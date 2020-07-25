@@ -1,0 +1,6 @@
+data/
+ob/
+bin/
+Tests/obj
+Tests/bin
+Tests/mockFiles/result.txt
