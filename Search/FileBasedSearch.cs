@@ -10,7 +10,7 @@ namespace lifenizer.Search {
     /// <summary>
     /// Agrep is file based and always searches all files
     /// </summary>
-    public class FileBasedSearch : ISearchEngine {
+    public class FileBasedSearch : ISearcher {
         private string path;
         private Random random = new Random();
 

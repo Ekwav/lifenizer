@@ -1,13 +1,20 @@
+using System;
+using System.IO;
+
 namespace lifenizer.Importers
 {
     /// <summary>
-    /// Imports files from the same filesystem by simply copying them
+    /// Imports files from the same filesystem by simply copying them to /tmp
     /// </summary>
     public class FileSystemImporter : IImporter
     {
-        public string Import(string arguments)
+        public string Import(string localPath)
         {
-            throw new System.NotImplementedException();
+            var tempPath = Path.Combine(Path.GetTempPath(),"lifenizer","intermediate",DateTime.Now.Ticks.ToString());
+            Directory.CreateDirectory(tempPath);
+            var fileName = Path.Combine(tempPath, Lifenizer.SOURCE_FILE_NAME);
+            File.Copy(localPath,fileName);
+            return fileName;
         }
     }
 

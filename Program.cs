@@ -2,19 +2,16 @@
 using System.Collections.Generic;
 using System.IO;
 using lifenizer.Converters;
-using lifenizer.DataModels;
 using lifenizer.Importers;
-using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Codecs;
 using Lucene.Net.Configuration;
-using Lucene.Net.Documents;
-using Lucene.Net.Index;
-using Lucene.Net.Search;
-using Lucene.Net.Store;
-using Lucene.Net.Util;
 using ManyConsole;
+using lifenizer.DataModels;
+using lifenizer.Storage;
+using lifenizer.Search;
 
-namespace lifenizer {
+namespace lifenizer
+{
 
     /// <summary>
     /// Entrance
@@ -92,61 +89,60 @@ namespace lifenizer {
     }
 
     public class Lifenizer {
+        public const string SOURCE_FILE_NAME = "source";
+
         public IImporter Importer { get; }
-        public IConverter Converter { get; }
-        public IServiceProvider Search { get; }
+        public ISearcher Searcher { get; }
+        public IStorage Storage {get;}
+
+        public Lifenizer(IImporter importer, ISearcher searcher, IStorage storage)
+        {
+            Importer = importer;
+            Searcher = searcher;
+            Storage = storage;
+        }
 
         public void Add (string args) {
             var path = Importer.Import (args);
         }
+
+        /// <summary>
+        /// Imports a file under specified path into the system, 
+        /// analyzes, converts, stores and indexes it
+        /// </summary>
+        /// <param name="importFilePath">Path to the file to be imported</param>
+        public void Import(string importFilePath)
+        {
+            var tempFilePath = Importer.Import(importFilePath);
+            var conversation = ConverterFactory.Instance.ConvertFile(tempFilePath);
+            var storageId = Storage.SaveFile(tempFilePath,conversation);
+            conversation.ImportedUrl = storageId;
+            Searcher.IndexSingle(conversation);
+        }
+
+        /// <summary>
+        /// Search for conversations
+        /// </summary>
+        /// <param name="query"></param>
+        /// <param name="v2"></param>
+        public IEnumerable<Match> Search(string query, int maxDifference)
+        {
+            return Searcher.FindMatches(query,maxDifference);
+        }
+
+        public Stream GetFile(string url)
+        {
+            return Storage.GetFile(url);
+        }
     }
+
+    
 
     /// <summary>
     /// Persists files and documents 
     /// </summary>
     public interface IDocumentStore {
 
-    }
-
-    public class LucenceSearch {
-        public void Index (Conversation conversation) {
-            var AppLuceneVersion = LuceneVersion.LUCENE_48;
-            var indexLocation = @"/home/ekwav/dev/lucence/index";
-            var dir = FSDirectory.Open (indexLocation);
-
-            //create an analyzer to process the text
-            var analyzer = new StandardAnalyzer (AppLuceneVersion);
-
-            //create an index writer
-            var indexConfig = new IndexWriterConfig (AppLuceneVersion, analyzer);
-            var writer = new IndexWriter (dir, indexConfig);
-
-            var d = new Document {
-                new StringField("name","/c/noch/eins",Field.Store.YES),
-                new TextField ("text", "Guten Morgen herr von und zu sowieso IHK", Field.Store.YES)
-            };
-            var d2 = new Document {
-                new StringField("name","/c/oder/ijajadja",Field.Store.YES),
-                new TextField ("text", "Durchaus möglichn  von dem herrn von der IHK", Field.Store.YES)
-            };
-
-            //writer.AddDocument (d);
-            //writer.AddDocument (d2);
-            writer.Flush (triggerMerge: false, applyAllDeletes: false);
-            var phrase = new FuzzyQuery (new Term("text","ikh"),2);
-            //phrase.Add (new Term ("text","morgen"));
-            //phrase.Add (new Term ("text", "herr")); DirectoryReader.Open(dir));//
-            writer.Dispose();
-            var searcher = new IndexSearcher(DirectoryReader.Open(dir));//writer.GetReader(applyAllDeletes: true));
-            var hits = searcher.Search(phrase, 20 /* top 20 */).ScoreDocs;
-            foreach (var hit in hits)
-            {
-                var foundDoc = searcher.Doc(hit.Doc);
-                var score = hit.Score;
-                foundDoc.Get("name");
-                foundDoc.Get("favoritePhrase");
-            }
-        }
     }
 
 }

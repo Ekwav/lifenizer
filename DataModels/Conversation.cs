@@ -13,6 +13,12 @@ namespace lifenizer.DataModels
         /// </summary>
         /// <value></value>
         public string OriginalUrl { get; set; }
+        /// <summary>
+        /// A Url the <see cref="IStorage"/> Provider is capable of finding
+        /// </summary>
+        /// <value></value>
+        public string ImportedUrl {get;set;}
+        
 
         /// <summary>
         /// When the information got created, eg letter send date or E-Mail Timestamp

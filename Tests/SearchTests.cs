@@ -59,14 +59,14 @@ namespace Tests
         [Test]
         public void IndexFolder()
         {
-            ISearchEngine searcher = new FileBasedSearch(path);
+            ISearcher searcher = new LucenceSearch(path);
             searcher.IndexBatch(new List<Conversation>(){conversation});
         }
 
         [Test]
         public void IndexFile()
         {
-            ISearchEngine searcher = new FileBasedSearch(path);
+            ISearcher searcher = new LucenceSearch(path);
             searcher.IndexSingle(conversation);
         }
 
@@ -74,8 +74,8 @@ namespace Tests
         [Test]
         public void Luence()
         {
-            var l = new LucenceSearch();
-            l.Index(null);
+            var l = new LucenceSearch(@"/home/ekwav/dev/lucence/index");
+            l.IndexSingle(null);
         }
     }
 }

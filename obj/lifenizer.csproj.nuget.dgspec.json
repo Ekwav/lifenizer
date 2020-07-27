@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "/media/ekwav/Daten11/dev/lifenizer/lifenizer.csproj": {}
+    "/media/ekwav/Daten13/dev/lifenizer/lifenizer.csproj": {}
   },
   "projects": {
-    "/media/ekwav/Daten11/dev/lifenizer/lifenizer.csproj": {
+    "/media/ekwav/Daten13/dev/lifenizer/lifenizer.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/media/ekwav/Daten11/dev/lifenizer/lifenizer.csproj",
+        "projectUniqueName": "/media/ekwav/Daten13/dev/lifenizer/lifenizer.csproj",
         "projectName": "lifenizer",
-        "projectPath": "/media/ekwav/Daten11/dev/lifenizer/lifenizer.csproj",
+        "projectPath": "/media/ekwav/Daten13/dev/lifenizer/lifenizer.csproj",
         "packagesPath": "/home/ekwav/.nuget/packages/",
-        "outputPath": "/media/ekwav/Daten11/dev/lifenizer/obj/",
+        "outputPath": "/media/ekwav/Daten13/dev/lifenizer/obj/",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "/usr/share/dotnet/sdk/NuGetFallbackFolder"
@@ -60,6 +60,10 @@
               "target": "Package",
               "version": "[2.2.0, )",
               "autoReferenced": true
+            },
+            "Moq": {
+              "target": "Package",
+              "version": "[4.14.5, )"
             },
             "Newtonsoft.Json": {
               "target": "Package",

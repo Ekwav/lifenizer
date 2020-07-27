@@ -20,21 +20,4 @@ namespace Tests
 
     }
 
-    public class PdfImportTests
-    {
-        [Test]
-        public void ImportPdf()
-        {
-            
-        }
-    }
-
-    public class ControllerTests
-    {
-        [Test]
-        public void CreateLifenizer()
-        {
-            var liefenizer = new Lifenizer();
-        }
-    }
 }

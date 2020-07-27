@@ -3,9 +3,9 @@ using lifenizer.DataModels;
 
 namespace lifenizer.Search
 {
-    public interface ISearchEngine
+    public interface ISearcher
     {
-        IEnumerable<Match> FindMatches(string searchTerm,int maxDifference);
+        IEnumerable<Match> FindMatches(string searchTerm,int maxDifference = 0);
         /// <summary>
         /// Indexes multiple .ls files 
         /// </summary>
