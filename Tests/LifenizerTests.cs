@@ -7,6 +7,7 @@ using lifenizer.Search;
 using lifenizer.DataModels;
 using System.Linq;
 using System.IO;
+using lifenizer.Converters;
 
 namespace Tests
 {
@@ -28,6 +29,9 @@ namespace Tests
         [Test]
         public void Index()
         {
+            var converterFactory = new Mock<ConverterFactory>();
+            converterFactory.Setup(cf=>cf.ConvertFile(It.IsAny<string>(),It.IsAny<string>()))
+            .Returns(new Conversation());
             var importer = new Mock<IImporter>();
             importer.Setup(i=>i.Import("a")).Returns("b");
             var storer = new Mock<IStorage>();
@@ -35,6 +39,8 @@ namespace Tests
             var indexer = new Mock<ISearcher>();
             indexer.Setup(i=>i.IndexSingle(It.IsAny<Conversation>()));
             lifenizer = new Lifenizer(importer.Object,indexer.Object,storer.Object);
+            ConverterFactory.Instance = converterFactory.Object;
+
 
             lifenizer.Import("a");
 

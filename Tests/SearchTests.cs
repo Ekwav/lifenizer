@@ -13,7 +13,7 @@ namespace Tests
     {
         private static string path = "/var/coflnet/test";
         private static DataPoint match = new DataPoint("A wonderful good morning mr John Doe");
-        private Conversation conversation = new Conversation(){OriginalUrl = path,DataPoints= new List<DataPoint>(){match}};
+        private Conversation conversation = new Conversation(){ImportedUrl = path,DataPoints= new List<DataPoint>(){match}};
         private string search = "John";
 
         private Random r = new Random();
@@ -75,7 +75,7 @@ namespace Tests
         public void Luence()
         {
             var l = new LucenceSearch(@"/home/ekwav/dev/lucence/index");
-            l.IndexSingle(null);
+            l.IndexSingle(new Conversation(){ImportedUrl="testUrl"});
         }
     }
 }

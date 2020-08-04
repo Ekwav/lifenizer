@@ -19,13 +19,14 @@ namespace lifenizer
             {
                 Console.WriteLine(item);
             }
+            var searcher = new Search.LucenceSearch("");
+            var matches = searcher.FindMatches(remainingArguments[0],2);
 
-            var arguments = $" {Program.DefaultDataPath} -type f -name \"*.ls\"  -exec  /usr/bin/agrep -2 -i \"{remainingArguments[0]}\" "+"\"{}\" +";
-            Console.WriteLine("full command: \nfind " + arguments);
-            ProcessHandler.Instance.RunCommandline("find", arguments)
-            .WaitForExit();
-            Thread.Sleep(100);
-
+            foreach (var item in matches)
+            {
+                Console.WriteLine($"Matched {item.Context.Content} in {item.Conversation.ImportedUrl}");
+            }
+           
             return 0;
         }
     }

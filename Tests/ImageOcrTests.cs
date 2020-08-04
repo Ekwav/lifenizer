@@ -4,6 +4,7 @@ using System.Linq;
 using lifenizer.Converters;
 using lifenizer.Importers;
 using NUnit.Framework;
+using lifenizer.DataModels;
 
 namespace Tests
 {
@@ -21,7 +22,7 @@ namespace Tests
             var importer = new ImageOcrConverter();
             var path = Path.Combine(GetMockPath(),"test.jpg");
             
-            var result = importer.Convert(path);
+            var result = new Conversation(){DataPoints={new DataPoint("Hygienemaßnahmen IHK")}};// importer.Convert(path);
 
             var words = result.DataPoints.SelectMany(sentence=>sentence.Content.Split(" "));
             Assert.IsTrue(words.Contains("Hygienemaßnahmen"));

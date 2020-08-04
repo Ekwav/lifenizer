@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using lifenizer.DataModels;
 
@@ -5,6 +6,9 @@ namespace lifenizer.Converters
 {
     public class ImageOcrConverter : IConverter
     {
+
+        public IEnumerable<string> MimeTypes => new string[]{"jpg","jpeg","png","tif"};
+
         public Conversation Convert(string path, params string[] options)
         {
             var hostDirectory = Path.GetDirectoryName(path);
@@ -34,6 +38,8 @@ namespace lifenizer.Converters
         /// <param name="path">The path of the file to import</param>
         /// <returns>A <see cref="Conversation"/> with the relevant content of the file to import</returns>
         Conversation Convert(string path, params string[] options);
+
+        IEnumerable<string> MimeTypes {get;}
     }
 }
 

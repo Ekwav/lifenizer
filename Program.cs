@@ -102,10 +102,6 @@ namespace lifenizer
             Storage = storage;
         }
 
-        public void Add (string args) {
-            var path = Importer.Import (args);
-        }
-
         /// <summary>
         /// Imports a file under specified path into the system, 
         /// analyzes, converts, stores and indexes it
@@ -135,14 +131,4 @@ namespace lifenizer
             return Storage.GetFile(url);
         }
     }
-
-    
-
-    /// <summary>
-    /// Persists files and documents 
-    /// </summary>
-    public interface IDocumentStore {
-
-    }
-
 }

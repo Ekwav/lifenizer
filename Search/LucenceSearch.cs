@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using lifenizer.DataModels;
 using Lucene.Net.Analysis.Standard;
@@ -21,7 +22,11 @@ namespace lifenizer.Search {
         }
 
         public void IndexBatch (IEnumerable<Conversation> batch) {
-            throw new System.NotImplementedException ();
+            foreach (var item in batch)
+            {
+                // this could be optimised
+                IndexSingle(item);
+            }
         }
 
         public void IndexSingle (Conversation conversation) {
@@ -62,8 +67,11 @@ namespace lifenizer.Search {
 
         }
         Document CreateDocumentFromConversation (Conversation conversation) {
+            if(conversation == null)
+                throw new ArgumentNullException(nameof(conversation));
+
             var document =  new Document {
-                new StringField ("url", conversation.OriginalUrl, Field.Store.YES),
+                new StringField ("url", conversation.ImportedUrl, Field.Store.YES),
                 
             };
 
