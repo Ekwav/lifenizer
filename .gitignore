@@ -1,5 +1,5 @@
 data/
-ob/
+obj/
 bin/
 Tests/obj
 Tests/bin
