@@ -3,9 +3,16 @@
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
-  <PropertyGroup>
-  <DefaultItemExcludes>$(DefaultItemExcludes);your_nonproj.file;api\**\*</DefaultItemExcludes>
-</PropertyGroup>
+
+
+  <ItemGroup>
+      <ProjectReference Include="../core/lifenizer.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="SimplerConfig" Version="1.0.0" />
+  </ItemGroup>
 
 
 </Project>

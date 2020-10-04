@@ -1,66 +1,83 @@
-using NUnit.Framework;
-using lifenizer;
-using Moq;
-using lifenizer.Importers;
-using lifenizer.Storage;
-using lifenizer.Search;
-using lifenizer.DataModels;
-using System.Linq;
 using System.IO;
+using System.Linq;
+using lifenizer;
 using lifenizer.Converters;
+using lifenizer.DataModels;
+using lifenizer.Importers;
+using lifenizer.Search;
+using lifenizer.Storage;
+using Moq;
+using NUnit.Framework;
 
 namespace Tests
 {
     public class HttpApiTests
     {
-        Lifenizer lifenizer ;
+        private const string IMPORT_FILE_NAME = "a";
+        private const string IMPORTER_NAME = "chat";
+        readonly Conversation CONVERSATION = new Conversation();
+        Lifenizer lifenizer;
+        Mock<IImporter> importer;
+        Mock<IStorage> storer;
+        Mock<ISearcher> indexer;
         [SetUp]
         public void Setup()
         {
-            var importer = new Mock<IImporter>();
-            importer.Setup(i=>i.Import("a")).Returns("b");
-            var storer = new Mock<IStorage>();
-            storer.Setup(i=>i.SaveFile("b",It.IsAny<Conversation>())).Returns("c");
-            var indexer = new Mock<ISearcher>();
-            indexer.Setup(i=>i.IndexSingle(It.IsAny<Conversation>()));
-            lifenizer = new Lifenizer(importer.Object,indexer.Object,storer.Object);
+            importer = new Mock<IImporter>();
+            importer.Setup(i => i.Import(IMPORT_FILE_NAME)).Returns("b");
+            storer = new Mock<IStorage>();
+            storer.Setup(i => i.SaveFile("b", It.IsAny<Conversation>())).Returns("c");
+            indexer = new Mock<ISearcher>();
+            indexer.Setup(i => i.IndexSingle(It.IsAny<Conversation>()));
+            lifenizer = new Lifenizer(importer.Object, indexer.Object, storer.Object);
         }
 
         [Test]
-        public void Index()
+        public void ImportGuess()
         {
-            var converterFactory = new Mock<ConverterFactory>();
-            converterFactory.Setup(cf=>cf.ConvertFile(It.IsAny<string>(),It.IsAny<string>()))
-            .Returns(new Conversation());
-            var importer = new Mock<IImporter>();
-            importer.Setup(i=>i.Import("a")).Returns("b");
-            var storer = new Mock<IStorage>();
-            storer.Setup(i=>i.SaveFile("b",It.IsAny<Conversation>())).Returns("c");
-            var indexer = new Mock<ISearcher>();
-            indexer.Setup(i=>i.IndexSingle(It.IsAny<Conversation>()));
-            lifenizer = new Lifenizer(importer.Object,indexer.Object,storer.Object);
+            var converterFactory = new Mock<IConverterFactory>();
+            converterFactory.Setup(cf => cf.ConvertFile(It.IsAny<string>(), null))
+                .Returns(CONVERSATION);
             ConverterFactory.Instance = converterFactory.Object;
 
+            lifenizer.Import(IMPORT_FILE_NAME);
 
-            lifenizer.Import("a");
+            converterFactory.Verify(c => c.ConvertFile(It.IsAny<string>(), null), Times.Once);
 
-            importer.Verify(i=>i.Import("a"),Times.Once);
-            storer.Verify(i=>i.SaveFile("b",It.IsAny<Conversation>()),Times.Once);
-            indexer.Verify(i=>i.IndexSingle(It.IsAny<Conversation>()),Times.Once);
+            importer.Verify(i => i.Import(IMPORT_FILE_NAME), Times.Once);
+            storer.Verify(i => i.SaveFile("b", CONVERSATION), Times.Once);
+            indexer.Verify(i => i.IndexSingle(CONVERSATION), Times.Once);
         }
-        
+
+        [Test]
+        public void ImportConverterProvided()
+        {
+            var converterFactory = new Mock<ConverterFactory>();
+            converterFactory.Setup(cf => cf.ConvertFile(It.IsAny<string>(), IMPORTER_NAME))
+                .Returns(CONVERSATION);
+            ConverterFactory.Instance = converterFactory.Object;
+
+            lifenizer.Import(IMPORT_FILE_NAME, IMPORTER_NAME);
+
+            converterFactory.Verify(c => c.ConvertFile(It.IsAny<string>(), IMPORTER_NAME), Times.Once);
+
+            importer.Verify(i => i.Import(IMPORT_FILE_NAME), Times.Once);
+            storer.Verify(i => i.SaveFile("b", CONVERSATION), Times.Once);
+            indexer.Verify(i => i.IndexSingle(CONVERSATION), Times.Once);
+        }
+
         [Test]
         public void SearchSimple()
         {
-            var match = new lifenizer.Search.Match(new Conversation(),new DataPoint("hi"));
+            var match = new lifenizer.Search.Match(new Conversation(), new DataPoint("hi"));
             var indexer = new Mock<ISearcher>();
-            indexer.Setup(i=>i.FindMatches("query",2)).Returns(new lifenizer.Search.Match[]{match});
-            lifenizer = new Lifenizer(null,indexer.Object,null);
+            indexer.Setup(i => i.FindMatches("query", 2)).Returns(new lifenizer.Search.Match[] { match });
+            lifenizer = new Lifenizer(null, indexer.Object, null);
 
-            var result = lifenizer.Search("query",2);
+            var result = lifenizer.Search("query", 2);
 
-            Assert.AreEqual(match,result.First());
-            indexer.Verify(i=>i.FindMatches("query",2),Times.Once);
+            Assert.AreEqual(match, result.First());
+            indexer.Verify(i => i.FindMatches("query", 2), Times.Once);
         }
 
         [Test]
@@ -68,12 +85,12 @@ namespace Tests
         {
             var storage = new Mock<IStorage>();
             var fs = (new Mock<Stream>()).Object;
-            storage.Setup(i=>i.GetFile("url")).Returns(fs);
-            lifenizer = new Lifenizer(null,null,storage.Object);
+            storage.Setup(i => i.GetFile("url")).Returns(fs);
+            lifenizer = new Lifenizer(null, null, storage.Object);
 
             var stream = lifenizer.GetFile("url");
 
-            Assert.AreEqual(fs,stream);
+            Assert.AreEqual(fs, stream);
         }
     }
 }

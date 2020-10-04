@@ -1,0 +1,60 @@
+<div class="container">
+  <div class="columns is-multiline">
+    <div class="upload-box">
+      <div class="upload-box-header">
+        <div class="header-title">
+          <h2>ngx-uploader</h2>
+        </div>
+        <div class="gh-icon">
+          <a target="_blank" href="https://github.com/bleenco/ngx-uploader">
+            <i class="ionicon ion-social-github"></i>
+          </a>
+        </div>
+      </div>
+      <div class="upload-box-content">
+        <label for="upload-input" class="drop-container" ngFileDrop [options]="options"
+          (uploadOutput)="onUploadOutput($event)" [uploadInput]="uploadInput">
+          <p>
+            Drag files here or
+
+            <input id="upload-input" type="file" ngFileSelect [options]="options"
+              (uploadOutput)="onUploadOutput($event)" [uploadInput]="uploadInput" multiple> browse
+
+            to upload.
+          </p>
+        </label>
+        <div class="upload-item" *ngFor="let f of files; let i = index;">
+          <div class="upload-item-content">
+            <div class="filename">
+              <div class="filename-left">
+                <i class="ionicon ion-ios-copy"></i>
+                <span>{{ f.name }}</span>
+              </div>
+              <div class="filename-right">
+                <i class="ionicon ion-close-round" (click)="cancelUpload(f.id)">stop</i>
+              </div>
+            </div>
+            <div class="progress-content">
+              <div class="progress">
+                <span class="bar" [style.width]="f?.progress?.data?.percentage + '%'"
+                  [class.is-done]="f?.progress?.data?.percentage === 100"></span>
+              </div>
+            </div>
+            <div class="progress-text-content">
+              <span class="progress-text" [class.is-done]="f?.progress?.data?.percentage === 100">
+                <span>{{ f.progress?.data?.percentage }}% </span>
+                <span *ngIf="f.progress?.data?.percentage !== 100">Uploading...</span>
+                <span *ngIf="f.progress?.data?.percentage === 100">Done</span>
+              </span>
+              <span class="speed-and-eta-text"
+                *ngIf="f.progress?.data?.percentage !== 0 && f.progress?.data?.percentage !== 100">
+                <span>{{ f.progress?.data?.speedHuman }} </span>
+                <span>ETA {{ f.progress?.data?.etaHuman }}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -94,6 +94,7 @@ namespace lifenizer
         public IImporter Importer { get; }
         public ISearcher Searcher { get; }
         public IStorage Storage {get;}
+        
 
         public Lifenizer(IImporter importer, ISearcher searcher, IStorage storage)
         {
@@ -107,10 +108,10 @@ namespace lifenizer
         /// analyzes, converts, stores and indexes it
         /// </summary>
         /// <param name="importFilePath">Path to the file to be imported</param>
-        public void Import(string importFilePath)
+        public void Import(string importFilePath,string converterIdentifier = null)
         {
             var tempFilePath = Importer.Import(importFilePath);
-            var conversation = ConverterFactory.Instance.ConvertFile(tempFilePath);
+            var conversation = ConverterFactory.Instance.ConvertFile(tempFilePath,converterIdentifier);
             var storageId = Storage.SaveFile(tempFilePath,conversation);
             conversation.ImportedUrl = storageId;
             Searcher.IndexSingle(conversation);

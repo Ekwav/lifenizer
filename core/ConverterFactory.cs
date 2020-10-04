@@ -6,11 +6,17 @@ using System.Linq;
 
 namespace lifenizer.Converters
 {
-    public class ConverterFactory
+    public interface IConverterFactory
     {
-        public static ConverterFactory Instance {get;set;}
+        void AddConverter(IConverter converter, params string[] capable);
+        Conversation ConvertFile(string tempPath, string converterId = null);
+    }
 
-        private Dictionary<string,IConverter> Converters = new Dictionary<string, IConverter>();
+    public class ConverterFactory : IConverterFactory
+    {
+        public static IConverterFactory Instance { get; set; }
+
+        private Dictionary<string, IConverter> Converters = new Dictionary<string, IConverter>();
 
         static ConverterFactory()
         {
@@ -20,15 +26,15 @@ namespace lifenizer.Converters
         public virtual Conversation ConvertFile(string tempPath, string converterId = null)
         {
 
-            if(converterId !=null&& Converters.TryGetValue(converterId,out IConverter converter))
+            if (converterId != null && Converters.TryGetValue(converterId, out IConverter converter))
                 return converter.Convert(tempPath);
-           
-            
+
+
             var extention = System.IO.Path.GetExtension(tempPath);
-            if(Converters.TryGetValue(extention.TrimStart('.'), out converter))
+            if (Converters.TryGetValue(extention.TrimStart('.'), out converter))
                 return converter.Convert(tempPath);
-            
-               
+
+
             throw new System.Exception($"No Converter found for the passed identifier '{converterId}' or fileextetnion '{extention}'");
         }
 
