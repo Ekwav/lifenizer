@@ -8,16 +8,9 @@ using NUnit.Framework;
 
 namespace Tests
 {
-    public class FileStorageTests
+    public class FileStorageTests : FileAccessTestBase
     {
-        string tempFolder;
-        IStorage storage;
-        [SetUp]
-        public void Setup()
-        {
-            tempFolder = TempFolderPath();
-            storage = new LocalFileStorage(tempFolder);
-        }
+
         [TearDown]
         public void Teardown()
         {
@@ -34,11 +27,5 @@ namespace Tests
 
 
 
-        private static string TempFolderPath()
-        {
-            var path = Path.Combine(Path.GetTempPath(),"lifenizer","test",System.DateTime.Now.Ticks.ToString());
-            Directory.CreateDirectory(path);
-            return path;
-        }
     }
 }

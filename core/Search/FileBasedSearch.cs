@@ -35,9 +35,12 @@ namespace lifenizer.Search {
 
 
         public void IndexSingle (Conversation conversation) {
-            var filePath = Path.Combine(path,$"{DateTime.Now.ToString()}.{random.Next(1000)}.ls");
-            File.WriteAllText(filePath,JsonConvert.SerializeObject(conversation));
+            var randomPath = RandomFilePath;
+            Directory.CreateDirectory(randomPath);
+            File.WriteAllText(RandomFilePath,JsonConvert.SerializeObject(conversation));
         }
+
+        private string RandomFilePath => Path.Combine(path,$"{DateTime.Now.Ticks.ToString()}.{random.Next(1000)}.ls");
 
         public void IndexBatch (IEnumerable<Conversation> batch) {
             foreach (var item in batch)

@@ -9,14 +9,19 @@ using NUnit.Framework;
 
 namespace Tests
 {
-    public class SearchTests
+    public class SearchTests : FileAccessTestBase
     {
-        private static string path = "/var/coflnet/test";
         private static DataPoint match = new DataPoint("A wonderful good morning mr John Doe");
-        private Conversation conversation = new Conversation(){ImportedUrl = path,DataPoints= new List<DataPoint>(){match}};
+        private Conversation conversation;
         private string search = "John";
 
         private Random r = new Random();
+
+        [SetUp]
+        public void Setup()
+        {
+            conversation = new Conversation(){ImportedUrl = tempFolder,DataPoints= new List<DataPoint>(){match}};
+        }
 
         [Test]
         public void SourceCreation()
@@ -41,7 +46,7 @@ namespace Tests
         [Test]
         public void SearchForMatch()
         {
-            var searcher = new FileBasedSearch(path);
+            var searcher = new FileBasedSearch(tempFolder);
             searcher.FindMatches(search);
         }
 
@@ -59,14 +64,14 @@ namespace Tests
         [Test]
         public void IndexFolder()
         {
-            ISearcher searcher = new LucenceSearch(path);
+            ISearcher searcher = new LucenceSearch(tempFolder);
             searcher.IndexBatch(new List<Conversation>(){conversation});
         }
 
         [Test]
         public void IndexFile()
         {
-            ISearcher searcher = new LucenceSearch(path);
+            ISearcher searcher = new LucenceSearch(tempFolder);
             searcher.IndexSingle(conversation);
         }
 
@@ -74,7 +79,7 @@ namespace Tests
         [Test]
         public void Luence()
         {
-            var l = new LucenceSearch(@"/home/ekwav/dev/lucence/index");
+            var l = new LucenceSearch(tempFolder);
             l.IndexSingle(new Conversation(){ImportedUrl="testUrl"});
         }
     }
