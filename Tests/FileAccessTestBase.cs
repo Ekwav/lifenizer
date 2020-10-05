@@ -7,12 +7,10 @@ namespace Tests
     public class FileAccessTestBase
     {
         protected string tempFolder;
-        protected IStorage storage;
         [SetUp]
         public void Setup()
         {
             tempFolder = TempFolderPath();
-            storage = new LocalFileStorage(tempFolder);
         }
 
         private static string TempFolderPath()
