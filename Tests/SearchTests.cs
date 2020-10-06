@@ -18,7 +18,7 @@ namespace Tests
         private Random r = new Random();
 
         [SetUp]
-        public void Setup()
+        public void SetupSearch()
         {
             conversation = new Conversation(){ImportedUrl = tempFolder,DataPoints= new List<DataPoint>(){match}};
         }

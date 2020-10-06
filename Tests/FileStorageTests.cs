@@ -13,10 +13,13 @@ namespace Tests
         protected IStorage storage;
         protected Conversation conversation;
 
+        string path;
+        byte[] blob;
+
         [TearDown]
         public void Teardown()
         {
-            Directory.Delete(tempFolder);
+            Directory.Delete(tempFolder,true);
         }
 
         [SetUp]
@@ -24,6 +27,9 @@ namespace Tests
         {
             conversation = new Conversation(){OriginalUrl = "test"};
             storage = new LocalFileStorage(tempFolder);
+            blob = new byte[]{123,45,67};
+            path = Path.Combine(tempFolder,"importedfile");
+            File.WriteAllBytes(path,blob);
         }
 
 
@@ -31,13 +37,13 @@ namespace Tests
         [Test]
         public void Store()
         {
-            storage.SaveFile("filePath",conversation);
+            storage.SaveFile(Path.Combine(tempFolder,"importedfile"),conversation);
         }
 
         [Test]
         public void StoreAndRetrieveConversation()
         {
-            var id = storage.SaveFile("filePath",conversation);
+            var id = storage.SaveFile(Path.Combine(tempFolder,"importedfile"),conversation);
             var retrieved = storage.GetConversation(id);
             Assert.AreEqual(conversation,retrieved);
         }
@@ -45,12 +51,10 @@ namespace Tests
         [Test]
         public void StoreAndRetrieveFile()
         {
-            var bytes = new byte[]{123,45,67};
-            var path = Path.Combine(tempFolder,"importedfile");
-            File.WriteAllBytes(path,bytes);
             var id = storage.SaveFile(path,conversation);
-            var retrieved = storage.GetFile(id);
-            Assert.AreEqual(conversation,retrieved);
+            var bytes = new byte[blob.Length];
+            storage.GetFile(id).Read(bytes,0,blob.Length);
+            Assert.AreEqual(blob,bytes);
         }
 
 
