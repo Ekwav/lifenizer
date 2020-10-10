@@ -1,5 +1,7 @@
 using System.IO;
 using lifenizer.DataModels;
+using Newtonsoft.Json;
+using System;
 
 namespace lifenizer.Storage
 {
@@ -18,12 +20,38 @@ namespace lifenizer.Storage
         
         public string SaveFile(string localPath, Conversation conversation)
         {
-            return "a";
+            var nextId = NewId;
+            Directory.CreateDirectory(AbsoluteFilePath(nextId,""));
+            MoveFile(localPath,nextId);
+            StoreConversation(conversation,nextId);
+            return nextId;
+        }
+
+        private string NewId
+        {
+            get {
+                return Guid.NewGuid().ToString("N");
+            }
+        }
+
+        private void StoreConversation(Conversation conversation, string id)
+        {
+            File.WriteAllText(AbsoluteFilePath(id,"conv"),JsonConvert.SerializeObject(conversation));
+        }
+
+        private void MoveFile(string localPath,string id)
+        {
+            File.Move(localPath,AbsoluteFilePath(id));
+        }
+
+        private string AbsoluteFilePath(string identifier,string fileName = "blob")
+        {
+            return Path.Combine(RootPath,identifier,fileName);
         }
         
         public Conversation GetConversation(string url)
         {
-            return new Conversation();
+            return JsonConvert.DeserializeObject<Conversation>(File.ReadAllText(AbsoluteFilePath(url,"conv")));
         }
         /// <summary>
         /// Gets a stream to the original imported artifact
@@ -32,7 +60,7 @@ namespace lifenizer.Storage
         /// <returns></returns>
         public Stream GetFile(string url)
         {
-            return System.IO.File.Open(url,FileMode.Open);
+            return System.IO.File.Open(AbsoluteFilePath(url),FileMode.Open);
         }
     }
 }
