@@ -10,7 +10,7 @@ import { UploadOutput, UploadInput, UploadFile, humanizeBytes, UploaderOptions, 
 })
 export class ImportComponent {
 
-  url = 'https://localhost:5001/api/upload';
+  url = 'https://localhost:5001/api/upload/';
 
   token = "my nice token";
   formData: FormData;
@@ -19,6 +19,8 @@ export class ImportComponent {
   humanizeBytes: Function;
   dragOver: boolean;
   options: UploaderOptions;
+
+  converter : string = "png";
 
   constructor() {
     this.options = { concurrency: 2, maxUploads: 30, maxFileSize: 1000000000 };
@@ -32,7 +34,7 @@ export class ImportComponent {
     if (output.type === 'allAddedToQueue') {
       const event: UploadInput = {
         type: 'uploadAll',
-        url: this.url,
+        url: this.url + this.converter,
         method: 'POST',
         data: { foo: 'bar' },
         headers: { Authorization: `bearer ${this.token}`,Kevin:"no" }

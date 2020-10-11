@@ -11,7 +11,7 @@ using NUnit.Framework;
 
 namespace Tests
 {
-    public class HttpApiTests
+    public partial class HttpApiTests
     {
         private const string IMPORT_FILE_NAME = "a";
         private const string IMPORTER_NAME = "chat";

@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using lifenizer;
 using Microsoft.AspNetCore.Http;
+using lifenizer.Converters;
 using Microsoft.AspNetCore.Mvc;
 
 namespace lifenizer.Api.Controllers
@@ -18,6 +19,8 @@ namespace lifenizer.Api.Controllers
 
         public UploadController()
         {
+            ConverterFactory.Instance.LoadFromAssemblies();
+            Console.WriteLine(SimplerConfig.Config.Instance["storagePath"]);
             lifenizer = new Lifenizer(
                 new lifenizer.Importers.FileSystemImporter(), 
                 new lifenizer.Search.LucenceSearch(SimplerConfig.Config.Instance["indexPath"]), 
@@ -32,13 +35,14 @@ namespace lifenizer.Api.Controllers
                 Console.WriteLine(converter);
                 var file = Request.Form.Files[0];
                 Console.WriteLine(Request.Headers["Authorization"]);
-                var folderName = Path.Combine("Resources", "Images");
-                var pathToSave = Path.Combine(Directory.GetCurrentDirectory(), folderName);
+                var tempPath =  Path.Combine(Path.GetTempPath(),"Resources", "Images");
+                Directory.CreateDirectory(tempPath);
+
                 if (file.Length > 0)
                 {
-                    var fileName = "a"; //ContentDispositionHeaderValue.Parse (file.ContentDisposition).FileName.Trim ('"');
-                    var fullPath = Path.Combine(pathToSave, fileName);
-                    var dbPath = Path.Combine(folderName, fileName);
+                    var fileName = file.FileName.Trim();
+                    var fullPath = Path.Combine(tempPath, fileName);
+                    Console.WriteLine(fullPath);
                     using(var stream = new FileStream(fullPath, FileMode.Create))
                     {
                         file.CopyTo(stream);
@@ -46,7 +50,7 @@ namespace lifenizer.Api.Controllers
                     // start the importer
                     lifenizer.Import(fullPath,converter);
 
-                    return Ok(new { dbPath });
+                    return Ok(new { tempPath });
                 }
                 else
                 {

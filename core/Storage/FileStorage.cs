@@ -14,6 +14,8 @@ namespace lifenizer.Storage
 
         public LocalFileStorage(string rootPath)
         {
+            if(rootPath == null)
+                throw new ArgumentException("rootPath has to be set and writeable",nameof(rootPath));
             RootPath = rootPath;
         }
 
