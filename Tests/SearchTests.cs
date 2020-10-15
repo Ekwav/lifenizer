@@ -14,13 +14,17 @@ namespace Tests
         private static DataPoint match = new DataPoint("A wonderful good morning mr John Doe");
         private Conversation conversation;
         private string search = "John";
+        private ISearcher searcher;
+        private string docUrl;
 
         private Random r = new Random();
 
         [SetUp]
         public void SetupSearch()
         {
-            conversation = new Conversation(){ImportedUrl = tempFolder,DataPoints= new List<DataPoint>(){match}};
+            docUrl = Path.Combine(tempFolder,"docUrl");
+            conversation = new Conversation(){ImportedUrl = docUrl,DataPoints= new List<DataPoint>(){match}};
+            searcher = new LucenceSearch(tempFolder);
         }
 
         [Test]
@@ -46,7 +50,6 @@ namespace Tests
         [Test]
         public void SearchForMatch()
         {
-            var searcher = new FileBasedSearch(tempFolder);
             searcher.FindMatches(search);
         }
 
@@ -54,24 +57,21 @@ namespace Tests
         public void AddAndSearchForMatch()
         {
             var tempPath = Path.Combine(Path.GetTempPath(),r.Next().ToString());
-            var searcher = new FileBasedSearch(tempPath);
             searcher.IndexSingle(conversation);
             var result = searcher.FindMatches(search).First();
-            Assert.AreEqual(conversation,result.Conversation);
+            Assert.AreEqual(conversation.ImportedUrl,result);
         }
 
 
         [Test]
         public void IndexFolder()
         {
-            ISearcher searcher = new LucenceSearch(tempFolder);
             searcher.IndexBatch(new List<Conversation>(){conversation});
         }
 
         [Test]
         public void IndexFile()
         {
-            ISearcher searcher = new LucenceSearch(tempFolder);
             searcher.IndexSingle(conversation);
         }
 
@@ -79,8 +79,7 @@ namespace Tests
         [Test]
         public void Luence()
         {
-            var l = new LucenceSearch(tempFolder);
-            l.IndexSingle(new Conversation(){ImportedUrl="testUrl"});
+            searcher.IndexSingle(new Conversation(){ImportedUrl="testUrl"});
         }
     }
 }

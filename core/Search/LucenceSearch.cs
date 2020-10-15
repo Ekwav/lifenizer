@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using lifenizer.DataModels;
 using Lucene.Net.Analysis.Standard;
@@ -17,8 +18,20 @@ namespace lifenizer.Search {
             IndexLocation = indexLocation;
         }
 
-        public IEnumerable<Match> FindMatches (string searchTerm, int maxDifference) {
-            throw new System.NotImplementedException ();
+        public IEnumerable<string> FindMatches (string searchTerm, int maxDifference) {
+            var dir = FSDirectory.Open (IndexLocation);
+            var searcher = new IndexSearcher (DirectoryReader.Open (dir)); 
+            
+            var phrase = new FuzzyQuery (new Term ("data", searchTerm), 2);
+            var hits = searcher.Search (phrase, 20 /* top 20 */ ).ScoreDocs;
+            foreach (var hit in hits) {
+                var foundDoc = searcher.Doc (hit.Doc);
+                var score = hit.Score;
+                
+                var url = foundDoc.Get ("url");
+                foundDoc.Get ("favoritePhrase");
+                yield return url;
+            }
         }
 
         public void IndexBatch (IEnumerable<Conversation> batch) {
@@ -40,30 +53,15 @@ namespace lifenizer.Search {
             var indexConfig = new IndexWriterConfig (AppLuceneVersion, analyzer);
             var writer = new IndexWriter (dir, indexConfig);
 
-            var d = new Document {
-                new StringField ("name", "/c/noch/eins", Field.Store.YES),
-                new TextField ("text", "Guten Morgen herr von und zu sowieso IHK", Field.Store.YES)
-            };
-
             Document d2 = CreateDocumentFromConversation (conversation);
 
             //writer.AddDocument (d);
             writer.AddDocument (d2);
             writer.Flush (triggerMerge: false, applyAllDeletes: false);
-            var phrase = new FuzzyQuery (new Term ("text", "ikh"), 2);
             //phrase.Add (new Term ("text","morgen"));
             //phrase.Add (new Term ("text", "herr")); DirectoryReader.Open(dir));//
             writer.Dispose ();
-            var searcher = new IndexSearcher (DirectoryReader.Open (dir)); //writer.GetReader(applyAllDeletes: true));
             
-            var hits = searcher.Search (phrase, 20 /* top 20 */ ).ScoreDocs;
-            foreach (var hit in hits) {
-                var foundDoc = searcher.Doc (hit.Doc);
-                var score = hit.Score;
-                
-                foundDoc.Get ("name");
-                foundDoc.Get ("favoritePhrase");
-            }
 
         }
         Document CreateDocumentFromConversation (Conversation conversation) {

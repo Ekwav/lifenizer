@@ -19,12 +19,13 @@ namespace lifenizer
             {
                 Console.WriteLine(item);
             }
+            var term = remainingArguments[0];
             var searcher = new Search.LucenceSearch("");
-            var matches = searcher.FindMatches(remainingArguments[0],2);
+            var matches = searcher.FindMatches(term,2);
 
             foreach (var item in matches)
             {
-                Console.WriteLine($"Matched {item.Context.Content} in {item.Conversation.ImportedUrl}");
+                Console.WriteLine($"Matched {term} in {item}");
             }
            
             return 0;

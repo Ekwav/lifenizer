@@ -5,7 +5,7 @@ namespace lifenizer.Search
 {
     public interface ISearcher
     {
-        IEnumerable<Match> FindMatches(string searchTerm,int maxDifference = 0);
+        IEnumerable<string> FindMatches(string searchTerm,int maxDifference = 0);
         /// <summary>
         /// Indexes multiple .ls files 
         /// </summary>

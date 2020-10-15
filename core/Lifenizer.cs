@@ -4,6 +4,8 @@ using lifenizer.Converters;
 using lifenizer.Importers;
 using lifenizer.Storage;
 using lifenizer.Search;
+using lifenizer.DataModels;
+using System.Linq;
 
 namespace lifenizer
 {
@@ -41,9 +43,9 @@ namespace lifenizer
         /// </summary>
         /// <param name="query"></param>
         /// <param name="v2"></param>
-        public IEnumerable<Match> Search(string query, int maxDifference)
+        public IEnumerable<Conversation> Search(string query, int maxDifference)
         {
-            return Searcher.FindMatches(query,maxDifference);
+            return Searcher.FindMatches(query,maxDifference).Select(Storage.GetConversation);
         }
 
         public Stream GetFile(string url)

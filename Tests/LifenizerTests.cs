@@ -69,15 +69,19 @@ namespace Tests
         [Test]
         public void SearchSimple()
         {
-            var match = new lifenizer.Search.Match(new Conversation(), new DataPoint("hi"));
+            var match = "path";
+            const string SearchTerm = "query";
             var indexer = new Mock<ISearcher>();
-            indexer.Setup(i => i.FindMatches("query", 2)).Returns(new lifenizer.Search.Match[] { match });
-            lifenizer = new Lifenizer(null, indexer.Object, null);
+            var storage = new Mock<IStorage>();
+            indexer.Setup(i => i.FindMatches(SearchTerm, 2)).Returns(new string[] { match });
+            storage.Setup(s=>s.GetConversation(match)).Returns(CONVERSATION);
+            lifenizer = new Lifenizer(null, indexer.Object, storage.Object);
 
-            var result = lifenizer.Search("query", 2);
+            var result = lifenizer.Search(SearchTerm, 2);
 
-            Assert.AreEqual(match, result.First());
-            indexer.Verify(i => i.FindMatches("query", 2), Times.Once);
+            Assert.AreEqual(CONVERSATION, result.First());
+            indexer.Verify(i => i.FindMatches(SearchTerm, 2), Times.Once);
+            storage.Verify(s=>s.GetConversation(match),Times.Once);
         }
 
         [Test]

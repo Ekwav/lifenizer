@@ -4,6 +4,7 @@ using lifenizer;
 using lifenizer.DataModels;
 using lifenizer.Storage;
 using Moq;
+using System;
 using NUnit.Framework;
 
 namespace Tests
@@ -30,6 +31,15 @@ namespace Tests
             blob = new byte[]{123,45,67};
             path = Path.Combine(tempFolder,"importedfile");
             File.WriteAllBytes(path,blob);
+        }
+
+        [Test]
+        public void NullFolder()
+        {
+            Assert.Throws<ArgumentException>(()=>
+            {
+                new LocalFileStorage(null);
+            },"rootPath has to be set");
         }
 
 
