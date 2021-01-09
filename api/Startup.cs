@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -10,6 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 
 namespace api
 {
@@ -28,16 +31,44 @@ namespace api
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddCors(options =>
-        {
-            options.AddPolicy(name: MyAllowSpecificOrigins,
-                              builder =>
-                              {
-                                  builder.WithOrigins("http://localhost:4200",
-                                                      "*.coflnet.com")
-                                                      .AllowAnyHeader()
-                                                      .AllowAnyMethod();
-                              });
-        });
+            {
+                options.AddPolicy(name: MyAllowSpecificOrigins,
+                    builder =>
+                    {
+                        builder.WithOrigins("http://localhost:4200",
+                                "*.coflnet.com")
+                            .AllowAnyHeader()
+                            .AllowAnyMethod();
+                    });
+            });
+            string key = "my_secret_key_12345"; //this should be same which is used while creating token      
+            var issuer = "http://mysite.com"; //this should be same which is used while creating token  
+
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = issuer,
+                    ValidAudience = issuer,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
+                    };
+
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnAuthenticationFailed = context =>
+                        {
+                            if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
+                            {
+                                context.Response.Headers.Add("Token-Expired", "true");
+                            }
+                            return Task.CompletedTask;
+                        }
+                    };
+                });
             services.AddControllers();
         }
 
@@ -55,6 +86,7 @@ namespace api
 
             app.UseCors(MyAllowSpecificOrigins);
 
+            app.UseAuthentication();
             app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>

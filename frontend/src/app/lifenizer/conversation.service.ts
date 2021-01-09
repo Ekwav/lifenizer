@@ -14,21 +14,21 @@ export class ConversationService {
   getConversations(search: string, size: number, skip: number): import("rxjs").Observable<import("ngx-mat-search-field").SearchFieldResult> {
     const page = Math.round(skip / size) + 1;
     return this.http
-      .get(`https://rickandmortyapi.com/api/character/?name=${search.toLowerCase()}&page=${page}`)
+      .get(`https://localhost:5001/api/search/${search.toLowerCase()}?page=${page}`)
       .pipe(
         map((data: any) => {
           let count = 1;
-          if (page === 1 && data.info && data.info.pages) {
-            count = Number(data.info.count);
+          if (page === 1 && data.info && data.pageCount) {
+            count = Number(data.total);
           }
           return {
             info: {
               count: count
             },
-            items: data.results.map((item: any) => {
+            items: data.items.map((item: any) => {
               return {
-                title: item.species ? `${item.name}|${item.species}` : item.name,
-                value: item.id
+                title: `${item.originalUrl}|${item.importedUrl}`,
+                value: item.createdDate
               };
             })
           };

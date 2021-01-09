@@ -5,3 +5,5 @@ Tests/obj
 Tests/bin
 Tests/mockFiles/result.txt
 frontend/node_modules/
+**/.vscode/
+frontend/package-lock.json

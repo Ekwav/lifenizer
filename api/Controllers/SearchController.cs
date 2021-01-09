@@ -1,11 +1,13 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Threading;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using lifenizer;
 using Microsoft.AspNetCore.Http;
+using lifenizer.DataModels;
 using lifenizer.Converters;
+using Messaia.Net.Pagination;
 using Microsoft.AspNetCore.Mvc;
 
 namespace lifenizer.Api.Controllers
@@ -28,13 +30,23 @@ namespace lifenizer.Api.Controllers
                 new lifenizer.Storage.LocalFileStorage(SimplerConfig.Config.Instance["storagePath"]));
         }
 
+        [Microsoft.AspNetCore.Authorization.Authorize]
         [HttpGet("{value?}"), DisableRequestSizeLimit]
-        public IActionResult Upload(string value = null)
+        public IActionResult Upload(string value = null,[FromQuery] int page = 1)
         {
             Console.WriteLine("hi"+value);
             var matches = lifenizer.Search(value,1);
+            var matcheList = matches.ToList();
+            matcheList.AddRange(matches);
+            matcheList.AddRange(matcheList);
+            matcheList.AddRange(matcheList);
+            matcheList.AddRange(matcheList);
+            matcheList.AddRange(matcheList);
 
-            return Ok(new { matches });
+            var result = new Pagination<Conversation>(page,10);
+            result.Build(matcheList.AsQueryable());
+
+            return Ok(result);
         }
     }
 }

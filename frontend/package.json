@@ -21,6 +21,7 @@
     "@angular/platform-browser": "~9.1.4",
     "@angular/platform-browser-dynamic": "~9.1.4",
     "@angular/router": "~9.1.4",
+    "@auth0/angular-jwt": "^5.0.1",
     "@ngx-file-upload/core": "^2.2.1",
     "ngx-dropzone": "^2.2.2",
     "ngx-mat-search-field": "^1.0.6",

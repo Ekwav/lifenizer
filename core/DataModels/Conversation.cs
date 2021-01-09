@@ -39,7 +39,7 @@ namespace lifenizer.DataModels
         /// <summary>
         /// The sourceType of this data, eg. PDF, chatlog, conversation.
         /// Can contain a `:` seperated path eg: 'PDF:tesseract:eng' 
-        /// to improve future recognitions reruns when new version comes out
+        /// exists to improve future recognitions re-runs when new version is released
         /// </summary>
         public string SourceType { get; set; }
 
