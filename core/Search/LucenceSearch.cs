@@ -19,19 +19,38 @@ namespace lifenizer.Search {
         }
 
         public IEnumerable<string> FindMatches (string searchTerm, int maxDifference) {
+            if(String.IsNullOrEmpty(searchTerm))
+                yield break;
             var dir = FSDirectory.Open (IndexLocation);
             var searcher = new IndexSearcher (DirectoryReader.Open (dir)); 
+            var directPhrase = new MultiPhraseQuery();
+            foreach (var item in searchTerm.Split(' '))
+            {
+                directPhrase.Add(new Term("data",item));
+            }
+            var directHits = searcher.Search (directPhrase, 20 /* top 20 */ ).ScoreDocs;
+            foreach (var hit in directHits)
+            {
+                yield return ConvertHits(searcher, hit);
+            }
+            // don't do expensive fuzzyQuery if results are enough
+            if(directHits.Length > 10)
+                yield break;
             
             var phrase = new FuzzyQuery (new Term ("data", searchTerm), 2);
             var hits = searcher.Search (phrase, 20 /* top 20 */ ).ScoreDocs;
-            foreach (var hit in hits) {
-                var foundDoc = searcher.Doc (hit.Doc);
-                var score = hit.Score;
-                
-                var url = foundDoc.Get ("url");
-                foundDoc.Get ("favoritePhrase");
-                yield return url;
+            foreach (var hit in hits)
+            {
+                yield return ConvertHits(searcher, hit);
             }
+        }
+
+        private static string ConvertHits(IndexSearcher searcher, ScoreDoc hit)
+        {
+            var foundDoc = searcher.Doc(hit.Doc);
+            var score = hit.Score;
+            var url = foundDoc.Get("url");
+            return url;
         }
 
         public void IndexBatch (IEnumerable<Conversation> batch) {

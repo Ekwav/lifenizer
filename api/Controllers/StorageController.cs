@@ -15,15 +15,12 @@ namespace lifenizer.Api.Controllers
 
     [Route("api/[controller]")]
     [ApiController]
-    public class SearchController : ControllerBase
+    public class StorageController : ControllerBase
     {
         private Lifenizer lifenizer;
 
-        public SearchController()
+        public StorageController()
         {
-            Console.WriteLine("created");
-            ConverterFactory.Instance.LoadFromAssemblies();
-            Console.WriteLine(SimplerConfig.Config.Instance["storagePath"]);
             lifenizer = new Lifenizer(
                 new lifenizer.Importers.FileSystemImporter(), 
                 new lifenizer.Search.LucenceSearch(SimplerConfig.Config.Instance["indexPath"]), 
@@ -31,17 +28,11 @@ namespace lifenizer.Api.Controllers
         }
 
         [Microsoft.AspNetCore.Authorization.Authorize]
-        [HttpGet("{value?}"), DisableRequestSizeLimit]
-        public IActionResult Search(string value = null,[FromQuery] int page = 1)
+        [HttpGet("{uuid?}")]
+        public IActionResult GetFile(string uuid = null)
         {
-            Console.WriteLine("hi"+value);
-            var matches = lifenizer.Search(value,1);
-            var matcheList = matches.ToList();
-
-            var result = new Pagination<Conversation>(page,10);
-            result.Build(matcheList.AsQueryable());
-
-            return Ok(result);
+            Console.WriteLine("hi"+uuid);
+            return File(lifenizer.GetFile(uuid.Split('.').First()),MimeTypes.MimeTypeMap.GetMimeType(uuid),null,true);
         }
     }
 }

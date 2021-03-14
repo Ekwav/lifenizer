@@ -5,6 +5,12 @@ namespace lifenizer.Search
 {
     public interface ISearcher
     {
+        /// <summary>
+        /// Get the documentUrls matching a certain search term
+        /// </summary>
+        /// <param name="searchTerm">The term to search for</param>
+        /// <param name="maxDifference">max difference from the search term</param>
+        /// <returns>Matching ids</returns>
         IEnumerable<string> FindMatches(string searchTerm,int maxDifference = 0);
         /// <summary>
         /// Indexes multiple .ls files 

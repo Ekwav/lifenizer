@@ -21,7 +21,7 @@ namespace lifenizer.Api.Controllers
         [HttpGet("gettoken")]
         public Object GetToken()
         {
-            string key = "my_secret_key_12345"; //Secret key which will be used later during validation    
+            string key = SimplerConfig.Config.Instance["jwt:secret"]; //Secret key which will be used later during validation    
             var issuer = "http://mysite.com"; //normally this will be your site URL    
 
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
@@ -41,7 +41,7 @@ namespace lifenizer.Api.Controllers
                 expires : DateTime.Now.AddDays(1),
                 signingCredentials : credentials);
             var jwt_token = new JwtSecurityTokenHandler().WriteToken(token);
-            return new { data = jwt_token };
+            return new { token = jwt_token };
         }
     }
 }

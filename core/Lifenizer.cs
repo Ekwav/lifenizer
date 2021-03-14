@@ -34,7 +34,6 @@ namespace lifenizer
             var tempFilePath = Importer.Import(importFilePath);
             var conversation = ConverterFactory.Instance.ConvertFile(tempFilePath,converterIdentifier);
             var storageId = Storage.SaveFile(tempFilePath,conversation);
-            conversation.ImportedUrl = storageId;
             Searcher.IndexSingle(conversation);
         }
 

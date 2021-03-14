@@ -13,7 +13,7 @@ namespace api
     {
         public static void Main(string[] args)
         {
-            SimplerConfig.Config.Instance.StartArgs = args;
+            SimplerConfig.Config.Instance.StartArgs =args;
             CreateHostBuilder(args).Build().Run();
         }
 

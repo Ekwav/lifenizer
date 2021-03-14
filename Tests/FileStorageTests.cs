@@ -26,7 +26,7 @@ namespace Tests
         [SetUp]
         public void SetupStorage()
         {
-            conversation = new Conversation(){OriginalUrl = "test"};
+            conversation = new Conversation(){OriginalUrl = "test",MimeType="application/pdf"};
             storage = new LocalFileStorage(tempFolder);
             blob = new byte[]{123,45,67};
             path = Path.Combine(tempFolder,"importedfile");
@@ -48,7 +48,16 @@ namespace Tests
         public void Store()
         {
             storage.SaveFile(Path.Combine(tempFolder,"importedfile"),conversation);
+            Assert.NotNull(conversation.ImportedUrl);
         }
+
+        [Test]
+        public void HasCorrectExtention()
+        {
+            storage.SaveFile(Path.Combine(tempFolder,"importedfile"),conversation);
+            Assert.AreEqual("pdf",Path.GetExtension(conversation.ImportedUrl).Trim('.'));
+        }
+
 
         [Test]
         public void StoreAndRetrieveConversation()

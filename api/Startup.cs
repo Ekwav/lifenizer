@@ -41,7 +41,7 @@ namespace api
                             .AllowAnyMethod();
                     });
             });
-            string key = "my_secret_key_12345"; //this should be same which is used while creating token      
+            string key = SimplerConfig.Config.Instance["jwt:secret"]; //this should be same which is used while creating token      
             var issuer = "http://mysite.com"; //this should be same which is used while creating token  
 
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

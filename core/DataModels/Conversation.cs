@@ -37,11 +37,18 @@ namespace lifenizer.DataModels
         /// </summary>
         public List<string> Participants { get; set; }
         /// <summary>
-        /// The sourceType of this data, eg. PDF, chatlog, conversation.
-        /// Can contain a `:` seperated path eg: 'PDF:tesseract:eng' 
+        /// The source (converter) of this data, eg. tesseract chatlog, conversation.
+        /// Can contain a `:` seperated path eg: 'tesseract:eng' 
         /// exists to improve future recognitions re-runs when new version is released
         /// </summary>
         public string SourceType { get; set; }
+        
+        /// <summary>
+        /// The mime-type of the source file, eg. application/pdf.
+        /// Used for returning the file
+        /// </summary>
+        /// <value></value>
+        public string MimeType {get;set;}
 
         /// <summary>
         /// Topics and similar essential data, helps to improve search
@@ -65,12 +72,13 @@ namespace lifenizer.DataModels
             Participants = new List<string> ();
         }
 
-        public Conversation (string originalUrl, DateTime createdDate, DateTime consumedDate, List<string> participants, string sourceType, List<string> keywords, string metaText, List<DataPoint> dataPoints) {
+        public Conversation (string originalUrl, DateTime createdDate, DateTime consumedDate, List<string> participants, string sourceType, string mimeType, List<string> keywords, string metaText, List<DataPoint> dataPoints) {
             OriginalUrl = originalUrl;
             CreatedDate = createdDate;
             ConsumedDate = consumedDate;
             Participants = participants;
             SourceType = sourceType;
+            MimeType = MimeType;
             Keywords = keywords;
             MetaText = metaText;
             DataPoints = dataPoints;

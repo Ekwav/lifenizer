@@ -12,7 +12,7 @@ namespace lifenizer.Importers
         {
             var tempPath = Path.Combine(Path.GetTempPath(),"lifenizer","intermediate",DateTime.Now.Ticks.ToString());
             Directory.CreateDirectory(tempPath);
-            var fileName = Path.Combine(tempPath, Lifenizer.SOURCE_FILE_NAME);
+            var fileName = Path.Combine(tempPath, Lifenizer.SOURCE_FILE_NAME +Path.GetExtension(localPath));
             File.Copy(localPath,fileName);
             return fileName;
         }

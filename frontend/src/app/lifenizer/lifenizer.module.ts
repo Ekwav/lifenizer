@@ -10,7 +10,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { NgxUploaderModule } from 'ngx-uploader';
 import {MatToolbarModule} from '@angular/material/toolbar';
 import { HttpClientModule } from '@angular/common/http';
-import { JwtModule } from '@auth0/angular-jwt';
+import { JwtModule, JWT_OPTIONS } from '@auth0/angular-jwt';
+import { AuthService } from './auth.service';
 
 const routes: Routes = [
   {path:"import",component:ImportComponent},
@@ -19,7 +20,17 @@ const routes: Routes = [
 ];
 
 export function tokenGetter() {
-  return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI1MzY2MGYyMi0xZWZjLTQxMmEtOTNjNy1lOTUzNDRmY2MxYmYiLCJ2YWxpZCI6IjEiLCJ1c2VyaWQiOiIxIiwibmFtZSI6ImJpbGFsIiwiZXhwIjoxNjAzMTM2Mjg3LCJpc3MiOiJodHRwOi8vbXlzaXRlLmNvbSIsImF1ZCI6Imh0dHA6Ly9teXNpdGUuY29tIn0.KT61cPsjv9bB5jnM4pz8TfeOd9RPimIxjaKVkOG2syo";// localStorage.getItem("access_token");
+  return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlZmVjOTEzYS04NWY3LTRmZWUtODdiMi1iOWExOGRkOTI5YjUiLCJ2YWxpZCI6IjEiLCJ1c2VyaWQiOiIxIiwibmFtZSI6ImJpbGFsIiwiZXhwIjoxNjE1NTAzMTQxLCJpc3MiOiJodHRwOi8vbXlzaXRlLmNvbSIsImF1ZCI6Imh0dHA6Ly9teXNpdGUuY29tIn0.CiibjEKeX-qDVEYlrIlxngz8_nalCLFw5rkaK9XJi-Y";// localStorage.getItem("access_token");
+}
+
+export function jwtOptionsFactory(authService : AuthService) {
+  return {
+    tokenGetter: () => {
+      return authService.getAsyncToken();
+    },
+    allowedDomains: ["localhost:5001","localhost:5000","coflnet.com"],
+    disallowedRoutes: ["https://localhost:5001/auth/gettoken"],
+  }
 }
 
 @NgModule({
@@ -35,12 +46,11 @@ export function tokenGetter() {
     NgxUploaderModule,
     HttpClientModule,
     JwtModule.forRoot({
-      config: {
-
-        tokenGetter: tokenGetter,
-        allowedDomains: ["localhost:5001","localhost:5000","coflnet.com"],
-        disallowedRoutes: ["http://example.com/examplebadroute/"],
-      },
+      jwtOptionsProvider: {
+        provide: JWT_OPTIONS,
+        useFactory: jwtOptionsFactory,
+        deps: [AuthService]
+      }
     }),
   ]
 })

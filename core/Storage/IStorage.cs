@@ -6,7 +6,7 @@ namespace lifenizer.Storage
     public interface IStorage
     {
         /// <summary>
-        /// Returns a unique url for this file
+        /// Returns a unique url for this file, includes the original file extension (received from <see cref="Conversation.MimeType"/>)
         /// </summary>
         /// <param name="localPath">The local binary to be stored</param>
         /// <param name="conversation">The accociated conversation derived from the binary</param>

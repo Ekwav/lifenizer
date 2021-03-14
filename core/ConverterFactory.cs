@@ -28,18 +28,27 @@ namespace lifenizer.Converters
 
         public virtual Conversation ConvertFile(string tempPath, string converterId = null)
         {
-
-            if (converterId != null && Converters.TryGetValue(converterId, out IConverter converter))
-                return converter.Convert(tempPath);
-
-
+            var mimeType = MimeTypes.MimeTypeMap.GetMimeType(tempPath);
             var extention = System.IO.Path.GetExtension(tempPath);
-            if (Converters.TryGetValue(extention.TrimStart('.'), out converter))
-                return converter.Convert(tempPath);
+            var converter = GetConverter(new string[]{converterId,mimeType,extention});
+            
+            var conversation = converter.Convert(tempPath);
+            conversation.MimeType = mimeType;
+            conversation.SourceType = converter.GetType().Name;
 
-
-            throw new System.Exception($"No Converter found for the passed identifier '{converterId}' or fileextetnion '{extention}'");
+            return conversation;
         }
+
+        private IConverter GetConverter(IEnumerable<string> ids)
+        {
+            foreach (var converterId in ids)
+            {
+                if (converterId != null && Converters.TryGetValue(converterId, out IConverter converter))
+                    return converter;
+            }
+            throw new System.Exception($"No Converter found for the passed identifiers '{string.Join(",",ids)}' ");
+        }
+
 
         /// <summary>
         /// Adds a Converter

@@ -47,6 +47,7 @@ namespace lifenizer.Api.Controllers
                     {
                         file.CopyTo(stream);
                     }
+                    
                     // start the importer
                     lifenizer.Import(fullPath,converter);
 

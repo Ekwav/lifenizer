@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { SearchFieldResult } from 'ngx-mat-search-field';
+import Fuse from 'fuse.js';
 
 @Injectable({
   providedIn: 'root'
@@ -25,10 +26,14 @@ export class ConversationService {
             info: {
               count: count
             },
-            items: data.items.map((item: any) => {
+            items: data.items.map((item: Conversation) => {
+              var fuse = new Fuse(item.dataPoints,{keys:['content']});
+              var points = fuse.search(search);
+              var match = points[0].item.content
+              console.log(match);
               return {
-                title: `${item.originalUrl}|${item.importedUrl}`,
-                value: item.createdDate
+                title: match,//`${item.originalUrl}|${item.importedUrl}`,
+                value: 'onlineUrl-'+item.importedUrl
               };
             })
           };
@@ -44,4 +49,20 @@ export class ConversationService {
       );
   }
 
+}
+export interface Conversation {
+  originalUrl: string;
+  importedUrl: string;
+  createdDate: Date;
+  consumedDate: Date;
+  participants: string[];
+  sourceType: string;
+  keywords: string[];
+  metaText: string;
+  dataPoints: DataPoint[];
+}
+
+export interface DataPoint {
+  offset: number;
+  content: string;
 }

@@ -25,8 +25,10 @@ namespace lifenizer.Storage
             var nextId = NewId;
             Directory.CreateDirectory(AbsoluteFilePath(nextId,""));
             MoveFile(localPath,nextId);
+            var extention = MimeTypes.MimeTypeMap.GetExtension(conversation.MimeType);
+            conversation.ImportedUrl = $"{nextId}.{extention}";
             StoreConversation(conversation,nextId);
-            return nextId;
+            return conversation.ImportedUrl;
         }
 
         private string NewId
@@ -48,7 +50,7 @@ namespace lifenizer.Storage
 
         private string AbsoluteFilePath(string identifier,string fileName = "blob")
         {
-            return Path.Combine(RootPath,identifier,fileName);
+            return Path.Combine(RootPath,identifier.Split(".")[0],fileName);
         }
         
         public Conversation GetConversation(string url)
