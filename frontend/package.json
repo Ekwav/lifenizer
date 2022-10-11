@@ -22,7 +22,7 @@
     "@angular/platform-browser-dynamic": "~10.2.5",
     "@angular/router": "~10.2.5",
     "@auth0/angular-jwt": "^5.0.1",
-    "@ngx-file-upload/core": "^2.2.1",
+    "@ngx-file-upload/core": "^3.0.1",
     "fuse.js": "^6.4.6",
     "ngx-dropzone": "^2.2.2",
     "ngx-mat-search-field": "^1.0.6",
@@ -32,7 +32,7 @@
     "zone.js": "~0.10.2"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "^13.3.0",
+    "@angular-devkit/build-angular": "^11.2.0",
     "@angular/cli": "~10.2.4",
     "@angular/compiler-cli": "~10.2.5",
     "@angular/language-service": "~10.2.5",
