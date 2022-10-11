@@ -22,7 +22,6 @@
     "@angular/platform-browser-dynamic": "~10.2.5",
     "@angular/router": "~10.2.5",
     "@auth0/angular-jwt": "^5.0.1",
-    "@ngx-file-upload/core": "^3.0.1",
     "fuse.js": "^6.4.6",
     "ngx-dropzone": "^2.2.2",
     "ngx-mat-search-field": "^1.0.6",
