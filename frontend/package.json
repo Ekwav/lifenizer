@@ -24,7 +24,7 @@
     "@auth0/angular-jwt": "^5.0.1",
     "fuse.js": "^6.4.6",
     "ngx-dropzone": "^2.2.2",
-    "ngx-uploader": "^10.0.0",
+    "ngx-uploader": "^11.0.0",
     "rxjs": "~6.5.4",
     "tslib": "^2.0.0",
     "zone.js": "~0.10.2"
