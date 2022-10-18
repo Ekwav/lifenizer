@@ -4,14 +4,18 @@ import { ImportComponent } from './import/import.component';
 import { NgxFileUploadCoreModule } from "@ngx-file-upload/core";
 import { Routes, RouterModule } from '@angular/router';
 import { NgxDropzoneModule } from 'ngx-dropzone';
-import { SearchFieldModule } from 'ngx-mat-search-field';
 import { SearchComponent } from './search/search.component';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { NgxUploaderModule } from 'ngx-uploader';
-import {MatToolbarModule} from '@angular/material/toolbar';
+import { MatToolbarModule } from '@angular/material/toolbar';
+import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { HttpClientModule } from '@angular/common/http';
 import { JwtModule, JWT_OPTIONS } from '@auth0/angular-jwt';
 import { AuthService } from './auth.service';
+import { ReactiveFormsModule } from '@angular/forms';
 
 const routes: Routes = [
   {path:"import",component:ImportComponent},
@@ -41,9 +45,12 @@ export function jwtOptionsFactory(authService : AuthService) {
     NgxDropzoneModule,
     NgxFileUploadCoreModule,
     MatFormFieldModule,
-    SearchFieldModule,
-
     NgxUploaderModule,
+    ReactiveFormsModule,
+    MatInputModule,
+    MatIconModule,
+    MatButtonModule,
+    MatAutocompleteModule,
     HttpClientModule,
     JwtModule.forRoot({
       jwtOptionsProvider: {
