@@ -10,7 +10,7 @@ import { Conversation } from '../conversation.service';
   templateUrl: './search.component.html',
   styleUrls: ['./search.component.scss']
 })
-export class SearchComponent implements OnInit,AfterViewInit {
+export class SearchComponent implements OnInit {
 
   searchConversationsCtrl = new FormControl();
   filteredConversations: Conversation[];
@@ -27,7 +27,6 @@ export class SearchComponent implements OnInit,AfterViewInit {
   onSelected() {
     this.conversation = this.searchInput as any;
     this.searchInput = null;
-    console.log(this.conversation);
   }
 
   displayWith(value: any) {
@@ -66,9 +65,6 @@ export class SearchComponent implements OnInit,AfterViewInit {
       });
   }
 
-  ngAfterViewInit():void{
-    const urlPrefix = "onlineUrl-";
-  }
 
   displayDocument(blobUrl: string) {
     throw new Error(blobUrl);
