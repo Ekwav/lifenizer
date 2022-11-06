@@ -5,6 +5,6 @@ Tests/obj
 Tests/bin
 Tests/mockFiles/result.txt
 frontend/node_modules/
-frontend/package-lock.json
 frontend/.angular
 node_modules/
+frontend/dist/

@@ -6,7 +6,7 @@ import { Routes, RouterModule } from '@angular/router';
 import { NgxDropzoneModule } from 'ngx-dropzone';
 import { SearchComponent } from './search/search.component';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { NgxUploaderModule } from 'ngx-uploader';
+import { NgxUploaderModule } from '@angular-ex/uploader';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';

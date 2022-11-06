@@ -1,7 +1,7 @@
 import { Component, OnInit, Inject, EventEmitter } from '@angular/core';
 import { NgxFileUploadRequest, NgxFileUploadStorage, NgxFileUploadFactory, NgxFileUploadOptions } from '@ngx-file-upload/core';
 
-import { UploadOutput, UploadInput, UploadFile, humanizeBytes, UploaderOptions, UploadStatus } from 'ngx-uploader';
+import { UploadOutput, UploadInput, UploadFile, humanizeBytes, UploaderOptions, UploadStatus } from '@angular-ex/uploader';
 
 @Component({
   selector: 'app-import',
