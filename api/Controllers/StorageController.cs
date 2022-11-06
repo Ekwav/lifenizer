@@ -23,8 +23,8 @@ namespace lifenizer.Api.Controllers
         public StorageController()
         {
             lifenizer = new Lifenizer(
-                new lifenizer.Importers.FileSystemImporter(), 
-                new lifenizer.Search.LucenceSearch(SimplerConfig.Config.Instance["indexPath"], NullLogger<Search.LucenceSearch>.Instance), 
+                new lifenizer.Importers.FileSystemImporter(),
+                new lifenizer.Search.LucenceSearch(SimplerConfig.Config.Instance["indexPath"], NullLogger<Search.LucenceSearch>.Instance),
                 new lifenizer.Storage.LocalFileStorage(SimplerConfig.Config.Instance["storagePath"]));
         }
 
@@ -32,7 +32,7 @@ namespace lifenizer.Api.Controllers
         [HttpGet("{uuid?}")]
         public IActionResult GetFile(string uuid = null)
         {
-            return File(lifenizer.GetFile(uuid.Split('.').First()),MimeTypes.MimeTypeMap.GetMimeType(uuid),null,true);
+            return File(lifenizer.GetFile(uuid.Split('.').First()), MimeTypes.MimeTypeMap.GetMimeType(Path.GetExtension(uuid)), null, true);
         }
     }
 }

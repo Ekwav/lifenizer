@@ -26,7 +26,7 @@ namespace lifenizer.Storage
             Directory.CreateDirectory(AbsoluteFilePath(nextId,""));
             MoveFile(localPath,nextId);
             var extention = MimeTypes.MimeTypeMap.GetExtension(conversation.MimeType);
-            conversation.ImportedUrl = $"{nextId}.{extention}";
+            conversation.ImportedUrl = $"{nextId}{extention}";
             StoreConversation(conversation,nextId);
             return conversation.ImportedUrl;
         }

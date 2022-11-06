@@ -1,36 +1,37 @@
 <mat-form-field class="example-full-width">
-    <input matInput placeholder="Search Conversation" [(ngModel)]="searchInput" [matAutocomplete]="auto"
+  <input matInput placeholder="Search Conversation" [(ngModel)]="searchInput" [matAutocomplete]="auto"
       [formControl]="searchConversationsCtrl" placeholder="Min 3 Characters Ex. Ant">
-    <button *ngIf="searchInput" matSuffix mat-icon-button aria-label="Clear" (click)="clearSelection()">
-      <mat-icon>close</mat-icon>
-    </button>
-    <mat-autocomplete [panelWidth]="400" #auto="matAutocomplete" (optionSelected)="onSelected()"
+  <button *ngIf="searchInput" matSuffix mat-icon-button aria-label="Clear" (click)="clearSelection()">
+    <mat-icon>close</mat-icon>
+  </button>
+  <mat-autocomplete [panelWidth]="400" #auto="matAutocomplete" (optionSelected)="onSelected()"
       [displayWith]="displayWith">
-      <mat-option *ngIf="isLoading" class="is-loading">Loading...</mat-option>
-      <ng-container *ngIf="!isLoading">
-        <mat-option *ngFor="let conversation of filteredConversations" [value]="conversation">
-          <span><b>{{getDisplay(conversation)}}</b> ({{conversation.importedUrl}})</span>
-        </mat-option>
-      </ng-container>
-    </mat-autocomplete>
-  </mat-form-field>
+    <mat-option *ngIf="isLoading" class="is-loading">Loading...</mat-option>
+    <ng-container *ngIf="!isLoading">
+      <mat-option *ngFor="let conversation of filteredConversations" [value]="conversation">
+        <span>
+          <b>{{getDisplay(conversation)}}</b> ({{conversation.importedUrl}})</span>
+      </mat-option>
+    </ng-container>
+  </mat-autocomplete>
+</mat-form-field>
 
-  <br>
+<br>
 
-  <ng-container *ngIf="errorMsg; else elseTemplate">
-    {{errorMsg}}
-  </ng-container>
-  <ng-template #elseTemplate>
-    <div class="conversation-details" *ngIf="conversation?.importedUrl">
-      <div>
-        <img [src]="conversation?.importedUrl" style="height: 250px;" />
-      </div>
-      <div>
-        <h3>Selected Value: {{conversation?.importedUrl}}</h3>
-        <ul>
-          <li>Date: {{conversation?.createdDate}}</li>
-        </ul>
-      </div>
+<ng-container *ngIf="errorMsg; else elseTemplate">
+  {{errorMsg}}
+</ng-container>
+<ng-template #elseTemplate>
+  <div class="conversation-details" *ngIf="conversation?.importedUrl">
+    <div>
+      <img [src]="'http://localhost:5000/api/Storage/' + conversation?.importedUrl | secure | async" style="height: 250px;"/>
     </div>
-  </ng-template>
-<img [src]="url" />
+    <div>
+      <h3>Selected Value: {{conversation?.importedUrl}}</h3>
+      <ul>
+        <li>Date: {{conversation?.createdDate}}</li>
+      </ul>
+    </div>
+  </div>
+</ng-template>
+<img [src]="url"/>

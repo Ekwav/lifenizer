@@ -28,10 +28,10 @@ namespace lifenizer.Converters
 
         public virtual Conversation ConvertFile(string tempPath, string converterId = null)
         {
-            var mimeType = MimeTypes.MimeTypeMap.GetMimeType(tempPath);
             var extention = System.IO.Path.GetExtension(tempPath);
-            var converter = GetConverter(new string[]{converterId,mimeType,extention?.TrimStart('.')});
-            
+            var mimeType = MimeTypes.MimeTypeMap.GetMimeType(extention);
+            var converter = GetConverter(new string[] { converterId, mimeType, extention?.TrimStart('.') });
+
             var conversation = converter.Convert(tempPath);
             conversation.MimeType = mimeType;
             conversation.SourceType = converter.GetType().Name;
@@ -41,13 +41,13 @@ namespace lifenizer.Converters
 
         private IConverter GetConverter(IEnumerable<string> ids)
         {
-            Console.WriteLine("registered " + string.Join(',',Converters.Keys));
+            Console.WriteLine("registered " + string.Join(',', Converters.Keys));
             foreach (var converterId in ids)
             {
                 if (converterId != null && Converters.TryGetValue(converterId, out IConverter converter))
                     return converter;
             }
-            throw new System.Exception($"No Converter found for the passed identifiers '{string.Join(",",ids)}' ");
+            throw new System.Exception($"No Converter found for the passed identifiers '{string.Join(",", ids)}' ");
         }
 
 
@@ -86,10 +86,10 @@ namespace lifenizer.Converters
         /// </summary>
         /// <param name="assembly">The <see cref="Assembly"/> to load 
         /// <see cref="IConverter"/> implementations from</param>
-        public void LoadFromAssemblies(Assembly assembly )
+        public void LoadFromAssemblies(Assembly assembly)
         {
             var type = typeof(IConverter);
-            var assemblies =  assembly
+            var assemblies = assembly
                 .GetReferencedAssemblies()
                 .Select(Assembly.Load);
             assemblies = assemblies.Append(assembly);
@@ -99,7 +99,7 @@ namespace lifenizer.Converters
                 .SelectMany(x => x.DefinedTypes)
                 .Where(p => type.IsAssignableFrom(p))
                 .Where(p => p.IsClass).ToList();
-            
+
             foreach (var item in types)
             {
                 var converter = (IConverter)Activator.CreateInstance(item);

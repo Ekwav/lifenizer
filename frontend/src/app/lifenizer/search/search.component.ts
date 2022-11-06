@@ -61,7 +61,6 @@ export class SearchComponent implements OnInit {
       )
       .subscribe((data: any) => {
           this.filteredConversations = data.items;
-        console.log(this.filteredConversations);
       });
   }
 
@@ -74,7 +73,6 @@ export class SearchComponent implements OnInit {
   {
     if (!(this.searchInput as string))
       return "no search";
-    console.log(this.searchInput);
     var match = conversation.dataPoints.filter(dp => dp.content && dp.content.toLowerCase().indexOf(this.searchInput?.toLowerCase()) >= 0);
     if (!match || !match.length)
       return "";
@@ -99,3 +97,5 @@ downLoadFile(data: any, type: string) {
  // }
 }
 }
+
+
