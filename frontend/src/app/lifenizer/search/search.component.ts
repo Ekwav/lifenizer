@@ -3,6 +3,7 @@ import { AfterViewInit, Component, OnInit, ViewChild } from '@angular/core';
 import { Observable } from 'rxjs';
 import { debounceTime, tap, switchMap, finalize, distinctUntilChanged, filter } from 'rxjs/operators';
 import { FormControl } from '@angular/forms';
+import { Conversation } from '../conversation.service';
 
 @Component({
   selector: 'app-search',
@@ -11,20 +12,22 @@ import { FormControl } from '@angular/forms';
 })
 export class SearchComponent implements OnInit,AfterViewInit {
 
-  searchMoviesCtrl = new FormControl();
-  filteredMovies: any;
+  searchConversationsCtrl = new FormControl();
+  filteredConversations: Conversation[];
   isLoading = false;
   errorMsg!: string;
   minLengthTerm = 3;
-  selectedMovie: any = "";
+  conversation: Conversation | null;
+  searchInput = "";
 
   constructor(
     private http: HttpClient
   ) { }
 
   onSelected() {
-    console.log(this.selectedMovie);
-    this.selectedMovie = this.selectedMovie;
+    this.conversation = this.searchInput as any;
+    this.searchInput = null;
+    console.log(this.conversation);
   }
 
   displayWith(value: any) {
@@ -32,24 +35,24 @@ export class SearchComponent implements OnInit,AfterViewInit {
   }
 
   clearSelection() {
-    this.selectedMovie = "";
-    this.filteredMovies = [];
+    this.conversation = null;
+    this.filteredConversations = [];
   }
 
   ngOnInit() {
-    this.searchMoviesCtrl.valueChanges
+    this.searchConversationsCtrl.valueChanges
       .pipe(
         filter(res => {
           return res !== null && res.length >= this.minLengthTerm
         }),
         distinctUntilChanged(),
-        debounceTime(200),
+        debounceTime(100),
         tap(() => {
           this.errorMsg = "";
-          this.filteredMovies = [];
+          this.filteredConversations = [];
           this.isLoading = true;
         }),
-        switchMap(value => this.http.get('http://www.omdbapi.com/?apikey='  + '&s=' + value)
+        switchMap(value => this.http.get('http://localhost:5000/api/search/' + value)
           .pipe(
             finalize(() => {
               this.isLoading = false
@@ -58,31 +61,29 @@ export class SearchComponent implements OnInit,AfterViewInit {
         )
       )
       .subscribe((data: any) => {
-        if (data['Search'] == undefined) {
-          this.errorMsg = data['Error'];
-          this.filteredMovies = [];
-        } else {
-          this.errorMsg = "";
-          this.filteredMovies = data['Search'];
-        }
-        console.log(this.filteredMovies);
+          this.filteredConversations = data.items;
+        console.log(this.filteredConversations);
       });
   }
 
   ngAfterViewInit():void{
     const urlPrefix = "onlineUrl-";
-   /* this.searchBar.registerOnChange((data:string)=>{
-      if(data.startsWith(urlPrefix))
-      {
-        this.displayDocument(data.substring(urlPrefix.length));
-      }
-    });*/
   }
 
   displayDocument(blobUrl: string) {
     throw new Error(blobUrl);
   }
 
+  getDisplay(conversation : Conversation) : string 
+  {
+    if (!(this.searchInput as string))
+      return "no search";
+    console.log(this.searchInput);
+    var match = conversation.dataPoints.filter(dp => dp.content && dp.content.toLowerCase().indexOf(this.searchInput?.toLowerCase()) >= 0);
+    if (!match || !match.length)
+      return "";
+    return match[0].content
+  }
 
   url : any;
 

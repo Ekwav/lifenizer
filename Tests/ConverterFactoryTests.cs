@@ -14,8 +14,8 @@ namespace Tests
         {
             var conMock = new Mock<IConverter>();
             conMock.Setup(con=>con.MimeTypes).Returns(new string[]{"test"});
+            conMock.Setup(con => con.Convert(path)).Returns(new Conversation());
             var factory = new ConverterFactory();
-            
 
             factory.AddConverter(conMock.Object);
             factory.ConvertFile(path);
@@ -41,7 +41,7 @@ namespace Tests
             var factory = new ConverterFactory();
             factory.LoadFromAssemblies();
 
-            var conversation = factory.ConvertFile(null,MIME_TYPE);
+            var conversation = factory.ConvertFile("",MIME_TYPE);
             Assert.NotNull(conversation);
         }
 

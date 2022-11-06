@@ -10,7 +10,7 @@ import { UploadOutput, UploadInput, UploadFile, humanizeBytes, UploaderOptions, 
 })
 export class ImportComponent {
 
-  url = 'https://localhost:5001/api/upload/';
+  url = 'http://localhost:5000/api/upload/';
 
   token = "my nice token";
   formData: FormData;

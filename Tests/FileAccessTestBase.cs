@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using lifenizer.Storage;
 using NUnit.Framework;
@@ -10,14 +11,13 @@ namespace Tests
         [SetUp]
         public void Setup()
         {
-            tempFolder = TempFolderPath();
+            tempFolder = RandomTempFolderPath();
+            Directory.CreateDirectory(tempFolder);
         }
 
-        private static string TempFolderPath()
+        protected string RandomTempFolderPath()
         {
-            var path = Path.Combine(Path.GetTempPath(),"lifenizer","test",System.DateTime.Now.Ticks.ToString());
-            Directory.CreateDirectory(path);
-            return path;
+            return Path.Combine(Path.GetTempPath(), "lifenizer", "test", System.DateTime.Now.Ticks.ToString() + Random.Shared.Next(100000));
         }
     }
 }
