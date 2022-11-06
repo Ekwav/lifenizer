@@ -30,7 +30,7 @@ namespace lifenizer.Converters
         {
             var mimeType = MimeTypes.MimeTypeMap.GetMimeType(tempPath);
             var extention = System.IO.Path.GetExtension(tempPath);
-            var converter = GetConverter(new string[]{converterId,mimeType,extention});
+            var converter = GetConverter(new string[]{converterId,mimeType,extention?.TrimStart('.')});
             
             var conversation = converter.Convert(tempPath);
             conversation.MimeType = mimeType;
@@ -41,6 +41,7 @@ namespace lifenizer.Converters
 
         private IConverter GetConverter(IEnumerable<string> ids)
         {
+            Console.WriteLine("registered " + string.Join(',',Converters.Keys));
             foreach (var converterId in ids)
             {
                 if (converterId != null && Converters.TryGetValue(converterId, out IConverter converter))

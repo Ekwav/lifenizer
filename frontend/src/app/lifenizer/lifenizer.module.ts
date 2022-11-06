@@ -33,7 +33,7 @@ export function jwtOptionsFactory(authService : AuthService) {
       return authService.getAsyncToken();
     },
     allowedDomains: ["localhost:5001","localhost:5000","coflnet.com"],
-    disallowedRoutes: ["https://localhost:5001/auth/gettoken"],
+    disallowedRoutes: ["http://localhost:5000/auth/gettoken"],
   }
 }
 

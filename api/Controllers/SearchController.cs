@@ -19,22 +19,16 @@ namespace lifenizer.Api.Controllers
     {
         private Lifenizer lifenizer;
 
-        public SearchController()
+        public SearchController(Lifenizer lifenizer)
         {
-            Console.WriteLine("created");
             ConverterFactory.Instance.LoadFromAssemblies();
-            Console.WriteLine(SimplerConfig.Config.Instance["storagePath"]);
-            lifenizer = new Lifenizer(
-                new lifenizer.Importers.FileSystemImporter(), 
-                new lifenizer.Search.LucenceSearch(SimplerConfig.Config.Instance["indexPath"]), 
-                new lifenizer.Storage.LocalFileStorage(SimplerConfig.Config.Instance["storagePath"]));
+            this.lifenizer = lifenizer;
         }
 
         [Microsoft.AspNetCore.Authorization.Authorize]
         [HttpGet("{value?}"), DisableRequestSizeLimit]
         public IActionResult Search(string value = null,[FromQuery] int page = 1)
         {
-            Console.WriteLine("hi"+value);
             var matches = lifenizer.Search(value,1);
             var matcheList = matches.ToList();
 

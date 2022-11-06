@@ -17,14 +17,11 @@ namespace lifenizer.Api.Controllers
     {
         private Lifenizer lifenizer;
 
-        public UploadController()
+        public UploadController(Lifenizer lifenizer)
         {
             ConverterFactory.Instance.LoadFromAssemblies();
             Console.WriteLine(SimplerConfig.Config.Instance["storagePath"]);
-            lifenizer = new Lifenizer(
-                new lifenizer.Importers.FileSystemImporter(), 
-                new lifenizer.Search.LucenceSearch(SimplerConfig.Config.Instance["indexPath"]), 
-                new lifenizer.Storage.LocalFileStorage(SimplerConfig.Config.Instance["storagePath"]));
+            this.lifenizer = lifenizer;
         }
 
         [HttpPost("{converter?}"), DisableRequestSizeLimit]
