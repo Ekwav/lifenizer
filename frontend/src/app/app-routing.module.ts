@@ -6,7 +6,7 @@ import { ImportComponent } from './lifenizer/import/import.component';
 const routes: Routes = [];
 
 @NgModule({
-  imports: [RouterModule.forRoot(routes, { relativeLinkResolution: 'legacy' })],
+  imports: [RouterModule.forRoot(routes, {})],
   exports: [RouterModule]
 })
 export class AppRoutingModule { }
