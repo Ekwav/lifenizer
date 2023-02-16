@@ -6,7 +6,7 @@ import { AppComponent } from './app.component';
 import { LifenizerModule } from './lifenizer/lifenizer.module';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import {MatLegacyButtonModule as MatButtonModule} from '@angular/material/legacy-button';
+import { MatButtonModule } from '@angular/material/button';
 
 @NgModule({
   declarations: [
