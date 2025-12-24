@@ -2,13 +2,11 @@
   <div class="columns is-multiline">
     <div class="upload-box">
       <div class="upload-box-content">
-        <label for="upload-input" class="drop-container" ngFileDrop [options]="options"
-          (uploadOutput)="onUploadOutput($event)" [uploadInput]="uploadInput">
+        <label for="upload-input" class="drop-container">
           <p>
             Drag files here or
 
-            <input id="upload-input" type="file" ngFileSelect [options]="options"
-              (uploadOutput)="onUploadOutput($event)" [uploadInput]="uploadInput" multiple> browse
+            <input id="upload-input" type="file" (change)="onFilesAdded($event.target.files)" multiple> browse
 
             to upload.
           </p>
@@ -26,20 +24,19 @@
             </div>
             <div class="progress-content">
               <div class="progress">
-                <span class="bar" [style.width]="f?.progress?.data?.percentage + '%'"
-                  [class.is-done]="f?.progress?.data?.percentage === 100"></span>
+                <span class="bar" [style.width]="f.progress + '%'"
+                  [class.is-done]="f.progress === 100"></span>
               </div>
             </div>
             <div class="progress-text-content">
-              <span class="progress-text" [class.is-done]="f?.progress?.data?.percentage === 100">
-                <span>{{ f.progress?.data?.percentage }}% </span>
-                <span *ngIf="f.progress?.data?.percentage !== 100">Uploading...</span>
-                <span *ngIf="f.progress?.data?.percentage === 100">Done</span>
+              <span class="progress-text" [class.is-done]="f.progress === 100">
+                <span>{{ f.progress }}% </span>
+                <span *ngIf="f.progress !== 100">Uploading...</span>
+                <span *ngIf="f.progress === 100">Done</span>
               </span>
               <span class="speed-and-eta-text"
-                *ngIf="f.progress?.data?.percentage !== 0 && f.progress?.data?.percentage !== 100">
-                <span>{{ f.progress?.data?.speedHuman }} </span>
-                <span>ETA {{ f.progress?.data?.etaHuman }}</span>
+                *ngIf="f.progress !== 0 && f.progress !== 100">
+                <span>{{ humanizeBytes(f.size) }}</span>
               </span>
             </div>
           </div>

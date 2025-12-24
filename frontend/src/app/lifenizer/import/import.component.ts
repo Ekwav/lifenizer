@@ -1,87 +1,104 @@
-import { Component, EventEmitter } from '@angular/core';
-import { NgxFileUploadRequest } from '@ngx-file-upload/core';
+import { Component } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 
-import { UploadOutput, UploadInput, UploadFile, humanizeBytes, UploaderOptions, UploadStatus } from '@angular-ex/uploader';
+interface UploadFile {
+  id: string;
+  name: string;
+  size: number;
+  progress: number;
+  status: 'pending' | 'uploading' | 'done' | 'error';
+  error?: string;
+}
 
 @Component({
   selector: 'app-import',
   templateUrl: './import.component.html',
-  styleUrls: ['import.component.scss']
+  styleUrls: ['import.component.scss'],
+  standalone: false
 })
 export class ImportComponent {
 
   url = 'http://localhost:5000/api/upload/';
-
   token = "my nice token";
-  formData: FormData;
-  files: UploadFile[];
-  uploadInput: EventEmitter<UploadInput>;
-  humanizeBytes: Function;
-  dragOver: boolean;
-  options: UploaderOptions;
+  files: UploadFile[] = [];
+  dragOver: boolean = false;
+  converter: string = "png";
+  maxFileSize = 1000000000;
 
-  converter : string = "png";
+  constructor(private http: HttpClient) {}
 
-  constructor() {
-    this.options = { concurrency: 2, maxUploads: 30, maxFileSize: 1000000000 };
-    this.files = [];
-    this.uploadInput = new EventEmitter<UploadInput>();
-    this.humanizeBytes = humanizeBytes;
-  }
+  onFilesAdded(files: File[]): void {
+    for (const file of files) {
+      if (file.size > this.maxFileSize) {
+        console.error(`File ${file.name} exceeds max size`);
+        continue;
+      }
 
-  onUploadOutput(output: UploadOutput): void {
-    console.log(output);
-    if (output.type === 'allAddedToQueue') {
-      const event: UploadInput = {
-        type: 'uploadAll',
-        url: this.url + this.converter,
-        method: 'POST',
-        data: { foo: 'bar' },
-        headers: { Authorization: `bearer ${this.token}`,Kevin:"no" }
+      const uploadFile: UploadFile = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: file.name,
+        size: file.size,
+        progress: 0,
+        status: 'pending'
       };
 
-      this.uploadInput.emit(event);
-    } else if (output.type === 'addedToQueue' && typeof output.file !== 'undefined') {
-      this.files.push(output.file);
-    } else if (output.type === 'uploading' && typeof output.file !== 'undefined') {
-      const index = this.files.findIndex(file => typeof output.file !== 'undefined' && file.id === output.file.id);
-      this.files[index] = output.file;
-    } else if (output.type === 'cancelled' || output.type === 'removed') {
-      this.files = this.files.filter((file: UploadFile) => file !== output.file);
-    } else if (output.type === 'dragOver') {
-      this.dragOver = true;
-    } else if (output.type === 'dragOut') {
-      this.dragOver = false;
-    } else if (output.type === 'drop') {
-      this.dragOver = false;
-    } else if (output.type === 'rejected' && typeof output.file !== 'undefined') {
-      console.log(output.file.name + ' rejected');
+      this.files.push(uploadFile);
+      this.uploadFile(uploadFile, file);
     }
+  }
 
-    this.files = this.files.filter(file => file.progress.status !== UploadStatus.Done);
+  private uploadFile(uploadFile: UploadFile, file: File): void {
+    uploadFile.status = 'uploading';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const headers = new HttpHeaders({
+      'Authorization': `bearer ${this.token}`,
+      'Kevin': 'no'
+    });
+
+    this.http.post<any>(`${this.url}${this.converter}`, formData, {
+      headers: headers,
+      reportProgress: true,
+      observe: 'events'
+    }).subscribe(
+      (event: any) => {
+        if (event.type === 1) { // ProgressEvent
+          uploadFile.progress = Math.round((event.loaded / event.total) * 100);
+        } else if (event.type === 4) { // HttpResponse
+          uploadFile.status = 'done';
+          uploadFile.progress = 100;
+        }
+      },
+      (error) => {
+        uploadFile.status = 'error';
+        uploadFile.error = error.message || 'Upload failed';
+      }
+    );
   }
 
   cancelUpload(id: string): void {
-    this.uploadInput.emit({ type: 'cancel', id: id });
+    const file = this.files.find(f => f.id === id);
+    if (file) {
+      file.status = 'pending';
+      // In a real app, you'd abort the request here
+    }
   }
 
   removeFile(id: string): void {
-    this.uploadInput.emit({ type: 'remove', id: id });
+    this.files = this.files.filter(file => file.id !== id);
   }
 
   removeAllFiles(): void {
-    this.uploadInput.emit({ type: 'removeAll' });
+    this.files = [];
   }
 
-
-  public onSelect(event) {
-    const addedFiles: File[] = event.addedFiles;
-    console.log(addedFiles);
-    // upload
-  }
-   
-  public onRemove(upload: NgxFileUploadRequest) {
-    console.log(upload);
-    // remove
+  humanizeBytes(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   }
 }

@@ -4,11 +4,12 @@
  */
 import { HttpClient } from '@angular/common/http';
 import { Pipe, PipeTransform } from '@angular/core';
-import { Observable } from 'rxjs/Observable';
+import { Observable } from 'rxjs';
 
 
 @Pipe({
-  name: 'secure'
+  name: 'secure',
+  standalone: false
 })
 export class SecurePipe implements PipeTransform {
 

@@ -1,12 +1,9 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ImportComponent } from './import/import.component';
-import { NgxFileUploadCoreModule } from "@ngx-file-upload/core";
 import { Routes, RouterModule } from '@angular/router';
-import { NgxDropzoneModule } from 'ngx-dropzone';
 import { SearchComponent } from './search/search.component';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { NgxUploaderModule } from '@angular-ex/uploader';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
@@ -40,10 +37,7 @@ export function jwtOptionsFactory(authService : AuthService) {
   imports: [
     RouterModule.forChild(routes),
     CommonModule,
-    NgxDropzoneModule,
-    NgxFileUploadCoreModule,
     MatFormFieldModule,
-    NgxUploaderModule,
     ReactiveFormsModule,
     MatInputModule,
     MatIconModule,
