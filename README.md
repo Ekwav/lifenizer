@@ -1,73 +1,48 @@
-Lifenezier (Life orginizer) is a program that helps to organize and search ALL your information.
+# Lifenizer Next
 
-1. Import data from some source (google, whatsapp, PDF, Scanned Image, minecraft chats ...)
-2. Search through all of it to find something you only remember partially (Conversation, a name, someones birthday)
+New Flutter + ASP.NET Core implementation. The legacy prototype remains in the repository root folders.
 
-## Motivation
-Its very hard to remember stuff. I and wanted a way to save all of my data and make it searchable.
+## Backend
 
-## Installation
-### Development
-1. Get docker
-2. Get dotnet runtime
-2. Clone this repo
-4. `cd lifenizer`
-3. `dotnet run`
+```bash
+cd backend
+dotnet restore LifenizerNext.slnx --ignore-failed-sources
+dotnet test LifenizerNext.slnx --no-restore
+ASPNETCORE_URLS=http://127.0.0.1:5075 dotnet run --project Lifenizer.Api/Lifenizer.Api.csproj
+```
 
-### Usage
-1. Install docker
-2. execute with docker
+The backend exposes:
 
+- `POST /api/auth/firebase`
+- `POST /api/auth/dev-login` for local/e2e when enabled
+- `POST /api/sync/push`
+- `GET /api/sync/pull?since=0`
+- `GET /api/imports/capabilities`
+- `POST /api/imports/{source}` for normalized plaintext import previews
+- `POST /api/analysis/relations/extract`
+- `POST /api/usage/events`
 
+Provider imports currently cover IMAP email, Paperless, WhatsApp, Telegram, Signal, Discord export/API, browser history, YouTube transcripts, scanned OCR text, and TAP/Coflnet-backed audio transcription. Production secrets are supplied through request metadata or configuration, while tests use placeholder secrets and mock servers.
 
-## Terms
-Stay consistant and use these words to avoid confusion
-- `conversation` any kind of information exchange, can be single word to whole groupchat history. 
-- `importer` gets external data into the system and feeds it to an `converter`
-- `converter` is the system that takes some data and converts it to a `conversation`
-- `searcher` is the system for indexing and searching `conversations`
+## Flutter
 
+```bash
+cd app
+flutter analyze
+flutter test
+flutter build web
+flutter build apk --debug
+flutter run -d web-server --web-hostname 127.0.0.1 --web-port 5174
+```
 
-## Start To Finish
+The app derives a vault key locally from the passphrase and backend-provided vault salt, encrypts entities with AES-GCM, and syncs ciphertext envelopes through the backend.
 
-Lets say you have some data, eg a letter, and you want to import it. How does it work?
-1. You need an importer, eg. `Scan`. It will get your document into the system by scanning it and saving it to the filesystem.
-2. You need an converter, eg. `ImageOcr`. This will take the scanned image and get the interesting content out of the data (create a [`conversation`](#terms)). In this case whatever is written on the letter.
-3. You need a `searcher`, eg. `FileBased`. It takes care of saving and indexing the data in a way that it can be searched quickly.
-4. The search engine can be queried for the text in the letter and will return the scanned image.
+Local organization features run after decryption in the client: imported conversations receive searchable tags, Search supports source/participant/tag facets, saved searches sync as encrypted entities, and the Insights tab summarizes timeline, source, participant, artifact, segment, and tag coverage without exposing plaintext to the backend.
 
-### Planed/available
-#### Importers
-* Scan 
-* download 
-* http (post)
+## Landing Pages
 
-#### Converter
-* Speech2Text
-* Ocr PDF
-* Ocr Image
-* E-Mails
-* Chats
-    * Discord
-    * Whatsapp
-    * Telegram
-    * Skype
-    * Signal
-    * Steam
-    * Minecraft
-    * Facebook
-* Twitter
-* Youtube 
-    * comments
-    * text in video 
-    * speach in video / subtitles
-    * Description
-* Websites (Browserhistory)
-* Speech recognition
-    * Cloud Providers
-    * Locally via DeepSepeach
+Static landing pages live in `landing/` and can be served by any static web server.
 
+## Notes
 
-#### Searchers
-* `LuenceSearch` 
-* `ElasticSearch` 
+See `docs/ARCHITECTURE.md` and `docs/PLACEHOLDERS.md` for the security model and current provider placeholders.

@@ -1,10 +1,23 @@
-data/
-obj/
-bin/
-Tests/obj
-Tests/bin
-Tests/mockFiles/result.txt
-frontend/node_modules/
-frontend/.angular
-node_modules/
-frontend/dist/
+# Flutter generated files
+app/.dart_tool/
+app/build/
+app/.flutter-plugins-dependencies
+app/.metadata
+app/android/.gradle/
+app/android/local.properties
+
+# .NET generated files
+backend/**/bin/
+backend/**/obj/
+backend/**/*.db
+backend/**/*.db-shm
+backend/**/*.db-wal
+
+# Playwright and npm generated files
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+e2e/.playwright/
+e2e/*.db
+e2e/*.db-shm
+e2e/*.db-wal

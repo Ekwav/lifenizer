@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lifenizer Security</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="logo" href="index.html">Lifenizer</a>
+    <nav class="nav">
+      <a href="security.html">Security</a>
+      <a href="imports.html">Imports</a>
+      <a href="hosted.html">Hosted</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+  </header>
+  <main>
+    <section class="hero" style="background-image: linear-gradient(90deg, rgba(10,18,17,.82), rgba(10,18,17,.35)), url('https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1800&q=80')">
+      <div class="hero-content">
+        <h1>Security</h1>
+        <p>Client-side encryption protects synced archive contents while hosted compute remains an explicit opt-in path.</p>
+      </div>
+    </section>
+    <section class="section">
+      <h2>Vault model.</h2>
+      <div class="grid">
+        <article class="card"><h3>Encrypted sync</h3><p>The backend stores ciphertext envelopes scoped by user and vault.</p></article>
+        <article class="card"><h3>Local search</h3><p>Devices decrypt locally and build the searchable index on trusted hardware.</p></article>
+        <article class="card"><h3>Firebase target</h3><p>Firebase ID token exchange is supported by the backend auth boundary.</p></article>
+        <article class="card"><h3>Compute lanes</h3><p>OCR, transcription, and relation extraction can receive plaintext only by user action.</p></article>
+      </div>
+    </section>
+  </main>
+  <footer class="footer">Production key recovery, passphrase rotation, and device invites remain planned work.</footer>
+</body>
+</html>

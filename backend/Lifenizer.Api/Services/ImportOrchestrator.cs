@@ -1,0 +1,22 @@
+using Lifenizer.Core;
+
+namespace Lifenizer.Api.Services;
+
+public sealed class ImportOrchestrator(
+    PlainImapImportClient imapImportClient,
+    ProviderHttpImportClient providerHttpImportClient)
+{
+    public Task<NormalizedImportResponse> ImportAsync(string source, ImportRequest request, CancellationToken cancellationToken)
+    {
+        return source.ToLowerInvariant() switch
+        {
+            "email" => imapImportClient.ImportAsync(request, cancellationToken),
+            "paperless" => providerHttpImportClient.ImportPaperlessAsync(request, cancellationToken),
+            "youtube-transcript" => providerHttpImportClient.ImportYouTubeTranscriptAsync(request, cancellationToken),
+            "discord" when ImportTextParsers.Metadata(request, "baseUrl") is not null => providerHttpImportClient.ImportDiscordApiAsync(request, cancellationToken),
+            "audio" when string.IsNullOrWhiteSpace(request.Text) && (request.PayloadBase64 is not null || ImportTextParsers.Metadata(request, "audioUrl") is not null || ImportTextParsers.Metadata(request, "tapBaseUrl") is not null) => providerHttpImportClient.ImportAudioTranscriptionAsync(request, cancellationToken),
+            "manual-text" or "scanned-pdf" or "live-recording" or "whatsapp" or "telegram" or "signal" or "discord" or "browser-history" or "audio" => Task.FromResult(ImportTextParsers.NormalizeLocal(source, request)),
+            _ => throw new KeyNotFoundException($"Unknown import source '{source}'.")
+        };
+    }
+}
