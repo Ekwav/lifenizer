@@ -6,12 +6,15 @@ import 'app_state.dart';
 import 'e2e_bridge.dart';
 import 'image_widgets.dart';
 import 'models.dart';
+import 'pricing_page.dart';
+import 'share_intent_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SemanticsBinding.instance.ensureSemantics();
   final appState = LifenizerAppState();
   installE2eBridge(appState);
+  ShareIntentService.instance.start(appState);
   runApp(LifenizerApp(state: appState));
 }
 
@@ -178,6 +181,7 @@ class _VaultShellState extends State<VaultShell> {
       ParticipantsPage(state: widget.state),
       RelationsPage(state: widget.state),
       SyncPage(state: widget.state),
+      PricingPage(state: widget.state),
     ];
 
     return Scaffold(
@@ -238,6 +242,10 @@ class _VaultShellState extends State<VaultShell> {
                           icon: Icon(Icons.sync),
                           label: Text('Sync'),
                         ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.workspace_premium_outlined),
+                          label: Text('Plans'),
+                        ),
                       ],
                     ),
                     const VerticalDivider(width: 1),
@@ -283,6 +291,10 @@ class _VaultShellState extends State<VaultShell> {
                 label: 'Relations',
               ),
               NavigationDestination(icon: Icon(Icons.sync), label: 'Sync'),
+              NavigationDestination(
+                icon: Icon(Icons.workspace_premium_outlined),
+                label: 'Plans',
+              ),
             ],
           );
         },
@@ -896,6 +908,17 @@ class _ImportsPageState extends State<ImportsPage> {
                         'whatsapp',
                         'telegram',
                         'signal',
+                        'slack',
+                        'teams',
+                        'facebook-messenger',
+                        'instagram',
+                        'imessage',
+                        'mbox',
+                        'git',
+                        'browser-capture',
+                        'google-search-history',
+                        'bookmarks',
+                        'lifenizer-backup',
                         'browser-history',
                         'youtube-transcript',
                         'audio',
@@ -949,6 +972,27 @@ class _ImportsPageState extends State<ImportsPage> {
                           Text(capability.source),
                           const SizedBox(height: 8),
                           Text(capability.status),
+                          const SizedBox(height: 8),
+                          Text(
+                            capability.requiresCredentials
+                                ? 'Requires provider credentials'
+                                : 'No provider credentials required',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          if (capability.acceptedFormats.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                for (final format in capability.acceptedFormats)
+                                  Chip(
+                                    visualDensity: VisualDensity.compact,
+                                    label: Text(format),
+                                  ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),

@@ -40,12 +40,20 @@ Transcription, OCR, remote imports, and relation extraction cannot be fully back
 
 - IMAP email using request-scoped host/user/password metadata.
 - Paperless document metadata/content using request-scoped base URL and token metadata.
-- WhatsApp, Telegram, Signal, Discord exports from pasted text/JSON/CSV.
+- WhatsApp, Telegram, Signal, Discord, Slack, Teams, Facebook Messenger, Instagram, and iMessage/SMS exports from pasted text/JSON/CSV/zip payloads.
+- Local `mbox` email exports without live IMAP credentials.
+- Git history imports from plaintext logs or JSON commit snapshots.
+- Browser extension capture payloads for consumed URLs/content (`browser-capture`).
+- Google search history imports from JSON/CSV exports.
+- Bookmark imports from JSON and Netscape HTML exports.
+- Lifenizer backup imports from portable JSON bundles.
 - Discord channel messages from a configured API URL and bot token.
 - Browser history CSV/JSON.
 - YouTube transcript JSON/XML/text from pasted content or a configured transcript URL/base URL.
 - Audio transcript text directly, or audio payloads through the configurable TAP/Coflnet transcription API (`Tap:BaseUrl`, `Tap:TranscriptionPath`, `Tap:ApiKey`).
 - Scanned PDF/OCR text through supplied OCR text metadata or text body.
+
+Concrete request examples and accepted metadata keys are documented in `docs/IMPORTERS.md`.
 
 The Flutter client consumes normalized import results, creates local participants/conversations, encrypts them with the vault key, and pushes ciphertext sync envelopes.
 

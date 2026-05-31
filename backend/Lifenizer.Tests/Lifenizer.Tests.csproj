@@ -26,4 +26,8 @@
     <ProjectReference Include="..\Lifenizer.Core\Lifenizer.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="MockData\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

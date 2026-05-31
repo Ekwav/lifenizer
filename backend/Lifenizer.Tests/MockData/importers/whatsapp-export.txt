@@ -1,0 +1,4 @@
+[29.05.2026, 09:12] Alice: Morning! Did the importer tests pass?
+[29.05.2026, 09:13] Bob: Working on it now.
+Continuation line without timestamp should stay in Bob message.
+[29.05.2026, 09:14] Alice: Great, please include bookmark HTML fixtures.

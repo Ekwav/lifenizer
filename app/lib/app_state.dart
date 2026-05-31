@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
@@ -28,6 +31,17 @@ class LifenizerAppState extends ChangeNotifier {
   final List<SavedSearch> savedSearches = [];
   final List<ImportCapability> importCapabilities = [];
 
+  _ConversationSearchIndex? _searchIndex;
+  bool _searchIndexDirty = true;
+  int _indexedConversationCount = -1;
+  int _indexedRelationCount = -1;
+  int _indexedParticipantCount = -1;
+
+  String? _lastSearchQuery;
+  DateTime? _lastSearchAt;
+  List<String> _lastSearchTopConversationIds = const [];
+  final Map<String, int> _sessionQueryFrequency = <String, int>{};
+
   QuotaStatus? quotaStatus;
   final List<ImageItem> images = [];
 
@@ -56,6 +70,11 @@ class LifenizerAppState extends ChangeNotifier {
       participants.clear();
       conversations.clear();
       relations.clear();
+      _markSearchIndexDirty();
+      _lastSearchQuery = null;
+      _lastSearchAt = null;
+      _lastSearchTopConversationIds = const [];
+      _sessionQueryFrequency.clear();
       savedSearches.clear();
       importCapabilities
         ..clear()
@@ -168,53 +187,108 @@ class LifenizerAppState extends ChangeNotifier {
     String? participantId,
     String? tag,
     bool favoritesOnly = false,
+    bool useVector = true,
   }) {
+    _ensureSearchIndex();
+    final index = _searchIndex;
+    if (index == null) {
+      return const [];
+    }
+
     final normalized = query.trim().toLowerCase();
     final normalizedSource = _cleanFilter(source);
     final normalizedParticipantId = _cleanFilter(participantId);
     final normalizedTag = _cleanFilter(tag)?.toLowerCase();
-    final results = conversations.where((conversation) {
+    final now = DateTime.now().toUtc();
+    final temporalIntent = _TemporalIntent.tryParse(normalized, now);
+
+    final previousQuery = _lastSearchQuery;
+    final previousTokens = previousQuery == null
+        ? const <String>[]
+        : _semanticTokens(_ConversationSearchIndex.tokenize(previousQuery));
+    final queryTokens = _semanticTokens(
+      _ConversationSearchIndex.tokenize(normalized),
+    );
+    final semanticQuery = queryTokens.join(' ');
+    final effectiveTokens = <String>[
+      ...queryTokens,
+      if (_shouldCarryPreviousQuery(normalized, previousTokens, queryTokens))
+        ...previousTokens,
+    ];
+
+    final queryFrequencyBoost = normalized.isEmpty
+        ? 0
+        : (_sessionQueryFrequency[normalized] ?? 0);
+    final candidateIds = index.lookupCandidates(effectiveTokens);
+    final scored = <_ScoredConversation>[];
+
+    for (final conversationId in candidateIds) {
+      final document = index.documents[conversationId];
+      if (document == null) continue;
+
+      final conversation = document.conversation;
       if (normalizedSource != null && conversation.source != normalizedSource) {
-        return false;
+        continue;
       }
       if (normalizedParticipantId != null &&
           !conversation.participantIds.contains(normalizedParticipantId)) {
-        return false;
+        continue;
       }
-      if (normalizedTag != null &&
-          !conversation.tags.any(
-            (item) => item.toLowerCase() == normalizedTag,
-          )) {
-        return false;
+      if (normalizedTag != null && !document.tagSet.contains(normalizedTag)) {
+        continue;
       }
       if (favoritesOnly && !conversation.isFavorite) {
-        return false;
+        continue;
       }
-      if (normalized.isEmpty) {
-        return true;
+
+      var score = 0.0;
+      if (normalized.isNotEmpty) {
+        if (semanticQuery.isNotEmpty &&
+            !document.haystack.contains(semanticQuery) &&
+            !_fuzzyMatch(semanticQuery, document.haystack)) {
+          continue;
+        }
+        score += index.lexicalScore(document, semanticQuery, effectiveTokens);
+        if (useVector) {
+          score += index.vectorScore(document, effectiveTokens) * 2.5;
+        }
+
+        score += _temporalScoreBoost(
+          conversation.startedAt.toUtc(),
+          now,
+          temporalIntent,
+        );
+        score += _recentSearchContinuityBoost(
+          conversation.id,
+          normalized,
+          previousQuery,
+          now,
+        );
+        if (queryFrequencyBoost > 0 && document.haystack.contains(normalized)) {
+          score += math.min(1.2, queryFrequencyBoost * 0.2);
+        }
+      } else {
+        // Empty query is timeline browsing; favor recency but keep deterministic.
+        score +=
+            _freshnessDecayScore(conversation.startedAt.toUtc(), now) * 2.0;
       }
-      final participantText = conversation.participantIds
-          .map(participantName)
-          .join(' ')
-          .toLowerCase();
-      final relationText = relations
-          .where(
-            (relation) => relation.evidenceConversationId == conversation.id,
-          )
-          .map(
-            (relation) =>
-                '${relation.subject} ${relation.relation} ${relation.object}',
-          )
-          .join(' ')
-          .toLowerCase();
-      final haystack =
-          '${conversation.searchableText} $participantText $relationText';
-      if (haystack.contains(normalized)) {
-        return true;
-      }
-      return _fuzzyMatch(normalized, haystack);
-    }).toList();
-    return results..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+
+      scored.add(_ScoredConversation(conversation: conversation, score: score));
+    }
+
+    scored.sort((left, right) {
+      final byScore = right.score.compareTo(left.score);
+      if (byScore != 0) return byScore;
+      return right.conversation.startedAt.compareTo(
+        left.conversation.startedAt,
+      );
+    });
+
+    final results = scored
+        .map((item) => item.conversation)
+        .toList(growable: false);
+    _updateSearchContext(normalized, results, now);
+    return results;
   }
 
   /// Page-friendly view of [search]. Returns the slice of results for the
@@ -226,6 +300,7 @@ class LifenizerAppState extends ChangeNotifier {
     String? participantId,
     String? tag,
     bool favoritesOnly = false,
+    bool useVector = true,
     int page = 1,
     int pageSize = 10,
   }) {
@@ -235,6 +310,7 @@ class LifenizerAppState extends ChangeNotifier {
       participantId: participantId,
       tag: tag,
       favoritesOnly: favoritesOnly,
+      useVector: useVector,
     );
     if (pageSize <= 0) {
       return ConversationSearchPage(
@@ -452,6 +528,7 @@ class LifenizerAppState extends ChangeNotifier {
         .toSet()
         .toList();
     final ids = <String>[];
+    var addedParticipant = false;
     for (final name in names) {
       final existing = participants.where(
         (participant) =>
@@ -463,8 +540,12 @@ class LifenizerAppState extends ChangeNotifier {
       }
       final participant = Participant(id: _uuid.v4(), displayName: name);
       participants.add(participant);
+      addedParticipant = true;
       ids.add(participant.id);
       await _pushEntity('participant', participant.id, participant.toJson());
+    }
+    if (addedParticipant) {
+      _markSearchIndexDirty();
     }
     notifyListeners();
     return ids;
@@ -505,6 +586,59 @@ class LifenizerAppState extends ChangeNotifier {
     });
   }
 
+  Future<void> importSharedPayload({
+    String? fileName,
+    String? mimeType,
+    String? text,
+    List<int>? bytes,
+    Map<String, String> metadata = const {},
+  }) async {
+    final normalizedName = (fileName ?? '').trim();
+    final normalizedMime = (mimeType ?? '').trim().toLowerCase();
+    final normalizedText = text?.trim();
+    final lowerName = normalizedName.toLowerCase();
+
+    String source = 'manual-text';
+    if (lowerName.endsWith('.mbox')) {
+      source = 'mbox';
+    } else if (lowerName.endsWith('.patch') ||
+        lowerName.endsWith('.diff') ||
+        lowerName.contains('git')) {
+      source = 'git';
+    } else if (lowerName.contains('bookmark')) {
+      source = 'bookmarks';
+    } else if (lowerName.contains('google') && lowerName.contains('search')) {
+      source = 'google-search-history';
+    } else if (lowerName.contains('history')) {
+      source = 'browser-history';
+    } else if (lowerName.contains('backup') ||
+        lowerName.endsWith('.lifenizerbackup')) {
+      source = 'lifenizer-backup';
+    } else if (normalizedMime.startsWith('audio/')) {
+      source = 'audio';
+    } else if (normalizedMime.startsWith('image/') ||
+        normalizedMime == 'application/pdf') {
+      source = 'scanned-pdf';
+    } else if (normalizedMime == 'text/uri-list' ||
+        normalizedText?.startsWith('http') == true) {
+      source = 'browser-capture';
+    }
+
+    final payloadBase64 = bytes == null || bytes.isEmpty
+        ? null
+        : base64Encode(bytes);
+
+    await importSource(
+      source: source,
+      title: normalizedName.isEmpty ? 'Shared import' : normalizedName,
+      text: payloadBase64 == null ? normalizedText : null,
+      originalFileName: normalizedName.isEmpty ? null : normalizedName,
+      mimeType: normalizedMime.isEmpty ? null : normalizedMime,
+      metadata: {...metadata, 'shared': 'true'},
+      payloadBase64: payloadBase64,
+    );
+  }
+
   Future<void> importSample(String source) async {
     switch (source) {
       case 'whatsapp':
@@ -525,6 +659,82 @@ class LifenizerAppState extends ChangeNotifier {
           source: source,
           text:
               'timestamp,sender,message\n2026-05-20T12:00:00Z,Sam,Signal CSV import works',
+        );
+      case 'slack':
+        return importSource(
+          source: source,
+          title: 'Slack project channel',
+          text:
+              '[{"user_profile":{"display_name":"Nina"},"text":"Slack export sample message.","ts":"1716206400.0"}]',
+        );
+      case 'teams':
+        return importSource(
+          source: source,
+          title: 'Teams planning thread',
+          text:
+              '{"messages":[{"fromDisplayName":"Jon","content":"<p>Teams export sample message.</p>","createdDateTime":"2026-05-20T13:10:00Z"}]}',
+        );
+      case 'facebook-messenger':
+        return importSource(
+          source: source,
+          title: 'Messenger thread sample',
+          text:
+              '{"title":"Friends Thread","participants":[{"name":"Ava"},{"name":"Liam"}],"messages":[{"sender_name":"Ava","content":"Messenger export sample message.","timestamp_ms":1716206400000}]}',
+        );
+      case 'instagram':
+        return importSource(
+          source: source,
+          title: 'Instagram DM sample',
+          text:
+              '{"title":"DM with Sam","participants":[{"name":"Sam"}],"messages":[{"sender_name":"Sam","content":"Instagram export sample message.","timestamp_ms":1716207400000}]}',
+        );
+      case 'imessage':
+        return importSource(
+          source: source,
+          title: 'iMessage sample',
+          text: '5/20/2026, 9:41 AM - Alex: iMessage export sample message.',
+        );
+      case 'mbox':
+        return importSource(
+          source: source,
+          title: 'Mbox sample',
+          text:
+              'From sender@example.test Tue May 20 10:15:00 2026\nFrom: Sender <sender@example.test>\nTo: Receiver <receiver@example.test>\nSubject: Mbox sample\nDate: Tue, 20 May 2026 10:15:00 +0000\n\nThis is a sample mbox message body.',
+        );
+      case 'git':
+        return importSource(
+          source: source,
+          title: 'Git sample',
+          text:
+              'commit 0f4e9b7\nAuthor: Dev One <dev1@example.test>\nDate: 2026-05-20T14:00:00Z\n\nAdd importer support for browser extension payloads',
+        );
+      case 'browser-capture':
+        return importSource(
+          source: source,
+          title: 'Captured reading session',
+          text:
+              '{"events":[{"title":"Importer docs","url":"https://docs.example.test/importers","content":"Read about browser capture format.","timestamp":"2026-05-20T15:00:00Z"}]}',
+        );
+      case 'google-search-history':
+        return importSource(
+          source: source,
+          title: 'Google search sample',
+          text:
+              'query,url,time\nflutter receive sharing intent,https://www.google.com/search?q=flutter+receive+sharing+intent,2026-05-20T15:30:00Z',
+        );
+      case 'bookmarks':
+        return importSource(
+          source: source,
+          title: 'Bookmarks sample',
+          text:
+              '{"roots":{"bookmark_bar":{"children":[{"type":"url","name":"Lifenizer","url":"https://github.com/Ekwav/lifenizer"}]}}}',
+        );
+      case 'lifenizer-backup':
+        return importSource(
+          source: source,
+          title: 'Backup sample',
+          text:
+              '{"conversations":[{"title":"Backup conversation","source":"manual-text","participantNames":["Alice"],"segments":[{"text":"Recovered from backup","participantName":"Alice","offsetMs":0}]}]}',
         );
       case 'browser-history':
         return importSource(
@@ -581,6 +791,7 @@ class LifenizerAppState extends ChangeNotifier {
         segments: [ConversationSegment(id: _uuid.v4(), text: text.trim())],
       );
       conversations.add(conversation);
+      _markSearchIndexDirty();
       await _pushEntity('conversation', conversation.id, conversation.toJson());
       status = 'Conversation encrypted and synced';
     });
@@ -611,6 +822,7 @@ class LifenizerAppState extends ChangeNotifier {
         ],
       );
       conversations.add(conversation);
+      _markSearchIndexDirty();
       await _pushEntity('conversation', conversation.id, conversation.toJson());
       status = 'Artifact metadata encrypted and synced';
     });
@@ -648,6 +860,7 @@ class LifenizerAppState extends ChangeNotifier {
         ],
       );
       conversations.add(conversation);
+      _markSearchIndexDirty();
       await _pushEntity('conversation', conversation.id, conversation.toJson());
       status = 'Recording session encrypted and synced';
     });
@@ -660,10 +873,15 @@ class LifenizerAppState extends ChangeNotifier {
         text: conversation.segments.map((segment) => segment.text).join('\n'),
         conversationId: conversation.id,
       );
+      var addedRelation = false;
       for (final relation in extracted) {
         if (relations.any((existing) => existing.id == relation.id)) continue;
         relations.add(relation);
+        addedRelation = true;
         await _pushEntity('relation', relation.id, relation.toJson());
+      }
+      if (addedRelation) {
+        _markSearchIndexDirty();
       }
       status = extracted.isEmpty
           ? 'No relations detected'
@@ -716,6 +934,7 @@ class LifenizerAppState extends ChangeNotifier {
   }
 
   Future<void> _ingestNormalizedImport(NormalizedImportResult result) async {
+    var addedConversation = false;
     for (final normalized in result.conversations) {
       final participantIds = await ensureParticipantNames(
         normalized.participantNames,
@@ -759,7 +978,11 @@ class LifenizerAppState extends ChangeNotifier {
               ],
       );
       conversations.add(conversation);
+      addedConversation = true;
       await _pushEntity('conversation', conversation.id, conversation.toJson());
+    }
+    if (addedConversation) {
+      _markSearchIndexDirty();
     }
   }
 
@@ -769,16 +992,19 @@ class LifenizerAppState extends ChangeNotifier {
         final participant = Participant.fromJson(json);
         participants.removeWhere((item) => item.id == participant.id);
         participants.add(participant);
+        _markSearchIndexDirty();
         break;
       case 'conversation':
         final conversation = Conversation.fromJson(json);
         conversations.removeWhere((item) => item.id == conversation.id);
         conversations.add(conversation);
+        _markSearchIndexDirty();
         break;
       case 'relation':
         final relation = RelationEdge.fromJson(json);
         relations.removeWhere((item) => item.id == relation.id);
         relations.add(relation);
+        _markSearchIndexDirty();
         break;
       case 'saved-search':
         final savedSearch = SavedSearch.fromJson(json);
@@ -848,6 +1074,206 @@ class LifenizerAppState extends ChangeNotifier {
     return cleaned == null || cleaned.isEmpty ? null : cleaned;
   }
 
+  void _markSearchIndexDirty() {
+    _searchIndexDirty = true;
+  }
+
+  bool _shouldCarryPreviousQuery(
+    String normalized,
+    List<String> previousTokens,
+    List<String> currentTokens,
+  ) {
+    if (normalized.isEmpty || previousTokens.isEmpty) {
+      return false;
+    }
+
+    final hasCarryHint =
+        normalized.contains('last search') ||
+        normalized.contains('previous search') ||
+        normalized.contains('same as before') ||
+        normalized.contains('again') ||
+        normalized.contains('same time');
+    if (hasCarryHint) {
+      return true;
+    }
+
+    if (currentTokens.length <= 2 && _lastSearchAt != null) {
+      final minutes = DateTime.now()
+          .toUtc()
+          .difference(_lastSearchAt!)
+          .inMinutes;
+      if (minutes <= 5) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  List<String> _semanticTokens(List<String> tokens) {
+    if (tokens.isEmpty) {
+      return tokens;
+    }
+
+    const controlTerms = {
+      'same',
+      'time',
+      'last',
+      'year',
+      'today',
+      'yesterday',
+      'week',
+      'month',
+      'morning',
+      'afternoon',
+      'evening',
+      'night',
+      'tonight',
+      'search',
+      'previous',
+      'before',
+      'again',
+      'this',
+      'as',
+    };
+
+    final filtered = tokens
+        .where((token) => !controlTerms.contains(token))
+        .toList(growable: false);
+    return filtered.isEmpty ? tokens : filtered;
+  }
+
+  double _freshnessDecayScore(DateTime documentTime, DateTime now) {
+    final ageDays = now.difference(documentTime).inHours / 24.0;
+    if (ageDays <= 0) {
+      return 1.0;
+    }
+    // Half-life around 180 days keeps recent items favored without overwhelming semantics.
+    return math.exp(-(ageDays / 180.0));
+  }
+
+  double _temporalScoreBoost(
+    DateTime documentTime,
+    DateTime now,
+    _TemporalIntent? intent,
+  ) {
+    var boost = _freshnessDecayScore(documentTime, now) * 1.0;
+    if (intent == null) {
+      return boost;
+    }
+
+    boost += intent.alignmentScore(documentTime);
+    return boost;
+  }
+
+  double _recentSearchContinuityBoost(
+    String conversationId,
+    String normalized,
+    String? previousQuery,
+    DateTime now,
+  ) {
+    if (normalized.isEmpty || previousQuery == null || _lastSearchAt == null) {
+      return 0;
+    }
+
+    final elapsedMinutes = now.difference(_lastSearchAt!).inMinutes;
+    if (elapsedMinutes > 30) {
+      return 0;
+    }
+
+    final previousTokens = _ConversationSearchIndex.tokenize(
+      previousQuery,
+    ).toSet();
+    final currentTokens = _ConversationSearchIndex.tokenize(normalized).toSet();
+    if (previousTokens.isEmpty || currentTokens.isEmpty) {
+      return 0;
+    }
+
+    final overlap = currentTokens.intersection(previousTokens).length;
+    final overlapRatio = overlap / math.max(1, currentTokens.length);
+    final recentBoost = _lastSearchTopConversationIds.contains(conversationId)
+        ? 1.0
+        : 0.0;
+
+    if (overlapRatio <= 0 && recentBoost == 0.0) {
+      return 0;
+    }
+
+    final decay = math.exp(-(elapsedMinutes / 20.0));
+    return ((overlapRatio * 1.6) + recentBoost) * decay;
+  }
+
+  void _updateSearchContext(
+    String normalized,
+    List<Conversation> results,
+    DateTime now,
+  ) {
+    if (normalized.isEmpty) {
+      return;
+    }
+
+    _lastSearchQuery = normalized;
+    _lastSearchAt = now;
+    _lastSearchTopConversationIds = results
+        .take(5)
+        .map((item) => item.id)
+        .toList(growable: false);
+    _sessionQueryFrequency.update(
+      normalized,
+      (count) => count + 1,
+      ifAbsent: () => 1,
+    );
+  }
+
+  void _ensureSearchIndex() {
+    final needsRebuild =
+        _searchIndexDirty ||
+        _searchIndex == null ||
+        _indexedConversationCount != conversations.length ||
+        _indexedRelationCount != relations.length ||
+        _indexedParticipantCount != participants.length;
+    if (!needsRebuild) {
+      return;
+    }
+
+    final participantById = <String, String>{
+      for (final participant in participants)
+        participant.id: participant.displayName.toLowerCase(),
+    };
+    final relationTextByConversation = <String, StringBuffer>{};
+    for (final relation in relations) {
+      final conversationId = relation.evidenceConversationId;
+      if (conversationId == null || conversationId.isEmpty) {
+        continue;
+      }
+      final bucket = relationTextByConversation.putIfAbsent(
+        conversationId,
+        StringBuffer.new,
+      );
+      if (bucket.isNotEmpty) {
+        bucket.write(' ');
+      }
+      bucket
+        ..write(relation.subject)
+        ..write(' ')
+        ..write(relation.relation)
+        ..write(' ')
+        ..write(relation.object);
+    }
+
+    _searchIndex = _ConversationSearchIndex.build(
+      conversations: conversations,
+      participantById: participantById,
+      relationTextByConversation: relationTextByConversation.map(
+        (key, value) => MapEntry(key, value.toString().toLowerCase()),
+      ),
+    );
+    _searchIndexDirty = false;
+    _indexedConversationCount = conversations.length;
+    _indexedRelationCount = relations.length;
+    _indexedParticipantCount = participants.length;
+  }
+
   Future<void> _run(Future<void> Function() action) async {
     busy = true;
     error = null;
@@ -866,5 +1292,409 @@ class LifenizerAppState extends ChangeNotifier {
     final api = _api;
     if (api == null) throw StateError('Not logged in.');
     return api;
+  }
+}
+
+class _ScoredConversation {
+  const _ScoredConversation({required this.conversation, required this.score});
+
+  final Conversation conversation;
+  final double score;
+}
+
+class _IndexedConversation {
+  _IndexedConversation({
+    required this.conversation,
+    required this.haystack,
+    required this.title,
+    required this.source,
+    required this.tagSet,
+    required this.termFrequency,
+    required this.vectorNorm,
+  });
+
+  final Conversation conversation;
+  final String haystack;
+  final String title;
+  final String source;
+  final Set<String> tagSet;
+  final Map<String, int> termFrequency;
+  final double vectorNorm;
+}
+
+class _ConversationSearchIndex {
+  _ConversationSearchIndex({
+    required this.documents,
+    required this.invertedIndex,
+    required this.idf,
+    required this.allConversationIds,
+  });
+
+  final Map<String, _IndexedConversation> documents;
+  final Map<String, Set<String>> invertedIndex;
+  final Map<String, double> idf;
+  final Set<String> allConversationIds;
+
+  static _ConversationSearchIndex build({
+    required List<Conversation> conversations,
+    required Map<String, String> participantById,
+    required Map<String, String> relationTextByConversation,
+  }) {
+    final docs = <String, _IndexedConversation>{};
+    final inverted = <String, Set<String>>{};
+
+    for (final conversation in conversations) {
+      final participantText = conversation.participantIds
+          .map((id) => participantById[id] ?? id.toLowerCase())
+          .join(' ');
+      final relationText = relationTextByConversation[conversation.id] ?? '';
+      final haystack =
+          '${conversation.searchableText} $participantText $relationText'
+              .trim();
+      final tokens = tokenize(haystack);
+      final termFrequency = <String, int>{};
+      for (final token in tokens) {
+        termFrequency.update(token, (count) => count + 1, ifAbsent: () => 1);
+      }
+
+      for (final token in termFrequency.keys) {
+        inverted.putIfAbsent(token, () => <String>{}).add(conversation.id);
+      }
+
+      docs[conversation.id] = _IndexedConversation(
+        conversation: conversation,
+        haystack: haystack,
+        title: conversation.title.toLowerCase(),
+        source: conversation.source.toLowerCase(),
+        tagSet: conversation.tags.map((tag) => tag.toLowerCase()).toSet(),
+        termFrequency: termFrequency,
+        vectorNorm: 0,
+      );
+    }
+
+    final docCount = docs.length;
+    final idf = <String, double>{};
+    for (final entry in inverted.entries) {
+      final df = entry.value.length;
+      // Smoothed IDF to avoid division by zero and dampen very common terms.
+      idf[entry.key] = math.log((1 + docCount) / (1 + df)) + 1.0;
+    }
+
+    final docsWithNorm = <String, _IndexedConversation>{};
+    for (final entry in docs.entries) {
+      final document = entry.value;
+      var normSquared = 0.0;
+      for (final tfEntry in document.termFrequency.entries) {
+        final tokenIdf = idf[tfEntry.key] ?? 0.0;
+        final weight = tfEntry.value * tokenIdf;
+        normSquared += weight * weight;
+      }
+      docsWithNorm[entry.key] = _IndexedConversation(
+        conversation: document.conversation,
+        haystack: document.haystack,
+        title: document.title,
+        source: document.source,
+        tagSet: document.tagSet,
+        termFrequency: document.termFrequency,
+        vectorNorm: math.sqrt(normSquared),
+      );
+    }
+
+    return _ConversationSearchIndex(
+      documents: docsWithNorm,
+      invertedIndex: inverted,
+      idf: idf,
+      allConversationIds: docsWithNorm.keys.toSet(),
+    );
+  }
+
+  Set<String> lookupCandidates(List<String> queryTokens) {
+    if (queryTokens.isEmpty) {
+      return allConversationIds;
+    }
+
+    final candidates = <String>{};
+    for (final token in queryTokens) {
+      final direct = invertedIndex[token];
+      if (direct != null) {
+        candidates.addAll(direct);
+        continue;
+      }
+
+      // Fuzzy fallback in index-space for typo tolerance.
+      for (final entry in invertedIndex.entries) {
+        final candidateToken = entry.key;
+        if ((candidateToken.length - token.length).abs() > 2) {
+          continue;
+        }
+        final limit = token.length >= 6 ? 2 : 1;
+        if (_boundedDistance(token, candidateToken, limit) <= limit) {
+          candidates.addAll(entry.value);
+        }
+      }
+    }
+
+    return candidates.isEmpty ? allConversationIds : candidates;
+  }
+
+  double lexicalScore(
+    _IndexedConversation document,
+    String normalizedQuery,
+    List<String> queryTokens,
+  ) {
+    if (normalizedQuery.isEmpty) {
+      return 0;
+    }
+
+    var score = 0.0;
+    if (document.haystack.contains(normalizedQuery)) {
+      score += 8.0;
+    }
+
+    for (final token in queryTokens) {
+      final tf = document.termFrequency[token] ?? 0;
+      if (tf > 0) {
+        score += 2.0 + (tf * 1.2);
+      }
+      if (document.title.contains(token)) {
+        score += 3.0;
+      }
+      if (document.source.contains(token)) {
+        score += 1.0;
+      }
+      if (document.tagSet.contains(token)) {
+        score += 1.5;
+      }
+    }
+
+    return score;
+  }
+
+  double vectorScore(_IndexedConversation document, List<String> queryTokens) {
+    if (queryTokens.isEmpty || document.vectorNorm <= 0) {
+      return 0;
+    }
+
+    final queryTf = <String, int>{};
+    for (final token in queryTokens) {
+      queryTf.update(token, (count) => count + 1, ifAbsent: () => 1);
+    }
+
+    var queryNormSquared = 0.0;
+    var dot = 0.0;
+    for (final entry in queryTf.entries) {
+      final tokenIdf = idf[entry.key] ?? 0.0;
+      if (tokenIdf <= 0) {
+        continue;
+      }
+
+      final queryWeight = entry.value * tokenIdf;
+      queryNormSquared += queryWeight * queryWeight;
+
+      final docTf = document.termFrequency[entry.key];
+      if (docTf == null) {
+        continue;
+      }
+      final docWeight = docTf * tokenIdf;
+      dot += queryWeight * docWeight;
+    }
+
+    if (queryNormSquared <= 0 || dot <= 0) {
+      return 0;
+    }
+
+    final queryNorm = math.sqrt(queryNormSquared);
+    return dot / (queryNorm * document.vectorNorm);
+  }
+
+  static List<String> tokenize(String text) {
+    return text
+        .toLowerCase()
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where((token) => token.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  static int _boundedDistance(String left, String right, int limit) {
+    if ((left.length - right.length).abs() > limit) {
+      return limit + 1;
+    }
+
+    var previous = List<int>.generate(right.length + 1, (index) => index);
+    var current = List<int>.filled(right.length + 1, 0);
+    for (var i = 1; i <= left.length; i++) {
+      current[0] = i;
+      var rowMin = current[0];
+      for (var j = 1; j <= right.length; j++) {
+        final cost = left.codeUnitAt(i - 1) == right.codeUnitAt(j - 1) ? 0 : 1;
+        final deletion = previous[j] + 1;
+        final insertion = current[j - 1] + 1;
+        final substitution = previous[j - 1] + cost;
+        var min = deletion < insertion ? deletion : insertion;
+        if (substitution < min) {
+          min = substitution;
+        }
+        current[j] = min;
+        if (min < rowMin) {
+          rowMin = min;
+        }
+      }
+      if (rowMin > limit) {
+        return limit + 1;
+      }
+      final swap = previous;
+      previous = current;
+      current = swap;
+    }
+
+    return previous[right.length];
+  }
+}
+
+class _TemporalIntent {
+  const _TemporalIntent({
+    required this.targetStart,
+    required this.targetEnd,
+    this.hourStart,
+    this.hourEnd,
+    this.weight = 1.0,
+  });
+
+  final DateTime targetStart;
+  final DateTime targetEnd;
+  final int? hourStart;
+  final int? hourEnd;
+  final double weight;
+
+  static _TemporalIntent? tryParse(String normalizedQuery, DateTime nowUtc) {
+    if (normalizedQuery.isEmpty) {
+      return null;
+    }
+
+    DateTime start;
+    DateTime end;
+    double weight = 1.0;
+
+    final hasLastYear = normalizedQuery.contains('last year');
+    final hasSameTimeLastYear =
+        normalizedQuery.contains('same time last year') ||
+        normalizedQuery.contains('this time last year') ||
+        normalizedQuery.contains('on this day last year') ||
+        normalizedQuery.contains('same date last year');
+
+    if (hasSameTimeLastYear) {
+      final anchor = _safeShiftYear(nowUtc, -1);
+      start = DateTime.utc(
+        anchor.year,
+        anchor.month,
+        anchor.day,
+      ).subtract(const Duration(days: 1));
+      end = DateTime.utc(
+        anchor.year,
+        anchor.month,
+        anchor.day,
+      ).add(const Duration(days: 1, hours: 23, minutes: 59, seconds: 59));
+      weight = 2.6;
+    } else if (hasLastYear) {
+      final year = nowUtc.year - 1;
+      start = DateTime.utc(year, 1, 1);
+      end = DateTime.utc(year, 12, 31, 23, 59, 59);
+      weight = 1.6;
+    } else if (normalizedQuery.contains('yesterday')) {
+      final yesterday = nowUtc.subtract(const Duration(days: 1));
+      start = DateTime.utc(yesterday.year, yesterday.month, yesterday.day);
+      end = DateTime.utc(
+        yesterday.year,
+        yesterday.month,
+        yesterday.day,
+        23,
+        59,
+        59,
+      );
+      weight = 1.9;
+    } else if (normalizedQuery.contains('today')) {
+      start = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day);
+      end = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, 23, 59, 59);
+      weight = 1.6;
+    } else if (normalizedQuery.contains('last week')) {
+      start = nowUtc.subtract(const Duration(days: 7));
+      end = nowUtc;
+      weight = 1.4;
+    } else if (normalizedQuery.contains('last month')) {
+      start = nowUtc.subtract(const Duration(days: 30));
+      end = nowUtc;
+      weight = 1.3;
+    } else {
+      return null;
+    }
+
+    final hourRange = _parseHourRange(normalizedQuery);
+    return _TemporalIntent(
+      targetStart: start,
+      targetEnd: end,
+      hourStart: hourRange?.$1,
+      hourEnd: hourRange?.$2,
+      weight: weight,
+    );
+  }
+
+  double alignmentScore(DateTime documentTime) {
+    final doc = documentTime.toUtc();
+    final rangeStart = targetStart.toUtc();
+    final rangeEnd = targetEnd.toUtc();
+    final inRange = !doc.isBefore(rangeStart) && !doc.isAfter(rangeEnd);
+    if (!inRange) {
+      final distanceDays = doc.isBefore(rangeStart)
+          ? rangeStart.difference(doc).inHours / 24.0
+          : doc.difference(rangeEnd).inHours / 24.0;
+      return math.exp(-(distanceDays / 21.0)) * 0.8;
+    }
+
+    var score = 2.0 * weight;
+    if (hourStart != null && hourEnd != null) {
+      final hourMatch = _hourInRange(doc.hour, hourStart!, hourEnd!);
+      score += hourMatch ? 1.4 : -0.6;
+    }
+    return score;
+  }
+
+  static (int, int)? _parseHourRange(String normalizedQuery) {
+    if (normalizedQuery.contains('morning')) {
+      return (5, 11);
+    }
+    if (normalizedQuery.contains('afternoon')) {
+      return (12, 17);
+    }
+    if (normalizedQuery.contains('evening')) {
+      return (18, 22);
+    }
+    if (normalizedQuery.contains('night') ||
+        normalizedQuery.contains('tonight')) {
+      return (22, 4);
+    }
+    return null;
+  }
+
+  static bool _hourInRange(int hour, int start, int end) {
+    if (start <= end) {
+      return hour >= start && hour <= end;
+    }
+    return hour >= start || hour <= end;
+  }
+
+  static DateTime _safeShiftYear(DateTime value, int years) {
+    final targetYear = value.year + years;
+    final lastDay = DateTime.utc(targetYear, value.month + 1, 0).day;
+    final day = value.day > lastDay ? lastDay : value.day;
+    return DateTime.utc(
+      targetYear,
+      value.month,
+      day,
+      value.hour,
+      value.minute,
+      value.second,
+      value.millisecond,
+      value.microsecond,
+    );
   }
 }

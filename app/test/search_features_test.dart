@@ -24,6 +24,105 @@ Conversation _conv({
 }
 
 void main() {
+  group('relevance priorities', () {
+    test('prefers same time last year when query asks for it', () {
+      final state = LifenizerAppState();
+      final now = DateTime.now().toUtc();
+      final lastYear = _safeLastYear(now);
+
+      state.conversations.addAll([
+        _conv(
+          id: 'last-year',
+          title: 'Importer retrospective',
+          segments: [ConversationSegment(id: 's1', text: 'Importer status')],
+          at: lastYear,
+        ),
+        _conv(
+          id: 'recent',
+          title: 'Importer retrospective',
+          segments: [ConversationSegment(id: 's2', text: 'Importer status')],
+          at: now.subtract(const Duration(days: 2)),
+        ),
+      ]);
+
+      final hits = state.search('importer same time last year');
+      expect(hits, hasLength(2));
+      expect(hits.first.id, 'last-year');
+    });
+
+    test('can reuse last search context with carryover phrase', () {
+      final state = LifenizerAppState();
+      state.conversations.addAll([
+        _conv(
+          id: 'atlas',
+          title: 'Project Atlas timeline',
+          segments: [
+            ConversationSegment(id: 's1', text: 'Atlas importer roadmap'),
+          ],
+        ),
+        _conv(
+          id: 'zeus',
+          title: 'Project Zeus timeline',
+          segments: [
+            ConversationSegment(id: 's2', text: 'Zeus importer roadmap'),
+          ],
+        ),
+      ]);
+
+      final first = state.search('atlas importer roadmap');
+      expect(first.first.id, 'atlas');
+
+      final followUp = state.search('same as before timeline');
+      expect(followUp.first.id, 'atlas');
+    });
+  });
+
+  group('indexed search', () {
+    test('picks up conversations added after first query', () {
+      final state = LifenizerAppState();
+      state.conversations.add(_conv(id: 'a', title: 'First entry'));
+
+      expect(state.search('second'), isEmpty);
+
+      state.conversations.add(_conv(id: 'b', title: 'Second entry'));
+      final hits = state.search('second');
+      expect(hits.map((item) => item.id), ['b']);
+    });
+
+    test('vector scoring can be toggled', () {
+      final state = LifenizerAppState();
+      state.conversations.addAll([
+        _conv(
+          id: 'a',
+          title: 'Importer plan',
+          segments: [
+            ConversationSegment(
+              id: 's1',
+              text: 'search index plan with importer coverage',
+            ),
+          ],
+        ),
+        _conv(
+          id: 'b',
+          title: 'Importer plan plan plan',
+          segments: [
+            ConversationSegment(id: 's2', text: 'index tuning and ranking'),
+          ],
+        ),
+      ]);
+
+      final lexical = state.search('importer plan', useVector: false);
+      final vector = state.search('importer plan', useVector: true);
+
+      expect(lexical, hasLength(2));
+      expect(vector, hasLength(2));
+      expect(
+        vector.map((item) => item.id).toSet(),
+        equals(lexical.map((item) => item.id).toSet()),
+      );
+    });
+  });
+
   group('fuzzy search', () {
     test('matches with single-character typo', () {
       final state = LifenizerAppState();
@@ -130,4 +229,11 @@ void main() {
       expect(page.totalPages, 3);
     });
   });
+}
+
+DateTime _safeLastYear(DateTime now) {
+  final targetYear = now.year - 1;
+  final lastDay = DateTime.utc(targetYear, now.month + 1, 0).day;
+  final day = now.day > lastDay ? lastDay : now.day;
+  return DateTime.utc(targetYear, now.month, day, now.hour);
 }

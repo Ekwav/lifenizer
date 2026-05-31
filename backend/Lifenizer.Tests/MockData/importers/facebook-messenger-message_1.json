@@ -1,0 +1,19 @@
+{
+  "title": "Project thread",
+  "participants": [
+    { "name": "Ava" },
+    { "name": "Liam" }
+  ],
+  "messages": [
+    {
+      "sender_name": "Ava",
+      "timestamp_ms": 1780203600000,
+      "content": "Messenger export in realistic shape"
+    },
+    {
+      "sender_name": "Liam",
+      "timestamp_ms": 1780203660000,
+      "content": "Looks good, now run integration tests"
+    }
+  ]
+}

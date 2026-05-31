@@ -7,11 +7,21 @@ These are intentional boundaries after the provider import implementation pass.
 - Email: IMAP login/select/search/fetch with request-scoped credentials. Tests use a mock IMAP server.
 - Paperless: document metadata/content fetch from a configured base URL and token. Tests use a mock HTTP API.
 - WhatsApp, Telegram, Signal, Discord exports: text/JSON/CSV parsers.
+- Slack and Microsoft Teams exports: JSON/text/zip parsers.
+- Facebook Messenger and Instagram exports: JSON/text/zip parsers.
+- iMessage/SMS exports: text and JSON parsers.
+- Local mbox exports: text parser for offline email archive imports.
+- Git history imports: plaintext log and JSON commit parsers.
+- Browser extension capture imports: URL/content event payload parser.
+- Google search history imports: JSON/CSV parser.
+- Bookmark imports: browser JSON and Netscape HTML parser.
+- Lifenizer backup imports: portable JSON bundle parser.
 - Discord API: channel message fetch from a configured base URL and bot token. Tests use a mock HTTP API.
 - Browser history: CSV/JSON parser.
 - YouTube transcripts: JSON/XML/text parser plus configured transcript URL/base URL fetch. Tests use a mock HTTP API.
 - Audio: supplied transcript text or configurable TAP/Coflnet transcription POST. Tests use a mock TAP endpoint and placeholder API key.
 - Scanned PDFs: supplied OCR text is normalized; real OCR engines can feed the same route.
+- Full metadata keys and request examples are documented in `docs/IMPORTERS.md`.
 
 ## Secrets
 

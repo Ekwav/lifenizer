@@ -1,0 +1,16 @@
+{
+  "events": [
+    {
+      "title": "Importer API docs",
+      "url": "https://docs.example.test/importers",
+      "content": "Compared Slack and Teams export schemas.",
+      "timestamp": "2026-05-30T16:42:00Z"
+    },
+    {
+      "title": "Android share target notes",
+      "url": "https://developer.android.com/training/sharing/receive",
+      "summary": "Checked ACTION_SEND and ACTION_SEND_MULTIPLE behavior.",
+      "time": "2026-05-30T16:50:00Z"
+    }
+  ]
+}

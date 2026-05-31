@@ -1,0 +1,34 @@
+{
+  "checksum": "faux-checksum",
+  "roots": {
+    "bookmark_bar": {
+      "children": [
+        {
+          "date_added": "1717152000000",
+          "id": "1",
+          "name": "Lifenizer Repo",
+          "type": "url",
+          "url": "https://github.com/Ekwav/lifenizer"
+        },
+        {
+          "date_added": "1717152600000",
+          "id": "2",
+          "name": "Import Research",
+          "type": "folder",
+          "children": [
+            {
+              "date_added": "1717152900000",
+              "id": "3",
+              "name": "Google Activity Schema",
+              "type": "url",
+              "url": "https://developers.google.com/data-portability/schema-reference/my_activity"
+            }
+          ]
+        }
+      ],
+      "name": "Bookmarks bar",
+      "type": "folder"
+    }
+  },
+  "version": 1
+}

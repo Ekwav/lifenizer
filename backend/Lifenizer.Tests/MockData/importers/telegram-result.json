@@ -1,0 +1,24 @@
+{
+  "name": "Release coordination",
+  "messages": [
+    {
+      "id": 1,
+      "date": "2026-05-28T08:00:00Z",
+      "from": "Marta",
+      "text": [
+        "Can we import nested ",
+        {
+          "type": "bold",
+          "text": "Telegram"
+        },
+        " text arrays?"
+      ]
+    },
+    {
+      "id": 2,
+      "date": "2026-05-28T08:02:00Z",
+      "from": "Jon",
+      "text": "Yes, parser now joins fragments."
+    }
+  ]
+}

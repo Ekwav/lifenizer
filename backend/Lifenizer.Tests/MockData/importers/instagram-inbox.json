@@ -1,0 +1,19 @@
+{
+  "title": "DM with Sam",
+  "participants": [
+    { "name": "Sam" },
+    { "name": "Rin" }
+  ],
+  "messages": [
+    {
+      "sender_name": "Sam",
+      "timestamp_ms": 1780207200000,
+      "content": "Instagram export parser check"
+    },
+    {
+      "sender_name": "Rin",
+      "timestamp_ms": 1780207260000,
+      "content": "Second DM line"
+    }
+  ]
+}
