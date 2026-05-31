@@ -4,6 +4,7 @@ import 'package:flutter/rendering.dart';
 
 import 'app_state.dart';
 import 'e2e_bridge.dart';
+import 'image_widgets.dart';
 import 'models.dart';
 
 void main() {
@@ -198,51 +199,61 @@ class _VaultShellState extends State<VaultShell> {
       body: LayoutBuilder(
         builder: (context, constraints) {
           final wide = constraints.maxWidth >= 820;
-          if (wide) {
-            return Row(
-              children: [
-                NavigationRail(
-                  selectedIndex: selectedIndex,
-                  onDestinationSelected: (index) =>
-                      setState(() => selectedIndex = index),
-                  labelType: NavigationRailLabelType.all,
-                  destinations: const [
-                    NavigationRailDestination(
-                      icon: Icon(Icons.search),
-                      label: Text('Search'),
+          final pageArea = LayoutBuilder(
+            builder: (context, innerConstraints) {
+              if (wide) {
+                return Row(
+                  children: [
+                    NavigationRail(
+                      selectedIndex: selectedIndex,
+                      onDestinationSelected: (index) =>
+                          setState(() => selectedIndex = index),
+                      labelType: NavigationRailLabelType.all,
+                      destinations: const [
+                        NavigationRailDestination(
+                          icon: Icon(Icons.search),
+                          label: Text('Search'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.insights_outlined),
+                          label: Text('Insights'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.add_circle_outline),
+                          label: Text('Capture'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.input),
+                          label: Text('Imports'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.people_outline),
+                          label: Text('People'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.account_tree_outlined),
+                          label: Text('Relations'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.sync),
+                          label: Text('Sync'),
+                        ),
+                      ],
                     ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.insights_outlined),
-                      label: Text('Insights'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.add_circle_outline),
-                      label: Text('Capture'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.input),
-                      label: Text('Imports'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.people_outline),
-                      label: Text('People'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.account_tree_outlined),
-                      label: Text('Relations'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.sync),
-                      label: Text('Sync'),
-                    ),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: pages[selectedIndex]),
                   ],
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(child: pages[selectedIndex]),
-              ],
-            );
-          }
-          return pages[selectedIndex];
+                );
+              }
+              return pages[selectedIndex];
+            },
+          );
+          return Column(
+            children: [
+              StorageQuotaBanner(state: widget.state),
+              Expanded(child: pageArea),
+            ],
+          );
         },
       ),
       bottomNavigationBar: LayoutBuilder(
@@ -349,153 +360,159 @@ class _SearchPageState extends State<SearchPage> {
       participantId: _participantFilter,
       tag: _tagFilter,
     );
-    return PageFrame(
-      title: 'Search',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: _queryController,
-            onChanged: (_) => setState(() {}),
-            onSubmitted: (_) {
-              FocusScope.of(context).unfocus();
-              setState(() {});
-            },
-            textInputAction: TextInputAction.search,
-            decoration: const InputDecoration(
-              labelText: 'Search text, people, relations',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
+    return RefreshIndicator(
+      onRefresh: widget.state.pullSync,
+      child: PageFrame(
+        title: 'Search',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _queryController,
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) {
+                FocusScope.of(context).unfocus();
+                setState(() {});
+              },
+              textInputAction: TextInputAction.search,
+              decoration: const InputDecoration(
+                labelText: 'Search text, people, relations',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              SizedBox(
-                width: 220,
-                child: _FilterDropdown(
-                  label: 'Source',
-                  value: _sourceFilter,
-                  items: widget.state.availableSources,
-                  onChanged: (value) => setState(() => _sourceFilter = value),
-                ),
-              ),
-              SizedBox(
-                width: 260,
-                child: _FilterDropdown(
-                  label: 'Participant',
-                  value: _participantFilter,
-                  items: widget.state.participants
-                      .map((item) => item.id)
-                      .toList(),
-                  itemLabel: widget.state.participantName,
-                  onChanged: (value) =>
-                      setState(() => _participantFilter = value),
-                ),
-              ),
-              SizedBox(
-                width: 220,
-                child: _FilterDropdown(
-                  label: 'Tag',
-                  value: _tagFilter,
-                  items: widget.state.allTags,
-                  onChanged: (value) => setState(() => _tagFilter = value),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => setState(() {
-                  _sourceFilter = '';
-                  _participantFilter = '';
-                  _tagFilter = '';
-                  _queryController.clear();
-                }),
-                icon: const Icon(Icons.filter_alt_off_outlined),
-                label: const Text('Clear'),
-              ),
-              FilledButton.icon(
-                onPressed: widget.state.busy ? null : _saveCurrentSearch,
-                icon: const Icon(Icons.bookmark_add_outlined),
-                label: const Text('Save search'),
-              ),
-            ],
-          ),
-          if (widget.state.savedSearches.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 12,
+              runSpacing: 12,
               children: [
-                for (final savedSearch in widget.state.savedSearches)
-                  ActionChip(
-                    avatar: const Icon(Icons.bookmark_outline),
-                    label: Text(savedSearch.title),
-                    onPressed: () => setState(() {
-                      _queryController.text = savedSearch.query;
-                      _sourceFilter = savedSearch.source ?? '';
-                      _participantFilter = savedSearch.participantId ?? '';
-                      _tagFilter = savedSearch.tag ?? '';
-                    }),
+                SizedBox(
+                  width: 220,
+                  child: _FilterDropdown(
+                    label: 'Source',
+                    value: _sourceFilter,
+                    items: widget.state.availableSources,
+                    onChanged: (value) => setState(() => _sourceFilter = value),
                   ),
+                ),
+                SizedBox(
+                  width: 260,
+                  child: _FilterDropdown(
+                    label: 'Participant',
+                    value: _participantFilter,
+                    items: widget.state.participants
+                        .map((item) => item.id)
+                        .toList(),
+                    itemLabel: widget.state.participantName,
+                    onChanged: (value) =>
+                        setState(() => _participantFilter = value),
+                  ),
+                ),
+                SizedBox(
+                  width: 220,
+                  child: _FilterDropdown(
+                    label: 'Tag',
+                    value: _tagFilter,
+                    items: widget.state.allTags,
+                    onChanged: (value) => setState(() => _tagFilter = value),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => setState(() {
+                    _sourceFilter = '';
+                    _participantFilter = '';
+                    _tagFilter = '';
+                    _queryController.clear();
+                  }),
+                  icon: const Icon(Icons.filter_alt_off_outlined),
+                  label: const Text('Clear'),
+                ),
+                FilledButton.icon(
+                  onPressed: widget.state.busy ? null : _saveCurrentSearch,
+                  icon: const Icon(Icons.bookmark_add_outlined),
+                  label: const Text('Save search'),
+                ),
               ],
             ),
-          ],
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _Metric(
-                label: 'Conversations',
-                value: '${widget.state.conversations.length}',
-              ),
-              _Metric(
-                label: 'Participants',
-                value: '${widget.state.participants.length}',
-              ),
-              _Metric(
-                label: 'Relations',
-                value: '${widget.state.relations.length}',
-              ),
-              _Metric(
-                label: 'Saved',
-                value: '${widget.state.savedSearches.length}',
+            if (widget.state.savedSearches.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final savedSearch in widget.state.savedSearches)
+                    ActionChip(
+                      avatar: const Icon(Icons.bookmark_outline),
+                      label: Text(savedSearch.title),
+                      onPressed: () => setState(() {
+                        _queryController.text = savedSearch.query;
+                        _sourceFilter = savedSearch.source ?? '';
+                        _participantFilter = savedSearch.participantId ?? '';
+                        _tagFilter = savedSearch.tag ?? '';
+                      }),
+                    ),
+                ],
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          if (results.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text(
-                  widget.state.conversations.isEmpty
-                      ? 'No conversations yet. Capture or import something to get started.'
-                      : 'No matches. Try a different query or clear the filters.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _Metric(
+                  label: 'Conversations',
+                  value: '${widget.state.conversations.length}',
+                ),
+                _Metric(
+                  label: 'Participants',
+                  value: '${widget.state.participants.length}',
+                ),
+                _Metric(
+                  label: 'Relations',
+                  value: '${widget.state.relations.length}',
+                ),
+                _Metric(
+                  label: 'Saved',
+                  value: '${widget.state.savedSearches.length}',
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (results.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    widget.state.conversations.isEmpty
+                        ? 'No conversations yet. Capture or import something to get started.'
+                        : 'No matches. Try a different query or clear the filters.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
+                ),
+              )
+            else ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '${results.length} result${results.length == 1 ? '' : 's'}',
+                  style: Theme.of(context).textTheme.labelMedium,
                 ),
               ),
-            )
-          else ...[
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                '${results.length} result${results.length == 1 ? '' : 's'}',
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-            ),
-            for (final conversation in results) ...[
-              ConversationCard(state: widget.state, conversation: conversation),
-              const SizedBox(height: 12),
+              for (final conversation in results) ...[
+                ConversationCard(
+                  state: widget.state,
+                  conversation: conversation,
+                ),
+                const SizedBox(height: 12),
+              ],
             ],
           ],
-        ],
-      ),
-    );
+        ),
+      ), // PageFrame
+    ); // RefreshIndicator
   }
 
   Future<void> _saveCurrentSearch() async {
@@ -1037,6 +1054,7 @@ class SyncPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final quota = state.quotaStatus;
     return PageFrame(
       title: 'Sync',
       child: Column(
@@ -1045,7 +1063,48 @@ class SyncPage extends StatelessWidget {
           Text('User ${state.session?.userId ?? ''}'),
           Text('Vault ${state.session?.vaultId ?? ''}'),
           Text('Cursor ${state.syncCursor}'),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
+          // Storage indicator
+          if (quota != null) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Storage · ${quota.plan}',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                Text(
+                  '${quota.usedFormatted} / ${quota.limitFormatted}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: (quota.usedPercent / 100).clamp(0.0, 1.0),
+                minHeight: 8,
+                color: quota.isOverLimit
+                    ? Theme.of(context).colorScheme.error
+                    : quota.isNearLimit
+                    ? Colors.orange
+                    : null,
+              ),
+            ),
+            if (quota.plan == 'Free') ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.star_outline),
+                label: const Text('Upgrade for more storage'),
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => UpgradeDialog(state: state),
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+          ],
           FilledButton.icon(
             onPressed: state.busy ? null : state.pullSync,
             icon: const Icon(Icons.sync),
@@ -1067,6 +1126,16 @@ class ConversationCard extends StatelessWidget {
   final LifenizerAppState state;
   final Conversation conversation;
 
+  void _openDetail(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) =>
+          _ConversationDetailSheet(state: state, conversation: conversation),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final participants = conversation.participantIds
@@ -1076,47 +1145,160 @@ class ConversationCard extends StatelessWidget {
         .map((segment) => segment.text)
         .join(' ');
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    conversation.title,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Detect relations',
-                  onPressed: () => state.extractRelations(conversation),
-                  icon: const Icon(Icons.account_tree_outlined),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text('${conversation.source} • $participants'),
-            if (conversation.tags.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
+      child: InkWell(
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        onTap: () => _openDetail(context),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  for (final tag in conversation.tags)
-                    Chip(
-                      label: Text(tag),
-                      visualDensity: VisualDensity.compact,
+                  Expanded(
+                    child: Text(
+                      conversation.title,
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'Detect relations',
+                    onPressed: () => state.extractRelations(conversation),
+                    icon: const Icon(Icons.account_tree_outlined),
+                  ),
                 ],
               ),
+              const SizedBox(height: 4),
+              Text('${conversation.source} • $participants'),
+              if (conversation.tags.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final tag in conversation.tags)
+                      Chip(
+                        label: Text(tag),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 8),
+              Text(preview, maxLines: 3, overflow: TextOverflow.ellipsis),
             ],
-            const SizedBox(height: 8),
-            Text(preview, maxLines: 3, overflow: TextOverflow.ellipsis),
-          ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _ConversationDetailSheet extends StatelessWidget {
+  const _ConversationDetailSheet({
+    required this.state,
+    required this.conversation,
+  });
+
+  final LifenizerAppState state;
+  final Conversation conversation;
+
+  @override
+  Widget build(BuildContext context) {
+    final participants = conversation.participantIds
+        .map(state.participantName)
+        .join(', ');
+    final fullText = conversation.segments.map((s) => s.text).join('\n\n');
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.4,
+      maxChildSize: 1.0,
+      expand: false,
+      builder: (ctx, scrollController) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: CustomScrollView(
+            controller: scrollController,
+            slivers: [
+              SliverToBoxAdapter(
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Text(
+                  conversation.title,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 12),
+                  child: Text(
+                    '${conversation.source} • $participants',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+              if (conversation.tags.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final tag in conversation.tags)
+                          Chip(
+                            label: Text(tag),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: AnimatedBuilder(
+                    animation: state,
+                    builder: (_, __) => ImageGallery(
+                      state: state,
+                      conversationId: conversation.id,
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Text(
+                  'Transcript',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    fullText.isEmpty ? 'No transcript.' : fullText,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

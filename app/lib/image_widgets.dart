@@ -194,6 +194,8 @@ class ImageGallery extends StatefulWidget {
 }
 
 class _ImageGalleryState extends State<ImageGallery> {
+  bool _uploading = false;
+
   @override
   void initState() {
     super.initState();
@@ -204,7 +206,33 @@ class _ImageGalleryState extends State<ImageGallery> {
       .where((img) => img.conversationId == widget.conversationId)
       .toList();
 
+  Future<void> _showPickerSheet() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+    await _pick(source);
+  }
+
   Future<void> _pick(ImageSource source) async {
+    setState(() => _uploading = true);
     try {
       await widget.state.captureAndUploadImage(
         source: source,
@@ -223,6 +251,8 @@ class _ImageGalleryState extends State<ImageGallery> {
           context,
         ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
       }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
     }
   }
 
@@ -239,15 +269,18 @@ class _ImageGalleryState extends State<ImageGallery> {
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const Spacer(),
-            IconButton(
-              icon: const Icon(Icons.camera_alt),
-              tooltip: 'Take photo',
-              onPressed: () => _pick(ImageSource.camera),
-            ),
-            IconButton(
-              icon: const Icon(Icons.photo_library),
-              tooltip: 'Pick from gallery',
-              onPressed: () => _pick(ImageSource.gallery),
+            if (_uploading)
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            IconButton.filled(
+              icon: const Icon(Icons.add_a_photo),
+              tooltip: 'Add image',
+              onPressed: _uploading ? null : _showPickerSheet,
             ),
           ],
         ),
@@ -325,13 +358,12 @@ class _ImageGalleryState extends State<ImageGallery> {
       ),
     );
     if (confirmed == true && mounted) {
+      final messenger = ScaffoldMessenger.of(context);
       try {
         await widget.state.deleteImage(img.id);
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+          messenger.showSnackBar(SnackBar(content: Text('Delete failed: $e')));
         }
       }
     }

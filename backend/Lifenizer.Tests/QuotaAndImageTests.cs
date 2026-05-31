@@ -174,11 +174,19 @@ public sealed class QuotaAndImageTests
                ?? throw new InvalidOperationException("Auth response was empty.");
     }
 
-    /// <summary>Returns the bytes of a valid 1×1 JPEG image.</summary>
-    private static byte[] MinimalJpeg() => Convert.FromBase64String(
-        "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQ" +
-        "oFBQQEBQoLCgsKCwsKCwsKCwsKCwsKCwsKCwsKCwsKCwsKCwsKCw" +
-        "sKCwsKCwv/wAAREAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/E" +
-        "ABQQAQAAAAAAAAAAAAAAAAAAAADw/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAA" +
-        "AAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB//Z");
+    /// <summary>Returns the bytes of a minimal valid JFIF JPEG (SOI + APP0 + EOI).</summary>
+    private static byte[] MinimalJpeg() =>
+    [
+        // SOI
+        0xFF, 0xD8,
+        // APP0 JFIF marker
+        0xFF, 0xE0, 0x00, 0x10,
+        0x4A, 0x46, 0x49, 0x46, 0x00, // "JFIF\0"
+        0x01, 0x01,                     // version 1.1
+        0x00,                           // aspect ratio units = 0
+        0x00, 0x01, 0x00, 0x01,         // 1x1 density
+        0x00, 0x00,                     // no thumbnail
+        // EOI
+        0xFF, 0xD9,
+    ];
 }
