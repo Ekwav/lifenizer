@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -91,6 +92,79 @@ class LifenizerApiClient {
     return relations;
   }
 
+  // ---------------------------------------------------------------------------
+  // Images
+  // ---------------------------------------------------------------------------
+
+  Future<ImageItem> uploadImage(
+    Uint8List bytes,
+    String fileName,
+    String contentType, {
+    String? conversationId,
+  }) async {
+    final uri = _uri('/api/images');
+    final req = http.MultipartRequest('POST', uri)
+      ..headers.addAll(_headers())
+      ..files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: fileName),
+      );
+    if (conversationId != null) {
+      req.fields['conversationId'] = conversationId;
+    }
+    final streamed = await req.send();
+    final resp = await http.Response.fromStream(streamed);
+    if (resp.statusCode == 402) throw QuotaExceededException(resp.body);
+    _ensureSuccess(resp);
+    return ImageItem.fromJson(
+      Map<String, dynamic>.from(jsonDecode(resp.body) as Map),
+    );
+  }
+
+  Future<List<ImageItem>> listImages({String? conversationId}) async {
+    final query = conversationId != null
+        ? {'conversationId': conversationId}
+        : null;
+    final response = await http.get(
+      _uri('/api/images', query),
+      headers: _headers(),
+    );
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as List;
+    return data
+        .map((e) => ImageItem.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<void> deleteImage(String id) async {
+    final response = await http.delete(
+      _uri('/api/images/$id'),
+      headers: _headers(),
+    );
+    _ensureSuccess(response);
+  }
+
+  String imageUrl(String id) => _uri('/api/images/$id').toString();
+
+  // ---------------------------------------------------------------------------
+  // Quota / Premium
+  // ---------------------------------------------------------------------------
+
+  Future<QuotaStatus> getQuotaStatus() async {
+    final response = await http.get(
+      _uri('/api/premium/status'),
+      headers: _headers(),
+    );
+    _ensureSuccess(response);
+    return QuotaStatus.fromJson(
+      Map<String, dynamic>.from(jsonDecode(response.body) as Map),
+    );
+  }
+
+  Future<String> createCheckoutUrl(String plan) async {
+    final response = await _post('/api/premium/checkout/$plan', {});
+    return response['checkoutUrl'] as String;
+  }
+
   Future<Map<String, dynamic>> _post(
     String path,
     Map<String, dynamic> body, {
@@ -142,4 +216,13 @@ class ApiException implements Exception {
 
   @override
   String toString() => 'API $statusCode: $body';
+}
+
+class QuotaExceededException implements Exception {
+  QuotaExceededException(this.body);
+
+  final String body;
+
+  @override
+  String toString() => 'Quota exceeded: $body';
 }

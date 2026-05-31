@@ -7,6 +7,7 @@ public sealed class LifenizerDbContext(DbContextOptions<LifenizerDbContext> opti
     public DbSet<UserAccount> Users => Set<UserAccount>();
     public DbSet<SyncEnvelopeRecord> SyncEnvelopes => Set<SyncEnvelopeRecord>();
     public DbSet<UsageEventRecord> UsageEvents => Set<UsageEventRecord>();
+    public DbSet<ImageRecord> Images => Set<ImageRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -39,6 +40,16 @@ public sealed class LifenizerDbContext(DbContextOptions<LifenizerDbContext> opti
             entity.HasIndex(usage => new { usage.UserId, usage.CreatedAt });
             entity.Property(usage => usage.Kind).HasMaxLength(96);
             entity.Property(usage => usage.Unit).HasMaxLength(32);
+        });
+
+        modelBuilder.Entity<ImageRecord>(entity =>
+        {
+            entity.HasKey(img => img.Id);
+            entity.HasIndex(img => new { img.UserId, img.UploadedAt });
+            entity.Property(img => img.FileName).HasMaxLength(255);
+            entity.Property(img => img.ContentType).HasMaxLength(64);
+            entity.Property(img => img.BlobPath).HasMaxLength(512);
+            entity.Property(img => img.ConversationId).HasMaxLength(128);
         });
     }
 }

@@ -528,6 +528,79 @@ class NormalizedSegment {
   }
 }
 
+class ImageItem {
+  ImageItem({
+    required this.id,
+    required this.fileName,
+    required this.contentType,
+    required this.sizeBytes,
+    required this.uploadedAt,
+    this.conversationId,
+  });
+
+  final String id;
+  final String fileName;
+  final String contentType;
+  final int sizeBytes;
+  final DateTime uploadedAt;
+  final String? conversationId;
+
+  factory ImageItem.fromJson(Map<String, dynamic> json) {
+    return ImageItem(
+      id: json['id'] as String,
+      fileName: json['fileName'] as String,
+      contentType: json['contentType'] as String,
+      sizeBytes: json['sizeBytes'] as int,
+      uploadedAt: DateTime.parse(json['uploadedAt'] as String),
+      conversationId: json['conversationId'] as String?,
+    );
+  }
+}
+
+class QuotaStatus {
+  QuotaStatus({
+    required this.plan,
+    required this.usedBytes,
+    required this.limitBytes,
+    required this.usedPercent,
+    this.expiresAt,
+  });
+
+  final String plan;
+  final int usedBytes;
+  final int limitBytes;
+  final double usedPercent;
+  final DateTime? expiresAt;
+
+  bool get isNearLimit => usedPercent >= 80;
+  bool get isOverLimit => usedBytes >= limitBytes;
+
+  String get usedFormatted => _formatBytes(usedBytes);
+  String get limitFormatted => _formatBytes(limitBytes);
+
+  static String _formatBytes(int bytes) {
+    if (bytes >= 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+    } else if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    } else {
+      return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    }
+  }
+
+  factory QuotaStatus.fromJson(Map<String, dynamic> json) {
+    return QuotaStatus(
+      plan: json['plan'] as String? ?? 'Free',
+      usedBytes: (json['usedBytes'] as num).toInt(),
+      limitBytes: (json['limitBytes'] as num).toInt(),
+      usedPercent: (json['usedPercent'] as num).toDouble(),
+      expiresAt: json['expiresAt'] == null
+          ? null
+          : DateTime.parse(json['expiresAt'] as String),
+    );
+  }
+}
+
 Map<String, dynamic> decodeJsonMap(String value) {
   return Map<String, dynamic>.from(jsonDecode(value) as Map);
 }

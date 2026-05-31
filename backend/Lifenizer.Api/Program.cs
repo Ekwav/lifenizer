@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Coflnet.Payments.Client.Api;
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
 using Lifenizer.Api.Data;
@@ -18,13 +19,30 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddOpenApi();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient("imports");
 builder.Services.AddScoped<ClaimsPrincipalUser>();
 builder.Services.AddScoped<UserAccountService>();
 builder.Services.AddScoped<PlainImapImportClient>();
 builder.Services.AddScoped<ProviderHttpImportClient>();
 builder.Services.AddScoped<ImportOrchestrator>();
+builder.Services.AddScoped<PremiumService>();
 builder.Services.AddLifenizerAuth(builder.Configuration);
+
+// Coflnet Payments API client – gracefully skipped when Payments:BaseUrl is absent.
+var paymentsBaseUrl = builder.Configuration["Payments:BaseUrl"];
+if (!string.IsNullOrWhiteSpace(paymentsBaseUrl))
+{
+    builder.Services.AddHttpClient<IUserApi, UserApi>(client =>
+    {
+        client.BaseAddress = new Uri(paymentsBaseUrl.TrimEnd('/') + "/");
+    });
+}
+else
+{
+    // Register a no-op stub so DI resolves without crashing when payments is unconfigured.
+    builder.Services.AddSingleton<IUserApi>(new UserApi("http://localhost:8000"));
+}
 
 builder.Services.AddDbContext<LifenizerDbContext>(options =>
 {
@@ -84,7 +102,10 @@ app.MapSyncEndpoints();
 app.MapAnalysisEndpoints();
 app.MapImportEndpoints();
 app.MapUsageEndpoints();
+app.MapImageEndpoints();
+app.MapPremiumEndpoints();
 
 app.Run();
 
 public partial class Program;
+

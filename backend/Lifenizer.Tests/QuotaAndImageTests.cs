@@ -1,0 +1,184 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using Lifenizer.Core;
+
+namespace Lifenizer.Tests;
+
+/// <summary>
+/// Integration tests for storage quota and image upload endpoints.
+/// </summary>
+public sealed class QuotaAndImageTests
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    // -----------------------------------------------------------------------
+    // Quota tests
+    // -----------------------------------------------------------------------
+
+    [Test]
+    public async Task PremiumStatusReturnsFreePlanByDefault()
+    {
+        await using var factory = new LifenizerApiFactory();
+        using var client = factory.CreateClient();
+
+        var auth = await LoginAsync(client, "quota-user@example.test");
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", auth.AuthToken);
+
+        var response = await client.GetAsync("/api/premium/status");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Multiple(() =>
+        {
+            Assert.That(body.GetProperty("plan").GetString(), Does.Contain("Free").Or.Contain("Personal"));
+            Assert.That(body.GetProperty("limitBytes").GetInt64(), Is.EqualTo(StorageQuota.FreeLimitBytes));
+            Assert.That(body.GetProperty("usedBytes").GetInt64(), Is.EqualTo(0));
+        });
+    }
+
+    [Test]
+    public async Task QuotaStatusRequiresAuthentication()
+    {
+        await using var factory = new LifenizerApiFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/premium/status");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
+    // -----------------------------------------------------------------------
+    // Image upload / download / delete
+    // -----------------------------------------------------------------------
+
+    [Test]
+    public async Task UploadAndDownloadImage()
+    {
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Artifacts:StorePath"] = Path.Combine(Path.GetTempPath(), "lifenizer-test-blobs", Guid.NewGuid().ToString("N"))
+        });
+        using var client = factory.CreateClient();
+
+        var auth = await LoginAsync(client, "img-user@example.test");
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", auth.AuthToken);
+
+        // Upload a minimal JPEG (1×1 pixel).
+        var jpegBytes = MinimalJpeg();
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(jpegBytes)
+        {
+            Headers = { ContentType = new MediaTypeHeaderValue("image/jpeg") }
+        }, "file", "test.jpg");
+
+        var upload = await client.PostAsync("/api/images", content);
+        Assert.That(upload.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+
+        var uploadBody = await upload.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var id = uploadBody.GetProperty("id").GetString()!;
+
+        // Download.
+        var download = await client.GetAsync($"/api/images/{id}");
+        Assert.That(download.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(download.Content.Headers.ContentType!.MediaType, Is.EqualTo("image/jpeg"));
+
+        var downloadedBytes = await download.Content.ReadAsByteArrayAsync();
+        Assert.That(downloadedBytes, Is.EqualTo(jpegBytes));
+    }
+
+    [Test]
+    public async Task DeleteImageRemovesBlob()
+    {
+        var blobRoot = Path.Combine(
+            Path.GetTempPath(), "lifenizer-test-blobs", Guid.NewGuid().ToString("N"));
+
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Artifacts:StorePath"] = blobRoot
+        });
+        using var client = factory.CreateClient();
+
+        var auth = await LoginAsync(client, "del-user@example.test");
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", auth.AuthToken);
+
+        var jpegBytes = MinimalJpeg();
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(jpegBytes)
+        {
+            Headers = { ContentType = new MediaTypeHeaderValue("image/jpeg") }
+        }, "file", "delete-me.jpg");
+
+        var upload = await client.PostAsync("/api/images", content);
+        upload.EnsureSuccessStatusCode();
+        var uploadBody = await upload.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var id = uploadBody.GetProperty("id").GetString()!;
+
+        // Check quota increased.
+        var status = await client.GetFromJsonAsync<JsonElement>("/api/premium/status", JsonOptions);
+        Assert.That(status.GetProperty("usedBytes").GetInt64(), Is.GreaterThan(0));
+
+        // Delete.
+        var delete = await client.DeleteAsync($"/api/images/{id}");
+        Assert.That(delete.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+
+        // Download should now 404.
+        var download = await client.GetAsync($"/api/images/{id}");
+        Assert.That(download.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        // Quota should have been decremented.
+        var status2 = await client.GetFromJsonAsync<JsonElement>("/api/premium/status", JsonOptions);
+        Assert.That(status2.GetProperty("usedBytes").GetInt64(), Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task UploadUnsupportedContentTypeIsRejected()
+    {
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Artifacts:StorePath"] = Path.Combine(Path.GetTempPath(), "lifenizer-test-blobs", Guid.NewGuid().ToString("N"))
+        });
+        using var client = factory.CreateClient();
+
+        var auth = await LoginAsync(client, "ct-user@example.test");
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", auth.AuthToken);
+
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("not an image"))
+        {
+            Headers = { ContentType = new MediaTypeHeaderValue("text/plain") }
+        }, "file", "evil.txt");
+
+        var response = await client.PostAsync("/api/images", content);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    private static async Task<AuthResponse> LoginAsync(HttpClient client, string email)
+    {
+        var response = await client.PostAsJsonAsync(
+            "/api/auth/dev-login",
+            new DevLoginRequest(email, email.Split('@')[0]),
+            JsonOptions);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<AuthResponse>(JsonOptions)
+               ?? throw new InvalidOperationException("Auth response was empty.");
+    }
+
+    /// <summary>Returns the bytes of a valid 1×1 JPEG image.</summary>
+    private static byte[] MinimalJpeg() => Convert.FromBase64String(
+        "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQ" +
+        "oFBQQEBQoLCgsKCwsKCwsKCwsKCwsKCwsKCwsKCwsKCwsKCwsKCw" +
+        "sKCwsKCwv/wAAREAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/E" +
+        "ABQQAQAAAAAAAAAAAAAAAAAAAADw/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAA" +
+        "AAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB//Z");
+}

@@ -4,6 +4,9 @@ import 'package:uuid/uuid.dart';
 
 import 'api_client.dart';
 import 'crypto_service.dart';
+import 'package:image_picker/image_picker.dart';
+
+import 'image_service.dart';
 import 'models.dart';
 
 class LifenizerAppState extends ChangeNotifier {
@@ -24,6 +27,9 @@ class LifenizerAppState extends ChangeNotifier {
   final List<RelationEdge> relations = [];
   final List<SavedSearch> savedSearches = [];
   final List<ImportCapability> importCapabilities = [];
+
+  QuotaStatus? quotaStatus;
+  final List<ImageItem> images = [];
 
   bool get isAuthenticated => session != null && _crypto.isUnlocked;
 
@@ -56,6 +62,7 @@ class LifenizerAppState extends ChangeNotifier {
         ..addAll(await anonymous.importCapabilities());
       await pullSync();
       status = 'Vault unlocked';
+      refreshQuota().ignore();
     });
   }
 
@@ -72,6 +79,88 @@ class LifenizerAppState extends ChangeNotifier {
     syncCursor = pulled.cursor;
     notifyListeners();
   }
+
+  // ---------------------------------------------------------------------------
+  // Quota & images
+  // ---------------------------------------------------------------------------
+
+  Future<void> refreshQuota() async {
+    final api = _requireApi();
+    try {
+      quotaStatus = await api.getQuotaStatus();
+      notifyListeners();
+    } catch (_) {
+      // Non-fatal: quota info will be unavailable but app continues.
+    }
+  }
+
+  Future<void> refreshImages({String? conversationId}) async {
+    final api = _requireApi();
+    final fetched = await api.listImages(conversationId: conversationId);
+    if (conversationId == null) {
+      images
+        ..clear()
+        ..addAll(fetched);
+    } else {
+      images.removeWhere((img) => img.conversationId == conversationId);
+      images.addAll(fetched);
+    }
+    notifyListeners();
+  }
+
+  /// Picks an image from [source], compresses it, checks local quota, uploads
+  /// it, and refreshes quota.  Throws [QuotaExceededException] if the local
+  /// quota check fails before the upload is attempted.
+  Future<ImageItem?> captureAndUploadImage({
+    required ImageSource source,
+    String? conversationId,
+  }) async {
+    final captured = source == ImageSource.camera
+        ? await ImageService.captureFromCamera()
+        : await ImageService.pickFromGallery();
+    if (captured == null) return null;
+
+    // Local quota pre-check.
+    final quota = quotaStatus;
+    if (quota != null &&
+        quota.usedBytes + captured.bytes.length > quota.limitBytes) {
+      throw QuotaExceededException(
+        'Storage quota exceeded. Please upgrade your plan.',
+      );
+    }
+
+    final api = _requireApi();
+    final item = await api.uploadImage(
+      captured.bytes,
+      captured.fileName,
+      captured.contentType,
+      conversationId: conversationId,
+    );
+    images.add(item);
+    notifyListeners();
+    // Refresh quota after upload.
+    refreshQuota().ignore();
+    return item;
+  }
+
+  Future<void> deleteImage(String id) async {
+    final api = _requireApi();
+    await api.deleteImage(id);
+    images.removeWhere((img) => img.id == id);
+    notifyListeners();
+    refreshQuota().ignore();
+  }
+
+  String imageUrl(String id) => _requireApi().imageUrl(id);
+
+  Map<String, String> get authHeaders {
+    final token = session?.authToken;
+    if (token == null) return const {};
+    return {'authorization': 'Bearer $token'};
+  }
+
+  Future<String> checkoutUrl(String plan) =>
+      _requireApi().createCheckoutUrl(plan);
 
   List<Conversation> search(
     String query, {
