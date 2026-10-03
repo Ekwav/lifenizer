@@ -24,6 +24,17 @@ class LifenizerApiClient {
     );
   }
 
+  Future<AuthSession> accountLogin({
+    required String email,
+    required String password,
+    bool register = false,
+  }) async => AuthSession.fromJson(
+    await _post(register ? '/api/auth/register' : '/api/auth/login', {
+      'email': email,
+      'password': password,
+    }, authenticated: false),
+  );
+
   Future<AuthSession> devLogin({
     required String email,
     required String displayName,
@@ -74,10 +85,9 @@ class LifenizerApiClient {
   }
 
   Future<PullResult> pull(int since) async {
-    final response = await _client.get(
-      _uri('/api/sync/pull', {'since': '$since'}),
-      headers: _headers(),
-    );
+    final response = await _client
+        .get(_uri('/api/sync/pull', {'since': '$since'}), headers: _headers())
+        .timeout(const Duration(seconds: 20));
     _ensureSuccess(response);
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final envelopes = (data['envelopes'] as List? ?? const [])
@@ -196,9 +206,9 @@ class LifenizerApiClient {
       headers: _headers(authenticated: authenticated),
       body: jsonEncode(body),
     );
-    final response = timeout == null
-        ? await request
-        : await request.timeout(timeout);
+    final response = await request.timeout(
+      timeout ?? const Duration(seconds: 30),
+    );
     _ensureSuccess(response);
     return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
   }

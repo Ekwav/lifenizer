@@ -1,7 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/app_state.dart';
 import 'package:app/models.dart';
+import 'package:app/api_client.dart';
+import 'package:app/services/local_vault_store.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:sembast/sembast_memory.dart';
 
 Conversation _conv({
   required String id,
@@ -76,6 +83,121 @@ void main() {
       final followUp = state.search('same as before timeline');
       expect(followUp.first.id, 'atlas');
     });
+  });
+
+  test(
+    'German participant and topic search rebuild after encrypted offline unlock',
+    () async {
+      final database = await databaseFactoryMemory.openDatabase('search-vault');
+      final store = LocalVaultStore(database);
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/auth/dev-login') {
+          return http.Response(
+            jsonEncode({
+              'authToken': 'token',
+              'userId': 'user',
+              'vaultId': 'vault',
+              'vaultSalt': 'search-salt',
+            }),
+            200,
+          );
+        }
+        if (request.url.path == '/api/sync/pull') {
+          return http.Response(jsonEncode({'cursor': 0, 'envelopes': []}), 200);
+        }
+        if (request.url.path == '/api/imports/capabilities') {
+          return http.Response('[]', 200);
+        }
+        return http.Response('not found', 404);
+      });
+      final state = LifenizerAppState(
+        localStore: store,
+        apiFactory: (baseUrl) =>
+            LifenizerApiClient(baseUrl: baseUrl, client: client),
+      );
+      await state.login(
+        baseUrl: 'http://localhost:5075',
+        email: 'search@example.test',
+        passphrase: 'private-search-test',
+      );
+      expect(state.error, isNull);
+      state.participants.add(
+        Participant(id: 'jorg', displayName: 'Jörg Müller'),
+      );
+      state.conversations.addAll([
+        _conv(
+          id: 'insurance',
+          title: 'Versicherung erneuern',
+          participantIds: ['jorg'],
+        ),
+        _conv(id: 'holiday', title: 'Urlaub planen'),
+        _conv(
+          id: 'insurance-older',
+          title: 'Versicherung erneuern',
+          participantIds: ['jorg'],
+          at: DateTime(2020),
+        ),
+      ]);
+      final original = state
+          .search('versicherung jorg')
+          .map((c) => c.id)
+          .toList();
+      expect(original, ['insurance', 'insurance-older']);
+      expect(state.search('versicherung jorg').map((c) => c.id), original);
+      await state.pullSync(); // Persists the encrypted snapshot before locking.
+      await state.lock();
+      expect(state.search('versicherung'), isEmpty);
+      await state.login(
+        baseUrl: 'http://localhost:5075',
+        email: 'search@example.test',
+        passphrase: 'private-search-test',
+        offline: true,
+      );
+      expect(state.error, isNull);
+      expect(state.search('versicherung jorg').map((c) => c.id), original);
+      expect(state.search('urlaub').map((c) => c.id), ['holiday']);
+      expect(state.search('muell versicher').map((c) => c.id), original);
+      await state.lock();
+      await database.close();
+      client.close();
+    },
+  );
+
+  group('query independence and literal topics', () {
+    test('switching to an unrelated short query has no carried tokens', () {
+      final state = LifenizerAppState();
+      state.conversations.addAll([
+        _conv(id: 'insurance', title: 'Insurance renewal'),
+        _conv(id: 'holiday', title: 'Holiday planning'),
+      ]);
+      expect(state.search('insurance').map((c) => c.id), ['insurance']);
+      expect(state.search('holiday').map((c) => c.id), ['holiday']);
+      expect(state.search('insurance').map((c) => c.id), ['insurance']);
+    });
+
+    test('time and search remain searchable literal topics', () {
+      final state = LifenizerAppState();
+      state.conversations.addAll([
+        _conv(id: 'time', title: 'Time travel'),
+        _conv(id: 'search', title: 'Search algorithms'),
+        _conv(id: 'other', title: 'Holiday plans'),
+      ]);
+      expect(state.search('time travel').map((c) => c.id), ['time']);
+      expect(state.search('search algorithms').map((c) => c.id), ['search']);
+    });
+
+    test(
+      'a temporal-only query finds dated conversations without literal today',
+      () {
+        final state = LifenizerAppState();
+        state.conversations.addAll([
+          _conv(id: 'old', title: 'Old review', at: DateTime(2020)),
+          _conv(id: 'now', title: 'Current review', at: DateTime.now()),
+        ]);
+        expect(state.search('today').first.id, 'now');
+        expect(state.search('heute').first.id, 'now');
+      },
+    );
   });
 
   group('indexed search', () {

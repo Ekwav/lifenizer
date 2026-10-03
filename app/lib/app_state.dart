@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -11,16 +12,41 @@ import 'package:image_picker/image_picker.dart';
 import 'image_service.dart';
 import 'models.dart';
 import 'services/search_criteria.dart';
+import 'services/local_vault_store.dart';
+
 import 'services/conversation_search_index.dart';
 import 'services/temporal_intent.dart';
 import 'services/search_scorer.dart';
 import 'services/search_service.dart';
 
+part 'services/vault_sync.dart';
+part 'services/vault_imports.dart';
+
 class LifenizerAppState extends ChangeNotifier {
+  LifenizerAppState({LocalVaultStore? localStore, this.apiFactory})
+    : _localStore = localStore;
+
+  final LifenizerApiClient Function(String)? apiFactory;
+  LocalVaultStore? _localStore;
+  String rememberedEmail = '';
+  String? _localVaultKey;
+  final List<SyncEnvelope> _pendingSync = [];
+  Future<void>? _syncInFlight;
+  Future<void> _storageTail = Future.value();
+  String? syncError;
+  Map<String, dynamic>? audioDraft;
+  Future<void> Function()? stopRecording;
+  DateTime? lastSyncedAt;
+  bool _unlocking = false;
+  int get pendingSyncCount => _pendingSync.length;
+
   final Uuid _uuid = const Uuid();
   final VaultCrypto _crypto = VaultCrypto();
 
-  String apiBaseUrl = 'http://127.0.0.1:5075';
+  String apiBaseUrl = const String.fromEnvironment(
+    'LIFENIZER_API_URL',
+    defaultValue: 'http://127.0.0.1:5075',
+  );
   String deviceId = const Uuid().v4();
   AuthSession? session;
   LifenizerApiClient? _api;
@@ -49,44 +75,14 @@ class LifenizerAppState extends ChangeNotifier {
   QuotaStatus? quotaStatus;
   final List<ImageItem> images = [];
 
-  bool get isAuthenticated => session != null && _crypto.isUnlocked;
+  bool get isAuthenticated =>
+      session != null && _crypto.isUnlocked && !_unlocking;
 
-  Future<void> login({
-    required String baseUrl,
-    required String email,
-    required String passphrase,
-  }) async {
-    await _run(() async {
-      apiBaseUrl = baseUrl.trim().isEmpty ? apiBaseUrl : baseUrl.trim();
-      final anonymous = LifenizerApiClient(baseUrl: apiBaseUrl);
-      final auth = await anonymous.devLogin(
-        email: email.trim(),
-        displayName: email.split('@').first,
-      );
-      await _crypto.unlock(
-        email: email.trim().toLowerCase(),
-        passphrase: passphrase,
-        vaultSalt: auth.vaultSalt,
-      );
-      session = auth;
-      _api = anonymous.authenticated(auth.authToken);
-      syncCursor = 0;
-      participants.clear();
-      conversations.clear();
-      relations.clear();
-      _markSearchIndexDirty();
-      _lastSearchQuery = null;
-      _lastSearchAt = null;
-      _lastSearchTopConversationIds = const [];
-      _sessionQueryFrequency.clear();
-      savedSearches.clear();
-      importCapabilities
-        ..clear()
-        ..addAll(await anonymous.importCapabilities());
-      await pullSync();
-      status = 'Vault unlocked';
-      refreshQuota().ignore();
-    });
+  void _notifyChanged() => notifyListeners();
+
+  void reportError(String message) {
+    error = message;
+    notifyListeners();
   }
 
   /// Test-only hook: unlocks the local vault crypto and installs an
@@ -109,20 +105,6 @@ class LifenizerAppState extends ChangeNotifier {
       vaultSalt: vaultSalt,
     );
     _api = client;
-  }
-
-  Future<void> pullSync() async {
-    final api = _requireApi();
-    final pulled = await api.pull(syncCursor);
-    for (final envelope in pulled.envelopes) {
-      final json = await _crypto.decryptJson(
-        cipherText: envelope.cipherText,
-        nonce: envelope.nonce,
-      );
-      _applyEntity(envelope.entityType, json);
-    }
-    syncCursor = pulled.cursor;
-    notifyListeners();
   }
 
   // ---------------------------------------------------------------------------
@@ -267,7 +249,9 @@ class LifenizerAppState extends ChangeNotifier {
     final previousQuery = _lastSearchQuery;
     final previousTokens = previousQuery == null
         ? const <String>[]
-        : ConversationSearchIndex.tokenize(TemporalIntent.lexicalQuery(previousQuery));
+        : ConversationSearchIndex.tokenize(
+            TemporalIntent.lexicalQuery(previousQuery),
+          );
 
     final scorer = SearchScorer(
       temporalIntent: temporalIntent,
@@ -487,300 +471,6 @@ class LifenizerAppState extends ChangeNotifier {
     return ids;
   }
 
-  Future<void> importSource({
-    required String source,
-    String? title,
-    String? participantNames,
-    String? text,
-    String? originalFileName,
-    String? mimeType,
-    Map<String, String> metadata = const {},
-    String? payloadBase64,
-  }) async {
-    await _run(() async {
-      final api = _requireApi();
-      final normalized = await api.importSource(
-        source,
-        ImportSourceRequest(
-          title: title?.trim().isEmpty == true ? null : title?.trim(),
-          text: text?.trim().isEmpty == true ? null : text,
-          originalFileName: originalFileName,
-          mimeType: mimeType,
-          metadata: metadata,
-          participantNames: participantNames == null
-              ? const []
-              : participantNames
-                    .split(',')
-                    .map((name) => name.trim())
-                    .where((name) => name.isNotEmpty)
-                    .toList(),
-          payloadBase64: payloadBase64,
-        ),
-      );
-      await _ingestNormalizedImport(normalized);
-      status = '${normalized.message} Encrypted and synced.';
-    });
-  }
-
-  /// Imports an audio recording for server-side transcription.
-  ///
-  /// Takes raw [bytes] and a [fileName] directly (rather than a
-  /// `PlatformFile`) so this can be driven by the file picker in the UI or
-  /// called directly from tests with a stubbed HTTP client. The backend
-  /// transcribes on CPU and can take minutes, so the request uses a long
-  /// timeout (see [LifenizerApiClient.importSource]); the resulting
-  /// conversation is ingested through the same normalized-import path as
-  /// every other import source, so it is tagged, encrypted, and synced
-  /// identically.
-  Future<void> importAudioBytes({
-    required List<int> bytes,
-    required String fileName,
-    String? mimeType,
-    String? title,
-    String? participantNames,
-    String? language,
-    DateTime? recordedAt,
-  }) async {
-    if (bytes.isEmpty) return;
-    status = 'Transcribing audio… this can take a few minutes.';
-    error = null;
-    notifyListeners();
-    await _run(() async {
-      final api = _requireApi();
-      final metadata = <String, String>{
-        if (language != null && language.trim().isNotEmpty)
-          'language': language.trim(),
-        if (recordedAt != null)
-          'recordedAt': recordedAt.toUtc().toIso8601String(),
-      };
-      final normalized = await api.importSource(
-        'audio',
-        ImportSourceRequest(
-          title: title?.trim().isEmpty == true ? null : title?.trim(),
-          originalFileName: fileName,
-          mimeType: mimeType ?? _guessAudioMimeType(fileName),
-          metadata: metadata,
-          participantNames: participantNames == null
-              ? const []
-              : participantNames
-                    .split(',')
-                    .map((name) => name.trim())
-                    .where((name) => name.isNotEmpty)
-                    .toList(),
-          payloadBase64: base64Encode(bytes),
-        ),
-        timeout: const Duration(minutes: 10),
-      );
-      await _ingestNormalizedImport(normalized);
-      status = '${normalized.message} Encrypted and synced.';
-    });
-  }
-
-  static const Map<String, String> _audioMimeTypesByExtension = {
-    'mp3': 'audio/mpeg',
-    'm4a': 'audio/mp4',
-    'wav': 'audio/wav',
-    'ogg': 'audio/ogg',
-    'opus': 'audio/opus',
-    'flac': 'audio/flac',
-    'aac': 'audio/aac',
-    'webm': 'audio/webm',
-  };
-
-  static String _guessAudioMimeType(String fileName) {
-    final extension = fileName.contains('.')
-        ? fileName.split('.').last.toLowerCase()
-        : '';
-    return _audioMimeTypesByExtension[extension] ?? 'application/octet-stream';
-  }
-
-  Future<void> importSharedPayload({
-    String? fileName,
-    String? mimeType,
-    String? text,
-    List<int>? bytes,
-    Map<String, String> metadata = const {},
-  }) async {
-    final normalizedName = (fileName ?? '').trim();
-    final normalizedMime = (mimeType ?? '').trim().toLowerCase();
-    final normalizedText = text?.trim();
-    final lowerName = normalizedName.toLowerCase();
-
-    String source = 'manual-text';
-    if (lowerName.endsWith('.mbox')) {
-      source = 'mbox';
-    } else if (lowerName.endsWith('.patch') ||
-        lowerName.endsWith('.diff') ||
-        lowerName.contains('git')) {
-      source = 'git';
-    } else if (lowerName.contains('bookmark')) {
-      source = 'bookmarks';
-    } else if (lowerName.contains('google') && lowerName.contains('search')) {
-      source = 'google-search-history';
-    } else if (lowerName.contains('history')) {
-      source = 'browser-history';
-    } else if (lowerName.contains('backup') ||
-        lowerName.endsWith('.lifenizerbackup')) {
-      source = 'lifenizer-backup';
-    } else if (normalizedMime.startsWith('audio/')) {
-      source = 'audio';
-    } else if (normalizedMime.startsWith('image/') ||
-        normalizedMime == 'application/pdf') {
-      source = 'scanned-pdf';
-    } else if (normalizedMime == 'text/uri-list' ||
-        normalizedText?.startsWith('http') == true) {
-      source = 'browser-capture';
-    }
-
-    final payloadBase64 = bytes == null || bytes.isEmpty
-        ? null
-        : base64Encode(bytes);
-
-    await importSource(
-      source: source,
-      title: normalizedName.isEmpty ? 'Shared import' : normalizedName,
-      text: payloadBase64 == null ? normalizedText : null,
-      originalFileName: normalizedName.isEmpty ? null : normalizedName,
-      mimeType: normalizedMime.isEmpty ? null : normalizedMime,
-      metadata: {...metadata, 'shared': 'true'},
-      payloadBase64: payloadBase64,
-    );
-  }
-
-  Future<void> importSample(String source) async {
-    switch (source) {
-      case 'whatsapp':
-        return importSource(
-          source: source,
-          title: 'WhatsApp project export',
-          text:
-              '[20.05.2026, 10:00] Alice: Person X works with Person Z.\n[20.05.2026, 10:01] Bob: Person Y is Person X\'s sister.',
-        );
-      case 'telegram':
-        return importSource(
-          source: source,
-          text:
-              '{"name":"Telegram Project","messages":[{"from":"Mira","text":"Ship the Flutter Android app.","date":"2026-05-20T11:00:00Z"}]}',
-        );
-      case 'signal':
-        return importSource(
-          source: source,
-          text:
-              'timestamp,sender,message\n2026-05-20T12:00:00Z,Sam,Signal CSV import works',
-        );
-      case 'slack':
-        return importSource(
-          source: source,
-          title: 'Slack project channel',
-          text:
-              '[{"user_profile":{"display_name":"Nina"},"text":"Slack export sample message.","ts":"1716206400.0"}]',
-        );
-      case 'teams':
-        return importSource(
-          source: source,
-          title: 'Teams planning thread',
-          text:
-              '{"messages":[{"fromDisplayName":"Jon","content":"<p>Teams export sample message.</p>","createdDateTime":"2026-05-20T13:10:00Z"}]}',
-        );
-      case 'facebook-messenger':
-        return importSource(
-          source: source,
-          title: 'Messenger thread sample',
-          text:
-              '{"title":"Friends Thread","participants":[{"name":"Ava"},{"name":"Liam"}],"messages":[{"sender_name":"Ava","content":"Messenger export sample message.","timestamp_ms":1716206400000}]}',
-        );
-      case 'instagram':
-        return importSource(
-          source: source,
-          title: 'Instagram DM sample',
-          text:
-              '{"title":"DM with Sam","participants":[{"name":"Sam"}],"messages":[{"sender_name":"Sam","content":"Instagram export sample message.","timestamp_ms":1716207400000}]}',
-        );
-      case 'imessage':
-        return importSource(
-          source: source,
-          title: 'iMessage sample',
-          text: '5/20/2026, 9:41 AM - Alex: iMessage export sample message.',
-        );
-      case 'mbox':
-        return importSource(
-          source: source,
-          title: 'Mbox sample',
-          text:
-              'From sender@example.test Tue May 20 10:15:00 2026\nFrom: Sender <sender@example.test>\nTo: Receiver <receiver@example.test>\nSubject: Mbox sample\nDate: Tue, 20 May 2026 10:15:00 +0000\n\nThis is a sample mbox message body.',
-        );
-      case 'git':
-        return importSource(
-          source: source,
-          title: 'Git sample',
-          text:
-              'commit 0f4e9b7\nAuthor: Dev One <dev1@example.test>\nDate: 2026-05-20T14:00:00Z\n\nAdd importer support for browser extension payloads',
-        );
-      case 'browser-capture':
-        return importSource(
-          source: source,
-          title: 'Captured reading session',
-          text:
-              '{"events":[{"title":"Importer docs","url":"https://docs.example.test/importers","content":"Read about browser capture format.","timestamp":"2026-05-20T15:00:00Z"}]}',
-        );
-      case 'google-search-history':
-        return importSource(
-          source: source,
-          title: 'Google search sample',
-          text:
-              'query,url,time\nflutter receive sharing intent,https://www.google.com/search?q=flutter+receive+sharing+intent,2026-05-20T15:30:00Z',
-        );
-      case 'bookmarks':
-        return importSource(
-          source: source,
-          title: 'Bookmarks sample',
-          text:
-              '{"roots":{"bookmark_bar":{"children":[{"type":"url","name":"Lifenizer","url":"https://github.com/Ekwav/lifenizer"}]}}}',
-        );
-      case 'lifenizer-backup':
-        return importSource(
-          source: source,
-          title: 'Backup sample',
-          text:
-              '{"conversations":[{"title":"Backup conversation","source":"manual-text","participantNames":["Alice"],"segments":[{"text":"Recovered from backup","participantName":"Alice","offsetMs":0}]}]}',
-        );
-      case 'browser-history':
-        return importSource(
-          source: source,
-          title: 'Browser research trail',
-          text:
-              'title,url,time\nPaperless docs,https://paperless.example.test,2026-05-20T12:30:00Z',
-        );
-      case 'youtube-transcript':
-        return importSource(
-          source: source,
-          title: 'YouTube transcript sample',
-          text:
-              '{"segments":[{"text":"Private archive demo transcript.","start":0},{"text":"Transcript segments are searchable after encryption.","start":2.5}]}',
-        );
-      case 'audio':
-        return importSource(
-          source: source,
-          title: 'Audio transcript sample',
-          originalFileName: 'meeting.wav',
-          mimeType: 'audio/wav',
-          text: 'Alice described the TAP transcription import plan.',
-        );
-      case 'scanned-pdf':
-        return importSource(
-          source: source,
-          title: 'Scanned invoice sample',
-          originalFileName: 'invoice.pdf',
-          mimeType: 'application/pdf',
-          text: 'OCR text from a scanned Paperless invoice.',
-        );
-      default:
-        status =
-            'This source needs provider credentials or pasted export data.';
-        notifyListeners();
-    }
-  }
-
   Future<void> addManualText({
     required String title,
     required String participantNames,
@@ -922,102 +612,6 @@ class LifenizerAppState extends ChangeNotifier {
       await _pushEntity('saved-search', savedSearch.id, savedSearch.toJson());
       status = 'Search saved and encrypted';
     });
-  }
-
-  Future<void> _pushEntity(
-    String entityType,
-    String entityId,
-    Map<String, dynamic> json,
-  ) async {
-    final payload = await _crypto.encryptJson(json);
-    final envelope = SyncEnvelope(
-      id: _uuid.v4(),
-      deviceId: deviceId,
-      entityType: entityType,
-      entityId: entityId,
-      operation: 'upsert',
-      revision: 1,
-      cipherText: payload.cipherText,
-      nonce: payload.nonce,
-      keyId: payload.keyId,
-      clientCreatedAt: DateTime.now().toUtc(),
-    );
-    syncCursor = await _requireApi().push([envelope]);
-  }
-
-  Future<void> _ingestNormalizedImport(NormalizedImportResult result) async {
-    var addedConversation = false;
-    for (final normalized in result.conversations) {
-      final participantIds = await ensureParticipantNames(
-        normalized.participantNames,
-      );
-      final nameToId = <String, String>{};
-      for (final participant in participants) {
-        nameToId[participant.displayName.toLowerCase()] = participant.id;
-      }
-      // Prefer the real historical timestamps carried by the imported
-      // segments (e.g. actual WhatsApp/email message dates) over defaulting
-      // to "now". Without this, every import would look like it happened at
-      // import time, which would make searching/filtering by time useless
-      // for anything that wasn't just imported. Conversation.startedAt/
-      // endedAt fall back to DateTime.now() automatically when null is
-      // passed, so sources without per-segment timestamps (e.g. audio
-      // without detected dates) keep today's default behavior.
-      final segmentTimestamps =
-          normalized.segments
-              .map((segment) => segment.createdAt)
-              .whereType<DateTime>()
-              .toList()
-            ..sort();
-      final derivedStartedAt = segmentTimestamps.isEmpty
-          ? null
-          : segmentTimestamps.first;
-      final derivedEndedAt = segmentTimestamps.isEmpty
-          ? null
-          : segmentTimestamps.last;
-      final conversation = Conversation(
-        id: _uuid.v4(),
-        title: normalized.title.trim().isEmpty
-            ? 'Imported ${result.source}'
-            : normalized.title.trim(),
-        source: normalized.source,
-        participantIds: participantIds,
-        artifactNames: normalized.artifactNames,
-        tags: _suggestTags(
-          source: normalized.source,
-          title: normalized.title,
-          text: normalized.segments.map((segment) => segment.text).join('\n'),
-          artifactNames: normalized.artifactNames,
-        ),
-        startedAt: derivedStartedAt,
-        endedAt: derivedEndedAt,
-        segments: normalized.segments.isEmpty
-            ? [
-                ConversationSegment(
-                  id: _uuid.v4(),
-                  text: 'Imported ${result.source} item without text.',
-                ),
-              ]
-            : [
-                for (final segment in normalized.segments)
-                  ConversationSegment(
-                    id: _uuid.v4(),
-                    text: segment.text,
-                    participantId: segment.participantName == null
-                        ? null
-                        : nameToId[segment.participantName!.toLowerCase()],
-                    offsetMs: segment.offsetMs,
-                    createdAt: segment.createdAt,
-                  ),
-              ],
-      );
-      conversations.add(conversation);
-      addedConversation = true;
-      await _pushEntity('conversation', conversation.id, conversation.toJson());
-    }
-    if (addedConversation) {
-      _markSearchIndexDirty();
-    }
   }
 
   void _applyEntity(String entityType, Map<String, dynamic> json) {
@@ -1184,6 +778,7 @@ class LifenizerAppState extends ChangeNotifier {
   }
 
   Future<void> _run(Future<void> Function() action) async {
+    if (busy) return;
     busy = true;
     error = null;
     notifyListeners();
@@ -1193,6 +788,10 @@ class LifenizerAppState extends ChangeNotifier {
       error = exception.toString();
     } finally {
       busy = false;
+      if (_pendingSync.isNotEmpty && syncError != null) {
+        status =
+            'Saved encrypted on this device · ${_pendingSync.length} change(s) waiting to sync';
+      }
       notifyListeners();
     }
   }

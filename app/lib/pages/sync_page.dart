@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../models.dart';
 import '../image_widgets.dart';
 import 'page_frame.dart';
 
@@ -17,9 +18,17 @@ class SyncPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('User ${state.session?.userId ?? ''}'),
-          Text('Vault ${state.session?.vaultId ?? ''}'),
-          Text('Cursor ${state.syncCursor}'),
+          Text('${state.pendingSyncCount} change(s) waiting to sync'),
+          Text(
+            state.lastSyncedAt == null
+                ? 'No sync this session'
+                : 'Last synced ${state.lastSyncedAt!.toCompactLocalString()}',
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Use the same API URL, account and vault passphrase on your computer and phone. Changes sync automatically while the app is open.',
+          ),
+          if (state.syncError != null) Text(state.syncError!),
           const SizedBox(height: 20),
           // Storage indicator
           if (quota != null) ...[
@@ -65,7 +74,7 @@ class SyncPage extends StatelessWidget {
           FilledButton.icon(
             onPressed: state.busy ? null : state.pullSync,
             icon: const Icon(Icons.sync),
-            label: const Text('Pull sync'),
+            label: const Text('Sync now'),
           ),
         ],
       ),

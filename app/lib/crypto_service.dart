@@ -22,6 +22,11 @@ class VaultCrypto {
 
   bool get isUnlocked => _vaultKey != null;
 
+  void lock() {
+    _vaultKey?.destroy();
+    _vaultKey = null;
+  }
+
   Future<void> unlock({
     required String email,
     required String passphrase,
