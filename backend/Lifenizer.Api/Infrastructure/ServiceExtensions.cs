@@ -1,3 +1,6 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Coflnet.Payments.Client.Api;
@@ -62,6 +65,15 @@ public static class ServiceExtensions
     public static IServiceCollection AddAuthenticationServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddLifenizerAuth(configuration);
+        services.AddScoped<IPasswordHasher<UserAccount>, PasswordHasher<UserAccount>>();
+        services.Configure<PasswordHasherOptions>(options => options.IterationCount = 210_000);
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("account-auth", context => RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "local",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+        });
         services.AddScoped<ClaimsPrincipalUser>();
 
         return services;

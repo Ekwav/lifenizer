@@ -20,7 +20,7 @@ builder.Services.AddConfiguredCors(builder.Configuration);
 var app = builder.Build();
 
 // Validate critical configuration after building the app
-StartupConfigurationValidator.Validate(app.Configuration, app.Services.GetRequiredService<ILogger<Program>>());
+StartupConfigurationValidator.Validate(app.Configuration, app.Services.GetRequiredService<ILogger<Program>>(), app.Environment.IsDevelopment());
 
 if (app.Environment.IsDevelopment())
 {
@@ -30,6 +30,7 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 // Kestrel's default MaxRequestBodySize (~28.6 MB) is too small for base64-encoded audio uploads
 // (a 30-minute recording is easily 30+ MB before the ~33% base64 inflation). Raise it just for the

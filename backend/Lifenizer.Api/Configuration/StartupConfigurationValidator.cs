@@ -11,7 +11,7 @@ public static class StartupConfigurationValidator
     /// Validates all required configuration values and logs clear error messages.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when critical configuration is missing or invalid.</exception>
-    public static void Validate(IConfiguration configuration, ILogger logger)
+    public static void Validate(IConfiguration configuration, ILogger logger, bool isDevelopment = false)
     {
         var errors = new List<string>();
 
@@ -25,6 +25,9 @@ public static class StartupConfigurationValidator
         {
             errors.Add($"Jwt:Secret must be at least 32 characters (currently {jwtSecret.Length}). Set in appsettings.json or environment variable 'Jwt__Secret'");
         }
+
+        if (!isDevelopment && jwtSecret == "replace-this-development-secret-with-a-host-secret-please")
+            errors.Add("Set a private Jwt:Secret before running in production; the shipped development example is unsafe.");
 
         // Validate Premium Products (these are product identifiers/SKUs, not prices)
         var premiumId = configuration["Products:Premium"];

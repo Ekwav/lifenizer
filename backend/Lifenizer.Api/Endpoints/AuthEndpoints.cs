@@ -1,3 +1,4 @@
+using System.Net.Mail;
 using FirebaseAdmin.Auth;
 using Lifenizer.Api.Data;
 using Lifenizer.Api.Services;
@@ -11,6 +12,32 @@ public static class AuthEndpoints
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/auth").WithTags("Auth");
+
+        group.MapPost("/register", async (
+            [FromBody] RegisterAccountRequest request,
+            UserAccountService users,
+            AuthTokenService tokens,
+            CancellationToken cancellationToken) =>
+        {
+            if (!ValidEmail(request.Email)) return Results.BadRequest(new { error = "valid_email_required" });
+            if (request.Password is null || request.Password.Length is < 12 or > 1024)
+                return Results.BadRequest(new { error = "password_length_12_to_1024" });
+            if (request.DisplayName?.Length > 256) return Results.BadRequest(new { error = "display_name_too_long" });
+            var user = await users.RegisterAsync(request.Email, request.Password, request.DisplayName, cancellationToken);
+            return user is null ? Results.Conflict(new { error = "account_exists" }) : Results.Ok(ToAuthResponse(user, tokens));
+        }).AllowAnonymous().RequireRateLimiting("account-auth");
+
+        group.MapPost("/login", async (
+            [FromBody] AccountLoginRequest request,
+            UserAccountService users,
+            AuthTokenService tokens,
+            CancellationToken cancellationToken) =>
+        {
+            if (!ValidEmail(request.Email) || request.Password is null || request.Password.Length is < 1 or > 1024)
+                return Results.Unauthorized();
+            var user = await users.LoginAsync(request.Email, request.Password, cancellationToken);
+            return user is null ? Results.Unauthorized() : Results.Ok(ToAuthResponse(user, tokens));
+        }).AllowAnonymous().RequireRateLimiting("account-auth");
 
         group.MapPost("/dev-login", async (
             [FromBody] DevLoginRequest request,
@@ -81,6 +108,9 @@ public static class AuthEndpoints
 
         return app;
     }
+
+    private static bool ValidEmail(string? email) => !string.IsNullOrWhiteSpace(email) && email.Length <= 320
+        && MailAddress.TryCreate(email.Trim(), out var address) && address.Address == email.Trim();
 
     private static AuthResponse ToAuthResponse(UserAccount user, AuthTokenService tokens)
     {

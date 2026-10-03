@@ -8,6 +8,7 @@ public sealed class UserAccount
     public Guid VaultId { get; set; }
     public string VaultSalt { get; set; } = string.Empty;
     public string AuthProviderId { get; set; } = string.Empty;
+    public string? PasswordHash { get; set; }
     public string? Email { get; set; }
     public string? DisplayName { get; set; }
     public SubscriptionPlan Plan { get; set; } = SubscriptionPlan.Free;

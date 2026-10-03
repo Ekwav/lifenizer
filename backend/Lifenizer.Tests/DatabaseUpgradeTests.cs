@@ -26,6 +26,7 @@ public sealed class DatabaseUpgradeTests
                 if (schema == "current")
                     db.Images.Add(new ImageRecord { Id = Guid.NewGuid(), UserId = userId, BlobPath = "existing-image", SizeBytes = 123 });
                 await db.SaveChangesAsync();
+                await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users DROP COLUMN PasswordHash");
                 if (schema == "legacy")
                 {
                     await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users DROP COLUMN StorageUsedBytes");

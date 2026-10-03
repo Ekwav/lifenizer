@@ -1,11 +1,57 @@
+using System.Security.Cryptography;
 using Lifenizer.Api.Data;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.Sqlite;
 using Lifenizer.Core;
 using Microsoft.EntityFrameworkCore;
 
 namespace Lifenizer.Api.Services;
 
-public sealed class UserAccountService(LifenizerDbContext db)
+public sealed class UserAccountService(LifenizerDbContext db, IPasswordHasher<UserAccount> passwordHasher)
 {
+    public async Task<UserAccount?> RegisterAsync(string email, string password, string? displayName, CancellationToken cancellationToken)
+    {
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        // Never bind a new password to an existing development/external vault.
+        if (await db.Users.AnyAsync(user => user.Email != null && user.Email.ToLower() == normalizedEmail, cancellationToken)) return null;
+        var now = DateTimeOffset.UtcNow;
+        var account = new UserAccount
+        {
+            Id = Guid.NewGuid(), VaultId = Guid.NewGuid(),
+            VaultSalt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+            AuthProviderId = $"local:{normalizedEmail}", Email = normalizedEmail,
+            DisplayName = displayName?.Trim(), CreatedAt = now, LastSeenAt = now
+        };
+        account.PasswordHash = passwordHasher.HashPassword(account, password);
+        db.Users.Add(account);
+        try { await db.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateException exception) when (exception.InnerException is SqliteException { SqliteErrorCode: 19 })
+        {
+            // The unique provider ID also handles concurrent registrations.
+            return null;
+        }
+        return account;
+    }
+
+    public async Task<UserAccount?> LoginAsync(string email, string password, CancellationToken cancellationToken)
+    {
+        var providerId = $"local:{email.Trim().ToLowerInvariant()}";
+        var account = await db.Users.SingleOrDefaultAsync(user => user.AuthProviderId == providerId, cancellationToken);
+        if (account?.PasswordHash is null)
+        {
+            // Match password verification cost without revealing whether the account exists.
+            passwordHasher.HashPassword(new UserAccount(), password);
+            return null;
+        }
+        var result = passwordHasher.VerifyHashedPassword(account, account.PasswordHash, password);
+        if (result == PasswordVerificationResult.Failed) return null;
+        if (result == PasswordVerificationResult.SuccessRehashNeeded)
+            account.PasswordHash = passwordHasher.HashPassword(account, password);
+        account.LastSeenAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+        return account;
+    }
+
     public async Task<UserAccount> GetOrCreateExternalUserAsync(
         string authProviderId,
         string? email,
