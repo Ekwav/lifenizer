@@ -297,11 +297,14 @@ class LifenizerAppState extends ChangeNotifier {
       sessionQueryFrequency: _sessionQueryFrequency,
     );
 
-    final effectiveTokens = <String>[
+    final carryPrevious = scorer.shouldCarryPreviousQuery(
+      previousTokens,
+      queryTokens,
+    );
+    final effectiveTokens = <String>{
       ...queryTokens,
-      if (scorer.shouldCarryPreviousQuery(previousTokens, queryTokens))
-        ...previousTokens,
-    ];
+      if (carryPrevious) ...previousTokens,
+    }.toList(growable: false);
 
     // Execute search using service
     final searchService = SearchService(index);
@@ -315,7 +318,11 @@ class LifenizerAppState extends ChangeNotifier {
         )
         .cast<Conversation>();
 
-    _updateSearchContext(criteria.normalized, results, now);
+    _updateSearchContext(
+      carryPrevious ? effectiveTokens.join(' ') : criteria.normalized,
+      results,
+      now,
+    );
     return results;
   }
 

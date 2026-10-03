@@ -69,6 +69,14 @@ void main() {
           ],
         ),
         _conv(
+          id: 'atlas-old',
+          title: 'Project Atlas timeline',
+          segments: [
+            ConversationSegment(id: 's-old', text: 'Atlas importer roadmap'),
+          ],
+          at: DateTime.utc(2025),
+        ),
+        _conv(
           id: 'zeus',
           title: 'Project Zeus timeline',
           segments: [
@@ -81,7 +89,12 @@ void main() {
       expect(first.first.id, 'atlas');
 
       final followUp = state.search('same as before timeline');
-      expect(followUp.first.id, 'atlas');
+      expect(followUp.map((c) => c.id), ['atlas', 'atlas-old']);
+      for (var rebuild = 0; rebuild < 25; rebuild++) {
+        final repeated = state.search('same as before timeline');
+        expect(repeated.map((c) => c.id), followUp.map((c) => c.id));
+      }
+      expect(state.search('zeus').map((c) => c.id), ['zeus']);
     });
   });
 
