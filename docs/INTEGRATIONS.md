@@ -57,9 +57,13 @@ Remove `lifenizer`, `krunner/dbusplugins/lifenizer.desktop`, and
 
 ```sh
 cd app
-flutter build apk --debug
-adb install -r build/app/outputs/flutter-apk/app-debug.apk
+flutter build apk --release
+adb install -r build/app/outputs/flutter-apk/app-release.apk
 ```
+
+Release mode hides development examples and compiles optimized code. The current
+Gradle setup uses the local debug signing key for sideloading; configure a private
+release signing key before distributing through an app store.
 
 Long-press Lifenizer in the launcher for **Find a conversation**, **Capture a
 memory**, or **Import conversations**. These standard Android static app
@@ -106,6 +110,9 @@ the user's Android launcher; an APK build verifies manifest and native code.
 Run `./scripts/verify.sh` for backend tests, strict Flutter analysis, Flutter
 unit/widget tests, and the browser encryption/sync workflow. It builds a web
 bundle with the explicitly enabled test bridge before running Playwright.
+Tests use dedicated ports 5076/5175 and a disposable database; the installed
+API on 5075 remains separate. After the checks pass, the script rebuilds a
+production bundle with the test bridge disabled.
 The default command excludes the external Whisper audio test. To require the
 real audio → transcript → search → second-device sync workflow, run
 `WHISPER_URL=http://127.0.0.1:19000 ./scripts/verify.sh --live-whisper` after
@@ -136,8 +143,8 @@ Without the flag, the API uses its configured default Whisper endpoint, which
 may be unreachable from a desktop outside the cluster. Capture and encrypted
 recording drafts remain available while transcription is unavailable.
 
-`--no-start` installs/enables units without starting them, useful while tests own
-ports 5075 or 19000. Once those ports are free:
+`--no-start` installs/enables units without starting them, useful while another
+process owns ports 5075 or 19000. Once those ports are free:
 
 ```sh
 systemctl --user start lifenizer-api.service lifenizer-whisper-forward.service

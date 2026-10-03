@@ -62,9 +62,9 @@ Notes:
 
 - `email` (IMAP)
 - `paperless`
-- `discord` (API mode when `metadata.baseUrl` is set)
+- `discord` (API mode when `metadata.channelId` is set)
 - `audio` (whisper-trained transcription mode when using a base64 payload)
-- `youtube-transcript` (remote fetch mode when transcript URL/base URL is supplied)
+- `youtube-transcript` (remote fetch mode when `metadata.videoId` is supplied)
 
 ## Metadata Keys by Source
 
@@ -72,23 +72,22 @@ Notes:
 
 Required:
 
-- `host`
+- Server config `Imports:Imap:Host`
 - `username`
 - `password`
 
 Optional:
 
-- `port` (default `993`)
+- Server config `Imports:Imap:Port` (default `993`)
 - `mailbox` (default `INBOX`)
-- `useTls` (`true`/`false`)
-- `allowInvalidCertificate` (`true`/`false`)
+- Server config `Imports:Imap:UseTls` (default `true`); certificate validation cannot be disabled by a request
 - `limit` (1..25)
 
 ### paperless
 
 Required:
 
-- `baseUrl` or config `Imports:Paperless:BaseUrl`
+- Server config `Imports:Paperless:BaseUrl` (no request override)
 - `token` or config `Imports:Paperless:Token`
 
 Optional:
@@ -99,7 +98,7 @@ Optional:
 
 Required:
 
-- `baseUrl` or config `Imports:Discord:BaseUrl`
+- Server config `Imports:Discord:BaseUrl` (no request override)
 - `channelId`
 - `token` or config `Imports:Discord:Token`
 
@@ -131,14 +130,9 @@ Optional request metadata:
 
 ### youtube-transcript remote mode
 
-Either:
-
-- `metadata.transcriptUrl`
-
-Or:
-
-- `metadata.baseUrl`
-- `metadata.videoId`
+Set server config `Imports:YouTube:BaseUrl` and send `metadata.videoId`.
+Request `baseUrl` and `transcriptUrl` overrides are rejected, and redirects are disabled.
+Pasted transcript text does not require a remote service.
 
 ### browser-capture
 
@@ -287,7 +281,7 @@ Behavior:
 
 - Shared URLs/text route to `browser-capture` or `manual-text`.
 - Shared backups route to `lifenizer-backup` (filename heuristics + JSON).
-- Shared media/docs route to source-specific importers where possible (`audio`, `scanned-pdf`, `mbox`, `git`, `bookmarks`, `browser-history`, etc.).
+- Shared audio routes to Whisper with a transcription timeout; text and URLs are captured locally. Other exports use supported importer routes. Binary PDFs/images require extracted OCR text or an image attachment; importing them does not pretend to perform OCR.
 
 The app queues incoming share intents and ingests them once the vault is unlocked.
 
@@ -296,11 +290,9 @@ The app queues incoming share intents and ingests them once the vault is unlocke
 ```json
 {
   "metadata": {
-    "host": "imap.example.com",
     "username": "alice@example.com",
     "password": "secret",
-    "mailbox": "INBOX",
-    "useTls": "true"
+    "mailbox": "INBOX"
   }
 }
 ```
@@ -308,7 +300,7 @@ The app queues incoming share intents and ingests them once the vault is unlocke
 ## Security Notes
 
 - Request-scoped provider credentials are not persisted by the backend.
-- When overriding provider `baseUrl` from request metadata, matching request-scoped secrets are required.
+- Provider destinations are server configuration only. Request endpoint/TLS overrides are rejected, and HTTP redirects are disabled.
 - Keep production secrets in secure environment configuration, not in repository files.
 
 ## Validation

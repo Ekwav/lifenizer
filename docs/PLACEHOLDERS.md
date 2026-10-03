@@ -45,14 +45,22 @@ These are intentional boundaries after the provider import implementation pass.
 
 - The intended app model is real client-side encryption before sync.
 - Backend tests use opaque test strings as ciphertext because the backend must not know encryption internals.
-- Production key backup/recovery, device invite flows, and passphrase rotation are not finished yet.
+- Devices join by signing in to the same self-hosted account and using the same vault passphrase. Encrypted offline snapshots/outboxes persist on each device.
+- Passphrase recovery, rotation and device-invite links are not implemented. Keep the passphrase in a password manager and back up server data.
+- New image attachments are encrypted. Legacy plaintext image uploads are not automatically rewritten; re-upload them to encrypt. Image viewing currently requires a network connection.
 
 ## Billing
 
 - `SubscriptionPlan` and `/api/usage/events` exist to prepare for hosted revenue.
-- Payment provider integration is not implemented.
+- Checkout/status connectors exist; commercial products, provider credentials and fulfillment must be configured before selling plans. Quotas currently cover image artifacts only.
 
 ## Recording
 
-- The Flutter app should use DiaFlutter as reference for VAD behavior.
-- Browser e2e tests may use simulated recording chunks because automated browsers cannot reliably provide microphone/VAD input without additional fixtures.
+- Microphone capture supports Android, Linux and secure-context browsers with permission.
+- Capture uses mono 16 kHz PCM, stops at 30 minutes, saves an encrypted local WAV draft,
+  and sends audio to Whisper only when the user chooses transcription.
+- Leaving Capture, backgrounding the app, or locking stops and saves an active recording.
+- No VAD, speaker diarization or background recording is promised. Transcript segment
+  timestamps come from the configured Whisper service.
+- Live whisper-trained transcription and search/sync are covered by an opt-in browser test;
+  the normal CI job excludes this external-service test explicitly.

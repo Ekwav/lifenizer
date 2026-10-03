@@ -21,10 +21,11 @@ runs as a **non-root user** (uid 1001) with no unnecessary capabilities.
 
 | Variable | Description | Example |
 |---|---|---|
-| `ConnectionStrings__Lifenizer` | SQLite connection string (dev) **or** Postgres DSN (prod) | `Data Source=/data/lifenizer.db` |
+| `ConnectionStrings__Lifenizer` | SQLite connection string (single replica; PostgreSQL requires a provider change) | `Data Source=/data/lifenizer.db` |
 | `Jwt__Secret` | HS256 signing key (≥ 32 bytes, random) | _(generate with `openssl rand -base64 32`)_ |
 | `Auth__AllowDevLogin` | `true` in dev only — **must be `false` in prod** | `false` |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to Firebase service account JSON mounted as a secret | `/run/secrets/firebase.json` |
+| `Auth__EnableFirebase` | Optional Google authentication, disabled by default | `false` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Credential file only used when Firebase is explicitly enabled | `/run/secrets/firebase.json` |
 | `Payments__BaseUrl` | Base URL of the Coflnet payments service | `https://payments.example.com` |
 | `Products__Premium` | Slug for the Premium product in the payments service | `lifenizer-premium` |
 | `Products__PremiumPlus` | Slug for the Premium+ product in the payments service | `lifenizer-premium-plus` |
@@ -41,12 +42,12 @@ runs as a **non-root user** (uid 1001) with no unnecessary capabilities.
 
 ## Storage notes
 
-- **SQLite** is fine for single-replica deployments.  For multi-replica
-  setups, switch to **PostgreSQL** by adding `Npgsql.EntityFrameworkCore.PostgreSQL`
-  and updating the connection string.
+- **SQLite** supports single-replica deployments. PostgreSQL requires changing
+  the EF provider, migrations and SQLite-specific upgrade logic; a different
+  connection string alone is insufficient.
 - Artifact blobs default to `/tmp/lifenizer-artifacts` (ephemeral).
-  In production, bind-mount a persistent `PersistentVolumeClaim` or configure
-  an object-storage backend and point `Artifacts__StorePath` at the mount path.
+  In production, mount persistent storage and point `Artifacts__StorePath` at it.
+  The example mounts `/data` for both SQLite and artifact files.
 
 ---
 
@@ -59,6 +60,8 @@ metadata:
   name: lifenizer-api
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: lifenizer-api
@@ -84,6 +87,10 @@ spec:
             capabilities:
               drop: ["ALL"]
           env:
+            - name: Auth__AllowDevLogin
+              value: "false"
+            - name: Artifacts__StorePath
+              value: /data/artifacts
             - name: ConnectionStrings__Lifenizer
               valueFrom:
                 secretKeyRef:
@@ -99,14 +106,9 @@ spec:
                 secretKeyRef:
                   name: lifenizer-secrets
                   key: payments-base-url
-            - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: /run/secrets/firebase/key.json
           volumeMounts:
-            - name: firebase-secret
-              mountPath: /run/secrets/firebase
-              readOnly: true
             - name: artifact-storage
-              mountPath: /data/artifacts
+              mountPath: /data
             - name: tmp
               mountPath: /tmp
           resources:
@@ -129,9 +131,6 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
       volumes:
-        - name: firebase-secret
-          secret:
-            secretName: lifenizer-firebase
         - name: artifact-storage
           persistentVolumeClaim:
             claimName: lifenizer-artifacts-pvc
@@ -151,6 +150,10 @@ spec:
 ```
 
 ### NetworkPolicy (restrict egress)
+
+This example permits DNS and in-cluster HTTPS only. Add destination-specific rules
+for the configured Whisper service (TCP 9000), IMAP, or external providers before
+using those imports.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -172,7 +175,7 @@ spec:
     - ports:
         - port: 53
           protocol: UDP
-    # Allow outbound to payments service and Firebase
+    # Allow in-cluster HTTPS; restrict destinations for your deployment
     - to:
         - namespaceSelector: {}
       ports:
@@ -199,3 +202,24 @@ The `POST /api/premium/checkout/{plan}` endpoint redirects users to a
 LemonSqueezy checkout page.  After a successful payment, the payments
 service will mark the product as owned; the next call to
 `GET /api/premium/status` will reflect the upgraded tier (cached for 5 min).
+
+## Local self-hosted runtime
+
+`./scripts/run-api.sh` starts a production-mode API on `http://127.0.0.1:5075`,
+generates a private persistent signing key, and stores SQLite/artifacts under
+`${XDG_STATE_HOME:-$HOME/.local/state}/lifenizer`. It disables development login.
+Set `LIFENIZER_BIND_URL` only when intentionally exposing the API through a private
+network or HTTPS reverse proxy. `Cors__AllowedOrigins__0` configures the web origin;
+native Linux/Android clients do not use browser CORS.
+
+Provider hosts are configuration-only: `Imports__Imap__Host` (plus Port/UseTls),
+`Imports__Paperless__BaseUrl`, `Imports__Discord__BaseUrl`, and `Imports__YouTube__BaseUrl`.
+HTTP redirects are disabled. The API can reach only the destinations its operator configures.
+A desktop-hosted API cannot resolve the cluster-only Whisper hostname; set
+`Whisper__BaseUrl` to an accessible private endpoint (for a temporary authorized test,
+`http://127.0.0.1:19000` through port-forwarding).
+
+Startup adopts both previously shipped SQLite schemas, then applies EF migrations.
+Back up the database before an upgrade; see [DATABASE.md](DATABASE.md). Do not scale the
+SQLite deployment beyond one replica. This repository does not deploy a Fleet workload
+or change the Whisper network policy; a cluster deployment needs those declared separately.

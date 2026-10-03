@@ -63,4 +63,4 @@ if [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} ]] && command -v gdbus >/dev/null; then
 fi
 if command -v update-desktop-database >/dev/null; then update-desktop-database "$application_dir"; fi
 if command -v kbuildsycoca6 >/dev/null; then kbuildsycoca6 --noincremental; fi
-echo 'Installed. Launch Lifenizer, unlock, then type "life <query>" in KRunner.'
+echo 'Installed. Open or restart Lifenizer, unlock, then type "life <query>" in KRunner.'
