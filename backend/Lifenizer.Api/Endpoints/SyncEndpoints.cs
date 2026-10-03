@@ -26,14 +26,18 @@ public static class SyncEndpoints
                 return Results.Unauthorized();
             }
 
+            var envelopes = (request.Envelopes ?? Array.Empty<SyncEnvelopeDto>()).DistinctBy(envelope => envelope.Id).ToArray();
+            var ids = envelopes.Select(envelope => envelope.Id).ToArray();
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            var existing = await db.SyncEnvelopes.Where(envelope => ids.Contains(envelope.Id))
+                .Select(envelope => new { envelope.Id, envelope.UserId }).ToListAsync(cancellationToken);
+            if (existing.Any(envelope => envelope.UserId != account.Id))
+                return Results.Conflict(new { error = "sync_id_conflict" });
+            var existingIds = existing.Select(envelope => envelope.Id).ToHashSet();
             var accepted = 0;
-            foreach (var envelope in request.Envelopes ?? Array.Empty<SyncEnvelopeDto>())
+            foreach (var envelope in envelopes)
             {
-                var exists = await db.SyncEnvelopes.AnyAsync(e => e.Id == envelope.Id, cancellationToken);
-                if (exists)
-                {
-                    continue;
-                }
+                if (existingIds.Contains(envelope.Id)) continue;
 
                 db.SyncEnvelopes.Add(new SyncEnvelopeRecord
                 {
@@ -55,6 +59,7 @@ public static class SyncEndpoints
             }
 
             await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             var cursor = await db.SyncEnvelopes
                 .Where(e => e.UserId == account.Id)
                 .MaxAsync(e => (long?)e.Sequence, cancellationToken) ?? 0;
