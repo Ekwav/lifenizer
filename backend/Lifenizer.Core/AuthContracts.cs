@@ -23,11 +23,11 @@ public enum SubscriptionPlan
     Personal = 0,
     Hosted = 1,
     Team = 2,
-    /// <summary>Free tier — 50 MB sync storage.</summary>
+    /// <summary>Free tier — 50 MB image storage.</summary>
     Free = 10,
-    /// <summary>Premium tier (4.99 €/month) — 10 GB sync storage.</summary>
+    /// <summary>Premium tier (4.99 €/month) — 10 GB image storage.</summary>
     Premium = 11,
-    /// <summary>PremiumPlus tier (19.99 €/month) — 100 GB sync storage.</summary>
+    /// <summary>PremiumPlus tier (19.99 €/month) — 100 GB image storage.</summary>
     PremiumPlus = 12,
 }
 

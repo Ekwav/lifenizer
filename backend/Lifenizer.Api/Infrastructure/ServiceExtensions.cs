@@ -66,7 +66,7 @@ public static class ServiceExtensions
     {
         services.AddLifenizerAuth(configuration);
         services.AddScoped<IPasswordHasher<UserAccount>, PasswordHasher<UserAccount>>();
-        services.Configure<PasswordHasherOptions>(options => options.IterationCount = 210_000);
+        services.Configure<PasswordHasherOptions>(options => options.IterationCount = 220_000);
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;

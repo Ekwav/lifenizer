@@ -47,7 +47,7 @@ public sealed class AccountAuthTests
         var account = await scope.ServiceProvider.GetRequiredService<LifenizerDbContext>().Users.SingleAsync();
         Assert.That(account.PasswordHash, Is.Not.EqualTo(Password));
         var bytes = Convert.FromBase64String(account.PasswordHash!);
-        Assert.That(System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(5, 4)), Is.EqualTo(210_000));
+        Assert.That(System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(5, 4)), Is.EqualTo(220_000));
         Assert.That(scope.ServiceProvider.GetRequiredService<IPasswordHasher<UserAccount>>().VerifyHashedPassword(account, account.PasswordHash!, Password), Is.EqualTo(PasswordVerificationResult.Success));
         Assert.That((await desktop.PostAsJsonAsync("/api/auth/dev-login", new DevLoginRequest("alice@example.test"))).StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Lifenizer.Api.Data;
 using Lifenizer.Api.Security;
 using Lifenizer.Api.Services;
@@ -11,11 +12,29 @@ public static class ImageEndpoints
 {
     private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif"
+        "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif", "application/octet-stream"
     };
 
     /// <summary>Maximum file size per upload: 25 MB.</summary>
     private const long MaxFileSizeBytes = 25L * 1024 * 1024;
+
+    private static async Task<bool> ValidEncryptedEnvelopeAsync(IFormFile file, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || root.EnumerateObject().Count() != 3) return false;
+            foreach (var key in new[] { "cipherText", "nonce", "keyId" })
+                if (!root.TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(value.GetString())) return false;
+            return root.GetProperty("keyId").GetString()!.Length <= 128
+                && Convert.FromBase64String(root.GetProperty("nonce").GetString()!).Length == 12
+                && Convert.FromBase64String(root.GetProperty("cipherText").GetString()!).Length > 0;
+        }
+        catch (JsonException) { return false; }
+        catch (FormatException) { return false; }
+    }
 
     public static IEndpointRouteBuilder MapImageEndpoints(this IEndpointRouteBuilder app)
     {
@@ -28,7 +47,6 @@ public static class ImageEndpoints
             HttpRequest request,
             ClaimsPrincipalUser currentUser,
             LifenizerDbContext db,
-            UserAccountService accounts,
             PremiumService premium,
             IConfiguration config,
             CancellationToken cancellationToken) =>
@@ -48,16 +66,22 @@ public static class ImageEndpoints
             if (!AllowedContentTypes.Contains(contentType))
                 return Results.BadRequest(new { error = "unsupported_content_type", contentType });
 
+            if (contentType.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase) && !await ValidEncryptedEnvelopeAsync(file, cancellationToken))
+                return Results.BadRequest(new { error = "invalid_encrypted_image_envelope" });
+
             var userId = currentUser.UserId;
 
             // Quota check via payments service.
             var quota = await premium.GetQuotaStatusAsync(userId, cancellationToken);
-            if (quota.UsedBytes + file.Length > quota.LimitBytes)
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            var reserved = await db.Users.Where(user => user.Id == userId && user.StorageUsedBytes <= quota.LimitBytes - file.Length)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(user => user.StorageUsedBytes, user => user.StorageUsedBytes + file.Length), cancellationToken);
+            if (reserved == 0)
             {
                 return Results.Json(new
                 {
                     error = "quota_exceeded",
-                    usedBytes = quota.UsedBytes,
+                    usedBytes = await db.Users.Where(user => user.Id == userId).Select(user => user.StorageUsedBytes).SingleAsync(cancellationToken),
                     limitBytes = quota.LimitBytes,
                     plan = quota.PlanName,
                 }, statusCode: StatusCodes.Status402PaymentRequired);
@@ -69,7 +93,8 @@ public static class ImageEndpoints
             Directory.CreateDirectory(userDir);
 
             var id = Guid.NewGuid();
-            var safeFileName = Path.GetFileName(file.FileName).Replace("..", string.Empty);
+            var safeFileName = contentType.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase)
+                ? $"{id}.bin" : Path.GetFileName(file.FileName).Replace("..", string.Empty);
             if (string.IsNullOrWhiteSpace(safeFileName)) safeFileName = "image";
             var ext = Path.GetExtension(safeFileName).ToLowerInvariant();
             var blobName = $"{id}{ext}";
@@ -95,7 +120,7 @@ public static class ImageEndpoints
 
             db.Images.Add(record);
             await db.SaveChangesAsync(cancellationToken);
-            await accounts.AdjustStorageUsageAsync(userId, file.Length, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
 
             return Results.Created($"/api/images/{id}", new
             {
@@ -141,6 +166,7 @@ public static class ImageEndpoints
             IConfiguration config,
             CancellationToken cancellationToken) =>
         {
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
             var record = await db.Images.FirstOrDefaultAsync(
                 img => img.Id == id && img.UserId == currentUser.UserId,
                 cancellationToken);
@@ -148,11 +174,11 @@ public static class ImageEndpoints
 
             var blobRoot = config["Artifacts:StorePath"] ?? "/tmp/lifenizer-artifacts";
             var fullPath = Path.Combine(blobRoot, record.BlobPath);
-            if (File.Exists(fullPath)) File.Delete(fullPath);
-
             db.Images.Remove(record);
             await db.SaveChangesAsync(cancellationToken);
             await accounts.AdjustStorageUsageAsync(currentUser.UserId, -record.SizeBytes, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            if (File.Exists(fullPath)) File.Delete(fullPath);
 
             return Results.NoContent();
         });

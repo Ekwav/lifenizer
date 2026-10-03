@@ -28,7 +28,8 @@ Both return the existing authentication response:
 
 Registration requires a valid email and a password of 12–1024 characters.
 Passwords are stored using the ASP.NET Core Identity password hasher with
-PBKDF2-HMAC-SHA512, 210,000 iterations and a random salt. Existing accounts,
+PBKDF2-HMAC-SHA512, 220,000 iterations and a random salt, following the
+[OWASP work factor guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#pbkdf2). Existing accounts,
 including development accounts, cannot be claimed by registering their email;
 registration returns `409 account_exists`. Invalid credentials return `401`.
 Registration and login share a per-IP limit of ten requests per minute (`429`).

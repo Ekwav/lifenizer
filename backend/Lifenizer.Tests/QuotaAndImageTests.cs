@@ -1,9 +1,13 @@
+using System.Security.Cryptography;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Lifenizer.Core;
+using Lifenizer.Api.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Lifenizer.Tests;
 
@@ -134,6 +138,111 @@ public sealed class QuotaAndImageTests
         // Quota should have been decremented.
         var status2 = await client.GetFromJsonAsync<JsonElement>("/api/premium/status", JsonOptions);
         Assert.That(status2.GetProperty("usedBytes").GetInt64(), Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task EncryptedImageStoresOpaqueEnvelopeAndFileName()
+    {
+        var blobRoot = Path.Combine(Path.GetTempPath(), "lifenizer-test-blobs", Guid.NewGuid().ToString("N"));
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?> { ["Artifacts:StorePath"] = blobRoot });
+        using var client = factory.CreateClient();
+        var auth = await LoginAsync(client, "encrypted-img@example.test");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AuthToken);
+        var plain = JsonSerializer.SerializeToUtf8Bytes(new { bytes = Convert.ToBase64String(MinimalJpeg()), fileName = "private-family-photo.jpg", contentType = "image/jpeg" });
+        var nonce = RandomNumberGenerator.GetBytes(12);
+        var cipher = new byte[plain.Length];
+        var mac = new byte[16];
+        using (var aes = new AesGcm(RandomNumberGenerator.GetBytes(32), 16)) aes.Encrypt(nonce, plain, cipher, mac);
+        var packed = JsonSerializer.SerializeToUtf8Bytes(new { c = Convert.ToBase64String(cipher), m = Convert.ToBase64String(mac) });
+        var envelope = JsonSerializer.SerializeToUtf8Bytes(new { cipherText = Convert.ToBase64String(packed), nonce = Convert.ToBase64String(nonce), keyId = "pbkdf2-sha256-aesgcm-v1" });
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(envelope) { Headers = { ContentType = new MediaTypeHeaderValue("application/octet-stream") } }, "file", "accidental-sensitive-name.jpg");
+        var upload = await client.PostAsync("/api/images", content);
+        upload.EnsureSuccessStatusCode();
+        var record = await upload.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var id = record.GetProperty("id").GetString();
+        Assert.That(record.GetProperty("fileName").GetString(), Is.EqualTo($"{id}.bin"));
+        var download = await client.GetAsync($"/api/images/{id}");
+        Assert.That(download.Content.Headers.ContentType!.MediaType, Is.EqualTo("application/octet-stream"));
+        Assert.That(download.Content.Headers.ContentDisposition!.DispositionType, Is.EqualTo("attachment"));
+        Assert.That(await download.Content.ReadAsByteArrayAsync(), Is.EqualTo(envelope));
+        var stored = await File.ReadAllTextAsync(Directory.GetFiles(blobRoot, "*.bin", SearchOption.AllDirectories).Single());
+        Assert.That(stored, Does.Not.Contain("private-family-photo").And.Not.Contain("image/jpeg"));
+        (await client.DeleteAsync($"/api/images/{id}")).EnsureSuccessStatusCode();
+        Assert.That((await client.GetFromJsonAsync<JsonElement>("/api/premium/status", JsonOptions)).GetProperty("usedBytes").GetInt64(), Is.Zero);
+    }
+
+    [TestCase("arbitrary blob")]
+    [TestCase("{\"cipherText\":\"YQ==\",\"nonce\":\"YQ==\",\"keyId\":\"v1\"}")]
+    [TestCase("{\"cipherText\":42,\"nonce\":null,\"keyId\":\"v1\"}")]
+    public async Task InvalidEncryptedImageEnvelopeIsRejected(string payload)
+    {
+        await using var factory = new LifenizerApiFactory();
+        using var client = factory.CreateClient();
+        var auth = await LoginAsync(client, "invalid-img@example.test");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AuthToken);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(payload)) { Headers = { ContentType = new MediaTypeHeaderValue("application/octet-stream") } }, "file", "opaque.bin");
+        Assert.That((await client.PostAsync("/api/images", content)).StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task ConcurrentUploadsAndDeletesKeepStorageCountCorrect()
+    {
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Artifacts:StorePath"] = Path.Combine(Path.GetTempPath(), "lifenizer-test-blobs", Guid.NewGuid().ToString("N"))
+        });
+        using var client = factory.CreateClient();
+        var auth = await LoginAsync(client, "concurrent-img@example.test");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AuthToken);
+        (await client.GetAsync("/api/premium/status")).EnsureSuccessStatusCode();
+        var ids = await Task.WhenAll(Enumerable.Range(0, 8).Select(async index =>
+        {
+            using var content = ImageForm();
+            using var upload = await client.PostAsync("/api/images", content);
+            upload.EnsureSuccessStatusCode();
+            return (await upload.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("id").GetString();
+        }));
+        var status = await client.GetFromJsonAsync<JsonElement>("/api/premium/status", JsonOptions);
+        Assert.That(status.GetProperty("usedBytes").GetInt64(), Is.EqualTo(8 * MinimalJpeg().Length));
+        var deletes = await Task.WhenAll(ids.Select(id => client.DeleteAsync($"/api/images/{id}")));
+        Assert.That(deletes.Select(response => response.StatusCode), Is.All.EqualTo(HttpStatusCode.NoContent));
+        Assert.That((await client.GetFromJsonAsync<JsonElement>("/api/premium/status", JsonOptions)).GetProperty("usedBytes").GetInt64(), Is.Zero);
+    }
+
+    [Test]
+    public async Task ConcurrentUploadsCannotExceedQuota()
+    {
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Artifacts:StorePath"] = Path.Combine(Path.GetTempPath(), "lifenizer-test-blobs", Guid.NewGuid().ToString("N"))
+        });
+        using var client = factory.CreateClient();
+        var auth = await LoginAsync(client, "full-img@example.test");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AuthToken);
+        (await client.GetAsync("/api/premium/status")).EnsureSuccessStatusCode();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<LifenizerDbContext>();
+            var account = await db.Users.SingleAsync();
+            account.StorageUsedBytes = StorageQuota.FreeLimitBytes - MinimalJpeg().Length;
+            await db.SaveChangesAsync();
+        }
+        using var first = ImageForm();
+        using var second = ImageForm();
+        var uploads = await Task.WhenAll(client.PostAsync("/api/images", first), client.PostAsync("/api/images", second));
+        Assert.That(uploads.Select(response => response.StatusCode), Is.EquivalentTo(new[] { HttpStatusCode.Created, HttpStatusCode.PaymentRequired }));
+        Assert.That((await client.GetFromJsonAsync<JsonElement>("/api/premium/status", JsonOptions)).GetProperty("usedBytes").GetInt64(), Is.EqualTo(StorageQuota.FreeLimitBytes));
+        using var verify = factory.Services.CreateScope();
+        Assert.That(await verify.ServiceProvider.GetRequiredService<LifenizerDbContext>().Images.CountAsync(), Is.EqualTo(1));
+    }
+
+    private static MultipartFormDataContent ImageForm()
+    {
+        var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(MinimalJpeg()) { Headers = { ContentType = new MediaTypeHeaderValue("image/jpeg") } }, "file", "image.jpg");
+        return content;
     }
 
     [Test]

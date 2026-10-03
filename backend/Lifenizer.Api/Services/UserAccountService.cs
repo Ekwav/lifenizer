@@ -113,12 +113,11 @@ public sealed class UserAccountService(LifenizerDbContext db, IPasswordHasher<Us
         long deltaBytes,
         CancellationToken cancellationToken)
     {
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken)
-            ?? throw new InvalidOperationException($"User {userId} not found.");
-
-        user.StorageUsedBytes = Math.Max(0, user.StorageUsedBytes + deltaBytes);
-        await db.SaveChangesAsync(cancellationToken);
-        return user.StorageUsedBytes;
+        var changed = await db.Users.Where(user => user.Id == userId).ExecuteUpdateAsync(
+            setters => setters.SetProperty(user => user.StorageUsedBytes, user => Math.Max(0, user.StorageUsedBytes + deltaBytes)),
+            cancellationToken);
+        if (changed == 0) throw new InvalidOperationException($"User {userId} not found.");
+        return await db.Users.Where(user => user.Id == userId).Select(user => user.StorageUsedBytes).SingleAsync(cancellationToken);
     }
 
     /// <summary>
