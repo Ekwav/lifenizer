@@ -6,13 +6,22 @@ import 'package:http/http.dart' as http;
 import 'models.dart';
 
 class LifenizerApiClient {
-  LifenizerApiClient({required this.baseUrl, this.authToken});
+  LifenizerApiClient({
+    required this.baseUrl,
+    this.authToken,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   final String baseUrl;
   final String? authToken;
+  final http.Client _client;
 
   LifenizerApiClient authenticated(String token) {
-    return LifenizerApiClient(baseUrl: baseUrl, authToken: token);
+    return LifenizerApiClient(
+      baseUrl: baseUrl,
+      authToken: token,
+      client: _client,
+    );
   }
 
   Future<AuthSession> devLogin({
@@ -27,7 +36,7 @@ class LifenizerApiClient {
   }
 
   Future<List<ImportCapability>> importCapabilities() async {
-    final response = await http.get(_uri('/api/imports/capabilities'));
+    final response = await _client.get(_uri('/api/imports/capabilities'));
     _ensureSuccess(response);
     final data = jsonDecode(response.body) as List;
     return data
@@ -38,11 +47,22 @@ class LifenizerApiClient {
         .toList();
   }
 
+  /// Runs an import for [source] with the given [request].
+  ///
+  /// [timeout] overrides the default (unbounded) wait for this call. It is
+  /// used for slow server-side work such as audio transcription (see
+  /// [LifenizerAppState.importAudioBytes]) — other imports stay exempt from
+  /// any timeout, matching today's behavior.
   Future<NormalizedImportResult> importSource(
     String source,
-    ImportSourceRequest request,
-  ) async {
-    final response = await _post('/api/imports/$source', request.toJson());
+    ImportSourceRequest request, {
+    Duration? timeout,
+  }) async {
+    final response = await _post(
+      '/api/imports/$source',
+      request.toJson(),
+      timeout: timeout,
+    );
     return NormalizedImportResult.fromJson(response);
   }
 
@@ -54,7 +74,7 @@ class LifenizerApiClient {
   }
 
   Future<PullResult> pull(int since) async {
-    final response = await http.get(
+    final response = await _client.get(
       _uri('/api/sync/pull', {'since': '$since'}),
       headers: _headers(),
     );
@@ -111,7 +131,7 @@ class LifenizerApiClient {
     if (conversationId != null) {
       req.fields['conversationId'] = conversationId;
     }
-    final streamed = await req.send();
+    final streamed = await _client.send(req);
     final resp = await http.Response.fromStream(streamed);
     if (resp.statusCode == 402) throw QuotaExceededException(resp.body);
     _ensureSuccess(resp);
@@ -124,7 +144,7 @@ class LifenizerApiClient {
     final query = conversationId != null
         ? {'conversationId': conversationId}
         : null;
-    final response = await http.get(
+    final response = await _client.get(
       _uri('/api/images', query),
       headers: _headers(),
     );
@@ -136,7 +156,7 @@ class LifenizerApiClient {
   }
 
   Future<void> deleteImage(String id) async {
-    final response = await http.delete(
+    final response = await _client.delete(
       _uri('/api/images/$id'),
       headers: _headers(),
     );
@@ -150,7 +170,7 @@ class LifenizerApiClient {
   // ---------------------------------------------------------------------------
 
   Future<QuotaStatus> getQuotaStatus() async {
-    final response = await http.get(
+    final response = await _client.get(
       _uri('/api/premium/status'),
       headers: _headers(),
     );
@@ -169,12 +189,16 @@ class LifenizerApiClient {
     String path,
     Map<String, dynamic> body, {
     bool authenticated = true,
+    Duration? timeout,
   }) async {
-    final response = await http.post(
+    final request = _client.post(
       _uri(path),
       headers: _headers(authenticated: authenticated),
       body: jsonEncode(body),
     );
+    final response = timeout == null
+        ? await request
+        : await request.timeout(timeout);
     _ensureSuccess(response);
     return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
   }

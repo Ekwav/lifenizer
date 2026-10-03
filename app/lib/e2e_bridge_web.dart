@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:js_interop';
 
 import 'app_state.dart';
+import 'models.dart';
 
 @JS('window')
 external JSObject get _window;
@@ -11,8 +12,10 @@ extension type _E2EWindow(JSObject _) implements JSObject {
   external set lifenizerE2eImportText(JSFunction value);
   external set lifenizerE2eImportBackend(JSFunction value);
   external set lifenizerE2eRecording(JSFunction value);
+  external set lifenizerE2eImportAudio(JSFunction value);
   external set lifenizerE2eExtractRelations(JSFunction value);
   external set lifenizerE2eSaveSearch(JSFunction value);
+  external set lifenizerE2eSearch(JSFunction value);
   external set lifenizerE2ePull(JSFunction value);
   external set lifenizerE2eSnapshot(JSFunction value);
 }
@@ -51,6 +54,30 @@ void installE2eBridge(LifenizerAppState state) {
     );
   }).toJS;
 
+  window.lifenizerE2eImportAudio =
+      ((
+            JSString payloadBase64,
+            JSString fileName,
+            JSString mimeType,
+            JSString participantNames,
+            JSString recordedAt,
+            JSString title,
+          ) {
+            state.importAudioBytes(
+              bytes: base64Decode(payloadBase64.toDart),
+              fileName: fileName.toDart,
+              mimeType: mimeType.toDart.isEmpty ? null : mimeType.toDart,
+              participantNames: participantNames.toDart.isEmpty
+                  ? null
+                  : participantNames.toDart,
+              recordedAt: recordedAt.toDart.isEmpty
+                  ? null
+                  : DateTime.parse(recordedAt.toDart),
+              title: title.toDart.isEmpty ? null : title.toDart,
+            );
+          })
+          .toJS;
+
   window.lifenizerE2eExtractRelations = (() {
     if (state.conversations.isNotEmpty) {
       state.extractRelations(state.conversations.first);
@@ -65,6 +92,39 @@ void installE2eBridge(LifenizerAppState state) {
       tag: 'whatsapp',
     );
   }).toJS;
+
+  window.lifenizerE2eSearch =
+      ((JSString query, JSString participant, JSString from, JSString to) {
+        final participantName = participant.toDart.trim();
+        String? participantId;
+        if (participantName.isNotEmpty) {
+          final match = state.participants.where(
+            (candidate) =>
+                candidate.displayName.toLowerCase() ==
+                participantName.toLowerCase(),
+          );
+          participantId = match.isEmpty ? null : match.first.id;
+        }
+        final fromText = from.toDart.trim();
+        final toText = to.toDart.trim();
+        final results = state.search(
+          query.toDart,
+          participantId: participantId,
+          from: fromText.isEmpty ? null : DateTime.parse(fromText),
+          to: toText.isEmpty ? null : DateTime.parse(toText),
+        );
+        return jsonEncode(
+          results
+              .map(
+                (conversation) => {
+                  'title': conversation.title,
+                  'source': conversation.source,
+                  'startedAt': conversation.startedAt.toJsonString(),
+                },
+              )
+              .toList(),
+        ).toJS;
+      }).toJS;
 
   window.lifenizerE2ePull = (() {
     state.pullSync();

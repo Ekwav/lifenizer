@@ -11,6 +11,9 @@ import 'package:image_picker/image_picker.dart';
 
 import 'image_service.dart';
 import 'models.dart';
+import 'services/search_criteria.dart';
+import 'services/search_scorer.dart';
+import 'services/search_service.dart';
 
 class LifenizerAppState extends ChangeNotifier {
   final Uuid _uuid = const Uuid();
@@ -83,6 +86,28 @@ class LifenizerAppState extends ChangeNotifier {
       status = 'Vault unlocked';
       refreshQuota().ignore();
     });
+  }
+
+  /// Test-only hook: unlocks the local vault crypto and installs an
+  /// already-authenticated API [client] directly, without [login]'s network
+  /// round trips (dev-login, capability fetch, initial sync pull).
+  ///
+  /// This lets tests exercise real app-state methods (e.g.
+  /// [importAudioBytes]) against a stubbed `http.Client` — see
+  /// `package:http/testing.dart`'s `MockClient` — instead of a live
+  /// backend. Not used by production code paths.
+  Future<void> debugAuthenticateForTesting(
+    LifenizerApiClient client, {
+    String email = 'test@example.test',
+    String passphrase = 'test-passphrase',
+    String vaultSalt = 'test-salt',
+  }) async {
+    await _crypto.unlock(
+      email: email,
+      passphrase: passphrase,
+      vaultSalt: vaultSalt,
+    );
+    _api = client;
   }
 
   Future<void> pullSync() async {
@@ -181,6 +206,24 @@ class LifenizerAppState extends ChangeNotifier {
   Future<String> checkoutUrl(String plan) =>
       _requireApi().createCheckoutUrl(plan);
 
+  /// Searches conversations based on query and optional filters.
+  ///
+  /// Supports temporal intent parsing (e.g., "today", "last week"), semantic
+  /// token filtering, vector similarity scoring, and search continuity
+  /// (carry-over tokens from the previous search if related).
+  ///
+  /// Parameters:
+  /// - [query]: Search query string (normalized internally)
+  /// - [source]: Optional source filter (e.g., "slack", "email")
+  /// - [participantId]: Optional participant ID filter
+  /// - [tag]: Optional tag filter
+  /// - [favoritesOnly]: If true, only return favorited conversations
+  /// - [useVector]: If true, include TF-IDF vector similarity in scoring
+  /// - [from]/[to]: Optional inclusive date-range filter (calendar dates in
+  ///   the caller's local timezone). A conversation matches when its time
+  ///   span overlaps the range.
+  ///
+  /// Returns: Sorted list of matching conversations (highest relevance first)
   List<Conversation> search(
     String query, {
     String? source,
@@ -188,6 +231,9 @@ class LifenizerAppState extends ChangeNotifier {
     String? tag,
     bool favoritesOnly = false,
     bool useVector = true,
+    DateTime? from,
+    DateTime? to,
+    int? maxResults,
   }) {
     _ensureSearchIndex();
     final index = _searchIndex;
@@ -195,99 +241,62 @@ class LifenizerAppState extends ChangeNotifier {
       return const [];
     }
 
-    final normalized = query.trim().toLowerCase();
-    final normalizedSource = _cleanFilter(source);
-    final normalizedParticipantId = _cleanFilter(participantId);
-    final normalizedTag = _cleanFilter(tag)?.toLowerCase();
-    final now = DateTime.now().toUtc();
-    final temporalIntent = _TemporalIntent.tryParse(normalized, now);
+    // Build search criteria and scorer
+    final criteria = SearchCriteria(
+      query: query,
+      source: source,
+      participantId: participantId,
+      tag: tag,
+      favoritesOnly: favoritesOnly,
+      useVector: useVector,
+      from: from,
+      to: to,
+    );
 
+    final now = DateTime.now().toUtc();
+    final temporalIntent = _TemporalIntent.tryParse(criteria.normalized, now);
+
+    // Prepare query tokens
+    final queryTokens = _semanticTokens(
+      _ConversationSearchIndex.tokenize(criteria.normalized),
+    );
+    final semanticQuery = queryTokens.join(' ');
+
+    // Determine which previous tokens to carry over
     final previousQuery = _lastSearchQuery;
     final previousTokens = previousQuery == null
         ? const <String>[]
         : _semanticTokens(_ConversationSearchIndex.tokenize(previousQuery));
-    final queryTokens = _semanticTokens(
-      _ConversationSearchIndex.tokenize(normalized),
+
+    final scorer = SearchScorer(
+      temporalIntent: temporalIntent,
+      normalizedQuery: criteria.normalized,
+      now: now,
+      previousQuery: previousQuery,
+      lastSearchAt: _lastSearchAt,
+      lastSearchTopIds: _lastSearchTopConversationIds,
+      sessionQueryFrequency: _sessionQueryFrequency,
     );
-    final semanticQuery = queryTokens.join(' ');
+
     final effectiveTokens = <String>[
       ...queryTokens,
-      if (_shouldCarryPreviousQuery(normalized, previousTokens, queryTokens))
+      if (scorer.shouldCarryPreviousQuery(previousTokens, queryTokens))
         ...previousTokens,
     ];
 
-    final queryFrequencyBoost = normalized.isEmpty
-        ? 0
-        : (_sessionQueryFrequency[normalized] ?? 0);
-    final candidateIds = index.lookupCandidates(effectiveTokens);
-    final scored = <_ScoredConversation>[];
+    // Execute search using service
+    final searchService = SearchService(index);
+    final results = searchService
+        .rankConversations(
+          criteria,
+          scorer,
+          effectiveTokens,
+          semanticQuery,
+          maxResults: maxResults,
+        )
+        .cast<Conversation>();
 
-    for (final conversationId in candidateIds) {
-      final document = index.documents[conversationId];
-      if (document == null) continue;
-
-      final conversation = document.conversation;
-      if (normalizedSource != null && conversation.source != normalizedSource) {
-        continue;
-      }
-      if (normalizedParticipantId != null &&
-          !conversation.participantIds.contains(normalizedParticipantId)) {
-        continue;
-      }
-      if (normalizedTag != null && !document.tagSet.contains(normalizedTag)) {
-        continue;
-      }
-      if (favoritesOnly && !conversation.isFavorite) {
-        continue;
-      }
-
-      var score = 0.0;
-      if (normalized.isNotEmpty) {
-        if (semanticQuery.isNotEmpty &&
-            !document.haystack.contains(semanticQuery) &&
-            !_fuzzyMatch(semanticQuery, document.haystack)) {
-          continue;
-        }
-        score += index.lexicalScore(document, semanticQuery, effectiveTokens);
-        if (useVector) {
-          score += index.vectorScore(document, effectiveTokens) * 2.5;
-        }
-
-        score += _temporalScoreBoost(
-          conversation.startedAt.toUtc(),
-          now,
-          temporalIntent,
-        );
-        score += _recentSearchContinuityBoost(
-          conversation.id,
-          normalized,
-          previousQuery,
-          now,
-        );
-        if (queryFrequencyBoost > 0 && document.haystack.contains(normalized)) {
-          score += math.min(1.2, queryFrequencyBoost * 0.2);
-        }
-      } else {
-        // Empty query is timeline browsing; favor recency but keep deterministic.
-        score +=
-            _freshnessDecayScore(conversation.startedAt.toUtc(), now) * 2.0;
-      }
-
-      scored.add(_ScoredConversation(conversation: conversation, score: score));
-    }
-
-    scored.sort((left, right) {
-      final byScore = right.score.compareTo(left.score);
-      if (byScore != 0) return byScore;
-      return right.conversation.startedAt.compareTo(
-        left.conversation.startedAt,
-      );
-    });
-
-    final results = scored
-        .map((item) => item.conversation)
-        .toList(growable: false);
-    _updateSearchContext(normalized, results, now);
+    _updateSearchContext(criteria.normalized, results, now);
     return results;
   }
 
@@ -301,6 +310,8 @@ class LifenizerAppState extends ChangeNotifier {
     String? tag,
     bool favoritesOnly = false,
     bool useVector = true,
+    DateTime? from,
+    DateTime? to,
     int page = 1,
     int pageSize = 10,
   }) {
@@ -311,6 +322,8 @@ class LifenizerAppState extends ChangeNotifier {
       tag: tag,
       favoritesOnly: favoritesOnly,
       useVector: useVector,
+      from: from,
+      to: to,
     );
     if (pageSize <= 0) {
       return ConversationSearchPage(
@@ -339,84 +352,6 @@ class LifenizerAppState extends ChangeNotifier {
       page: clampedPage,
       pageSize: pageSize,
     );
-  }
-
-  // Fuzzy-match every whitespace token of [query] against [haystack]. A token
-  // matches if it is a substring of any haystack token OR within Levenshtein
-  // edit distance 1 (2 for tokens with >=6 chars). Mirrors the spirit of the
-  // legacy LucenceSearch fuzzy fallback while staying client-side / E2EE.
-  bool _fuzzyMatch(String query, String haystack) {
-    final queryTokens = query
-        .split(RegExp(r'\s+'))
-        .where((token) => token.isNotEmpty)
-        .toList();
-    if (queryTokens.isEmpty) {
-      return true;
-    }
-    final haystackTokens = haystack
-        .split(RegExp(r'\s+'))
-        .where((token) => token.isNotEmpty)
-        .toList();
-    if (haystackTokens.isEmpty) {
-      return false;
-    }
-    for (final token in queryTokens) {
-      if (token.length < 3) {
-        if (!haystackTokens.any((candidate) => candidate.contains(token))) {
-          return false;
-        }
-        continue;
-      }
-      final maxDistance = token.length >= 6 ? 2 : 1;
-      final matched = haystackTokens.any((candidate) {
-        if (candidate.contains(token)) {
-          return true;
-        }
-        if ((candidate.length - token.length).abs() > maxDistance) {
-          return false;
-        }
-        return _editDistance(token, candidate, maxDistance) <= maxDistance;
-      });
-      if (!matched) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  int _editDistance(String left, String right, int limit) {
-    final leftLength = left.length;
-    final rightLength = right.length;
-    if ((leftLength - rightLength).abs() > limit) {
-      return limit + 1;
-    }
-    var previous = List<int>.generate(rightLength + 1, (index) => index);
-    var current = List<int>.filled(rightLength + 1, 0);
-    for (var i = 1; i <= leftLength; i++) {
-      current[0] = i;
-      var rowMin = current[0];
-      for (var j = 1; j <= rightLength; j++) {
-        final cost = left.codeUnitAt(i - 1) == right.codeUnitAt(j - 1) ? 0 : 1;
-        final deletion = previous[j] + 1;
-        final insertion = current[j - 1] + 1;
-        final substitution = previous[j - 1] + cost;
-        var min = deletion < insertion ? deletion : insertion;
-        if (substitution < min) {
-          min = substitution;
-        }
-        current[j] = min;
-        if (min < rowMin) {
-          rowMin = min;
-        }
-      }
-      if (rowMin > limit) {
-        return limit + 1;
-      }
-      final swap = previous;
-      previous = current;
-      current = swap;
-    }
-    return previous[rightLength];
   }
 
   List<String> get availableSources {
@@ -584,6 +519,78 @@ class LifenizerAppState extends ChangeNotifier {
       await _ingestNormalizedImport(normalized);
       status = '${normalized.message} Encrypted and synced.';
     });
+  }
+
+  /// Imports an audio recording for server-side transcription.
+  ///
+  /// Takes raw [bytes] and a [fileName] directly (rather than a
+  /// `PlatformFile`) so this can be driven by the file picker in the UI or
+  /// called directly from tests with a stubbed HTTP client. The backend
+  /// transcribes on CPU and can take minutes, so the request uses a long
+  /// timeout (see [LifenizerApiClient.importSource]); the resulting
+  /// conversation is ingested through the same normalized-import path as
+  /// every other import source, so it is tagged, encrypted, and synced
+  /// identically.
+  Future<void> importAudioBytes({
+    required List<int> bytes,
+    required String fileName,
+    String? mimeType,
+    String? title,
+    String? participantNames,
+    String? language,
+    DateTime? recordedAt,
+  }) async {
+    if (bytes.isEmpty) return;
+    status = 'Transcribing audio… this can take a few minutes.';
+    error = null;
+    notifyListeners();
+    await _run(() async {
+      final api = _requireApi();
+      final metadata = <String, String>{
+        if (language != null && language.trim().isNotEmpty)
+          'language': language.trim(),
+        if (recordedAt != null)
+          'recordedAt': recordedAt.toUtc().toIso8601String(),
+      };
+      final normalized = await api.importSource(
+        'audio',
+        ImportSourceRequest(
+          title: title?.trim().isEmpty == true ? null : title?.trim(),
+          originalFileName: fileName,
+          mimeType: mimeType ?? _guessAudioMimeType(fileName),
+          metadata: metadata,
+          participantNames: participantNames == null
+              ? const []
+              : participantNames
+                    .split(',')
+                    .map((name) => name.trim())
+                    .where((name) => name.isNotEmpty)
+                    .toList(),
+          payloadBase64: base64Encode(bytes),
+        ),
+        timeout: const Duration(minutes: 10),
+      );
+      await _ingestNormalizedImport(normalized);
+      status = '${normalized.message} Encrypted and synced.';
+    });
+  }
+
+  static const Map<String, String> _audioMimeTypesByExtension = {
+    'mp3': 'audio/mpeg',
+    'm4a': 'audio/mp4',
+    'wav': 'audio/wav',
+    'ogg': 'audio/ogg',
+    'opus': 'audio/opus',
+    'flac': 'audio/flac',
+    'aac': 'audio/aac',
+    'webm': 'audio/webm',
+  };
+
+  static String _guessAudioMimeType(String fileName) {
+    final extension = fileName.contains('.')
+        ? fileName.split('.').last.toLowerCase()
+        : '';
+    return _audioMimeTypesByExtension[extension] ?? 'application/octet-stream';
   }
 
   Future<void> importSharedPayload({
@@ -895,6 +902,8 @@ class LifenizerAppState extends ChangeNotifier {
     String? source,
     String? participantId,
     String? tag,
+    DateTime? from,
+    DateTime? to,
   }) async {
     await _run(() async {
       final savedSearch = SavedSearch(
@@ -904,6 +913,8 @@ class LifenizerAppState extends ChangeNotifier {
         source: _cleanFilter(source),
         participantId: _cleanFilter(participantId),
         tag: _cleanFilter(tag),
+        from: from,
+        to: to,
       );
       savedSearches.removeWhere((item) => item.id == savedSearch.id);
       savedSearches.add(savedSearch);
@@ -943,6 +954,26 @@ class LifenizerAppState extends ChangeNotifier {
       for (final participant in participants) {
         nameToId[participant.displayName.toLowerCase()] = participant.id;
       }
+      // Prefer the real historical timestamps carried by the imported
+      // segments (e.g. actual WhatsApp/email message dates) over defaulting
+      // to "now". Without this, every import would look like it happened at
+      // import time, which would make searching/filtering by time useless
+      // for anything that wasn't just imported. Conversation.startedAt/
+      // endedAt fall back to DateTime.now() automatically when null is
+      // passed, so sources without per-segment timestamps (e.g. audio
+      // without detected dates) keep today's default behavior.
+      final segmentTimestamps =
+          normalized.segments
+              .map((segment) => segment.createdAt)
+              .whereType<DateTime>()
+              .toList()
+            ..sort();
+      final derivedStartedAt = segmentTimestamps.isEmpty
+          ? null
+          : segmentTimestamps.first;
+      final derivedEndedAt = segmentTimestamps.isEmpty
+          ? null
+          : segmentTimestamps.last;
       final conversation = Conversation(
         id: _uuid.v4(),
         title: normalized.title.trim().isEmpty
@@ -957,6 +988,8 @@ class LifenizerAppState extends ChangeNotifier {
           text: normalized.segments.map((segment) => segment.text).join('\n'),
           artifactNames: normalized.artifactNames,
         ),
+        startedAt: derivedStartedAt,
+        endedAt: derivedEndedAt,
         segments: normalized.segments.isEmpty
             ? [
                 ConversationSegment(
@@ -1069,45 +1102,8 @@ class LifenizerAppState extends ChangeNotifier {
         .replaceAll(RegExp(r'^-|-$'), '');
   }
 
-  String? _cleanFilter(String? value) {
-    final cleaned = value?.trim();
-    return cleaned == null || cleaned.isEmpty ? null : cleaned;
-  }
-
   void _markSearchIndexDirty() {
     _searchIndexDirty = true;
-  }
-
-  bool _shouldCarryPreviousQuery(
-    String normalized,
-    List<String> previousTokens,
-    List<String> currentTokens,
-  ) {
-    if (normalized.isEmpty || previousTokens.isEmpty) {
-      return false;
-    }
-
-    final hasCarryHint =
-        normalized.contains('last search') ||
-        normalized.contains('previous search') ||
-        normalized.contains('same as before') ||
-        normalized.contains('again') ||
-        normalized.contains('same time');
-    if (hasCarryHint) {
-      return true;
-    }
-
-    if (currentTokens.length <= 2 && _lastSearchAt != null) {
-      final minutes = DateTime.now()
-          .toUtc()
-          .difference(_lastSearchAt!)
-          .inMinutes;
-      if (minutes <= 5) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   List<String> _semanticTokens(List<String> tokens) {
@@ -1143,64 +1139,9 @@ class LifenizerAppState extends ChangeNotifier {
     return filtered.isEmpty ? tokens : filtered;
   }
 
-  double _freshnessDecayScore(DateTime documentTime, DateTime now) {
-    final ageDays = now.difference(documentTime).inHours / 24.0;
-    if (ageDays <= 0) {
-      return 1.0;
-    }
-    // Half-life around 180 days keeps recent items favored without overwhelming semantics.
-    return math.exp(-(ageDays / 180.0));
-  }
-
-  double _temporalScoreBoost(
-    DateTime documentTime,
-    DateTime now,
-    _TemporalIntent? intent,
-  ) {
-    var boost = _freshnessDecayScore(documentTime, now) * 1.0;
-    if (intent == null) {
-      return boost;
-    }
-
-    boost += intent.alignmentScore(documentTime);
-    return boost;
-  }
-
-  double _recentSearchContinuityBoost(
-    String conversationId,
-    String normalized,
-    String? previousQuery,
-    DateTime now,
-  ) {
-    if (normalized.isEmpty || previousQuery == null || _lastSearchAt == null) {
-      return 0;
-    }
-
-    final elapsedMinutes = now.difference(_lastSearchAt!).inMinutes;
-    if (elapsedMinutes > 30) {
-      return 0;
-    }
-
-    final previousTokens = _ConversationSearchIndex.tokenize(
-      previousQuery,
-    ).toSet();
-    final currentTokens = _ConversationSearchIndex.tokenize(normalized).toSet();
-    if (previousTokens.isEmpty || currentTokens.isEmpty) {
-      return 0;
-    }
-
-    final overlap = currentTokens.intersection(previousTokens).length;
-    final overlapRatio = overlap / math.max(1, currentTokens.length);
-    final recentBoost = _lastSearchTopConversationIds.contains(conversationId)
-        ? 1.0
-        : 0.0;
-
-    if (overlapRatio <= 0 && recentBoost == 0.0) {
-      return 0;
-    }
-
-    final decay = math.exp(-(elapsedMinutes / 20.0));
-    return ((overlapRatio * 1.6) + recentBoost) * decay;
+  String? _cleanFilter(String? value) {
+    final cleaned = value?.trim();
+    return cleaned == null || cleaned.isEmpty ? null : cleaned;
   }
 
   void _updateSearchContext(
@@ -1293,13 +1234,6 @@ class LifenizerAppState extends ChangeNotifier {
     if (api == null) throw StateError('Not logged in.');
     return api;
   }
-}
-
-class _ScoredConversation {
-  const _ScoredConversation({required this.conversation, required this.score});
-
-  final Conversation conversation;
-  final double score;
 }
 
 class _IndexedConversation {
@@ -1421,9 +1355,26 @@ class _ConversationSearchIndex {
         continue;
       }
 
-      // Fuzzy fallback in index-space for typo tolerance.
+      // Fuzzy fallback in index-space, for typo tolerance AND partial-word
+      // matches (e.g. typing "ali" should surface a participant named
+      // "Alice" even though "ali" isn't itself an indexed token).
+      //
+      // The substring check is tried first, unconditionally, mirroring
+      // SearchService._fuzzyMatch's per-document gate. Without it, a short
+      // partial query like "ali" only ever finds "alice" when the rest of
+      // the vault happens to contain no other token that's edit-distance-
+      // close to "ali" (e.g. the common word "all") — as soon as a vault of
+      // any realistic size contains such a token, the candidate set stops
+      // being empty, the "fall back to every conversation" safety net below
+      // no longer kicks in, and the actual match is silently dropped. Using
+      // the same substring-first rule as the per-document gate here keeps
+      // the two matching stages consistent.
       for (final entry in invertedIndex.entries) {
         final candidateToken = entry.key;
+        if (candidateToken.contains(token)) {
+          candidates.addAll(entry.value);
+          continue;
+        }
         if ((candidateToken.length - token.length).abs() > 2) {
           continue;
         }

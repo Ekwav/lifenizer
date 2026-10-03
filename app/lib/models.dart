@@ -1,5 +1,74 @@
 import 'dart:convert';
 
+// ============================================================================
+// SERIALIZATION EXTENSIONS
+// ============================================================================
+
+/// DateTime serialization extension for converting DateTime to JSON-compatible strings.
+extension DateTimeSerializationX on DateTime {
+  /// Convert DateTime to UTC ISO8601 string for JSON serialization.
+  String toJsonString() => toUtc().toIso8601String();
+}
+
+/// DateTime formatting extension for compact, locale-neutral display.
+///
+/// Deliberately avoids the `intl` package: the app only needs a fixed,
+/// unambiguous `yyyy-MM-dd[ HH:mm]` layout rather than locale-aware
+/// formatting.
+extension DateTimeFormatX on DateTime {
+  /// Formats as `yyyy-MM-dd HH:mm` in local time, e.g. `2026-03-14 18:05`.
+  String toCompactLocalString() {
+    final local = toLocal();
+    return '${_dateOnly(local)} ${_two(local.hour)}:${_two(local.minute)}';
+  }
+
+  /// Formats as `yyyy-MM-dd` in local time (date only), e.g. `2026-03-14`.
+  String toCompactLocalDateString() => _dateOnly(toLocal());
+
+  static String _dateOnly(DateTime local) =>
+      '${local.year.toString().padLeft(4, '0')}-${_two(local.month)}-${_two(local.day)}';
+
+  static String _two(int value) => value.toString().padLeft(2, '0');
+}
+
+/// DateTime deserialization extension for parsing DateTime from JSON maps.
+extension DateTimeDeserializationX on Map<String, dynamic> {
+  /// Parse optional DateTime from a map key. Returns null if key is missing or null.
+  DateTime? parseDateTime(String key) {
+    final value = this[key];
+    return value == null ? null : DateTime.parse(value as String);
+  }
+
+  /// Parse required DateTime from a map key. Throws if key is missing or null.
+  DateTime parseDateTimeRequired(String key) {
+    return DateTime.parse(this[key] as String);
+  }
+}
+
+/// List deserialization extension for parsing lists from JSON maps.
+extension ListDeserializationX on Map<String, dynamic> {
+  /// Parse a list of strings from a map key. Returns empty list if key is missing.
+  List<String> parseStringList(String key) {
+    return List<String>.from(this[key] as List? ?? const []);
+  }
+
+  /// Parse a list of objects using a custom parser function.
+  /// Returns empty list if key is missing or empty.
+  List<T> parseObjectList<T>(
+    String key,
+    T Function(Map<String, dynamic>) parser,
+  ) {
+    return (this[key] as List? ?? const [])
+        .map((item) => parser(Map<String, dynamic>.from(item as Map)))
+        .toList();
+  }
+}
+
+// ============================================================================
+// AUTHENTICATION MODELS
+// ============================================================================
+
+/// Represents an authenticated user session with encryption vault access.
 class AuthSession {
   AuthSession({
     required this.authToken,
@@ -13,6 +82,14 @@ class AuthSession {
   final String vaultId;
   final String vaultSalt;
 
+  /// Serialize to JSON for caching/persistence.
+  Map<String, dynamic> toJson() => {
+    'authToken': authToken,
+    'userId': userId,
+    'vaultId': vaultId,
+    'vaultSalt': vaultSalt,
+  };
+
   factory AuthSession.fromJson(Map<String, dynamic> json) {
     return AuthSession(
       authToken: json['authToken'] as String,
@@ -23,6 +100,11 @@ class AuthSession {
   }
 }
 
+// ============================================================================
+// CONVERSATION PARTICIPANT & SEGMENT MODELS
+// ============================================================================
+
+/// Represents a participant in conversations (person or entity).
 class Participant {
   Participant({
     required this.id,
@@ -34,6 +116,7 @@ class Participant {
   final String displayName;
   final List<String> identifiers;
 
+  /// Serialize to JSON.
   Map<String, dynamic> toJson() => {
     'id': id,
     'displayName': displayName,
@@ -43,10 +126,11 @@ class Participant {
   factory Participant.fromJson(Map<String, dynamic> json) => Participant(
     id: json['id'] as String,
     displayName: json['displayName'] as String,
-    identifiers: List<String>.from(json['identifiers'] as List? ?? const []),
+    identifiers: json.parseStringList('identifiers'),
   );
 }
 
+/// Represents a single segment/message in a conversation with metadata.
 class ConversationSegment {
   ConversationSegment({
     required this.id,
@@ -62,26 +146,27 @@ class ConversationSegment {
   final int offsetMs;
   final DateTime createdAt;
 
+  /// Serialize to JSON.
   Map<String, dynamic> toJson() => {
     'id': id,
     'text': text,
     'participantId': participantId,
     'offsetMs': offsetMs,
-    'createdAt': createdAt.toIso8601String(),
+    'createdAt': createdAt.toJsonString(),
   };
 
   factory ConversationSegment.fromJson(Map<String, dynamic> json) {
-    final createdAtText = json['createdAt'] as String?;
     return ConversationSegment(
       id: json['id'] as String,
       text: json['text'] as String,
       participantId: json['participantId'] as String?,
       offsetMs: json['offsetMs'] as int? ?? 0,
-      createdAt: createdAtText == null ? null : DateTime.parse(createdAtText),
+      createdAt: json.parseDateTime('createdAt'),
     );
   }
 }
 
+/// Represents a conversation/thread with metadata and segments.
 class Conversation {
   Conversation({
     required this.id,
@@ -108,6 +193,7 @@ class Conversation {
   final DateTime startedAt;
   final DateTime endedAt;
 
+  /// Combined searchable text from title, source, artifacts, tags, and all segment texts.
   String get searchableText => [
     title,
     source,
@@ -116,6 +202,7 @@ class Conversation {
     ...segments.map((segment) => segment.text),
   ].join(' ').toLowerCase();
 
+  /// Serialize to JSON.
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
@@ -125,34 +212,32 @@ class Conversation {
     'artifactNames': artifactNames,
     'tags': tags,
     'isFavorite': isFavorite,
-    'startedAt': startedAt.toIso8601String(),
-    'endedAt': endedAt.toIso8601String(),
+    'startedAt': startedAt.toJsonString(),
+    'endedAt': endedAt.toJsonString(),
   };
 
   factory Conversation.fromJson(Map<String, dynamic> json) => Conversation(
     id: json['id'] as String,
     title: json['title'] as String,
     source: json['source'] as String,
-    participantIds: List<String>.from(
-      json['participantIds'] as List? ?? const [],
+    participantIds: json.parseStringList('participantIds'),
+    segments: json.parseObjectList<ConversationSegment>(
+      'segments',
+      ConversationSegment.fromJson,
     ),
-    segments: (json['segments'] as List? ?? const [])
-        .map(
-          (segment) => ConversationSegment.fromJson(
-            Map<String, dynamic>.from(segment as Map),
-          ),
-        )
-        .toList(),
-    artifactNames: List<String>.from(
-      json['artifactNames'] as List? ?? const [],
-    ),
-    tags: List<String>.from(json['tags'] as List? ?? const []),
+    artifactNames: json.parseStringList('artifactNames'),
+    tags: json.parseStringList('tags'),
     isFavorite: json['isFavorite'] as bool? ?? false,
-    startedAt: DateTime.parse(json['startedAt'] as String),
-    endedAt: DateTime.parse(json['endedAt'] as String),
+    startedAt: json.parseDateTimeRequired('startedAt'),
+    endedAt: json.parseDateTimeRequired('endedAt'),
   );
 }
 
+// ============================================================================
+// SEARCH & INSIGHTS MODELS
+// ============================================================================
+
+/// Represents a saved search query with optional filters.
 class SavedSearch {
   SavedSearch({
     required this.id,
@@ -161,6 +246,8 @@ class SavedSearch {
     this.source,
     this.participantId,
     this.tag,
+    this.from,
+    this.to,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now().toUtc();
 
@@ -170,8 +257,15 @@ class SavedSearch {
   final String? source;
   final String? participantId;
   final String? tag;
+
+  /// Inclusive start of the saved date-range filter, if any.
+  final DateTime? from;
+
+  /// Inclusive end of the saved date-range filter, if any.
+  final DateTime? to;
   final DateTime createdAt;
 
+  /// Serialize to JSON.
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
@@ -179,7 +273,9 @@ class SavedSearch {
     'source': source,
     'participantId': participantId,
     'tag': tag,
-    'createdAt': createdAt.toIso8601String(),
+    if (from != null) 'from': from!.toJsonString(),
+    if (to != null) 'to': to!.toJsonString(),
+    'createdAt': createdAt.toJsonString(),
   };
 
   factory SavedSearch.fromJson(Map<String, dynamic> json) => SavedSearch(
@@ -189,10 +285,16 @@ class SavedSearch {
     source: json['source'] as String?,
     participantId: json['participantId'] as String?,
     tag: json['tag'] as String?,
-    createdAt: DateTime.parse(json['createdAt'] as String),
+    // Absent in searches saved before the date-range filter existed;
+    // parseDateTime returns null for a missing key, keeping old JSON
+    // backward compatible.
+    from: json.parseDateTime('from'),
+    to: json.parseDateTime('to'),
+    createdAt: json.parseDateTimeRequired('createdAt'),
   );
 }
 
+/// Represents a single day bucket in conversation timeline.
 class TimelineBucket {
   TimelineBucket({required this.day, required this.count});
 
@@ -200,6 +302,7 @@ class TimelineBucket {
   final int count;
 }
 
+/// Represents a count facet grouped by source.
 class SourceFacet {
   SourceFacet({required this.source, required this.count});
 
@@ -207,6 +310,7 @@ class SourceFacet {
   final int count;
 }
 
+/// Represents a count facet grouped by participant.
 class ParticipantFacet {
   ParticipantFacet({required this.participant, required this.count});
 
@@ -214,6 +318,7 @@ class ParticipantFacet {
   final int count;
 }
 
+/// Represents aggregated insights about vault contents.
 class VaultInsights {
   VaultInsights({
     required this.totalConversations,
@@ -234,7 +339,7 @@ class VaultInsights {
   final List<String> tags;
 }
 
-/// A single page of search results.
+/// Represents a paginated page of search results.
 class ConversationSearchPage {
   ConversationSearchPage({
     required this.items,
@@ -248,13 +353,23 @@ class ConversationSearchPage {
   final int page;
   final int pageSize;
 
+  /// Total number of pages available.
   int get totalPages => pageSize <= 0
       ? 1
       : ((total + pageSize - 1) ~/ pageSize).clamp(1, 1 << 30);
+
+  /// Whether a previous page is available.
   bool get hasPrevious => page > 1;
+
+  /// Whether a next page is available.
   bool get hasNext => page < totalPages;
 }
 
+// ============================================================================
+// RELATIONSHIP MODELS
+// ============================================================================
+
+/// Represents a relation/edge between two entities extracted from conversations.
 class RelationEdge {
   RelationEdge({
     required this.id,
@@ -274,6 +389,7 @@ class RelationEdge {
   final double confidence;
   final String? evidenceConversationId;
 
+  /// Serialize to JSON.
   Map<String, dynamic> toJson() => {
     'id': id,
     'subject': subject,
@@ -295,6 +411,11 @@ class RelationEdge {
   );
 }
 
+// ============================================================================
+// SYNC & DATA TRANSFER MODELS
+// ============================================================================
+
+/// Represents a single sync operation envelope with encrypted payload.
 class SyncEnvelope {
   SyncEnvelope({
     required this.id,
@@ -322,6 +443,7 @@ class SyncEnvelope {
   final DateTime clientCreatedAt;
   final int serverSequence;
 
+  /// Serialize to JSON.
   Map<String, dynamic> toJson() => {
     'id': id,
     'deviceId': deviceId,
@@ -346,11 +468,16 @@ class SyncEnvelope {
     cipherText: json['cipherText'] as String,
     nonce: json['nonce'] as String,
     keyId: json['keyId'] as String,
-    clientCreatedAt: DateTime.parse(json['clientCreatedAt'] as String),
+    clientCreatedAt: json.parseDateTimeRequired('clientCreatedAt'),
     serverSequence: json['serverSequence'] as int? ?? 0,
   );
 }
 
+// ============================================================================
+// IMPORT MODELS
+// ============================================================================
+
+/// Describes an available import source capability and its configuration.
 class ImportCapability {
   ImportCapability({
     required this.source,
@@ -368,6 +495,16 @@ class ImportCapability {
   final String status;
   final List<String> acceptedFormats;
 
+  /// Serialize to JSON for caching/persistence.
+  Map<String, dynamic> toJson() => {
+    'source': source,
+    'displayName': displayName,
+    'availableNow': availableNow,
+    'requiresCredentials': requiresCredentials,
+    'status': status,
+    'acceptedFormats': acceptedFormats,
+  };
+
   factory ImportCapability.fromJson(Map<String, dynamic> json) {
     return ImportCapability(
       source: json['source'] as String,
@@ -375,13 +512,12 @@ class ImportCapability {
       availableNow: json['availableNow'] as bool,
       requiresCredentials: json['requiresCredentials'] as bool,
       status: json['status'] as String,
-      acceptedFormats: List<String>.from(
-        json['acceptedFormats'] as List? ?? const [],
-      ),
+      acceptedFormats: json.parseStringList('acceptedFormats'),
     );
   }
 }
 
+/// Represents a request to import data from a source (file upload or direct text).
 class ImportSourceRequest {
   ImportSourceRequest({
     this.title,
@@ -401,6 +537,7 @@ class ImportSourceRequest {
   final List<String> participantNames;
   final String? payloadBase64;
 
+  /// Serialize to JSON.
   Map<String, dynamic> toJson() => {
     if (title != null) 'title': title,
     if (text != null) 'text': text,
@@ -412,6 +549,7 @@ class ImportSourceRequest {
   };
 }
 
+/// Represents the normalized result of an import operation from the backend.
 class NormalizedImportResult {
   NormalizedImportResult({
     required this.source,
@@ -427,29 +565,33 @@ class NormalizedImportResult {
   final List<NormalizedConversation> conversations;
   final List<NormalizedParticipant> participants;
 
+  /// Serialize to JSON for caching/persistence.
+  Map<String, dynamic> toJson() => {
+    'source': source,
+    'plaintextCompute': plaintextCompute,
+    'message': message,
+    'conversations': conversations.map((c) => c.toJson()).toList(),
+    'participants': participants.map((p) => p.toJson()).toList(),
+  };
+
   factory NormalizedImportResult.fromJson(Map<String, dynamic> json) {
     return NormalizedImportResult(
       source: json['source'] as String,
       plaintextCompute: json['plaintextCompute'] as bool? ?? true,
       message: json['message'] as String? ?? '',
-      conversations: (json['conversations'] as List? ?? const [])
-          .map(
-            (item) => NormalizedConversation.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ),
-          )
-          .toList(),
-      participants: (json['participants'] as List? ?? const [])
-          .map(
-            (item) => NormalizedParticipant.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ),
-          )
-          .toList(),
+      conversations: json.parseObjectList<NormalizedConversation>(
+        'conversations',
+        NormalizedConversation.fromJson,
+      ),
+      participants: json.parseObjectList<NormalizedParticipant>(
+        'participants',
+        NormalizedParticipant.fromJson,
+      ),
     );
   }
 }
 
+/// Represents a participant extracted during import normalization.
 class NormalizedParticipant {
   NormalizedParticipant({
     required this.displayName,
@@ -459,14 +601,21 @@ class NormalizedParticipant {
   final String displayName;
   final List<String> identifiers;
 
+  /// Serialize to JSON for caching/persistence.
+  Map<String, dynamic> toJson() => {
+    'displayName': displayName,
+    'identifiers': identifiers,
+  };
+
   factory NormalizedParticipant.fromJson(Map<String, dynamic> json) {
     return NormalizedParticipant(
       displayName: json['displayName'] as String,
-      identifiers: List<String>.from(json['identifiers'] as List? ?? const []),
+      identifiers: json.parseStringList('identifiers'),
     );
   }
 }
 
+/// Represents a conversation extracted during import normalization.
 class NormalizedConversation {
   NormalizedConversation({
     required this.title,
@@ -482,27 +631,30 @@ class NormalizedConversation {
   final List<NormalizedSegment> segments;
   final List<String> artifactNames;
 
+  /// Serialize to JSON for caching/persistence.
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'source': source,
+    'participantNames': participantNames,
+    'segments': segments.map((s) => s.toJson()).toList(),
+    'artifactNames': artifactNames,
+  };
+
   factory NormalizedConversation.fromJson(Map<String, dynamic> json) {
     return NormalizedConversation(
       title: json['title'] as String,
       source: json['source'] as String,
-      participantNames: List<String>.from(
-        json['participantNames'] as List? ?? const [],
+      participantNames: json.parseStringList('participantNames'),
+      segments: json.parseObjectList<NormalizedSegment>(
+        'segments',
+        NormalizedSegment.fromJson,
       ),
-      segments: (json['segments'] as List? ?? const [])
-          .map(
-            (item) => NormalizedSegment.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ),
-          )
-          .toList(),
-      artifactNames: List<String>.from(
-        json['artifactNames'] as List? ?? const [],
-      ),
+      artifactNames: json.parseStringList('artifactNames'),
     );
   }
 }
 
+/// Represents a segment/message extracted during import normalization.
 class NormalizedSegment {
   NormalizedSegment({
     required this.text,
@@ -516,18 +668,29 @@ class NormalizedSegment {
   final int offsetMs;
   final DateTime? createdAt;
 
+  /// Serialize to JSON for caching/persistence.
+  Map<String, dynamic> toJson() => {
+    'text': text,
+    'participantName': participantName,
+    'offsetMs': offsetMs,
+    if (createdAt != null) 'createdAt': createdAt!.toJsonString(),
+  };
+
   factory NormalizedSegment.fromJson(Map<String, dynamic> json) {
     return NormalizedSegment(
       text: json['text'] as String,
       participantName: json['participantName'] as String?,
       offsetMs: json['offsetMs'] as int? ?? 0,
-      createdAt: json['createdAt'] == null
-          ? null
-          : DateTime.parse(json['createdAt'] as String),
+      createdAt: json.parseDateTime('createdAt'),
     );
   }
 }
 
+// ============================================================================
+// IMAGE & MEDIA MODELS
+// ============================================================================
+
+/// Represents an image/media item metadata with storage reference.
 class ImageItem {
   ImageItem({
     required this.id,
@@ -545,18 +708,33 @@ class ImageItem {
   final DateTime uploadedAt;
   final String? conversationId;
 
+  /// Serialize to JSON for caching/persistence.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'fileName': fileName,
+    'contentType': contentType,
+    'sizeBytes': sizeBytes,
+    'uploadedAt': uploadedAt.toJsonString(),
+    'conversationId': conversationId,
+  };
+
   factory ImageItem.fromJson(Map<String, dynamic> json) {
     return ImageItem(
       id: json['id'] as String,
       fileName: json['fileName'] as String,
       contentType: json['contentType'] as String,
       sizeBytes: json['sizeBytes'] as int,
-      uploadedAt: DateTime.parse(json['uploadedAt'] as String),
+      uploadedAt: json.parseDateTimeRequired('uploadedAt'),
       conversationId: json['conversationId'] as String?,
     );
   }
 }
 
+// ============================================================================
+// QUOTA & USAGE MODELS
+// ============================================================================
+
+/// Represents current storage quota status and usage information.
 class QuotaStatus {
   QuotaStatus({
     required this.plan,
@@ -572,12 +750,19 @@ class QuotaStatus {
   final double usedPercent;
   final DateTime? expiresAt;
 
+  /// Whether usage is at or near the 80% threshold.
   bool get isNearLimit => usedPercent >= 80;
+
+  /// Whether usage exceeds the storage limit.
   bool get isOverLimit => usedBytes >= limitBytes;
 
+  /// Human-readable formatted used storage amount.
   String get usedFormatted => _formatBytes(usedBytes);
+
+  /// Human-readable formatted storage limit amount.
   String get limitFormatted => _formatBytes(limitBytes);
 
+  /// Format bytes to human-readable string (KB, MB, GB).
   static String _formatBytes(int bytes) {
     if (bytes >= 1024 * 1024 * 1024) {
       return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
@@ -588,19 +773,31 @@ class QuotaStatus {
     }
   }
 
+  /// Serialize to JSON for caching/persistence.
+  Map<String, dynamic> toJson() => {
+    'plan': plan,
+    'usedBytes': usedBytes,
+    'limitBytes': limitBytes,
+    'usedPercent': usedPercent,
+    if (expiresAt != null) 'expiresAt': expiresAt!.toJsonString(),
+  };
+
   factory QuotaStatus.fromJson(Map<String, dynamic> json) {
     return QuotaStatus(
       plan: json['plan'] as String? ?? 'Free',
       usedBytes: (json['usedBytes'] as num).toInt(),
       limitBytes: (json['limitBytes'] as num).toInt(),
       usedPercent: (json['usedPercent'] as num).toDouble(),
-      expiresAt: json['expiresAt'] == null
-          ? null
-          : DateTime.parse(json['expiresAt'] as String),
+      expiresAt: json.parseDateTime('expiresAt'),
     );
   }
 }
 
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/// Decode a JSON string to a typed map.
 Map<String, dynamic> decodeJsonMap(String value) {
   return Map<String, dynamic>.from(jsonDecode(value) as Map);
 }

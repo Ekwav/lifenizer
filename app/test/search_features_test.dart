@@ -9,13 +9,14 @@ Conversation _conv({
   String source = 'manual',
   List<String> tags = const [],
   List<ConversationSegment> segments = const [],
+  List<String> participantIds = const [],
   DateTime? at,
 }) {
   return Conversation(
     id: id,
     title: title,
     source: source,
-    participantIds: const [],
+    participantIds: participantIds,
     tags: tags,
     segments: segments,
     startedAt: at ?? DateTime.utc(2026, 1, 1),
@@ -168,6 +169,174 @@ void main() {
       // "xy" is too short for fuzzy to kick in
       final hits = state.search('xy');
       expect(hits, isEmpty);
+    });
+  });
+
+  group('person search (lookup by who was involved)', () {
+    LifenizerAppState buildStateWithAlice() {
+      final state = LifenizerAppState();
+      state.participants.add(Participant(id: 'p-alice', displayName: 'Alice'));
+      state.conversations.add(
+        Conversation(
+          id: 'c-alice',
+          title: 'Weekly status',
+          source: 'manual-text',
+          participantIds: const ['p-alice'],
+          segments: [
+            ConversationSegment(
+              id: 's-1',
+              text: 'quarterly numbers looked fine this time around',
+            ),
+          ],
+          startedAt: DateTime.utc(2026, 1, 1),
+          endedAt: DateTime.utc(2026, 1, 1),
+        ),
+      );
+      return state;
+    }
+
+    test('finds a conversation by participant display name even though the '
+        'name never appears in the message text', () {
+      final state = buildStateWithAlice();
+      final hits = state.search('alice');
+      expect(hits.map((c) => c.id), contains('c-alice'));
+    });
+
+    test('participant name search is case-insensitive', () {
+      final state = buildStateWithAlice();
+      final hits = state.search('ALICE');
+      expect(hits.map((c) => c.id), contains('c-alice'));
+    });
+
+    test('participant name search matches a partial name fragment', () {
+      final state = buildStateWithAlice();
+      final hits = state.search('ali');
+      expect(hits.map((c) => c.id), contains('c-alice'));
+    });
+
+    test('partial participant name search still works alongside unrelated '
+        'conversations that could pollute the candidate lookup', () {
+      final state = buildStateWithAlice();
+      // Add extra conversations with short, unrelated tokens (e.g. "all")
+      // that are within edit-distance of the partial query "ali", to make
+      // sure the match isn't only working by accident because the index
+      // had no other candidates for that token.
+      state.conversations.addAll([
+        _conv(id: 'other-1', title: 'Buy all the groceries'),
+        _conv(id: 'other-2', title: 'Align the calendars'),
+      ]);
+      final hits = state.search('ali');
+      expect(hits.map((c) => c.id), contains('c-alice'));
+    });
+  });
+
+  group('combined lookup keys (keyword + person + time)', () {
+    test(
+      'a typo\'d keyword combined with a participant name narrows correctly',
+      () {
+        final state = LifenizerAppState();
+        final alice = Participant(id: 'p-alice', displayName: 'Alice');
+        final bob = Participant(id: 'p-bob', displayName: 'Bob');
+        state.participants.addAll([alice, bob]);
+        state.conversations.addAll([
+          _conv(
+            id: 'alice-insurance',
+            title: 'Insurance policy renewal',
+            segments: [
+              ConversationSegment(
+                id: 's1',
+                text: 'insurance policy renewal notes',
+              ),
+            ],
+            participantIds: const ['p-alice'],
+          ),
+          _conv(
+            id: 'bob-insurance',
+            title: 'Insurance policy renewal',
+            segments: [
+              ConversationSegment(
+                id: 's2',
+                text: 'insurance policy renewal notes',
+              ),
+            ],
+            participantIds: const ['p-bob'],
+          ),
+        ]);
+
+        // "polcy" is a typo of "policy" (not present verbatim) but should
+        // still fuzzy-match the "insurance" family of conversations combined
+        // with "Alice" mentioned in the query text.
+        final hits = state.search('polcy alice');
+        expect(hits.map((c) => c.id), ['alice-insurance']);
+      },
+    );
+
+    test('keyword + participant filter + date range narrows to only the '
+        'conversation matching all three', () {
+      final state = LifenizerAppState();
+      final alice = Participant(id: 'p-alice', displayName: 'Alice');
+      final bob = Participant(id: 'p-bob', displayName: 'Bob');
+      state.participants.addAll([alice, bob]);
+
+      final inRange = DateTime.utc(2026, 3, 10);
+      final outOfRange = DateTime.utc(2026, 1, 1);
+
+      Conversation roadmap({
+        required String id,
+        required List<String> participantIds,
+        required DateTime at,
+      }) => Conversation(
+        id: id,
+        title: 'Roadmap sync',
+        source: 'manual-text',
+        participantIds: participantIds,
+        segments: [
+          ConversationSegment(id: '$id-seg', text: 'roadmap discussion'),
+        ],
+        startedAt: at,
+        endedAt: at,
+      );
+
+      state.conversations.addAll([
+        // Matches keyword + participant + date.
+        roadmap(id: 'match', participantIds: const ['p-alice'], at: inRange),
+        // Right keyword + participant, wrong date.
+        roadmap(
+          id: 'wrong-date',
+          participantIds: const ['p-alice'],
+          at: outOfRange,
+        ),
+        // Right keyword + date, wrong participant.
+        roadmap(
+          id: 'wrong-participant',
+          participantIds: const ['p-bob'],
+          at: inRange,
+        ),
+        // Right participant + date, wrong keyword.
+        Conversation(
+          id: 'wrong-keyword',
+          title: 'Weekend plans',
+          source: 'manual-text',
+          participantIds: const ['p-alice'],
+          segments: [
+            ConversationSegment(
+              id: 'wrong-keyword-seg',
+              text: 'grocery shopping',
+            ),
+          ],
+          startedAt: inRange,
+          endedAt: inRange,
+        ),
+      ]);
+
+      final results = state.search(
+        'roadmap',
+        participantId: 'p-alice',
+        from: DateTime.utc(2026, 3, 1),
+        to: DateTime.utc(2026, 3, 31),
+      );
+
+      expect(results.map((c) => c.id), ['match']);
     });
   });
 
