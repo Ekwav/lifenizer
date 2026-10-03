@@ -1,69 +1,26 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using Coflnet.Payments.Client.Api;
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
+using Lifenizer.Api.Configuration;
 using Lifenizer.Api.Data;
 using Lifenizer.Api.Endpoints;
-using Lifenizer.Api.Security;
-using Lifenizer.Api.Services;
+using Lifenizer.Api.Infrastructure;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
-});
-
-builder.Services.AddOpenApi();
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddMemoryCache();
-builder.Services.AddHttpClient("imports");
-builder.Services.AddScoped<ClaimsPrincipalUser>();
-builder.Services.AddScoped<UserAccountService>();
-builder.Services.AddScoped<PlainImapImportClient>();
-builder.Services.AddScoped<ProviderHttpImportClient>();
-builder.Services.AddScoped<ImportOrchestrator>();
-builder.Services.AddScoped<PremiumService>();
-builder.Services.AddLifenizerAuth(builder.Configuration);
-
-// Coflnet Payments API client – gracefully skipped when Payments:BaseUrl is absent.
-var paymentsBaseUrl = builder.Configuration["Payments:BaseUrl"];
-if (!string.IsNullOrWhiteSpace(paymentsBaseUrl))
-{
-    builder.Services.AddHttpClient<IUserApi, UserApi>(client =>
-    {
-        client.BaseAddress = new Uri(paymentsBaseUrl.TrimEnd('/') + "/");
-    });
-}
-else
-{
-    // Register a no-op stub so DI resolves without crashing when payments is unconfigured.
-    builder.Services.AddSingleton<IUserApi>(new UserApi("http://localhost:8000"));
-}
-
-builder.Services.AddDbContext<LifenizerDbContext>(options =>
-{
-    var connectionString = builder.Configuration.GetConnectionString("Lifenizer")
-        ?? $"Data Source={Path.Combine(AppContext.BaseDirectory, "lifenizer-next.db")}";
-    options.UseSqlite(connectionString);
-});
-
-builder.Services.AddCors(options =>
-{
-    options.AddDefaultPolicy(policy => policy
-        .WithOrigins(
-            "http://localhost:5173",
-            "http://localhost:5174",
-            "http://127.0.0.1:5173",
-            "http://127.0.0.1:5174")
-        .AllowAnyHeader()
-        .AllowAnyMethod());
-});
+// Register services in logical groups
+builder.Services.AddCoreServices();
+builder.Services.AddDataServices(builder.Configuration);
+builder.Services.AddAuthenticationServices(builder.Configuration);
+builder.Services.AddImportServices();
+builder.Services.AddPaymentServices(builder.Configuration);
+builder.Services.AddConfiguredCors(builder.Configuration);
 
 var app = builder.Build();
+
+// Validate critical configuration after building the app
+StartupConfigurationValidator.Validate(app.Configuration, app.Services.GetRequiredService<ILogger<Program>>());
 
 if (app.Environment.IsDevelopment())
 {
@@ -74,26 +31,69 @@ app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Kestrel's default MaxRequestBodySize (~28.6 MB) is too small for base64-encoded audio uploads
+// (a 30-minute recording is easily 30+ MB before the ~33% base64 inflation). Raise it just for the
+// imports route; every other endpoint keeps the platform default.
+var importsMaxRequestBytes = app.Configuration.GetValue<long?>("Imports:MaxRequestBytes") ?? 200_000_000L;
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/imports", StringComparison.OrdinalIgnoreCase))
+    {
+        var sizeFeature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (sizeFeature is { IsReadOnly: false })
+        {
+            sizeFeature.MaxRequestBodySize = importsMaxRequestBytes;
+        }
+    }
+
+    await next();
+});
+
+// Apply database migrations
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<LifenizerDbContext>();
-    await db.Database.EnsureCreatedAsync();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    try
+    {
+        logger.LogInformation("Applying database schema...");
+        await db.Database.EnsureCreatedAsync();
+        logger.LogInformation("Database schema ready");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Database migration failed. Ensure database is accessible and schema is valid");
+        throw;
+    }
 }
 
-if (Environment.GetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS") is { Length: > 0 })
+// Initialize Firebase if credentials are available
+if (Environment.GetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS") is { Length: > 0 } credentialsPath)
 {
     try
     {
+        app.Logger.LogInformation("Initializing Firebase with credentials from {Path}", credentialsPath);
         FirebaseApp.Create(new AppOptions { Credential = GoogleCredential.GetApplicationDefault() });
+        app.Logger.LogInformation("Firebase initialized successfully");
     }
-    catch (InvalidOperationException)
+    catch (InvalidOperationException ex) when (ex.Message.Contains("already initialized", StringComparison.OrdinalIgnoreCase))
     {
-        // Firebase was already initialized by the host.
+        // Firebase was already initialized by the host
+        app.Logger.LogInformation("Firebase was already initialized");
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Failed to initialize Firebase");
+        if (!app.Environment.IsDevelopment())
+        {
+            throw;
+        }
     }
 }
 else
 {
-    app.Logger.LogWarning("GOOGLE_APPLICATION_CREDENTIALS is not set; /api/auth/firebase requires FirebaseAdmin initialization.");
+    app.Logger.LogWarning("GOOGLE_APPLICATION_CREDENTIALS is not set; /api/auth/firebase requires FirebaseAdmin initialization. Set the environment variable to enable Firebase features");
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", app = "lifenizer-next" })).AllowAnonymous();

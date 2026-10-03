@@ -10,7 +10,7 @@ public static class ImportEndpoints
     private static readonly ImportCapability[] Capabilities =
     [
         new("manual-text", "Manual text or chat paste", true, false, "Normalizes plaintext/chat paste into encrypted client sync.", ["text/plain", "text/markdown"]),
-        new("audio", "Audio file upload", true, true, "Can call the configurable TAP/Coflnet transcription API, then the client encrypts the transcript.", ["audio/wav", "audio/mpeg", "audio/mp4", "audio/ogg"]),
+        new("audio", "Audio file upload", true, true, "Can call the self-hosted whisper-trained transcription service, then the client encrypts the transcript.", ["audio/wav", "audio/mpeg", "audio/mp4", "audio/ogg"]),
         new("live-recording", "Live VAD recording", true, false, "Client route groups VAD chunks into one encrypted conversation.", ["audio/wav"]),
         new("scanned-pdf", "Scanned PDF", true, false, "Accepts supplied OCR text now; OCR providers can feed the same route.", ["application/pdf", "image/png", "image/jpeg", "text/plain"]),
         new("paperless", "Paperless", true, true, "Fetches Paperless document metadata/content from a configured base URL and token.", ["application/json"]),

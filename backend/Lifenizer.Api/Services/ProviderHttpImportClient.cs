@@ -1,12 +1,16 @@
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
+using Lifenizer.Api.Services.Parsers;
+using Lifenizer.Api.Services.Utilities;
 using Lifenizer.Core;
 
 namespace Lifenizer.Api.Services;
 
-public sealed class ProviderHttpImportClient(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+public sealed class ProviderHttpImportClient(
+    IHttpClientFactory httpClientFactory,
+    IConfiguration configuration,
+    WhisperTranscriptionClient whisperTranscriptionClient,
+    ParserRegistry parserRegistry)
 {
     public async Task<NormalizedImportResponse> ImportPaperlessAsync(ImportRequest request, CancellationToken cancellationToken)
     {
@@ -19,24 +23,24 @@ public sealed class ProviderHttpImportClient(IHttpClientFactory httpClientFactor
 
         var json = await SendForTextAsync(message, cancellationToken);
         using var doc = JsonDocument.Parse(json);
-        var documents = EnumerateArray(doc.RootElement, "results", "documents", "items");
+        var documents = CommonParsing.EnumerateArray(doc.RootElement, "results", "documents", "items");
         var conversations = new List<NormalizedConversation>();
         foreach (var document in documents)
         {
-            var title = JsonString(document, "title") ?? JsonString(document, "original_file_name") ?? "Paperless document";
+            var title = JsonFieldExtractor.GetString(document, "title", "original_file_name") ?? "Paperless document";
             var correspondent = CorrespondentName(document) ?? "Paperless";
-            var content = JsonString(document, "content") ?? JsonString(document, "notes") ?? JsonString(document, "archive_serial_number") ?? title;
+            var content = JsonFieldExtractor.GetString(document, "content", "notes", "archive_serial_number") ?? title;
             var metadata = new Dictionary<string, string>();
             foreach (var key in new[] { "id", "created", "document_type", "archive_serial_number" })
             {
-                if (JsonString(document, key) is { } value) metadata[key] = value;
+                if (JsonFieldExtractor.GetString(document, key) is { } value) metadata[key] = value;
             }
             conversations.Add(new NormalizedConversation(
                 title,
                 "paperless",
                 [correspondent],
-                [new NormalizedSegment(content, correspondent, 0, TryParseDate(JsonString(document, "created")))],
-                JsonString(document, "original_file_name") is { } fileName ? [fileName] : [],
+                [new NormalizedSegment(content, correspondent, 0, CommonParsing.TryParseDate(JsonFieldExtractor.GetString(document, "created")))],
+                JsonFieldExtractor.GetString(document, "original_file_name") is { } fileName ? [fileName] : [],
                 metadata));
         }
 
@@ -60,14 +64,14 @@ public sealed class ProviderHttpImportClient(IHttpClientFactory httpClientFactor
             transcriptText = await SendForTextAsync(message, cancellationToken);
         }
 
-        return ImportTextParsers.ParseTranscript("youtube-transcript", request, transcriptText, request.Title ?? "YouTube transcript");
+        return ImportTextParsers.ParseTranscript("youtube-transcript", request, transcriptText, request.Title ?? "YouTube transcript", parserRegistry);
     }
 
     public async Task<NormalizedImportResponse> ImportDiscordApiAsync(ImportRequest request, CancellationToken cancellationToken)
     {
         if (ImportTextParsers.Metadata(request, "baseUrl") is null)
         {
-            return ImportTextParsers.NormalizeLocal("discord", request);
+            return ImportTextParsers.NormalizeLocal("discord", request, parserRegistry);
         }
 
         var baseUrl = ProviderBaseUrl(request, "baseUrl", "Imports:Discord:BaseUrl", "Discord");
@@ -78,37 +82,116 @@ public sealed class ProviderHttpImportClient(IHttpClientFactory httpClientFactor
         using var message = new HttpRequestMessage(HttpMethod.Get, uri);
         message.Headers.Authorization = new AuthenticationHeaderValue("Bot", token);
         var json = await SendForTextAsync(message, cancellationToken);
-        return ImportTextParsers.ParseDiscordMessages("discord", request, json);
+        return ImportTextParsers.ParseDiscordMessages("discord", request, json, parserRegistry);
     }
 
     public async Task<NormalizedImportResponse> ImportAudioTranscriptionAsync(ImportRequest request, CancellationToken cancellationToken)
     {
+        var recordedAt = ParseRecordedAt(request);
+
         if (!string.IsNullOrWhiteSpace(request.Text))
         {
-            return ImportTextParsers.SingleConversation("audio", request, request.Text, request.OriginalFileName ?? "Audio transcript", ImportTextParsers.Metadata(request, "fileName") is { } name ? [name] : null);
+            var textResponse = ImportTextParsers.SingleConversation("audio", request, request.Text, request.OriginalFileName ?? "Audio transcript", ImportTextParsers.Metadata(request, "fileName") is { } name ? [name] : null);
+            return recordedAt is null ? textResponse : WithRecordedAt(textResponse, recordedAt.Value);
         }
 
-        var baseUrl = ProviderBaseUrl(request, "tapBaseUrl", "Tap:BaseUrl", "TAP transcription", "https://tap.coflnet.com");
-        var path = ImportTextParsers.Metadata(request, "tapPath") ?? configuration["Tap:TranscriptionPath"] ?? "/api/transcribe";
-        var apiKey = ProviderSecret(request, "tapApiKey", "Tap:ApiKey", "tapBaseUrl", "Tap:BaseUrl", "TAP transcription", "placeholder-tap-api-key");
-        var uri = new Uri(new Uri(baseUrl.TrimEnd('/') + "/"), path.TrimStart('/'));
-        var payload = new
+        if (string.IsNullOrWhiteSpace(request.PayloadBase64))
         {
-            fileName = request.OriginalFileName ?? ImportTextParsers.Metadata(request, "fileName") ?? "audio-upload",
-            mimeType = request.MimeType ?? "application/octet-stream",
-            audioBase64 = request.PayloadBase64,
-            audioUrl = ImportTextParsers.Metadata(request, "audioUrl"),
-            language = ImportTextParsers.Metadata(request, "language") ?? "auto"
-        };
+            throw new InvalidOperationException("Audio import requires either text or a base64-encoded payloadBase64 audio file.");
+        }
 
-        using var message = new HttpRequestMessage(HttpMethod.Post, uri)
+        byte[] audioBytes;
+        try
         {
-            Content = JsonContent.Create(payload)
-        };
-        message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        var json = await SendForTextAsync(message, cancellationToken);
-        var transcript = ExtractTranscript(json);
-        return ImportTextParsers.ParseTranscript("audio", request, transcript, request.OriginalFileName ?? "Audio transcript");
+            audioBytes = Convert.FromBase64String(request.PayloadBase64);
+        }
+        catch (FormatException)
+        {
+            throw new InvalidOperationException("Audio import payloadBase64 is not valid base64.");
+        }
+
+        var fileName = request.OriginalFileName ?? ImportTextParsers.Metadata(request, "fileName") ?? "audio-upload";
+        var mimeType = request.MimeType ?? "application/octet-stream";
+        // NOTE: language is the only per-request override honored here. The whisper-trained base
+        // URL is intentionally configuration-only (Whisper:BaseUrl) -- it must never come from
+        // request metadata, or any authenticated user could redirect server-side requests to
+        // arbitrary in-cluster addresses (SSRF).
+        var language = ImportTextParsers.Metadata(request, "language");
+
+        var transcription = await whisperTranscriptionClient.TranscribeAsync(audioBytes, fileName, mimeType, language, cancellationToken);
+
+        var segments = new List<NormalizedSegment>();
+        foreach (var segment in transcription.Segments)
+        {
+            var text = segment.Text.Trim();
+            if (text.Length == 0) continue;
+            var offsetMs = (int)Math.Round(segment.Start * 1000);
+            var createdAt = recordedAt is null ? (DateTimeOffset?)null : recordedAt.Value + TimeSpan.FromMilliseconds(offsetMs);
+            segments.Add(new NormalizedSegment(text, null, offsetMs, createdAt));
+        }
+
+        if (segments.Count == 0)
+        {
+            throw new InvalidOperationException("Whisper transcription returned no usable text.");
+        }
+
+        var metadata = !string.IsNullOrWhiteSpace(transcription.Language)
+            ? new Dictionary<string, string> { ["language"] = transcription.Language }
+            : null;
+        var title = CommonParsing.Clean(request.Title) ?? CommonParsing.Clean(request.OriginalFileName) ?? "Audio transcript";
+        IReadOnlyList<string> artifactNames = ImportTextParsers.Metadata(request, "fileName") is { } explicitFileName ? [explicitFileName] : CommonParsing.ArtifactNames(request);
+        var conversation = new NormalizedConversation(
+            title,
+            "audio",
+            ImportTextParsers.ParticipantNames(request),
+            segments,
+            artifactNames,
+            metadata);
+
+        return ImportTextParsers.Response("audio", $"Transcribed and normalized {segments.Count} audio segment(s).", [conversation]);
+    }
+
+    /// <summary>
+    /// Parses the optional metadata.recordedAt override for audio imports (ISO 8601 date-time).
+    /// A string with an explicit offset/"Z" round-trips as given; a string without one is assumed
+    /// UTC, matching <see cref="CommonParsing.TryParseDate"/>'s existing semantics. Rejects
+    /// unparseable values and values more than 1 day in the future (guards against swapped
+    /// day/month typos creating future-dated memories).
+    /// </summary>
+    private static DateTimeOffset? ParseRecordedAt(ImportRequest request)
+    {
+        var raw = ImportTextParsers.Metadata(request, "recordedAt");
+        if (raw is null) return null;
+
+        var parsed = CommonParsing.TryParseDate(raw);
+        if (parsed is null)
+        {
+            throw new InvalidOperationException($"Audio import metadata.recordedAt is not a valid ISO 8601 date-time (was '{raw}').");
+        }
+
+        if (parsed.Value > DateTimeOffset.UtcNow.AddDays(1))
+        {
+            throw new InvalidOperationException($"Audio import metadata.recordedAt must not be more than 1 day in the future (was '{raw}').");
+        }
+
+        return parsed;
+    }
+
+    /// <summary>
+    /// Rewrites every segment's CreatedAt to recordedAt + segment.OffsetMs, so a "recorded on"
+    /// timestamp supplied by the client anchors the whole conversation instead of import time.
+    /// </summary>
+    private static NormalizedImportResponse WithRecordedAt(NormalizedImportResponse response, DateTimeOffset recordedAt)
+    {
+        var conversations = response.Conversations
+            .Select(conversation => conversation with
+            {
+                Segments = conversation.Segments
+                    .Select(segment => segment with { CreatedAt = recordedAt + TimeSpan.FromMilliseconds(segment.OffsetMs) })
+                    .ToArray()
+            })
+            .ToList();
+        return response with { Conversations = conversations };
     }
 
     private async Task<string> SendForTextAsync(HttpRequestMessage message, CancellationToken cancellationToken)
@@ -123,63 +206,15 @@ public sealed class ProviderHttpImportClient(IHttpClientFactory httpClientFactor
         return body;
     }
 
-    private static string ExtractTranscript(string body)
-    {
-        var trimmed = body.Trim();
-        if (!trimmed.StartsWith('{') && !trimmed.StartsWith('[')) return body;
-
-        using var doc = JsonDocument.Parse(trimmed);
-        if (doc.RootElement.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var key in new[] { "text", "transcript", "content" })
-            {
-                if (JsonString(doc.RootElement, key) is { } value) return value;
-            }
-            if (doc.RootElement.TryGetProperty("segments", out _)) return trimmed;
-        }
-        return trimmed;
-    }
-
-    private static IEnumerable<JsonElement> EnumerateArray(JsonElement root, params string[] propertyNames)
-    {
-        if (root.ValueKind == JsonValueKind.Array) return root.EnumerateArray().ToArray();
-        foreach (var propertyName in propertyNames)
-        {
-            if (root.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.Array)
-            {
-                return property.EnumerateArray().ToArray();
-            }
-        }
-        return [];
-    }
-
     private static string? CorrespondentName(JsonElement document)
     {
         if (!document.TryGetProperty("correspondent", out var correspondent)) return null;
         if (correspondent.ValueKind == JsonValueKind.String) return correspondent.GetString();
         if (correspondent.ValueKind == JsonValueKind.Object)
         {
-            return JsonString(correspondent, "name") ?? JsonString(correspondent, "display_name");
+            return JsonFieldExtractor.GetString(correspondent, "name", "display_name");
         }
         return null;
-    }
-
-    private static string? JsonString(JsonElement element, string property)
-    {
-        if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(property, out var value)) return null;
-        return value.ValueKind switch
-        {
-            JsonValueKind.String => value.GetString(),
-            JsonValueKind.Number => value.ToString(),
-            JsonValueKind.True => "true",
-            JsonValueKind.False => "false",
-            _ => null
-        };
-    }
-
-    private static DateTimeOffset? TryParseDate(string? value)
-    {
-        return DateTimeOffset.TryParse(value, out var parsed) ? parsed : null;
     }
 
     private static string Required(ImportRequest request, string key)

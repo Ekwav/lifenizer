@@ -81,17 +81,22 @@ public sealed class ImportIntegrationTests
                 new { author = new { username = "Dev One" }, content = "Discord export through a mock API.", timestamp = "2026-05-21T09:00:00Z" },
                 new { author = new { username = "Dev Two" }, content = "This should become a normalized conversation.", timestamp = "2026-05-21T09:01:00Z" }
             }),
-            "/api/transcribe" => Json(new
+            "/asr" => Json(new
             {
+                text = "Whisper mock transcription segment one. Whisper mock transcription segment two.",
+                language = "en",
                 segments = new[]
                 {
-                    new { speaker = "Alice", text = "TAP mock transcription segment one.", start = 0.0 },
-                    new { speaker = "Bob", text = "TAP mock transcription segment two.", start = 3.0 }
+                    new { text = "Whisper mock transcription segment one.", start = 0.0, end = 2.5 },
+                    new { text = "Whisper mock transcription segment two.", start = 3.0, end = 5.5 }
                 }
             }),
             _ => Text("not found", 404)
         });
-        await using var factory = new LifenizerApiFactory();
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Whisper:BaseUrl"] = mockApi.Url
+        });
         using var client = await AuthenticatedClientAsync(factory, "alice@example.test");
 
         var paperless = await ImportAsync(client, "paperless", new ImportRequest(Metadata: new Dictionary<string, string>
@@ -113,13 +118,7 @@ public sealed class ImportIntegrationTests
         var audio = await ImportAsync(client, "audio", new ImportRequest(
             OriginalFileName: "meeting.wav",
             MimeType: "audio/wav",
-            PayloadBase64: Convert.ToBase64String(Encoding.UTF8.GetBytes("fake wav")),
-            Metadata: new Dictionary<string, string>
-            {
-                ["tapBaseUrl"] = mockApi.Url,
-                ["tapPath"] = "/api/transcribe",
-                ["tapApiKey"] = "placeholder-tap-secret"
-            }));
+            PayloadBase64: Convert.ToBase64String(Encoding.UTF8.GetBytes("fake wav"))));
 
         Assert.Multiple(() =>
         {
@@ -127,7 +126,9 @@ public sealed class ImportIntegrationTests
             Assert.That(paperless.Participants.Select(p => p.DisplayName), Does.Contain("Acme GmbH"));
             Assert.That(youtube.Conversations[0].Segments, Has.Count.EqualTo(2));
             Assert.That(discord.Participants.Select(p => p.DisplayName), Does.Contain("Dev One"));
-            Assert.That(audio.Conversations[0].Segments.Select(s => s.Text), Does.Contain("TAP mock transcription segment one."));
+            Assert.That(audio.Conversations[0].Segments.Select(s => s.Text), Does.Contain("Whisper mock transcription segment one."));
+            Assert.That(audio.Conversations[0].Metadata, Is.Not.Null);
+            Assert.That(audio.Conversations[0].Metadata!["language"], Is.EqualTo("en"));
         });
     }
 

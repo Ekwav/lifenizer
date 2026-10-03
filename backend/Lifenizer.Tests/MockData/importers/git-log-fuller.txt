@@ -1,0 +1,16 @@
+commit 3c7a0ec4dc78089b4e9fd6fdf3ce38cb0a63de28
+Author:     Max Mustermann <max@example.test>
+AuthorDate: Fri May 31 08:11:53 2026 +0000
+Commit:     Max Mustermann <max@example.test>
+CommitDate: Fri May 31 08:11:53 2026 +0000
+
+    importer: add browser capture parser
+
+commit f3b47d4ca34f27dfe8e6f0d3a72f388de4f7fa2a
+Author:     Erika Musterfrau <erika@example.test>
+AuthorDate: Fri May 31 07:03:10 2026 +0000
+Commit:     Erika Musterfrau <erika@example.test>
+CommitDate: Fri May 31 07:03:10 2026 +0000
+
+    docs: clarify backup payload example
+    include nested bookmark structure note
