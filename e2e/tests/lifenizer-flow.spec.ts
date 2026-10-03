@@ -1,10 +1,11 @@
 import { expect, Page, test } from '@playwright/test';
 
-const apiUrl = 'http://127.0.0.1:5075';
+const apiUrl = 'http://127.0.0.1:5076';
 const passphrase = 'correct horse battery staple';
 
 type Snapshot = {
   authenticated: boolean;
+  busy: boolean;
   cursor: number;
   participants: Array<{ displayName: string }>;
   conversations: Array<{ title: string; source: string; tags?: string[] }>;
@@ -42,7 +43,11 @@ async function snapshot(page: Page): Promise<Snapshot> {
 }
 
 async function waitForSnapshot(page: Page, predicate: (snapshot: Snapshot) => boolean) {
-  await expect.poll(async () => predicate(await snapshot(page)), { timeout: 30_000 }).toBeTruthy();
+  await expect.poll(async () => {
+    const data = await snapshot(page);
+    if (data.error) throw new Error(data.error);
+    return !data.busy && predicate(data);
+  }, { timeout: 30_000 }).toBeTruthy();
 }
 
 test('encrypted sync, search, relations, and user isolation across browser contexts', async ({ browser, page }) => {

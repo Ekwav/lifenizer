@@ -133,6 +133,9 @@ void installE2eBridge(LifenizerAppState state) {
   window.lifenizerE2eSnapshot = (() {
     return jsonEncode({
       'authenticated': state.isAuthenticated,
+      'busy': state.busy,
+      'pendingSync': state.pendingSyncCount,
+      'syncError': state.syncError,
       'cursor': state.syncCursor,
       'participants': state.participants
           .map((participant) => participant.toJson())

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, Page, test } from '@playwright/test';
 
-const apiUrl = 'http://127.0.0.1:5075';
+const apiUrl = 'http://127.0.0.1:5076';
 const whisperUrl = process.env.WHISPER_URL ?? 'http://127.0.0.1:19000';
 const audioPath = process.env.E2E_AUDIO_FILE ?? 'fixtures/speech-sample.wav';
 const expectedKeyword = (process.env.E2E_AUDIO_KEYWORD ?? 'country').toLowerCase();
@@ -47,7 +47,7 @@ async function importAudio(page: Page, audioBase64: string, title: string, recor
   await expect.poll(async () => {
     const data = await snapshot(page);
     if (data.error) throw new Error(`Import failed: ${data.error}`);
-    return data.conversations.some((conversation: Hit) => conversation.source === 'audio' && conversation.title === title);
+    return !data.busy && data.conversations.some((conversation: Hit) => conversation.source === 'audio' && conversation.title === title);
   }, { timeout: 270_000, intervals: [2_000] }).toBeTruthy();
 }
 
@@ -58,7 +58,12 @@ function isoDay(offsetDays: number): string {
 }
 
 test('audio recording is transcribed by whisper and found by keyword, person and time', async ({ browser, page }) => {
-  test.skip(!(await whisperReachable()), `No whisper-asr-webservice reachable at ${whisperUrl}.`);
+  const reachable = await whisperReachable();
+  if (process.env.LIFENIZER_REQUIRE_WHISPER === 'true') {
+    expect(reachable, `Live Whisper must be reachable at ${whisperUrl}`).toBeTruthy();
+  } else {
+    test.skip(!reachable, `No whisper-asr-webservice reachable at ${whisperUrl}.`);
+  }
   test.setTimeout(600_000);
 
   const audioBase64 = readFileSync(resolve(audioPath)).toString('base64');

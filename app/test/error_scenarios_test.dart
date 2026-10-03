@@ -140,7 +140,7 @@ void main() {
       ),
       (
         name: 'oversized malformed payload is rejected early',
-        run: () => _parseImportPayload('{' + ('x' * 10000), source: 'telegram'),
+        run: () => _parseImportPayload('{${'x' * 10000}', source: 'telegram'),
         expected: 'Malformed JSON',
       ),
     ];

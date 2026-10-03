@@ -44,23 +44,17 @@ void main() {
 
           final repeats = messageCount >= 1000 ? 2 : 5;
           final rssBefore = ProcessInfo.currentRss;
-          final stopwatch = Stopwatch()..start();
-          var parsedSegments = 0;
-
-          for (var i = 0; i < repeats; i++) {
-            final parsed = NormalizedImportResult.fromJson(payload);
-            parsedSegments += parsed.conversations
-                .fold<int>(0, (acc, conv) => acc + conv.segments.length);
-          }
-
-          stopwatch.stop();
+          final elapsedMicros = _medianParsingMicros(
+            () => NormalizedImportResult.fromJson(payload),
+            repeats: repeats,
+            expectedSegments: messageCount,
+          );
           final rssAfter = ProcessInfo.currentRss;
 
           final totalMessages = messageCount * repeats;
-          final millis = stopwatch.elapsedMicroseconds / 1000.0;
+          final millis = elapsedMicros / 1000.0;
           final msPerMessage = millis / totalMessages;
-          final segmentsPerSecond =
-              totalMessages / (stopwatch.elapsedMicroseconds / 1000000.0);
+          final segmentsPerSecond = totalMessages / (elapsedMicros / 1000000.0);
 
           summary.add(
             _PerfRow(
@@ -72,8 +66,6 @@ void main() {
               rssDeltaKiB: (rssAfter - rssBefore) / 1024.0,
             ),
           );
-
-          expect(parsedSegments, equals(totalMessages));
         }
       }
 
@@ -85,20 +77,22 @@ void main() {
           messageCount: 100,
         );
 
-        final newWatch = Stopwatch()..start();
-        final newParsed = NormalizedImportResult.fromJson(payload);
-        newWatch.stop();
-
-        final legacyWatch = Stopwatch()..start();
-        final legacyParsed = _legacyParse(payload);
-        legacyWatch.stop();
-
-        expect(newParsed.conversations.first.segments.length, equals(100));
-        expect(legacyParsed.conversations.first.segments.length, equals(100));
-
+        const repeats = 5;
         legacyVsNew[source] = (
-          newMs: newWatch.elapsedMicroseconds / 1000.0,
-          legacyMs: legacyWatch.elapsedMicroseconds / 1000.0,
+          newMs:
+              _medianParsingMicros(
+                () => NormalizedImportResult.fromJson(payload),
+                repeats: repeats,
+                expectedSegments: 100,
+              ) /
+              (1000 * repeats),
+          legacyMs:
+              _medianParsingMicros(
+                () => _legacyParse(payload),
+                repeats: repeats,
+                expectedSegments: 100,
+              ) /
+              (1000 * repeats),
         );
       }
 
@@ -106,7 +100,7 @@ void main() {
         ..sort((a, b) => b.msPerMessage.compareTo(a.msPerMessage));
       final topSlow = slowest.take(5).toList(growable: false);
 
-      print('Import parser performance summary (client ingest path)');
+      print('Import parser performance summary (median of 7 warmed batches)');
       for (final row in summary) {
         print(
           '${row.source.padRight(20)} '
@@ -158,6 +152,34 @@ void main() {
       expect(summary.length, equals(parserSources.length * sizes.length));
     });
   });
+}
+
+double _medianParsingMicros(
+  NormalizedImportResult Function() parse, {
+  required int repeats,
+  required int expectedSegments,
+}) {
+  // Warm the parser/JIT before measuring. Independent batches and their median
+  // prevent a scheduler pause or a GC cycle from deciding the scaling guardrail.
+  for (var i = 0; i < 3; i++) {
+    parse();
+  }
+  final samples = <int>[];
+  for (var sample = 0; sample < 7; sample++) {
+    var parsedSegments = 0;
+    final stopwatch = Stopwatch()..start();
+    for (var i = 0; i < repeats; i++) {
+      parsedSegments += parse().conversations.fold<int>(
+        0,
+        (count, conversation) => count + conversation.segments.length,
+      );
+    }
+    stopwatch.stop();
+    expect(parsedSegments, repeats * expectedSegments);
+    samples.add(stopwatch.elapsedMicroseconds);
+  }
+  samples.sort();
+  return samples[samples.length ~/ 2].toDouble();
 }
 
 Map<String, dynamic> _buildNormalizedImportPayload({

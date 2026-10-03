@@ -223,10 +223,6 @@ void main() {
       });
 
       test('very long query', () {
-        final longQuery =
-            'this is a very long query '
-            '* 10'
-            '${' '}';
         final criteria = SearchCriteria(
           query:
               'this is a very long query this is a very long query this is a very long query',
