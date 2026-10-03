@@ -56,14 +56,14 @@ class ShareIntentService {
     }
     _draining = true;
     try {
-      while (_pending.isNotEmpty && state.isAuthenticated) {
+      while (_pending.isNotEmpty && state.isAuthenticated && !state.busy) {
         final payload = _pending.removeAt(0);
         final uri = payload['uri'] as String?;
         try {
           final bytes = uri == null
               ? null
               : await channel.invokeMethod<Uint8List>('readSharedFile', uri);
-          if (!state.isAuthenticated) {
+          if (!state.isAuthenticated || state.busy) {
             _pending.insert(0, payload);
             return;
           }

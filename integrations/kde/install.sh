@@ -12,7 +12,7 @@ runner_dir=${XDG_DATA_HOME:-"$HOME/.local/share"}/krunner/dbusplugins
 application_dir=${XDG_DATA_HOME:-"$HOME/.local/share"}/applications
 service_dir=${XDG_DATA_HOME:-"$HOME/.local/share"}/dbus-1/services
 mkdir -p "$install_dir" "$runner_dir" "$application_dir" "$service_dir"
-cp -a "$bundle_dir/." "$install_dir/"
+cp -a --remove-destination "$bundle_dir/." "$install_dir/"
 install -m644 "$repo_dir/integrations/kde/lifenizer.desktop" "$runner_dir/lifenizer.desktop"
 # The quoted path in Exec follows the freedesktop desktop-entry quoting rules.
 escaped_dir=${install_dir//\\/\\\\}
@@ -58,6 +58,9 @@ cat > "$service_dir/com.lifenizer.Search.service" <<SERVICE
 Name=com.lifenizer.Search
 Exec="$escaped_dir/lifenizer" lifenizer://search
 SERVICE
+if [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} ]] && command -v gdbus >/dev/null; then
+  gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
+fi
 if command -v update-desktop-database >/dev/null; then update-desktop-database "$application_dir"; fi
 if command -v kbuildsycoca6 >/dev/null; then kbuildsycoca6 --noincremental; fi
 echo 'Installed. Launch Lifenizer, unlock, then type "life <query>" in KRunner.'
