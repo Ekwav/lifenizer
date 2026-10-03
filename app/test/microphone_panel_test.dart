@@ -287,6 +287,32 @@ void main() {
     },
   );
 
+  testWidgets('hidden desktop window or browser tab saves recording', (
+    tester,
+  ) async {
+    final vault = await mount(tester);
+    await start(tester);
+    recorder.pcm.add(samples);
+    await tester.pump();
+    final saved = Completer<void>();
+    void onSaved() {
+      if (vault.state.audioDraft != null && !saved.isCompleted) {
+        saved.complete();
+      }
+    }
+
+    vault.state.addListener(onSaved);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await finish(tester, saved.future);
+    vault.state.removeListener(onSaved);
+    expect(recorder.stops, 1);
+    await verifyDraft(vault);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await remove(tester, vault);
+  });
+
   testWidgets('background pause saves the active recording', (tester) async {
     final vault = await mount(tester);
     await start(tester);

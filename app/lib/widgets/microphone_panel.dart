@@ -41,7 +41,8 @@ class _MicrophonePanelState extends State<MicrophonePanel>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       unawaited(_finish());
     }
