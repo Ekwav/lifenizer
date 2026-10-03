@@ -43,10 +43,13 @@ public static class AuthEndpoints
 
         group.MapPost("/firebase", async (
             [FromBody] TokenContainer request,
+            IConfiguration configuration,
             UserAccountService users,
             AuthTokenService tokens,
             CancellationToken cancellationToken) =>
         {
+            if (!configuration.GetValue<bool>("Auth:EnableFirebase")) return Results.NotFound();
+
             if (string.IsNullOrWhiteSpace(request.AuthToken))
             {
                 return Results.BadRequest(new { error = "auth_token_required" });

@@ -14,8 +14,8 @@ public sealed class ProviderHttpImportClient(
 {
     public async Task<NormalizedImportResponse> ImportPaperlessAsync(ImportRequest request, CancellationToken cancellationToken)
     {
-        var baseUrl = ProviderBaseUrl(request, "baseUrl", "Imports:Paperless:BaseUrl", "Paperless");
-        var token = ProviderSecret(request, "token", "Imports:Paperless:Token", "baseUrl", "Imports:Paperless:BaseUrl", "Paperless");
+        var baseUrl = ProviderBaseUrl(request, "Imports:Paperless:BaseUrl", "Paperless");
+        var token = ProviderSecret(request, "token", "Imports:Paperless:Token", "Paperless");
         var limit = int.TryParse(ImportTextParsers.Metadata(request, "limit"), out var parsedLimit) ? Math.Clamp(parsedLimit, 1, 50) : 10;
         var uri = new Uri(new Uri(baseUrl.TrimEnd('/') + "/"), $"api/documents/?page_size={limit}");
         using var message = new HttpRequestMessage(HttpMethod.Get, uri);
@@ -52,13 +52,9 @@ public sealed class ProviderHttpImportClient(
         var transcriptText = request.Text;
         if (string.IsNullOrWhiteSpace(transcriptText))
         {
-            var url = ImportTextParsers.Metadata(request, "transcriptUrl");
-            if (url is null)
-            {
-                var baseUrl = Required(request, "baseUrl");
-                var videoId = Required(request, "videoId");
-                url = new Uri(new Uri(baseUrl.TrimEnd('/') + "/"), $"api/transcripts/{Uri.EscapeDataString(videoId)}").ToString();
-            }
+            var baseUrl = ProviderBaseUrl(request, "Imports:YouTube:BaseUrl", "YouTube");
+            var videoId = Required(request, "videoId");
+            var url = new Uri(new Uri(baseUrl.TrimEnd('/') + "/"), $"api/transcripts/{Uri.EscapeDataString(videoId)}");
 
             using var message = new HttpRequestMessage(HttpMethod.Get, url);
             transcriptText = await SendForTextAsync(message, cancellationToken);
@@ -69,14 +65,14 @@ public sealed class ProviderHttpImportClient(
 
     public async Task<NormalizedImportResponse> ImportDiscordApiAsync(ImportRequest request, CancellationToken cancellationToken)
     {
-        if (ImportTextParsers.Metadata(request, "baseUrl") is null)
+        if (ImportTextParsers.Metadata(request, "channelId") is null && ImportTextParsers.Metadata(request, "baseUrl") is null)
         {
             return ImportTextParsers.NormalizeLocal("discord", request, parserRegistry);
         }
 
-        var baseUrl = ProviderBaseUrl(request, "baseUrl", "Imports:Discord:BaseUrl", "Discord");
+        var baseUrl = ProviderBaseUrl(request, "Imports:Discord:BaseUrl", "Discord");
         var channelId = Required(request, "channelId");
-        var token = ProviderSecret(request, "token", "Imports:Discord:Token", "baseUrl", "Imports:Discord:BaseUrl", "Discord");
+        var token = ProviderSecret(request, "token", "Imports:Discord:Token", "Discord");
         var limit = int.TryParse(ImportTextParsers.Metadata(request, "limit"), out var parsedLimit) ? Math.Clamp(parsedLimit, 1, 100) : 50;
         var uri = new Uri(new Uri(baseUrl.TrimEnd('/') + "/"), $"api/channels/{Uri.EscapeDataString(channelId)}/messages?limit={limit}");
         using var message = new HttpRequestMessage(HttpMethod.Get, uri);
@@ -223,55 +219,23 @@ public sealed class ProviderHttpImportClient(
             ?? throw new InvalidOperationException($"Import requires metadata.{key}.");
     }
 
-    private string ProviderBaseUrl(ImportRequest request, string metadataKey, string configKey, string providerName, string? fallback = null)
+    private string ProviderBaseUrl(ImportRequest request, string configKey, string providerName)
     {
-        var baseUrl = ImportTextParsers.Metadata(request, metadataKey) ?? configuration[configKey] ?? fallback;
-        if (string.IsNullOrWhiteSpace(baseUrl))
-        {
-            throw new InvalidOperationException($"{providerName} import requires metadata.{metadataKey} or configuration {configKey}.");
-        }
+        if (ImportTextParsers.Metadata(request, "baseUrl") is not null || ImportTextParsers.Metadata(request, "transcriptUrl") is not null)
+            throw new InvalidOperationException($"{providerName} endpoint is configuration-only; set {configKey} on the server.");
 
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
-        {
-            throw new InvalidOperationException($"{providerName} import requires an absolute http or https URL in metadata.{metadataKey} or configuration {configKey}.");
-        }
+        var baseUrl = configuration[configKey];
+        if (string.IsNullOrWhiteSpace(baseUrl) || !Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri)
+            || uri.Scheme is not ("http" or "https") || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+            throw new InvalidOperationException($"{providerName} import requires an absolute http(s) URL in configuration {configKey}.");
 
         return baseUrl;
     }
 
-    private string ProviderSecret(
-        ImportRequest request,
-        string metadataKey,
-        string configKey,
-        string baseUrlMetadataKey,
-        string baseUrlConfigKey,
-        string providerName,
-        string? fallback = null)
+    private string ProviderSecret(ImportRequest request, string metadataKey, string configKey, string providerName)
     {
-        if (ImportTextParsers.Metadata(request, metadataKey) is { } requestSecret)
-        {
-            return requestSecret;
-        }
-
-        var requestBaseUrl = ImportTextParsers.Metadata(request, baseUrlMetadataKey);
-        var configuredBaseUrl = configuration[baseUrlConfigKey];
-        if (requestBaseUrl is not null && !SameOrigin(requestBaseUrl, configuredBaseUrl))
-        {
-            throw new InvalidOperationException($"{providerName} import requires request-scoped metadata.{metadataKey} when metadata.{baseUrlMetadataKey} overrides the configured provider URL.");
-        }
-
-        return configuration[configKey]
-            ?? fallback
+        return ImportTextParsers.Metadata(request, metadataKey)
+            ?? configuration[configKey]
             ?? throw new InvalidOperationException($"{providerName} import requires metadata.{metadataKey} or configuration {configKey}.");
-    }
-
-    private static bool SameOrigin(string? left, string? right)
-    {
-        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return false;
-        if (!Uri.TryCreate(left, UriKind.Absolute, out var leftUri)) return false;
-        if (!Uri.TryCreate(right, UriKind.Absolute, out var rightUri)) return false;
-        return leftUri.Scheme.Equals(rightUri.Scheme, StringComparison.OrdinalIgnoreCase)
-            && leftUri.IdnHost.Equals(rightUri.IdnHost, StringComparison.OrdinalIgnoreCase)
-            && leftUri.Port == rightUri.Port;
     }
 }

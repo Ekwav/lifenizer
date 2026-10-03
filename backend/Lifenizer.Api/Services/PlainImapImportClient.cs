@@ -7,17 +7,19 @@ using Lifenizer.Core;
 
 namespace Lifenizer.Api.Services;
 
-public sealed partial class PlainImapImportClient
+public sealed partial class PlainImapImportClient(IConfiguration configuration)
 {
     public async Task<NormalizedImportResponse> ImportAsync(ImportRequest request, CancellationToken cancellationToken)
     {
-        var host = Required(request, "host");
-        var port = int.TryParse(ImportTextParsers.Metadata(request, "port"), out var parsedPort) ? parsedPort : 993;
+        if (new[] { "host", "port", "useTls", "allowInvalidCertificate" }.Any(key => ImportTextParsers.Metadata(request, key) is not null))
+            throw new InvalidOperationException("IMAP endpoint and TLS settings are configuration-only; set Imports:Imap on the server.");
+        var host = configuration["Imports:Imap:Host"];
+        if (string.IsNullOrWhiteSpace(host)) throw new InvalidOperationException("Email import requires configuration Imports:Imap:Host.");
+        var port = configuration.GetValue("Imports:Imap:Port", 993);
         var username = Required(request, "username");
         var password = Required(request, "password");
         var mailbox = ImportTextParsers.Metadata(request, "mailbox") ?? "INBOX";
-        var useTls = !bool.TryParse(ImportTextParsers.Metadata(request, "useTls"), out var parsedUseTls) || parsedUseTls;
-        var allowInvalidCertificate = bool.TryParse(ImportTextParsers.Metadata(request, "allowInvalidCertificate"), out var parsedAllowInvalidCertificate) && parsedAllowInvalidCertificate;
+        var useTls = configuration.GetValue("Imports:Imap:UseTls", true);
         var limit = int.TryParse(ImportTextParsers.Metadata(request, "limit"), out var parsedLimit) ? Math.Clamp(parsedLimit, 1, 25) : 10;
 
         using var tcp = new TcpClient();
@@ -26,7 +28,7 @@ public sealed partial class PlainImapImportClient
         Stream stream = networkStream;
         if (useTls)
         {
-            var ssl = new SslStream(networkStream, leaveInnerStreamOpen: false, (_, _, _, errors) => allowInvalidCertificate || errors == SslPolicyErrors.None);
+            var ssl = new SslStream(networkStream, leaveInnerStreamOpen: false, (_, _, _, errors) => errors == SslPolicyErrors.None);
             await ssl.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = host }, cancellationToken);
             stream = ssl;
         }
@@ -155,7 +157,7 @@ public sealed partial class PlainImapImportClient
         var response = builder.ToString();
         if (!response.Contains($"{tag} OK", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException($"IMAP command {command} failed: {response}");
+            throw new InvalidOperationException($"IMAP {command.Split(' ')[0]} command failed.");
         }
         return response;
     }
@@ -190,6 +192,7 @@ public sealed partial class PlainImapImportClient
 
     private static string Quote(string value)
     {
+        if (value.Contains('\r') || value.Contains('\n')) throw new InvalidOperationException("IMAP values cannot contain line breaks.");
         return '"' + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + '"';
     }
 

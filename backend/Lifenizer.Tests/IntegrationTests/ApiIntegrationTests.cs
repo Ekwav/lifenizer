@@ -101,9 +101,7 @@ public sealed class ApiIntegrationTests
 
         var response = await client.PostAsJsonAsync("/api/auth/firebase", new TokenContainer(""), JsonOptions);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.That(body, Does.Contain("auth_token_required"));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     [Test]
@@ -114,9 +112,7 @@ public sealed class ApiIntegrationTests
 
         var response = await client.PostAsJsonAsync("/api/auth/firebase", new TokenContainer("invalid-token"), JsonOptions);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.That(body, Does.Contain("Firebase token verification failed"));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     [Test]

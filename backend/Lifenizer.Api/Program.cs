@@ -58,7 +58,7 @@ using (var scope = app.Services.CreateScope())
     try
     {
         logger.LogInformation("Applying database schema...");
-        await db.Database.EnsureCreatedAsync();
+        await DatabaseSchema.UpgradeAsync(db);
         logger.LogInformation("Database schema ready");
     }
     catch (Exception ex)
@@ -69,11 +69,11 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Initialize Firebase if credentials are available
-if (Environment.GetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS") is { Length: > 0 } credentialsPath)
+if (app.Configuration.GetValue<bool>("Auth:EnableFirebase"))
 {
     try
     {
-        app.Logger.LogInformation("Initializing Firebase with credentials from {Path}", credentialsPath);
+        app.Logger.LogInformation("Initializing opt-in Firebase authentication");
         FirebaseApp.Create(new AppOptions { Credential = GoogleCredential.GetApplicationDefault() });
         app.Logger.LogInformation("Firebase initialized successfully");
     }
@@ -93,7 +93,7 @@ if (Environment.GetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS") is { Le
 }
 else
 {
-    app.Logger.LogWarning("GOOGLE_APPLICATION_CREDENTIALS is not set; /api/auth/firebase requires FirebaseAdmin initialization. Set the environment variable to enable Firebase features");
+    app.Logger.LogInformation("Firebase authentication is disabled");
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", app = "lifenizer-next" })).AllowAnonymous();

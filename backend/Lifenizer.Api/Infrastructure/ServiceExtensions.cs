@@ -29,14 +29,14 @@ public static class ServiceExtensions
         services.AddOpenApi();
         services.AddHttpContextAccessor();
         services.AddMemoryCache();
-        services.AddHttpClient("imports");
+        services.AddHttpClient("imports").ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
         // CPU-based whisper-trained transcription is slow for longer recordings, so this client
         // gets a generous timeout distinct from the "imports" client used by fast provider calls.
         services.AddHttpClient(WhisperTranscriptionClient.HttpClientName, client =>
         {
             client.Timeout = TimeSpan.FromMinutes(10);
-        });
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
         return services;
     }
@@ -165,7 +165,7 @@ public static class ServiceExtensions
         {
             options.AddDefaultPolicy(policy =>
             {
-                var origins = new[]
+                var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[]
                 {
                     "http://localhost:5173",
                     "http://localhost:5174",

@@ -18,17 +18,19 @@ public sealed class ImportIntegrationTests
     {
         const string rawEmail = "From: Alice Example <alice@example.test>\r\nTo: Bob Example <bob@example.test>\r\nSubject: Quarterly Plan\r\nDate: Tue, 21 May 2026 10:15:00 +0000\r\nMessage-Id: <plan@example.test>\r\n\r\nBob, the Paperless import and TAP transcription are ready for review.";
         await using var imap = new MockImapServer(rawEmail);
-        await using var factory = new LifenizerApiFactory();
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Imports:Imap:Host"] = "127.0.0.1",
+            ["Imports:Imap:Port"] = imap.Port.ToString(),
+            ["Imports:Imap:UseTls"] = "false"
+        });
         using var client = await AuthenticatedClientAsync(factory, "alice@example.test");
 
         var response = await client.PostAsJsonAsync("/api/imports/email", new ImportRequest(
             Metadata: new Dictionary<string, string>
             {
-                ["host"] = "127.0.0.1",
-                ["port"] = imap.Port.ToString(),
                 ["username"] = "alice@example.test",
                 ["password"] = "placeholder-imap-secret",
-                ["useTls"] = "false",
                 ["mailbox"] = "INBOX"
             }), JsonOptions);
         response.EnsureSuccessStatusCode();
@@ -95,23 +97,23 @@ public sealed class ImportIntegrationTests
         });
         await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
         {
-            ["Whisper:BaseUrl"] = mockApi.Url
+            ["Whisper:BaseUrl"] = mockApi.Url,
+            ["Imports:Paperless:BaseUrl"] = mockApi.Url,
+            ["Imports:Discord:BaseUrl"] = mockApi.Url,
+            ["Imports:YouTube:BaseUrl"] = mockApi.Url
         });
         using var client = await AuthenticatedClientAsync(factory, "alice@example.test");
 
         var paperless = await ImportAsync(client, "paperless", new ImportRequest(Metadata: new Dictionary<string, string>
         {
-            ["baseUrl"] = mockApi.Url,
             ["token"] = "placeholder-paperless-token"
         }));
         var youtube = await ImportAsync(client, "youtube-transcript", new ImportRequest(Title: "Private archive video", Metadata: new Dictionary<string, string>
         {
-            ["baseUrl"] = mockApi.Url,
             ["videoId"] = "video-1"
         }));
         var discord = await ImportAsync(client, "discord", new ImportRequest(Metadata: new Dictionary<string, string>
         {
-            ["baseUrl"] = mockApi.Url,
             ["channelId"] = "channel-1",
             ["token"] = "placeholder-discord-token"
         }));
@@ -447,6 +449,49 @@ public sealed class ImportIntegrationTests
         Assert.That(mockApi.RequestCount, Is.EqualTo(0));
     }
 
+    [TestCase("paperless", "baseUrl")]
+    [TestCase("discord", "baseUrl")]
+    [TestCase("youtube-transcript", "baseUrl")]
+    [TestCase("youtube-transcript", "transcriptUrl")]
+    [TestCase("email", "host")]
+    [TestCase("email", "allowInvalidCertificate")]
+    public async Task RequestCannotOverrideProviderDestination(string source, string key)
+    {
+        await using var target = new MockHttpServer(_ => Json(new { }));
+        await using var factory = new LifenizerApiFactory();
+        using var client = await AuthenticatedClientAsync(factory, "alice@example.test");
+        var response = await client.PostAsJsonAsync($"/api/imports/{source}", new ImportRequest(Metadata: new Dictionary<string, string>
+        {
+            [key] = target.Url,
+            ["token"] = "attacker-token",
+            ["channelId"] = "test",
+            ["videoId"] = "test"
+        }), JsonOptions);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(target.RequestCount, Is.Zero);
+    }
+
+    [TestCase("paperless", "Imports:Paperless:BaseUrl")]
+    [TestCase("discord", "Imports:Discord:BaseUrl")]
+    [TestCase("youtube-transcript", "Imports:YouTube:BaseUrl")]
+    [TestCase("audio", "Whisper:BaseUrl")]
+    public async Task ProviderDoesNotFollowRedirects(string source, string configKey)
+    {
+        await using var target = new MockHttpServer(_ => Json(new { }));
+        await using var redirect = new MockHttpServer(_ => new MockHttpResponse("text/plain", "redirect", 307, target.Url));
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?> { [configKey] = redirect.Url });
+        using var client = await AuthenticatedClientAsync(factory, "alice@example.test");
+        var response = await client.PostAsJsonAsync($"/api/imports/{source}", new ImportRequest(PayloadBase64: "YQ==", Metadata: new Dictionary<string, string>
+        {
+            ["token"] = "provider-token",
+            ["channelId"] = "test",
+            ["videoId"] = "test"
+        }), JsonOptions);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(redirect.RequestCount, Is.EqualTo(1));
+        Assert.That(target.RequestCount, Is.Zero);
+    }
+
     [Test]
     public async Task MalformedImportJsonReturnsBadRequest()
     {
@@ -510,7 +555,7 @@ public sealed class ImportIntegrationTests
     }
 }
 
-internal sealed record MockHttpResponse(string ContentType, string Body, int StatusCode = 200);
+internal sealed record MockHttpResponse(string ContentType, string Body, int StatusCode = 200, string? RedirectLocation = null);
 
 internal sealed class MockHttpServer : IAsyncDisposable
 {
@@ -563,6 +608,7 @@ internal sealed class MockHttpServer : IAsyncDisposable
             var bytes = Encoding.UTF8.GetBytes(response.Body);
             context.Response.StatusCode = response.StatusCode;
             context.Response.ContentType = response.ContentType;
+            if (response.RedirectLocation is not null) context.Response.RedirectLocation = response.RedirectLocation;
             context.Response.ContentLength64 = bytes.Length;
             await context.Response.OutputStream.WriteAsync(bytes, cancellation.Token);
             context.Response.Close();
