@@ -78,6 +78,7 @@ class SearchInputField extends StatelessWidget {
   const SearchInputField({
     required this.viewModel,
     required this.onChanged,
+    this.focusNode,
     super.key,
   });
 
@@ -86,11 +87,13 @@ class SearchInputField extends StatelessWidget {
 
   /// Callback invoked when text changes.
   final VoidCallback onChanged;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: viewModel.queryController,
+      focusNode: focusNode,
       onChanged: (_) => onChanged(),
       onSubmitted: (_) {
         FocusScope.of(context).unfocus();

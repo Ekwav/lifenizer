@@ -11,11 +11,13 @@ class SearchResultsList extends StatelessWidget {
   const SearchResultsList({
     required this.results,
     required this.state,
+    this.hasMore = false,
     super.key,
   });
 
   /// List of conversations matching the search criteria.
   final List<Conversation> results;
+  final bool hasMore;
 
   /// App state for accessing data and performing actions.
   final LifenizerAppState state;
@@ -45,7 +47,9 @@ class SearchResultsList extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            '${results.length} result${results.length == 1 ? '' : 's'}',
+            hasMore
+                ? 'Showing first ${results.length} results'
+                : '${results.length} result${results.length == 1 ? '' : 's'}',
             style: Theme.of(context).textTheme.labelMedium,
           ),
         ),
@@ -73,13 +77,7 @@ class ConversationCard extends StatelessWidget {
   final Conversation conversation;
 
   void _openDetail(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) =>
-          _ConversationDetailSheet(state: state, conversation: conversation),
-    );
+    openConversationDetail(context, state, conversation);
   }
 
   @override
@@ -145,6 +143,20 @@ class ConversationCard extends StatelessWidget {
       ),
     );
   }
+}
+
+void openConversationDetail(
+  BuildContext context,
+  LifenizerAppState state,
+  Conversation conversation,
+) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (_) =>
+        _ConversationDetailSheet(state: state, conversation: conversation),
+  );
 }
 
 /// Detail sheet for viewing full conversation information.

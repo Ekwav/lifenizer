@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Service
+Name=Lifenizer conversations
+Comment=Find private conversations in your unlocked vault
+Icon=system-search
+X-KDE-PluginInfo-Name=lifenizer
+X-KDE-PluginInfo-Version=1.0
+X-KDE-PluginInfo-EnabledByDefault=true
+X-Plasma-API=DBus
+X-Plasma-DBusRunner-Service=com.lifenizer.Search
+X-Plasma-DBusRunner-Path=/runner
+X-Plasma-Runner-Match-Regex=^(life|lifenizer)(\s|$)
+X-Plasma-Request-Actions-Once=true
+X-Plasma-Runner-Syntaxes=life :q:
+X-Plasma-Runner-Syntax-Descriptions=Search your unlocked Lifenizer vault

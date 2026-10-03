@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -5,21 +7,66 @@ import 'app_state.dart';
 import 'e2e_bridge.dart';
 import 'pages/login_page.dart';
 import 'share_intent_service.dart';
+import 'services/quick_action_service.dart';
 import 'widgets/vault_shell.dart';
 
-void main() {
+Future<void> main([List<String> arguments = const []]) async {
   WidgetsFlutterBinding.ensureInitialized();
   SemanticsBinding.instance.ensureSemantics();
   final appState = LifenizerAppState();
+  await appState.initialize();
   installE2eBridge(appState);
-  ShareIntentService.instance.start(appState);
+  unawaited(ShareIntentService.instance.start(appState));
+  unawaited(QuickActionService.instance.start(appState, arguments: arguments));
   runApp(LifenizerApp(state: appState));
 }
 
-class LifenizerApp extends StatelessWidget {
+class LifenizerApp extends StatefulWidget {
   const LifenizerApp({required this.state, super.key});
 
   final LifenizerAppState state;
+
+  @override
+  State<LifenizerApp> createState() => _LifenizerAppState();
+}
+
+class _LifenizerAppState extends State<LifenizerApp>
+    with WidgetsBindingObserver {
+  Timer? _syncTimer;
+
+  LifenizerAppState get state => widget.state;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _resumeSync();
+  }
+
+  void _resumeSync() {
+    _syncTimer?.cancel();
+    unawaited(state.syncQuietly());
+    _syncTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => state.syncQuietly(),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (lifecycle == AppLifecycleState.resumed) {
+      _resumeSync();
+    } else {
+      _syncTimer?.cancel();
+    }
+  }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +74,7 @@ class LifenizerApp extends StatelessWidget {
       animation: state,
       builder: (context, _) {
         return MaterialApp(
+          key: ValueKey(state.isAuthenticated),
           title: 'Lifenizer',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(

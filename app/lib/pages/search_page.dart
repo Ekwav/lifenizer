@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models.dart';
+import '../services/quick_action_service.dart';
 import 'page_frame.dart';
 import 'search/search_filters.dart';
 import 'search/search_input_field.dart';
@@ -18,9 +19,16 @@ import 'search/search_results_list.dart';
 ///
 /// Significantly reduced nesting (from 11 levels to ~6) and improved maintainability.
 class SearchPage extends StatefulWidget {
-  const SearchPage({required this.state, super.key});
+  const SearchPage({
+    required this.state,
+    this.action,
+    this.actionRevision = 0,
+    super.key,
+  });
 
   final LifenizerAppState state;
+  final QuickAction? action;
+  final int actionRevision;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -28,20 +36,48 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage> {
   late SearchViewModel _viewModel;
+  final _searchFocus = FocusNode();
+  int _resultLimit = 50;
 
   @override
   void initState() {
     super.initState();
     _viewModel = SearchViewModel(
-      queryController: TextEditingController(),
+      queryController: TextEditingController(text: widget.action?.query ?? ''),
       sourceFilter: '',
       participantFilter: '',
       tagFilter: '',
     );
+    _applyAction();
+  }
+
+  @override
+  void didUpdateWidget(SearchPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.actionRevision != widget.actionRevision) _applyAction();
+  }
+
+  void _applyAction() {
+    _resultLimit = 50;
+    _viewModel.clearFilters();
+    _viewModel.setQuery(widget.action?.query ?? '');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final id = widget.action?.conversationId;
+      final conversation = widget.state.conversations
+          .where((item) => item.id == id)
+          .firstOrNull;
+      if (conversation != null) {
+        openConversationDetail(context, widget.state, conversation);
+      } else {
+        _searchFocus.requestFocus();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _searchFocus.dispose();
     _viewModel.queryController.dispose();
     super.dispose();
   }
@@ -56,6 +92,7 @@ class _SearchPageState extends State<SearchPage> {
       tag: _viewModel.tagFilter,
       from: _viewModel.fromFilter,
       to: _viewModel.toFilter,
+      maxResults: _resultLimit + 1,
     );
 
     return RefreshIndicator(
@@ -68,7 +105,8 @@ class _SearchPageState extends State<SearchPage> {
             // Search input field
             SearchInputField(
               viewModel: _viewModel,
-              onChanged: () => setState(() {}),
+              focusNode: _searchFocus,
+              onChanged: () => setState(() => _resultLimit = 50),
             ),
             const SizedBox(height: 16),
 
@@ -81,8 +119,9 @@ class _SearchPageState extends State<SearchPage> {
                   .toList(),
               availableTags: widget.state.allTags,
               participantName: widget.state.participantName,
-              onFilterChanged: () => setState(() {}),
+              onFilterChanged: () => setState(() => _resultLimit = 50),
               onClearFilters: () => setState(() {
+                _resultLimit = 50;
                 _viewModel.clearFilters();
               }),
               onSaveSearch: _saveCurrentSearch,
@@ -101,6 +140,7 @@ class _SearchPageState extends State<SearchPage> {
                       avatar: const Icon(Icons.bookmark_outline),
                       label: Text(savedSearch.title),
                       onPressed: () => setState(() {
+                        _resultLimit = 50;
                         _viewModel.applySavedSearch(
                           query: savedSearch.query,
                           source: savedSearch.source,
@@ -132,7 +172,16 @@ class _SearchPageState extends State<SearchPage> {
             // unbounded") — the whole page fails to render. SearchResultsList
             // is a plain Column, which sizes to its own content and scrolls
             // naturally with the rest of the page.
-            SearchResultsList(results: results, state: widget.state),
+            SearchResultsList(
+              results: results.take(_resultLimit).toList(growable: false),
+              state: widget.state,
+              hasMore: results.length > _resultLimit,
+            ),
+            if (results.length > _resultLimit)
+              OutlinedButton(
+                onPressed: () => setState(() => _resultLimit += 50),
+                child: const Text('Show more conversations'),
+              ),
           ],
         ),
       ), // PageFrame

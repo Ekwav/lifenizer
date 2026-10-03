@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Lifenizer</string>
+    <string name="search_hint">Find conversations, people, and memories</string>
+    <string name="shortcut_search">Find a conversation</string>
+    <string name="shortcut_capture">Capture a memory</string>
+    <string name="shortcut_imports">Import conversations</string>
+</resources>

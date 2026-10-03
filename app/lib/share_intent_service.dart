@@ -1,128 +1,91 @@
-import 'dart:async';
-
-import 'package:cross_file/cross_file.dart';
 import 'package:flutter/foundation.dart';
-import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:flutter/services.dart';
 
 import 'app_state.dart';
+import 'services/quick_action_service.dart';
 
+/// Android grants access to shared content URIs; files are read directly into
+/// memory once the vault is unlocked, without a plaintext cache on disk.
 class ShareIntentService {
   ShareIntentService._();
-
-  static final ShareIntentService instance = ShareIntentService._();
+  static final instance = ShareIntentService._();
+  static const channel = MethodChannel('com.lifenizer/shares');
 
   LifenizerAppState? _state;
-  bool _started = false;
   bool _draining = false;
-
-  final List<_SharedPayload> _pending = [];
-  final Set<String> _seen = <String>{};
-
-  StreamSubscription<List<SharedMediaFile>>? _mediaSub;
+  final List<Map<String, dynamic>> _pending = [];
 
   Future<void> start(LifenizerAppState state) async {
-    if (_started) return;
-    _started = true;
-    _state = state;
-
-    state.addListener(_drainIfReady);
-
-    if (kIsWeb) return;
-
-    _mediaSub = ReceiveSharingIntent.instance.getMediaStream().listen((items) {
-      _enqueueMedia(items);
-      _drainIfReady();
-    });
-
-    final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
-    if (initialMedia.isNotEmpty) {
-      _enqueueMedia(initialMedia);
+    if (kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android ||
+        _state != null) {
+      return;
     }
-
-    _drainIfReady();
+    _state = state;
+    state.addListener(_drainIfReady);
+    channel.setMethodCallHandler((call) async {
+      if (call.method == 'shares') _enqueue(call.arguments);
+    });
+    _enqueue(await channel.invokeMethod<Object?>('initialShares'));
   }
 
   Future<void> stop() async {
     _state?.removeListener(_drainIfReady);
     _state = null;
-    _started = false;
-    await _mediaSub?.cancel();
-    _mediaSub = null;
+    channel.setMethodCallHandler(null);
+    _pending.clear();
   }
 
-  void _enqueueMedia(List<SharedMediaFile> items) {
-    for (final item in items) {
-      if (item.type == SharedMediaType.text ||
-          item.type == SharedMediaType.url) {
-        _enqueueText(item.path.isNotEmpty ? item.path : (item.message ?? ''));
-        continue;
-      }
-
-      final key = 'media:${item.path}:${item.type}:${item.mimeType}';
-      if (!_seen.add(key)) continue;
-      _pending.add(
-        _SharedPayload(
-          filePath: item.path,
-          fileName: item.path.split('/').last,
-          mimeType: item.mimeType,
-        ),
-      );
+  void _enqueue(Object? items) {
+    if (items is! List) {
+      return;
     }
-  }
-
-  void _enqueueText(String value) {
-    final text = value.trim();
-    if (text.isEmpty) return;
-    final key = 'text:$text';
-    if (!_seen.add(key)) return;
-    _pending.add(_SharedPayload(text: text, mimeType: 'text/plain'));
+    _pending.addAll(
+      items.whereType<Map>().map((item) => Map<String, dynamic>.from(item)),
+    );
+    if (_pending.isNotEmpty) {
+      QuickActionService.instance.request(const QuickAction(action: 'imports'));
+    }
+    _drainIfReady();
   }
 
   Future<void> _drainIfReady() async {
     final state = _state;
-    if (state == null ||
-        !state.isAuthenticated ||
-        _draining ||
-        _pending.isEmpty) {
+    if (state == null || !state.isAuthenticated || state.busy || _draining) {
       return;
     }
     _draining = true;
     try {
-      while (_pending.isNotEmpty) {
+      while (_pending.isNotEmpty && state.isAuthenticated) {
         final payload = _pending.removeAt(0);
-        List<int>? bytes;
-        if (payload.filePath != null && payload.filePath!.isNotEmpty) {
-          try {
-            bytes = await XFile(payload.filePath!).readAsBytes();
-          } catch (_) {
-            // Skip unreadable entries without failing the whole queue.
+        final uri = payload['uri'] as String?;
+        try {
+          final bytes = uri == null
+              ? null
+              : await channel.invokeMethod<Uint8List>('readSharedFile', uri);
+          if (!state.isAuthenticated) {
+            _pending.insert(0, payload);
+            return;
+          }
+          await state.importSharedPayload(
+            fileName: payload['fileName'] as String?,
+            mimeType: payload['mimeType'] as String?,
+            text: payload['text'] as String?,
+            bytes: bytes,
+            metadata: const {'ingestedBy': 'android-share-target'},
+          );
+        } on PlatformException catch (error) {
+          state.reportError(
+            error.message ?? 'The shared file could not be read.',
+          );
+        } finally {
+          if (uri != null && !_pending.contains(payload)) {
+            await channel.invokeMethod<void>('releaseSharedFile', uri);
           }
         }
-
-        await state.importSharedPayload(
-          fileName: payload.fileName,
-          mimeType: payload.mimeType,
-          text: payload.text,
-          bytes: bytes,
-          metadata: const {'ingestedBy': 'android-share-target'},
-        );
       }
     } finally {
       _draining = false;
     }
   }
-}
-
-class _SharedPayload {
-  const _SharedPayload({
-    this.text,
-    this.filePath,
-    this.fileName,
-    this.mimeType,
-  });
-
-  final String? text;
-  final String? filePath;
-  final String? fileName;
-  final String? mimeType;
 }

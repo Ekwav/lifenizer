@@ -1,0 +1,11 @@
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="search" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_search">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="com.lifenizer.app" android:targetClass="com.lifenizer.app.MainActivity" android:data="lifenizer://search" />
+    </shortcut>
+    <shortcut android:shortcutId="capture" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_capture">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="com.lifenizer.app" android:targetClass="com.lifenizer.app.MainActivity" android:data="lifenizer://capture" />
+    </shortcut>
+    <shortcut android:shortcutId="imports" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_imports">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="com.lifenizer.app" android:targetClass="com.lifenizer.app.MainActivity" android:data="lifenizer://imports" />
+    </shortcut>
+</shortcuts>

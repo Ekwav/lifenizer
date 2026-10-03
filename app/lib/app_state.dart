@@ -166,16 +166,18 @@ class LifenizerAppState extends ChangeNotifier {
         'Storage quota exceeded. Please upgrade your plan.',
       );
     }
-    if (!identical(api, _api) || !_crypto.isUnlocked)
+    if (!identical(api, _api) || !_crypto.isUnlocked) {
       throw StateError('Vault is locked.');
+    }
     final item = await api.uploadImage(
       encrypted,
       '${_uuid.v4()}.bin',
       'application/octet-stream',
       conversationId: conversationId,
     );
-    if (!identical(api, _api) || !_crypto.isUnlocked)
+    if (!identical(api, _api) || !_crypto.isUnlocked) {
       throw StateError('Vault is locked.');
+    }
     images.add(item);
     notifyListeners();
     refreshQuota().ignore();
@@ -186,8 +188,9 @@ class LifenizerAppState extends ChangeNotifier {
     final api = _requireApi();
     if (!_crypto.isUnlocked) throw StateError('Vault is locked.');
     final bytes = await api.downloadImage(image.id);
-    if (!identical(api, _api) || !_crypto.isUnlocked)
+    if (!identical(api, _api) || !_crypto.isUnlocked) {
       throw StateError('Vault is locked.');
+    }
     // Older image/* uploads were stored raw. Display them in memory with a
     // gallery notice; new uploads always contain authenticated ciphertext.
     final decoded = image.contentType.startsWith('image/')
@@ -197,8 +200,9 @@ class LifenizerAppState extends ChangeNotifier {
             contentType: image.contentType,
           )
         : await ImageService.decryptImage(bytes, _crypto);
-    if (!identical(api, _api) || !_crypto.isUnlocked)
+    if (!identical(api, _api) || !_crypto.isUnlocked) {
       throw StateError('Vault is locked.');
+    }
     return decoded;
   }
 
@@ -499,6 +503,86 @@ class LifenizerAppState extends ChangeNotifier {
     }
     notifyListeners();
     return ids;
+  }
+
+  Future<void> importSharedPayload({
+    String? fileName,
+    String? mimeType,
+    String? text,
+    List<int>? bytes,
+    Map<String, String> metadata = const {},
+  }) async {
+    final normalizedName = (fileName ?? '').trim();
+    final normalizedMime = (mimeType ?? '').trim().toLowerCase();
+    final normalizedText = text?.trim();
+    final lowerName = normalizedName.toLowerCase();
+
+    String source = 'manual-text';
+    if (lowerName.endsWith('.mbox')) {
+      source = 'mbox';
+    } else if (lowerName.endsWith('.patch') ||
+        lowerName.endsWith('.diff') ||
+        lowerName.contains('git')) {
+      source = 'git';
+    } else if (lowerName.contains('bookmark')) {
+      source = 'bookmarks';
+    } else if (lowerName.contains('google') && lowerName.contains('search')) {
+      source = 'google-search-history';
+    } else if (lowerName.contains('history')) {
+      source = 'browser-history';
+    } else if (lowerName.contains('backup') ||
+        lowerName.endsWith('.lifenizerbackup')) {
+      source = 'lifenizer-backup';
+    } else if (normalizedMime.startsWith('audio/') ||
+        VaultImports._audioMimeTypesByExtension.containsKey(lowerName.split('.').last)) {
+      source = 'audio';
+    } else if (normalizedMime.startsWith('image/') ||
+        normalizedMime == 'application/pdf') {
+      source = 'scanned-pdf';
+    } else if (normalizedMime == 'text/uri-list' ||
+        normalizedText?.startsWith('http') == true) {
+      source = 'browser-capture';
+    }
+
+    if (source == 'audio' && bytes != null && bytes.isNotEmpty) {
+      return importAudioBytes(
+        bytes: bytes,
+        fileName: normalizedName.isEmpty
+            ? 'shared-recording.wav'
+            : normalizedName,
+        mimeType: normalizedMime.isEmpty ? null : normalizedMime,
+      );
+    }
+    if (source == 'manual-text' || source == 'browser-capture') {
+      return addManualText(
+        title: normalizedName.isEmpty ? 'Shared conversation' : normalizedName,
+        participantNames: '',
+        source: source,
+        text:
+            normalizedText ??
+            (bytes == null ? '' : utf8.decode(bytes, allowMalformed: true)),
+      );
+    }
+    if (source == 'scanned-pdf' && bytes != null && normalizedText == null) {
+      reportError(
+        'This file needs OCR first. Import extracted text, or attach the image to a conversation.',
+      );
+      return;
+    }
+
+    final payloadBase64 = bytes == null || bytes.isEmpty
+        ? null
+        : base64Encode(bytes);
+
+    await importSource(
+      source: source,
+      title: normalizedName.isEmpty ? 'Shared import' : normalizedName,
+      text: payloadBase64 == null ? normalizedText : null,
+      originalFileName: normalizedName.isEmpty ? null : normalizedName,
+      mimeType: normalizedMime.isEmpty ? null : normalizedMime,
+      metadata: {...metadata, 'shared': 'true'},
+      payloadBase64: payloadBase64,
+    );
   }
 
   Future<void> addManualText({
