@@ -114,7 +114,9 @@ class LifenizerAppState extends ChangeNotifier {
   Future<void> refreshQuota() async {
     final api = _requireApi();
     try {
-      quotaStatus = await api.getQuotaStatus();
+      final fetched = await api.getQuotaStatus();
+      if (!identical(api, _api) || !_crypto.isUnlocked) return;
+      quotaStatus = fetched;
       notifyListeners();
     } catch (_) {
       // Non-fatal: quota info will be unavailable but app continues.
@@ -124,6 +126,7 @@ class LifenizerAppState extends ChangeNotifier {
   Future<void> refreshImages({String? conversationId}) async {
     final api = _requireApi();
     final fetched = await api.listImages(conversationId: conversationId);
+    if (!identical(api, _api) || !_crypto.isUnlocked) return;
     if (conversationId == null) {
       images
         ..clear()
@@ -147,27 +150,56 @@ class LifenizerAppState extends ChangeNotifier {
         : await ImageService.pickFromGallery();
     if (captured == null) return null;
 
-    // Local quota pre-check.
+    return uploadCapturedImage(captured, conversationId: conversationId);
+  }
+
+  Future<ImageItem> uploadCapturedImage(
+    CapturedImage captured, {
+    String? conversationId,
+  }) async {
+    final api = _requireApi();
+    final encrypted = await ImageService.encryptImage(captured, _crypto);
     final quota = quotaStatus;
     if (quota != null &&
-        quota.usedBytes + captured.bytes.length > quota.limitBytes) {
+        quota.usedBytes + encrypted.length > quota.limitBytes) {
       throw QuotaExceededException(
         'Storage quota exceeded. Please upgrade your plan.',
       );
     }
-
-    final api = _requireApi();
+    if (!identical(api, _api) || !_crypto.isUnlocked)
+      throw StateError('Vault is locked.');
     final item = await api.uploadImage(
-      captured.bytes,
-      captured.fileName,
-      captured.contentType,
+      encrypted,
+      '${_uuid.v4()}.bin',
+      'application/octet-stream',
       conversationId: conversationId,
     );
+    if (!identical(api, _api) || !_crypto.isUnlocked)
+      throw StateError('Vault is locked.');
     images.add(item);
     notifyListeners();
-    // Refresh quota after upload.
     refreshQuota().ignore();
     return item;
+  }
+
+  Future<CapturedImage> decryptedImage(ImageItem image) async {
+    final api = _requireApi();
+    if (!_crypto.isUnlocked) throw StateError('Vault is locked.');
+    final bytes = await api.downloadImage(image.id);
+    if (!identical(api, _api) || !_crypto.isUnlocked)
+      throw StateError('Vault is locked.');
+    // Older image/* uploads were stored raw. Display them in memory with a
+    // gallery notice; new uploads always contain authenticated ciphertext.
+    final decoded = image.contentType.startsWith('image/')
+        ? CapturedImage(
+            bytes: bytes,
+            fileName: image.fileName,
+            contentType: image.contentType,
+          )
+        : await ImageService.decryptImage(bytes, _crypto);
+    if (!identical(api, _api) || !_crypto.isUnlocked)
+      throw StateError('Vault is locked.');
+    return decoded;
   }
 
   Future<void> deleteImage(String id) async {
@@ -177,8 +209,6 @@ class LifenizerAppState extends ChangeNotifier {
     notifyListeners();
     refreshQuota().ignore();
   }
-
-  String imageUrl(String id) => _requireApi().imageUrl(id);
 
   Map<String, String> get authHeaders {
     final token = session?.authToken;

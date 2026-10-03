@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import 'models.dart';
 
@@ -136,7 +137,12 @@ class LifenizerApiClient {
     final req = http.MultipartRequest('POST', uri)
       ..headers.addAll(_headers())
       ..files.add(
-        http.MultipartFile.fromBytes('file', bytes, filename: fileName),
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: fileName,
+          contentType: MediaType.parse(contentType),
+        ),
       );
     if (conversationId != null) {
       req.fields['conversationId'] = conversationId;
@@ -173,7 +179,13 @@ class LifenizerApiClient {
     _ensureSuccess(response);
   }
 
-  String imageUrl(String id) => _uri('/api/images/$id').toString();
+  Future<Uint8List> downloadImage(String id) async {
+    final response = await _client
+        .get(_uri('/api/images/$id'), headers: _headers())
+        .timeout(const Duration(seconds: 30));
+    _ensureSuccess(response);
+    return response.bodyBytes;
+  }
 
   // ---------------------------------------------------------------------------
   // Quota / Premium

@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api_client.dart';
 import 'app_state.dart';
 import 'models.dart';
+import 'image_service.dart';
 
 // ============================================================================
 //  StorageQuotaBanner
@@ -78,11 +78,11 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
         if (mounted) Navigator.of(context).pop();
-      } else {
+      } else if (mounted) {
         setState(() => _error = 'Could not open browser. URL: $url');
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -199,7 +199,13 @@ class _ImageGalleryState extends State<ImageGallery> {
   @override
   void initState() {
     super.initState();
-    widget.state.refreshImages(conversationId: widget.conversationId);
+    widget.state
+        .refreshImages(conversationId: widget.conversationId)
+        .catchError((Object error) {
+          if (mounted && widget.state.isAuthenticated) {
+            widget.state.reportError('Could not load images: $error');
+          }
+        });
   }
 
   List<ImageItem> get _items => widget.state.images
@@ -284,6 +290,14 @@ class _ImageGalleryState extends State<ImageGallery> {
             ),
           ],
         ),
+        if (items.any((image) => image.contentType.startsWith('image/')))
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              'Older images were uploaded without vault encryption.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
         if (items.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
@@ -295,7 +309,7 @@ class _ImageGalleryState extends State<ImageGallery> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (ctx, i) {
                 final img = items[i];
                 return GestureDetector(
@@ -303,24 +317,12 @@ class _ImageGalleryState extends State<ImageGallery> {
                   onLongPress: () => _confirmDelete(context, img),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: CachedNetworkImage(
-                      imageUrl: widget.state.imageUrl(img.id),
-                      httpHeaders: widget.state.authHeaders,
+                    child: _DecryptedVaultImage(
+                      state: widget.state,
+                      image: img,
                       width: 100,
                       height: 100,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        color: Colors.grey.shade200,
-                        width: 100,
-                        height: 100,
-                        child: const Icon(Icons.image),
-                      ),
-                      errorWidget: (_, __, ___) => Container(
-                        color: Colors.grey.shade200,
-                        width: 100,
-                        height: 100,
-                        child: const Icon(Icons.broken_image),
-                      ),
                     ),
                   ),
                 );
@@ -339,12 +341,14 @@ class _ImageGalleryState extends State<ImageGallery> {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, ImageItem img) async {
+  Future<void> _confirmDelete(BuildContext dialogContext, ImageItem img) async {
     final confirmed = await showDialog<bool>(
-      context: context,
+      context: dialogContext,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete image?'),
-        content: Text(img.fileName),
+        content: Text(
+          img.contentType.startsWith('image/') ? img.fileName : 'Private image',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -382,53 +386,161 @@ class _FullScreenImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text(image.fileName),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: () async {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Delete image?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Cancel'),
+    return ListenableBuilder(
+      listenable: state,
+      builder: (context, _) {
+        if (!state.isAuthenticated) {
+          return const Scaffold(body: Center(child: Icon(Icons.lock)));
+        }
+        return Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            title: Text(
+              image.contentType.startsWith('image/')
+                  ? image.fileName
+                  : 'Private image',
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Delete image?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Delete'),
+                        ),
+                      ],
                     ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Delete'),
-                    ),
-                  ],
-                ),
-              );
-              if (confirmed == true) {
-                await state.deleteImage(image.id);
-                if (context.mounted) Navigator.of(context).pop();
-              }
-            },
+                  );
+                  if (confirmed == true) {
+                    try {
+                      await state.deleteImage(image.id);
+                      if (context.mounted) Navigator.of(context).pop();
+                    } catch (error) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Delete failed: $error')),
+                        );
+                      }
+                    }
+                  }
+                },
+              ),
+            ],
           ),
-        ],
-      ),
-      body: Center(
-        child: InteractiveViewer(
-          child: CachedNetworkImage(
-            imageUrl: state.imageUrl(image.id),
-            httpHeaders: state.authHeaders,
-            fit: BoxFit.contain,
-            placeholder: (_, __) =>
-                const CircularProgressIndicator(color: Colors.white),
-            errorWidget: (_, __, ___) =>
-                const Icon(Icons.broken_image, color: Colors.white, size: 64),
+          body: Center(
+            child: InteractiveViewer(
+              child: _DecryptedVaultImage(
+                state: state,
+                image: image,
+                fit: BoxFit.contain,
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
+    );
+  }
+}
+
+/// Decoded pixels remain in memory and are evicted when locked or disposed.
+class _DecryptedVaultImage extends StatefulWidget {
+  const _DecryptedVaultImage({
+    required this.state,
+    required this.image,
+    required this.fit,
+    this.width,
+    this.height,
+  });
+  final LifenizerAppState state;
+  final ImageItem image;
+  final BoxFit fit;
+  final double? width;
+  final double? height;
+  @override
+  State<_DecryptedVaultImage> createState() => _DecryptedVaultImageState();
+}
+
+class _DecryptedVaultImageState extends State<_DecryptedVaultImage> {
+  Future<CapturedImage>? _image;
+  MemoryImage? _provider;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.state.addListener(_vaultChanged);
+    _load();
+  }
+
+  void _load() {
+    _provider?.evict();
+    _provider = null;
+    _image = widget.state.isAuthenticated
+        ? widget.state.decryptedImage(widget.image)
+        : null;
+  }
+
+  void _vaultChanged() {
+    if (!widget.state.isAuthenticated || _image == null) {
+      setState(_load);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _DecryptedVaultImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state != widget.state) {
+      oldWidget.state.removeListener(_vaultChanged);
+      widget.state.addListener(_vaultChanged);
+    }
+    if (oldWidget.state != widget.state ||
+        oldWidget.image.id != widget.image.id) {
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.state.removeListener(_vaultChanged);
+    _provider?.evict();
+    _image = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.state.isAuthenticated) return const Icon(Icons.lock);
+    return FutureBuilder<CapturedImage>(
+      future: _image,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const Icon(Icons.broken_image);
+        if (snapshot.connectionState != ConnectionState.done ||
+            !snapshot.hasData) {
+          return SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        }
+        _provider ??= MemoryImage(snapshot.data!.bytes);
+        return Image(
+          image: _provider!,
+          width: widget.width,
+          height: widget.height,
+          fit: widget.fit,
+          errorBuilder: (_, _, _) => const Icon(Icons.broken_image),
+        );
+      },
     );
   }
 }
