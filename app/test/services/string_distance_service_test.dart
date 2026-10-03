@@ -2,6 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/services/string_distance_service.dart';
 
 void main() {
+  test('distance counts supplementary Unicode characters once', () {
+    expect(StringDistance.levenshtein('hello😀', 'hello', 1), 1);
+    expect(StringDistance.levenshtein('😀', 'a', 1), 1);
+  });
+
   group('StringDistance.levenshtein', () {
     group('exact matches', () {
       test('returns 0 for identical strings', () {
@@ -75,7 +80,10 @@ void main() {
       });
 
       test('handles double typo: within limit', () {
-        expect(StringDistance.levenshtein('hello', 'hallo', 2), lessThanOrEqualTo(2));
+        expect(
+          StringDistance.levenshtein('hello', 'hallo', 2),
+          lessThanOrEqualTo(2),
+        );
       });
 
       test('handles transposition as edits', () {

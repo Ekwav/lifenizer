@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -12,6 +11,8 @@ import 'package:image_picker/image_picker.dart';
 import 'image_service.dart';
 import 'models.dart';
 import 'services/search_criteria.dart';
+import 'services/conversation_search_index.dart';
+import 'services/temporal_intent.dart';
 import 'services/search_scorer.dart';
 import 'services/search_service.dart';
 
@@ -34,7 +35,7 @@ class LifenizerAppState extends ChangeNotifier {
   final List<SavedSearch> savedSearches = [];
   final List<ImportCapability> importCapabilities = [];
 
-  _ConversationSearchIndex? _searchIndex;
+  ConversationSearchIndex? _searchIndex;
   bool _searchIndexDirty = true;
   int _indexedConversationCount = -1;
   int _indexedRelationCount = -1;
@@ -254,11 +255,11 @@ class LifenizerAppState extends ChangeNotifier {
     );
 
     final now = DateTime.now().toUtc();
-    final temporalIntent = _TemporalIntent.tryParse(criteria.normalized, now);
+    final temporalIntent = TemporalIntent.tryParse(criteria.normalized, now);
 
     // Prepare query tokens
-    final queryTokens = _semanticTokens(
-      _ConversationSearchIndex.tokenize(criteria.normalized),
+    final queryTokens = ConversationSearchIndex.tokenize(
+      TemporalIntent.lexicalQuery(criteria.normalized),
     );
     final semanticQuery = queryTokens.join(' ');
 
@@ -266,7 +267,7 @@ class LifenizerAppState extends ChangeNotifier {
     final previousQuery = _lastSearchQuery;
     final previousTokens = previousQuery == null
         ? const <String>[]
-        : _semanticTokens(_ConversationSearchIndex.tokenize(previousQuery));
+        : ConversationSearchIndex.tokenize(TemporalIntent.lexicalQuery(previousQuery));
 
     final scorer = SearchScorer(
       temporalIntent: temporalIntent,
@@ -1106,39 +1107,6 @@ class LifenizerAppState extends ChangeNotifier {
     _searchIndexDirty = true;
   }
 
-  List<String> _semanticTokens(List<String> tokens) {
-    if (tokens.isEmpty) {
-      return tokens;
-    }
-
-    const controlTerms = {
-      'same',
-      'time',
-      'last',
-      'year',
-      'today',
-      'yesterday',
-      'week',
-      'month',
-      'morning',
-      'afternoon',
-      'evening',
-      'night',
-      'tonight',
-      'search',
-      'previous',
-      'before',
-      'again',
-      'this',
-      'as',
-    };
-
-    final filtered = tokens
-        .where((token) => !controlTerms.contains(token))
-        .toList(growable: false);
-    return filtered.isEmpty ? tokens : filtered;
-  }
-
   String? _cleanFilter(String? value) {
     final cleaned = value?.trim();
     return cleaned == null || cleaned.isEmpty ? null : cleaned;
@@ -1202,7 +1170,7 @@ class LifenizerAppState extends ChangeNotifier {
         ..write(relation.object);
     }
 
-    _searchIndex = _ConversationSearchIndex.build(
+    _searchIndex = ConversationSearchIndex.build(
       conversations: conversations,
       participantById: participantById,
       relationTextByConversation: relationTextByConversation.map(
@@ -1233,419 +1201,5 @@ class LifenizerAppState extends ChangeNotifier {
     final api = _api;
     if (api == null) throw StateError('Not logged in.');
     return api;
-  }
-}
-
-class _IndexedConversation {
-  _IndexedConversation({
-    required this.conversation,
-    required this.haystack,
-    required this.title,
-    required this.source,
-    required this.tagSet,
-    required this.termFrequency,
-    required this.vectorNorm,
-  });
-
-  final Conversation conversation;
-  final String haystack;
-  final String title;
-  final String source;
-  final Set<String> tagSet;
-  final Map<String, int> termFrequency;
-  final double vectorNorm;
-}
-
-class _ConversationSearchIndex {
-  _ConversationSearchIndex({
-    required this.documents,
-    required this.invertedIndex,
-    required this.idf,
-    required this.allConversationIds,
-  });
-
-  final Map<String, _IndexedConversation> documents;
-  final Map<String, Set<String>> invertedIndex;
-  final Map<String, double> idf;
-  final Set<String> allConversationIds;
-
-  static _ConversationSearchIndex build({
-    required List<Conversation> conversations,
-    required Map<String, String> participantById,
-    required Map<String, String> relationTextByConversation,
-  }) {
-    final docs = <String, _IndexedConversation>{};
-    final inverted = <String, Set<String>>{};
-
-    for (final conversation in conversations) {
-      final participantText = conversation.participantIds
-          .map((id) => participantById[id] ?? id.toLowerCase())
-          .join(' ');
-      final relationText = relationTextByConversation[conversation.id] ?? '';
-      final haystack =
-          '${conversation.searchableText} $participantText $relationText'
-              .trim();
-      final tokens = tokenize(haystack);
-      final termFrequency = <String, int>{};
-      for (final token in tokens) {
-        termFrequency.update(token, (count) => count + 1, ifAbsent: () => 1);
-      }
-
-      for (final token in termFrequency.keys) {
-        inverted.putIfAbsent(token, () => <String>{}).add(conversation.id);
-      }
-
-      docs[conversation.id] = _IndexedConversation(
-        conversation: conversation,
-        haystack: haystack,
-        title: conversation.title.toLowerCase(),
-        source: conversation.source.toLowerCase(),
-        tagSet: conversation.tags.map((tag) => tag.toLowerCase()).toSet(),
-        termFrequency: termFrequency,
-        vectorNorm: 0,
-      );
-    }
-
-    final docCount = docs.length;
-    final idf = <String, double>{};
-    for (final entry in inverted.entries) {
-      final df = entry.value.length;
-      // Smoothed IDF to avoid division by zero and dampen very common terms.
-      idf[entry.key] = math.log((1 + docCount) / (1 + df)) + 1.0;
-    }
-
-    final docsWithNorm = <String, _IndexedConversation>{};
-    for (final entry in docs.entries) {
-      final document = entry.value;
-      var normSquared = 0.0;
-      for (final tfEntry in document.termFrequency.entries) {
-        final tokenIdf = idf[tfEntry.key] ?? 0.0;
-        final weight = tfEntry.value * tokenIdf;
-        normSquared += weight * weight;
-      }
-      docsWithNorm[entry.key] = _IndexedConversation(
-        conversation: document.conversation,
-        haystack: document.haystack,
-        title: document.title,
-        source: document.source,
-        tagSet: document.tagSet,
-        termFrequency: document.termFrequency,
-        vectorNorm: math.sqrt(normSquared),
-      );
-    }
-
-    return _ConversationSearchIndex(
-      documents: docsWithNorm,
-      invertedIndex: inverted,
-      idf: idf,
-      allConversationIds: docsWithNorm.keys.toSet(),
-    );
-  }
-
-  Set<String> lookupCandidates(List<String> queryTokens) {
-    if (queryTokens.isEmpty) {
-      return allConversationIds;
-    }
-
-    final candidates = <String>{};
-    for (final token in queryTokens) {
-      final direct = invertedIndex[token];
-      if (direct != null) {
-        candidates.addAll(direct);
-        continue;
-      }
-
-      // Fuzzy fallback in index-space, for typo tolerance AND partial-word
-      // matches (e.g. typing "ali" should surface a participant named
-      // "Alice" even though "ali" isn't itself an indexed token).
-      //
-      // The substring check is tried first, unconditionally, mirroring
-      // SearchService._fuzzyMatch's per-document gate. Without it, a short
-      // partial query like "ali" only ever finds "alice" when the rest of
-      // the vault happens to contain no other token that's edit-distance-
-      // close to "ali" (e.g. the common word "all") — as soon as a vault of
-      // any realistic size contains such a token, the candidate set stops
-      // being empty, the "fall back to every conversation" safety net below
-      // no longer kicks in, and the actual match is silently dropped. Using
-      // the same substring-first rule as the per-document gate here keeps
-      // the two matching stages consistent.
-      for (final entry in invertedIndex.entries) {
-        final candidateToken = entry.key;
-        if (candidateToken.contains(token)) {
-          candidates.addAll(entry.value);
-          continue;
-        }
-        if ((candidateToken.length - token.length).abs() > 2) {
-          continue;
-        }
-        final limit = token.length >= 6 ? 2 : 1;
-        if (_boundedDistance(token, candidateToken, limit) <= limit) {
-          candidates.addAll(entry.value);
-        }
-      }
-    }
-
-    return candidates.isEmpty ? allConversationIds : candidates;
-  }
-
-  double lexicalScore(
-    _IndexedConversation document,
-    String normalizedQuery,
-    List<String> queryTokens,
-  ) {
-    if (normalizedQuery.isEmpty) {
-      return 0;
-    }
-
-    var score = 0.0;
-    if (document.haystack.contains(normalizedQuery)) {
-      score += 8.0;
-    }
-
-    for (final token in queryTokens) {
-      final tf = document.termFrequency[token] ?? 0;
-      if (tf > 0) {
-        score += 2.0 + (tf * 1.2);
-      }
-      if (document.title.contains(token)) {
-        score += 3.0;
-      }
-      if (document.source.contains(token)) {
-        score += 1.0;
-      }
-      if (document.tagSet.contains(token)) {
-        score += 1.5;
-      }
-    }
-
-    return score;
-  }
-
-  double vectorScore(_IndexedConversation document, List<String> queryTokens) {
-    if (queryTokens.isEmpty || document.vectorNorm <= 0) {
-      return 0;
-    }
-
-    final queryTf = <String, int>{};
-    for (final token in queryTokens) {
-      queryTf.update(token, (count) => count + 1, ifAbsent: () => 1);
-    }
-
-    var queryNormSquared = 0.0;
-    var dot = 0.0;
-    for (final entry in queryTf.entries) {
-      final tokenIdf = idf[entry.key] ?? 0.0;
-      if (tokenIdf <= 0) {
-        continue;
-      }
-
-      final queryWeight = entry.value * tokenIdf;
-      queryNormSquared += queryWeight * queryWeight;
-
-      final docTf = document.termFrequency[entry.key];
-      if (docTf == null) {
-        continue;
-      }
-      final docWeight = docTf * tokenIdf;
-      dot += queryWeight * docWeight;
-    }
-
-    if (queryNormSquared <= 0 || dot <= 0) {
-      return 0;
-    }
-
-    final queryNorm = math.sqrt(queryNormSquared);
-    return dot / (queryNorm * document.vectorNorm);
-  }
-
-  static List<String> tokenize(String text) {
-    return text
-        .toLowerCase()
-        .split(RegExp(r'[^a-z0-9]+'))
-        .where((token) => token.isNotEmpty)
-        .toList(growable: false);
-  }
-
-  static int _boundedDistance(String left, String right, int limit) {
-    if ((left.length - right.length).abs() > limit) {
-      return limit + 1;
-    }
-
-    var previous = List<int>.generate(right.length + 1, (index) => index);
-    var current = List<int>.filled(right.length + 1, 0);
-    for (var i = 1; i <= left.length; i++) {
-      current[0] = i;
-      var rowMin = current[0];
-      for (var j = 1; j <= right.length; j++) {
-        final cost = left.codeUnitAt(i - 1) == right.codeUnitAt(j - 1) ? 0 : 1;
-        final deletion = previous[j] + 1;
-        final insertion = current[j - 1] + 1;
-        final substitution = previous[j - 1] + cost;
-        var min = deletion < insertion ? deletion : insertion;
-        if (substitution < min) {
-          min = substitution;
-        }
-        current[j] = min;
-        if (min < rowMin) {
-          rowMin = min;
-        }
-      }
-      if (rowMin > limit) {
-        return limit + 1;
-      }
-      final swap = previous;
-      previous = current;
-      current = swap;
-    }
-
-    return previous[right.length];
-  }
-}
-
-class _TemporalIntent {
-  const _TemporalIntent({
-    required this.targetStart,
-    required this.targetEnd,
-    this.hourStart,
-    this.hourEnd,
-    this.weight = 1.0,
-  });
-
-  final DateTime targetStart;
-  final DateTime targetEnd;
-  final int? hourStart;
-  final int? hourEnd;
-  final double weight;
-
-  static _TemporalIntent? tryParse(String normalizedQuery, DateTime nowUtc) {
-    if (normalizedQuery.isEmpty) {
-      return null;
-    }
-
-    DateTime start;
-    DateTime end;
-    double weight = 1.0;
-
-    final hasLastYear = normalizedQuery.contains('last year');
-    final hasSameTimeLastYear =
-        normalizedQuery.contains('same time last year') ||
-        normalizedQuery.contains('this time last year') ||
-        normalizedQuery.contains('on this day last year') ||
-        normalizedQuery.contains('same date last year');
-
-    if (hasSameTimeLastYear) {
-      final anchor = _safeShiftYear(nowUtc, -1);
-      start = DateTime.utc(
-        anchor.year,
-        anchor.month,
-        anchor.day,
-      ).subtract(const Duration(days: 1));
-      end = DateTime.utc(
-        anchor.year,
-        anchor.month,
-        anchor.day,
-      ).add(const Duration(days: 1, hours: 23, minutes: 59, seconds: 59));
-      weight = 2.6;
-    } else if (hasLastYear) {
-      final year = nowUtc.year - 1;
-      start = DateTime.utc(year, 1, 1);
-      end = DateTime.utc(year, 12, 31, 23, 59, 59);
-      weight = 1.6;
-    } else if (normalizedQuery.contains('yesterday')) {
-      final yesterday = nowUtc.subtract(const Duration(days: 1));
-      start = DateTime.utc(yesterday.year, yesterday.month, yesterday.day);
-      end = DateTime.utc(
-        yesterday.year,
-        yesterday.month,
-        yesterday.day,
-        23,
-        59,
-        59,
-      );
-      weight = 1.9;
-    } else if (normalizedQuery.contains('today')) {
-      start = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day);
-      end = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, 23, 59, 59);
-      weight = 1.6;
-    } else if (normalizedQuery.contains('last week')) {
-      start = nowUtc.subtract(const Duration(days: 7));
-      end = nowUtc;
-      weight = 1.4;
-    } else if (normalizedQuery.contains('last month')) {
-      start = nowUtc.subtract(const Duration(days: 30));
-      end = nowUtc;
-      weight = 1.3;
-    } else {
-      return null;
-    }
-
-    final hourRange = _parseHourRange(normalizedQuery);
-    return _TemporalIntent(
-      targetStart: start,
-      targetEnd: end,
-      hourStart: hourRange?.$1,
-      hourEnd: hourRange?.$2,
-      weight: weight,
-    );
-  }
-
-  double alignmentScore(DateTime documentTime) {
-    final doc = documentTime.toUtc();
-    final rangeStart = targetStart.toUtc();
-    final rangeEnd = targetEnd.toUtc();
-    final inRange = !doc.isBefore(rangeStart) && !doc.isAfter(rangeEnd);
-    if (!inRange) {
-      final distanceDays = doc.isBefore(rangeStart)
-          ? rangeStart.difference(doc).inHours / 24.0
-          : doc.difference(rangeEnd).inHours / 24.0;
-      return math.exp(-(distanceDays / 21.0)) * 0.8;
-    }
-
-    var score = 2.0 * weight;
-    if (hourStart != null && hourEnd != null) {
-      final hourMatch = _hourInRange(doc.hour, hourStart!, hourEnd!);
-      score += hourMatch ? 1.4 : -0.6;
-    }
-    return score;
-  }
-
-  static (int, int)? _parseHourRange(String normalizedQuery) {
-    if (normalizedQuery.contains('morning')) {
-      return (5, 11);
-    }
-    if (normalizedQuery.contains('afternoon')) {
-      return (12, 17);
-    }
-    if (normalizedQuery.contains('evening')) {
-      return (18, 22);
-    }
-    if (normalizedQuery.contains('night') ||
-        normalizedQuery.contains('tonight')) {
-      return (22, 4);
-    }
-    return null;
-  }
-
-  static bool _hourInRange(int hour, int start, int end) {
-    if (start <= end) {
-      return hour >= start && hour <= end;
-    }
-    return hour >= start || hour <= end;
-  }
-
-  static DateTime _safeShiftYear(DateTime value, int years) {
-    final targetYear = value.year + years;
-    final lastDay = DateTime.utc(targetYear, value.month + 1, 0).day;
-    final day = value.day > lastDay ? lastDay : value.day;
-    return DateTime.utc(
-      targetYear,
-      value.month,
-      day,
-      value.hour,
-      value.minute,
-      value.second,
-      value.millisecond,
-      value.microsecond,
-    );
   }
 }

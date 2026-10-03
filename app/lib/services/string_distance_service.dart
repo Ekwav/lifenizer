@@ -29,8 +29,10 @@ class StringDistance {
       return 1;
     }
 
-    final leftLength = left.length;
-    final rightLength = right.length;
+    final leftUnits = left.runes.toList(growable: false);
+    final rightUnits = right.runes.toList(growable: false);
+    final leftLength = leftUnits.length;
+    final rightLength = rightUnits.length;
 
     if (leftLength == 0) {
       return rightLength <= limit ? rightLength : limit + 1;
@@ -60,8 +62,12 @@ class StringDistance {
     for (var i = 1; i <= leftLength; i++) {
       current[0] = i;
       var rowMin = current[0];
-      for (var j = 1; j <= rightLength; j++) {
-        final cost = left.codeUnitAt(i - 1) == right.codeUnitAt(j - 1) ? 0 : 1;
+      final start = i - limit > 1 ? i - limit : 1;
+      final end = i + limit < rightLength ? i + limit : rightLength;
+      if (start > 1) current[start - 1] = limit + 1;
+      if (end < rightLength) current[end + 1] = limit + 1;
+      for (var j = start; j <= end; j++) {
+        final cost = leftUnits[i - 1] == rightUnits[j - 1] ? 0 : 1;
         final deletion = previous[j] + 1;
         final insertion = current[j - 1] + 1;
         final substitution = previous[j - 1] + cost;
@@ -85,7 +91,9 @@ class StringDistance {
       previous = current;
       current = swap;
     }
-    final result = previous[rightLength];
+    final result = previous[rightLength] <= limit
+        ? previous[rightLength]
+        : limit + 1;
     if (cacheKey != null) {
       _putCache(cacheKey, result);
     }

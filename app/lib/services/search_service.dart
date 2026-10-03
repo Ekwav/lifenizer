@@ -1,6 +1,7 @@
 import 'search_criteria.dart';
 import 'search_scorer.dart';
-import 'string_distance_service.dart';
+import '../models.dart';
+import 'conversation_search_index.dart';
 
 /// Collects coarse-grained timing data for search ranking stages.
 class SearchRankProfile {
@@ -15,7 +16,7 @@ class SearchRankProfile {
 class _ScoredItem {
   const _ScoredItem({required this.conversation, required this.score});
 
-  final dynamic conversation;
+  final Conversation conversation;
   final double score;
 }
 
@@ -27,7 +28,7 @@ class SearchService {
   /// Creates a [SearchService] for the given conversation search index.
   SearchService(this._searchIndex);
 
-  final dynamic _searchIndex;
+  final ConversationSearchIndex _searchIndex;
 
   /// Ranks conversations according to search criteria and scorer.
   ///
@@ -45,7 +46,7 @@ class SearchService {
   /// - [semanticQuery]: Whitespace-joined query tokens for phrase matching
   ///
   /// Returns: Sorted list of matching conversations
-  List rankConversations(
+  List<Conversation> rankConversations(
     SearchCriteria criteria,
     SearchScorer scorer,
     List<String> effectiveTokens,
@@ -54,7 +55,11 @@ class SearchService {
     int? maxResults,
   }) {
     final lookupStopwatch = Stopwatch()..start();
-    final candidateIds = _searchIndex.lookupCandidates(effectiveTokens);
+    final expansions = _searchIndex.expandTokens(effectiveTokens);
+    final candidateIds = _searchIndex.lookupCandidates(
+      effectiveTokens,
+      expansions: expansions,
+    );
     lookupStopwatch.stop();
 
     profile?.candidateLookupTime = lookupStopwatch.elapsed;
@@ -63,7 +68,6 @@ class SearchService {
     final scoringStopwatch = Stopwatch()..start();
     final scored = <_ScoredItem>[];
 
-    final hasSemanticQuery = semanticQuery.isNotEmpty;
     final sourceFilter = criteria.normalizedSource;
     final participantFilter = criteria.normalizedParticipantId;
     final tagFilter = criteria.normalizedTag;
@@ -99,18 +103,12 @@ class SearchService {
       // Score the conversation
       var score = 0.0;
       if (!criteria.isEmptyQuery) {
-        // Semantic matching gate: ensure basic relevance
-        if (hasSemanticQuery &&
-            !document.haystack.contains(semanticQuery) &&
-            !_fuzzyMatch(semanticQuery, document.haystack)) {
-          continue;
-        }
-
         // Lexical and vector scoring from the index
         score += _searchIndex.lexicalScore(
           document,
           semanticQuery,
           effectiveTokens,
+          expansions: expansions,
         );
         if (criteria.useVector) {
           score += _searchIndex.vectorScore(document, effectiveTokens) * 2.5;
@@ -156,7 +154,12 @@ class SearchService {
     if (byScore != 0) {
       return byScore;
     }
-    return right.conversation.startedAt.compareTo(left.conversation.startedAt);
+    final byDate = right.conversation.startedAt.compareTo(
+      left.conversation.startedAt,
+    );
+    return byDate != 0
+        ? byDate
+        : left.conversation.id.compareTo(right.conversation.id);
   }
 
   static List<_ScoredItem> _sortWithOptionalLimit(
@@ -213,7 +216,11 @@ class SearchService {
   /// LifenizerAppState._ingestNormalizedImport), which is where the
   /// "segment createdAt" fallback described for this filter actually takes
   /// effect.
-  bool _matchesDateRange(dynamic conversation, DateTime? from, DateTime? to) {
+  bool _matchesDateRange(
+    Conversation conversation,
+    DateTime? from,
+    DateTime? to,
+  ) {
     final DateTime startedAt = conversation.startedAt.toUtc();
     final DateTime endedAt = conversation.endedAt.toUtc();
     final spanStart = startedAt.isBefore(endedAt) ? startedAt : endedAt;
@@ -224,53 +231,6 @@ class SearchService {
     }
     if (to != null && spanStart.isAfter(to)) {
       return false;
-    }
-    return true;
-  }
-
-  /// Fuzzy-match every whitespace-separated token of [query] against [haystack].
-  ///
-  /// A token matches if:
-  /// - It is a substring of any haystack token, OR
-  /// - It is within Levenshtein edit distance 1 (or 2 for tokens >= 6 chars)
-  ///
-  /// All query tokens must match for the overall result to be true.
-  bool _fuzzyMatch(String query, String haystack) {
-    final queryTokens = query
-        .split(RegExp(r'\s+'))
-        .where((token) => token.isNotEmpty)
-        .toList();
-    if (queryTokens.isEmpty) {
-      return true;
-    }
-    final haystackTokens = haystack
-        .split(RegExp(r'\s+'))
-        .where((token) => token.isNotEmpty)
-        .toList();
-    if (haystackTokens.isEmpty) {
-      return false;
-    }
-    for (final token in queryTokens) {
-      if (token.length < 3) {
-        if (!haystackTokens.any((candidate) => candidate.contains(token))) {
-          return false;
-        }
-        continue;
-      }
-      final maxDistance = token.length >= 6 ? 2 : 1;
-      final matched = haystackTokens.any((candidate) {
-        if (candidate.contains(token)) {
-          return true;
-        }
-        if ((candidate.length - token.length).abs() > maxDistance) {
-          return false;
-        }
-        return StringDistance.levenshtein(token, candidate, maxDistance) <=
-            maxDistance;
-      });
-      if (!matched) {
-        return false;
-      }
     }
     return true;
   }
