@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../widgets/microphone_panel.dart';
 import 'page_frame.dart';
 
 class CapturePage extends StatefulWidget {
@@ -14,20 +15,14 @@ class CapturePage extends StatefulWidget {
 }
 
 class _CapturePageState extends State<CapturePage> {
-  final TextEditingController _titleController = TextEditingController(
-    text: 'Coffee with Person X',
-  );
-  final TextEditingController _participantsController = TextEditingController(
-    text: 'Person X, Person Y',
-  );
-  final TextEditingController _textController = TextEditingController(
-    text: "Person X is Person Y's brother and Person X works with Person Z.",
-  );
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _participantsController = TextEditingController();
+  final TextEditingController _textController = TextEditingController();
   final TextEditingController _recordingTitleController = TextEditingController(
     text: 'Live session',
   );
   final TextEditingController _recordingParticipantsController =
-      TextEditingController(text: 'Person X, Person Y');
+      TextEditingController();
   final TextEditingController _segmentController = TextEditingController();
   final List<String> _segments = [];
   bool _recording = false;
@@ -51,15 +46,18 @@ class _CapturePageState extends State<CapturePage> {
         builder: (context, constraints) {
           final twoColumns = constraints.maxWidth >= 900;
           final children = [
+            MicrophonePanel(state: widget.state),
             _ManualTextPanel(
               titleController: _titleController,
               participantsController: _participantsController,
               textController: _textController,
-              onSubmit: () => widget.state.addManualText(
-                title: _titleController.text,
-                participantNames: _participantsController.text,
-                text: _textController.text,
-              ),
+              onSubmit: widget.state.busy
+                  ? null
+                  : () => widget.state.addManualText(
+                      title: _titleController.text,
+                      participantNames: _participantsController.text,
+                      text: _textController.text,
+                    ),
             ),
             _RecordingPanel(
               recording: _recording,
@@ -77,27 +75,35 @@ class _CapturePageState extends State<CapturePage> {
                   _segmentController.clear();
                 }
               }),
-              onStop: () async {
-                await widget.state.addRecordingConversation(
-                  title: _recordingTitleController.text,
-                  participantNames: _recordingParticipantsController.text,
-                  segmentTexts: _segments,
-                );
-                setState(() => _recording = false);
-              },
+              onStop: widget.state.busy
+                  ? null
+                  : () async {
+                      await widget.state.addRecordingConversation(
+                        title: _recordingTitleController.text,
+                        participantNames: _recordingParticipantsController.text,
+                        segmentTexts: _segments,
+                      );
+                      if (mounted && widget.state.error == null) {
+                        setState(() => _recording = false);
+                      }
+                    },
             ),
             _FilePanel(
-              participantsController: _participantsController,
-              onPick: () async {
-                final result = await FilePicker.pickFiles(withData: true);
-                final file = result?.files.single;
-                if (file != null) {
-                  await widget.state.addFileArtifact(
-                    participantNames: _participantsController.text,
-                    file: file,
-                  );
-                }
-              },
+              onPick: widget.state.busy
+                  ? null
+                  : () async {
+                      final result = await FilePicker.pickFiles(withData: true);
+                      final file = result?.files.single;
+                      if (file != null) {
+                        await widget.state.importSharedPayload(
+                          fileName: file.name,
+                          bytes: file.bytes,
+                          mimeType: file.extension == 'pdf'
+                              ? 'application/pdf'
+                              : null,
+                        );
+                      }
+                    },
             ),
           ];
           if (twoColumns) {
@@ -136,7 +142,7 @@ class _ManualTextPanel extends StatelessWidget {
   final TextEditingController titleController;
   final TextEditingController participantsController;
   final TextEditingController textController;
-  final VoidCallback onSubmit;
+  final VoidCallback? onSubmit;
 
   @override
   Widget build(BuildContext context) {
@@ -186,15 +192,7 @@ class _ManualTextPanel extends StatelessWidget {
   }
 }
 
-/// Panel for a manually-typed live session log.
-///
-/// This is NOT audio recording: no microphone is used. While a session is
-/// "started", the user types out lines as they happen (e.g. taking notes
-/// during a live conversation) and each typed line becomes one segment.
-/// Labelled explicitly as typed notes so it doesn't read as if it captures
-/// audio — actual audio capture is imported separately via a file (see
-/// ImportsPage's "Import audio recording" action), which is transcribed
-/// server-side.
+/// Typed notes captured as individual conversation segments.
 class _RecordingPanel extends StatelessWidget {
   const _RecordingPanel({
     required this.recording,
@@ -214,7 +212,7 @@ class _RecordingPanel extends StatelessWidget {
   final List<String> segments;
   final VoidCallback onStart;
   final VoidCallback onAddSegment;
-  final VoidCallback onStop;
+  final VoidCallback? onStop;
 
   @override
   Widget build(BuildContext context) {
@@ -230,9 +228,8 @@ class _RecordingPanel extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Type lines live as a conversation happens. This does not use '
-              'the microphone — for an actual audio recording, use "Import '
-              'audio recording" on the Imports page instead.',
+              'Type notes as a conversation happens, or use the microphone '
+              'panel above to record audio.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -290,13 +287,9 @@ class _RecordingPanel extends StatelessWidget {
 }
 
 class _FilePanel extends StatelessWidget {
-  const _FilePanel({
-    required this.participantsController,
-    required this.onPick,
-  });
+  const _FilePanel({required this.onPick});
 
-  final TextEditingController participantsController;
-  final VoidCallback onPick;
+  final VoidCallback? onPick;
 
   @override
   Widget build(BuildContext context) {
@@ -309,14 +302,6 @@ class _FilePanel extends StatelessWidget {
             Text(
               'File or audio',
               style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: participantsController,
-              decoration: const InputDecoration(
-                labelText: 'Participants',
-                border: OutlineInputBorder(),
-              ),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(

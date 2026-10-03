@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 import '../app_state.dart';
 import '../models.dart';
@@ -18,14 +19,9 @@ class _ImportsPageState extends State<ImportsPage> {
   final TextEditingController _sourceController = TextEditingController(
     text: 'whatsapp',
   );
-  final TextEditingController _titleController = TextEditingController(
-    text: 'Imported conversation',
-  );
+  final TextEditingController _titleController = TextEditingController();
   final TextEditingController _participantsController = TextEditingController();
-  final TextEditingController _textController = TextEditingController(
-    text:
-        '[20.05.2026, 10:00] Alice: Person X works with Person Z.\n[20.05.2026, 10:01] Bob: Person Y is Person X\'s sister.',
-  );
+  final TextEditingController _textController = TextEditingController();
   final TextEditingController _fileController = TextEditingController();
   final TextEditingController _mimeController = TextEditingController();
   final TextEditingController _metadataController = TextEditingController(
@@ -58,8 +54,12 @@ class _ImportsPageState extends State<ImportsPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Run import',
+                    'Import an export',
                     style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Your configured server processes imports in plaintext. Results are encrypted before sync.',
                   ),
                   const SizedBox(height: 12),
                   Wrap(
@@ -146,34 +146,35 @@ class _ImportsPageState extends State<ImportsPage> {
                       FilledButton.icon(
                         onPressed: widget.state.busy ? null : _runImport,
                         icon: const Icon(Icons.input),
-                        label: const Text('Import and encrypt'),
+                        label: const Text('Send import and encrypt result'),
                       ),
-                      for (final source in const [
-                        'whatsapp',
-                        'telegram',
-                        'signal',
-                        'slack',
-                        'teams',
-                        'facebook-messenger',
-                        'instagram',
-                        'imessage',
-                        'mbox',
-                        'git',
-                        'browser-capture',
-                        'google-search-history',
-                        'bookmarks',
-                        'lifenizer-backup',
-                        'browser-history',
-                        'youtube-transcript',
-                        'audio',
-                        'scanned-pdf',
-                      ])
-                        OutlinedButton(
-                          onPressed: widget.state.busy
-                              ? null
-                              : () => widget.state.importSample(source),
-                          child: Text(source),
-                        ),
+                      if (kDebugMode)
+                        for (final source in const [
+                          'whatsapp',
+                          'telegram',
+                          'signal',
+                          'slack',
+                          'teams',
+                          'facebook-messenger',
+                          'instagram',
+                          'imessage',
+                          'mbox',
+                          'git',
+                          'browser-capture',
+                          'google-search-history',
+                          'bookmarks',
+                          'lifenizer-backup',
+                          'browser-history',
+                          'youtube-transcript',
+                          'audio',
+                          'scanned-pdf',
+                        ])
+                          OutlinedButton(
+                            onPressed: widget.state.busy
+                                ? null
+                                : () => widget.state.importSample(source),
+                            child: Text(source),
+                          ),
                     ],
                   ),
                 ],
