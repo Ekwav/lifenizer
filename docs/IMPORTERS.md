@@ -63,7 +63,7 @@ Notes:
 - `email` (IMAP)
 - `paperless`
 - `discord` (API mode when `metadata.baseUrl` is set)
-- `audio` (TAP/Coflnet transcription mode when using base64/url payload)
+- `audio` (whisper-trained transcription mode when using a base64 payload)
 - `youtube-transcript` (remote fetch mode when transcript URL/base URL is supplied)
 
 ## Metadata Keys by Source
@@ -109,17 +109,25 @@ Optional:
 
 ### audio transcription mode
 
-Either provide `text` directly, or provider-backed transcription inputs:
+Either provide `text` directly, or a `payloadBase64` audio payload with `mimeType`/`originalFileName`
+for the backend to transcribe through the self-hosted whisper-trained service
+(`onerahmet/openai-whisper-asr-webservice`, `faster_whisper` engine, CPU).
 
-- `payloadBase64` and `mimeType`/`originalFileName`, or
-- `metadata.audioUrl`
+Config (server-side only; the transcription base URL is intentionally **not** overridable from
+request metadata to prevent SSRF):
 
-Provider metadata/config:
+- `Whisper:BaseUrl` (default `http://whisper-trained.tab:9000`)
+- `Whisper:Language` (optional; default unset = auto-detect)
 
-- `metadata.tapBaseUrl` or config `Tap:BaseUrl`
-- `metadata.tapPath` or config `Tap:TranscriptionPath`
-- `metadata.tapApiKey` or config `Tap:ApiKey`
-- `metadata.language` (default `auto`)
+Optional request metadata:
+
+- `metadata.language` — per-request ISO language code. Empty or `auto` means auto-detect.
+- `metadata.recordedAt` — ISO 8601 date-time (e.g. `2025-10-14T18:05:00Z`) marking when the audio
+  was actually recorded. When set, each transcribed segment's `createdAt` is `recordedAt +
+  offsetMs` instead of `null`, so the conversation is dated by when it happened rather than when
+  it was imported. A value without a UTC offset is assumed to be UTC. Unparseable values, or
+  values more than 1 day in the future, are rejected with a 400 naming `metadata.recordedAt`.
+  Applies to both the base64 audio payload path and the direct-`text` transcript path.
 
 ### youtube-transcript remote mode
 

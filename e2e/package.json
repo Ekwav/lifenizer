@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build:app": "cd ../app && flutter build web --dart-define=LIFENIZER_E2E=true",
     "test": "playwright test"
   },
   "keywords": [],

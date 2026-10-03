@@ -15,7 +15,7 @@ Lifenizer Next is a Flutter + ASP.NET Core rewrite of the original prototype. Th
 The backend lives in `backend/`:
 
 - `Lifenizer.Core`: DTOs and domain contracts shared by API/tests.
-- `Lifenizer.Api`: ASP.NET Core API, SQLite persistence, JWT auth, sync relay, import execution, TAP/Coflnet transcription connector, IMAP/HTTP provider connectors, and relation extraction endpoint.
+- `Lifenizer.Api`: ASP.NET Core API, SQLite persistence, JWT auth, sync relay, import execution, whisper-trained transcription connector, IMAP/HTTP provider connectors, and relation extraction endpoint.
 - `Lifenizer.Tests`: API integration tests.
 
 Auth follows the AneApi/Coflnet pattern without importing CoflnetCore: `/api/auth/firebase` targets Firebase ID token exchange, while `/api/auth/dev-login` is enabled only by configuration for local development and e2e tests.
@@ -50,7 +50,7 @@ Transcription, OCR, remote imports, and relation extraction cannot be fully back
 - Discord channel messages from a configured API URL and bot token.
 - Browser history CSV/JSON.
 - YouTube transcript JSON/XML/text from pasted content or a configured transcript URL/base URL.
-- Audio transcript text directly, or audio payloads through the configurable TAP/Coflnet transcription API (`Tap:BaseUrl`, `Tap:TranscriptionPath`, `Tap:ApiKey`).
+- Audio transcript text directly, or audio payloads transcribed through the self-hosted whisper-trained service (`Whisper:BaseUrl`, optional `Whisper:Language`).
 - Scanned PDF/OCR text through supplied OCR text metadata or text body.
 
 Concrete request examples and accepted metadata keys are documented in `docs/IMPORTERS.md`.

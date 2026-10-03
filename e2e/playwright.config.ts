@@ -1,4 +1,9 @@
+import { resolve } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
+
+const whisperUrl = process.env.WHISPER_URL ?? 'http://127.0.0.1:19000';
+// Absolute, because the backend resolves relative SQLite paths against its project directory.
+const database = resolve(__dirname, 'lifenizer-e2e.db');
 
 export default defineConfig({
   testDir: './tests',
@@ -17,7 +22,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'rm -f lifenizer-e2e.db lifenizer-e2e.db-shm lifenizer-e2e.db-wal && ASPNETCORE_URLS=http://127.0.0.1:5075 ConnectionStrings__Lifenizer="Data Source=lifenizer-e2e.db" Auth__AllowDevLogin=true Jwt__Secret=test-secret-for-lifenizer-next-playwright dotnet run --project ../backend/Lifenizer.Api/Lifenizer.Api.csproj --no-launch-profile',
+      command: `rm -f "${database}" "${database}-shm" "${database}-wal" && ASPNETCORE_URLS=http://127.0.0.1:5075 ConnectionStrings__Lifenizer="Data Source=${database}" Auth__AllowDevLogin=true Jwt__Secret=test-secret-for-lifenizer-next-playwright Whisper__BaseUrl=${whisperUrl} dotnet run --project ../backend/Lifenizer.Api/Lifenizer.Api.csproj --no-launch-profile`,
       url: 'http://127.0.0.1:5075/health',
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
