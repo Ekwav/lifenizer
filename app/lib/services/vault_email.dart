@@ -16,7 +16,7 @@ extension VaultEmail on LifenizerAppState {
       final result = await _requireApi().importSource(
         'email',
         ImportSourceRequest(metadata: metadata),
-        timeout: const Duration(minutes: 2),
+        timeout: const Duration(minutes: 10),
       );
       if (!isAuthenticated || session!.userId != owner) {
         throw StateError(

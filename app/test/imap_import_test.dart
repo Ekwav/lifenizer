@@ -157,6 +157,23 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
+    'reindex attachments replays earlier UIDs without duplicate messages',
+    () async {
+      final f = _Fixture();
+      await f.open();
+      addTearDown(f.dispose);
+      await f.connect();
+      await f.state.emailImport.fetch();
+      expect(f.requests.last['afterUid'], '1');
+      expect(f.state.conversations.single.segments, hasLength(2));
+      await f.state.emailImport.reindexAttachments();
+      expect(f.requests.last['afterUid'], '0');
+      expect(f.state.conversations.single.segments, hasLength(2));
+      expect(f.credentials.records.values.single['afterUid'], '1');
+    },
+  );
+
+  test(
     'cursor advances after encrypted persistence and credentials never enter vault records',
     () async {
       final f = _Fixture();

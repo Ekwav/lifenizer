@@ -223,6 +223,38 @@ class EmailImportService extends ChangeNotifier {
     return _running!;
   }
 
+  /// Replay existing messages so newly supported attachment text is indexed.
+  Future<void> reindexAttachments() async {
+    if (working || state.busy || !state.isAuthenticated || _account == null) {
+      return;
+    }
+    final identity = _identity!;
+    final generation = _generation;
+    final account = {..._account!, 'afterUid': '0', 'uidValidity': '0'};
+    _connection =
+        () async {
+          try {
+            if (account['remember'] == true) {
+              await _store.write(identity, account);
+            }
+            if (_disposed || _generation != generation || _identity != identity) {
+              return;
+            }
+            _account = account;
+            await fetch();
+          } catch (exception) {
+            if (!_disposed && _generation == generation) {
+              error = exception.toString();
+            }
+          }
+        }().whenComplete(() {
+          _connection = null;
+          _notify();
+        });
+    _notify();
+    await _connection;
+  }
+
   Future<void> _fetch() async {
     final identity = _identity!;
     final generation = _generation;
