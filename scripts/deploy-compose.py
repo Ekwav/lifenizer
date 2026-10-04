@@ -55,11 +55,27 @@ def main():
     parser.add_argument("--host", default="mail.coflnet.com", help="SSH host/alias for the mail server")
     parser.add_argument("--show-link", action="store_true", help="Show the existing link without extending its deadline")
     parser.add_argument("--backup-only", action="store_true", help="Back up the server database, artifacts and configuration")
+    parser.add_argument("--publish-apk", type=Path, help="Publish an already-built Android APK over HTTPS without changing pairing")
     args = parser.parse_args()
     os.umask(0o077)
     directory = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "lifenizer/compose"
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     state_file = directory / "pairing.json"
+    if args.publish_apk:
+        apk = args.publish_apk.resolve(strict=True)
+        with apk.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        upload = json.loads(remote(args.host, {"action": "prepare-apk"}, capture=True).stdout)
+        run("scp", "-q", str(apk), args.host + ":" + upload["path"])
+        remote(args.host, {"action": "publish-apk", "name": upload["name"], "sha256": digest})
+        url = SERVER + "/downloads/lifenizer.apk"
+        request = urllib.request.Request(url, headers={"Range": "bytes=0-15", "Cache-Control": "no-cache"})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            with apk.open("rb") as stream:
+                if response.status != 206 or response.read() != stream.read(16):
+                    raise SystemExit("Published APK download verification failed")
+        print(f"Install/update Lifenizer on Android: {url}\nSHA-256: {digest}")
+        return
     if args.backup_only:
         remote(args.host, {"action": "backup"})
         return

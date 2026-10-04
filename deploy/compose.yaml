@@ -25,6 +25,7 @@ services:
     volumes:
       - ./data:/data
       - ./whisper:/run/lifenizer-whisper:ro
+      - ./downloads:/app/downloads:ro
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=128m

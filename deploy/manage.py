@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Remote half of deploy-compose.py; receives configuration on stdin, never logs it."""
 import datetime
+import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import subprocess
 import sys
@@ -28,6 +30,26 @@ def main():
     env = dict(line.split("=", 1) for line in env_file.read_text().splitlines()
                if line and not line.startswith("#")) if env_file.exists() else {}
     action = request["action"]
+    if action == "prepare-apk":
+        downloads = directory / "downloads"
+        downloads.mkdir(mode=0o700, exist_ok=True)
+        name = "upload-" + secrets.token_hex(16) + ".apk"
+        print(json.dumps({"name": name, "path": str(downloads / name)}))
+        return
+    if action == "publish-apk":
+        name = request["name"]
+        if not re.fullmatch(r"upload-[0-9a-f]{32}\.apk", name):
+            raise SystemExit("Invalid APK upload name")
+        upload = directory / "downloads" / name
+        with upload.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        if digest != request["sha256"]:
+            upload.unlink()
+            raise SystemExit("APK upload checksum mismatch; previous release preserved")
+        upload.chmod(0o600)
+        upload.replace(directory / "downloads/lifenizer.apk")
+        print("Verified Android release published")
+        return
     if action == "inspect":
         proxy = json.loads(run("docker", "inspect", "traefik", capture=True).stdout)[0]
         address = proxy["NetworkSettings"]["Networks"]["proxy"]["IPAddress"]
@@ -54,7 +76,7 @@ def main():
         return
     if env.get("Pairing__BootstrapTokenHash") not in (None, request["bootstrapHash"]):
         raise SystemExit("Bootstrap identity differs; existing configuration preserved")
-    for name in ("data", "data/artifacts", "whisper"):
+    for name in ("data", "data/artifacts", "whisper", "downloads"):
         (directory / name).mkdir(mode=0o700, exist_ok=True)
     env.update({"LIFENIZER_IMAGE": request["image"], "LIFENIZER_UID": str(os.getuid()),
                 "LIFENIZER_GID": str(os.getgid()), "ReverseProxy__KnownProxies__0": request["proxy"]})

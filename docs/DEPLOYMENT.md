@@ -90,6 +90,20 @@ The connection link supplies the URL as well, so it works with clients built usi
 another default. The Android release currently uses the repository's development
 signing configuration; preserve that signing key for updates to existing installs.
 
+To update a phone without USB, publish the built APK after deploying this Compose
+configuration:
+
+```bash
+./scripts/deploy-compose.py --publish-apk app/build/app/outputs/flutter-apk/app-release.apk
+```
+
+Open `https://mail.coflnet.com/lifenizer/downloads/lifenizer.apk` on the phone and
+install the update over the existing app. The public download contains the app
+binary only; existing pairing and encrypted vault data remain on the device.
+Publishing verifies the upload checksum, replaces the APK atomically, and checks
+the HTTPS range download. The API mounts the downloads directory read-only and
+serves only the fixed APK filename.
+
 ---
 
 ## Building the container image

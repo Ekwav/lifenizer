@@ -99,6 +99,7 @@ else
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", app = "lifenizer-next" })).AllowAnonymous();
+app.MapNativeClientEndpoints();
 app.MapAuthEndpoints();
 app.MapPairingEndpoints();
 app.MapSyncEndpoints();
