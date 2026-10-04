@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
 import '../app_state.dart';
+import 'connection_scanner_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({required this.state, super.key});
@@ -54,6 +55,19 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  Future<void> _scanConnection() async {
+    final link = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const ConnectionScannerPage()),
+    );
+    if (!mounted ||
+        link == null ||
+        widget.state.busy ||
+        widget.state.pairing.busy) {
+      return;
+    }
+    await widget.state.pairing.connect(link);
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     body: SafeArea(
@@ -75,6 +89,17 @@ class _LoginPageState extends State<LoginPage> {
                   const Text('Your conversations, searchable on every device.'),
                   const SizedBox(height: 24),
                   if (!kIsWeb) ...[
+                    if (defaultTargetPlatform == TargetPlatform.android) ...[
+                      FilledButton.icon(
+                        onPressed:
+                            widget.state.busy || widget.state.pairing.busy
+                            ? null
+                            : _scanConnection,
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text('Scan connection QR'),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     if (widget.state.pairing.isPaired)
                       FilledButton.icon(
                         onPressed:
@@ -92,7 +117,7 @@ class _LoginPageState extends State<LoginPage> {
                       decoration: const InputDecoration(
                         labelText: 'Connection link',
                         helperText:
-                            'Paste your setup link, or open its QR code on this device.',
+                            'Paste your setup link or scan its QR code.',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -246,7 +271,8 @@ class _LoginPageState extends State<LoginPage> {
                         label: const Text('Unlock this device offline'),
                       ),
                   ],
-                  if (widget.state.busy) const LinearProgressIndicator(),
+                  if (widget.state.busy)
+                    const LinearProgressIndicator(),
                   if (widget.state.error != null) ...[
                     const SizedBox(height: 12),
                     Text(

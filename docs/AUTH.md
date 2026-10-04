@@ -1,6 +1,6 @@
 # Native device connection
 
-Install the Android or KDE app and open the private setup link/QR. On KDE, paste it into **Connection link** and select **Connect this device**. The first device creates the encrypted vault automatically. No email, account password, or vault passphrase needs typing.
+Install the Android or KDE app and open the private setup link/QR. To add a device, open **Sync → Add device** on an unlocked connected app: it shows the QR and **Copy connection link**. On Android, select **Scan connection QR** in the login screen and allow camera access; scanning a valid connection QR starts pairing automatically. You can also paste the link into **Connection link** and select **Connect this device**. The first device creates the encrypted vault automatically. No email, account password, or vault passphrase needs typing.
 
 Keep that device unlocked while connecting the other device. For the original one-hour setup window, requests possessing the link connect automatically. Afterwards, open **Sync** on a connected, unlocked device, compare the displayed verification code on both devices, and select **Approve** or **Deny**. Approvals require the connected app to be running and unlocked. The link is a private enrollment capability; do not publish it or paste it into shared chat, shell history, or logs. Manual email/password registration and login remain available, including the optional invitation field.
 

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../app_state.dart';
 import '../models.dart';
@@ -36,6 +38,14 @@ class SyncPage extends StatelessWidget {
           ),
           if (paired) ...[
             const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: state.pairing.connectionLink == null
+                  ? null
+                  : () => _showPairingCode(context),
+              icon: const Icon(Icons.qr_code),
+              label: const Text('Add device'),
+            ),
+            const SizedBox(height: 8),
             Text(
               state.pairing.automaticApprovalActive
                   ? 'New devices with your connection link connect automatically until ${state.pairing.automaticApprovalUntil!.toLocal()}.'
@@ -134,4 +144,70 @@ class SyncPage extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _showPairingCode(BuildContext context) => showDialog<void>(
+    context: context,
+    builder: (context) => AnimatedBuilder(
+      animation: state,
+      builder: (context, _) {
+        final link = state.pairing.connectionLink;
+        return AlertDialog(
+          title: const Text('Add a device'),
+          content: SizedBox(
+            width: 320,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (link == null)
+                    const Text('Unlock this vault to show its connection code.')
+                  else ...[
+                    const Text(
+                      'Open Lifenizer on your phone and tap Scan connection QR.',
+                    ),
+                    const SizedBox(height: 12),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: QrImageView(
+                        data: link,
+                        size: 280,
+                        backgroundColor: Colors.white,
+                        semanticsLabel: 'Secure vault connection QR code',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      state.pairing.automaticApprovalActive
+                          ? 'Automatic approval is available until ${state.pairing.automaticApprovalUntil!.toLocal()}. Keep this code private.'
+                          : 'Keep this device unlocked. Compare the verification code on both devices, then approve the new device in Sync.',
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            if (link != null)
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final currentLink = state.pairing.connectionLink;
+                  if (currentLink == null) return;
+                  await Clipboard.setData(ClipboardData(text: currentLink));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Connection link copied')),
+                  );
+                },
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy connection link'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }

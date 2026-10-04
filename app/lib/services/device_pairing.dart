@@ -33,6 +33,27 @@ class DevicePairingService extends ChangeNotifier {
       _credentials!['email'] == email;
   bool get _currentVault =>
       matchesVault(state.apiBaseUrl, state.rememberedEmail);
+  String? get connectionLink {
+    if (kIsWeb || !state.isAuthenticated || !_currentVault) return null;
+    final secret = _credentials?['secret'];
+    final until = _credentials?['until'];
+    if (secret is! String || until is! int) return null;
+    final link = Uri(
+      scheme: 'lifenizer',
+      host: 'connect',
+      queryParameters: {'server': state.apiBaseUrl},
+      fragment: Uri(
+        queryParameters: {'v': '1', 'secret': secret, 'until': '$until'},
+      ).query,
+    ).toString();
+    try {
+      PairingLink.parse(link);
+      return link;
+    } on FormatException {
+      return null;
+    }
+  }
+
   DateTime? get automaticApprovalUntil => _credentials == null
       ? null
       : DateTime.fromMillisecondsSinceEpoch(
