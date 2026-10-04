@@ -98,6 +98,33 @@ class LifenizerApiClient {
         .toList();
   }
 
+  Future<Map<String, dynamic>> tabTrainingNotice() async {
+    final response = await _get('/api/training/tab/notice');
+    _ensureSuccess(response);
+    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+  }
+
+  Future<Map<String, dynamic>> grantTabTrainingConsent(
+    Map<String, dynamic> body,
+  ) => _post('/api/training/tab/consents', body);
+
+  Future<Map<String, dynamic>> submitTabCorrection(Map<String, dynamic> body) =>
+      _post(
+        '/api/training/tab/corrections',
+        body,
+        timeout: const Duration(minutes: 2),
+      );
+
+  Future<void> withdrawTabTrainingConsent(
+    String id,
+    String contributionKey,
+  ) async {
+    await _post(
+      '/api/training/tab/consents/${Uri.encodeComponent(id)}/withdraw',
+      {'contributionKey': contributionKey},
+    );
+  }
+
   /// Runs an import for [source] with the given [request].
   ///
   /// [timeout] overrides the default (unbounded) wait for this call. It is

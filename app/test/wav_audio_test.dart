@@ -5,6 +5,39 @@ import 'package:app/services/wav_audio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('sentence clip excludes audio before and after its timestamps', () {
+    final pcm = Uint8List(3 * 32000);
+    pcm.fillRange(0, 32000, 11);
+    pcm.fillRange(32000, 64000, 22);
+    pcm.fillRange(64000, pcm.length, 33);
+    final clip = clipWav(encodeWav(pcm), startMs: 1000, endMs: 2000);
+    expect(clip.length, 32044);
+    expect(clip.sublist(44), everyElement(22));
+    expect(
+      clipWav(encodeWav(pcm), startMs: 2000).sublist(44),
+      everyElement(33),
+    );
+  });
+
+  test(
+    'invalid format, truncated audio and oversized sentences are rejected',
+    () {
+      final wav = encodeWav(Uint8List(32000));
+      final stereo = Uint8List.fromList(wav);
+      ByteData.sublistView(stereo).setUint16(22, 2, Endian.little);
+      for (final bytes in [stereo, wav.sublist(0, wav.length - 1)]) {
+        expect(() => clipWav(bytes, startMs: 0), throwsFormatException);
+      }
+      for (final start in [-1, 1000]) {
+        expect(() => clipWav(wav, startMs: start), throwsFormatException);
+      }
+      expect(
+        () => clipWav(encodeWav(Uint8List(121 * 32000)), startMs: 0),
+        throwsFormatException,
+      );
+    },
+  );
+
   test(
     'Whisper WAV carries correct format, length and PCM without corruption',
     () {

@@ -184,7 +184,16 @@ extension VaultImports on LifenizerAppState {
         ),
         timeout: const Duration(minutes: 10),
       );
+      final previousIds = conversations
+          .map((conversation) => conversation.id)
+          .toSet();
       await _ingestNormalizedImport(normalized);
+      for (final conversation in conversations) {
+        if (conversation.source == 'audio' &&
+            !previousIds.contains(conversation.id)) {
+          await _cacheCorrectionAudio(conversation.id, bytes);
+        }
+      }
       status = '${normalized.message} Encrypted and synced.';
     });
   }
@@ -476,6 +485,7 @@ extension VaultImports on LifenizerAppState {
           text: segment.text,
           participantId: participantId,
           offsetMs: segment.offsetMs,
+          endMs: segment.endMs,
           createdAt: segment.createdAt ?? old?.createdAt,
           attachmentUrls: segment.attachmentUrls,
         );

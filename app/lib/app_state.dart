@@ -25,6 +25,10 @@ import 'services/discord_bot_import_service.dart';
 import 'services/document_import_service.dart';
 import 'services/document_credentials.dart';
 import 'services/recording_controller.dart';
+import 'services/audio_cache_io.dart'
+    if (dart.library.js_interop) 'services/audio_cache_web.dart'
+    as audio_cache;
+import 'services/wav_audio.dart';
 
 import 'services/conversation_search_index.dart';
 import 'services/search_index_worker_io.dart'
@@ -36,6 +40,7 @@ import 'services/search_service.dart';
 part 'services/vault_sync.dart';
 part 'services/vault_imports.dart';
 part 'services/vault_email.dart';
+part 'services/vault_training.dart';
 
 class LifenizerAppState extends ChangeNotifier {
   LifenizerAppState({

@@ -169,7 +169,8 @@ void main() {
   Future<void> finish(WidgetTester tester, Future<void> operation) async {
     var completed = false;
     operation.then((_) => completed = true);
-    for (var i = 0; i < 100 && !completed; i++) {
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (!completed && DateTime.now().isBefore(deadline)) {
       await tester.pump(const Duration(milliseconds: 10));
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 10)),

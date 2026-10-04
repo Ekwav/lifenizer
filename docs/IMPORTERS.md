@@ -239,6 +239,29 @@ Optional request metadata:
   values more than 1 day in the future, are rejected with a 400 naming `metadata.recordedAt`.
   Applies to both the base64 audio payload path and the direct-`text` transcript path.
 
+### correcting transcription for TAB
+
+Open an audio conversation and choose **Correct for TAB** beside a transcript sentence.
+Enter the corrected text and confirm that it is your own voice without confidential
+information. The dialog loads TAB's current notice and requires explicit training
+consent. Anonymous contributions need no email account. Only the selected sentence's
+WAV clip and corrected text are submitted for validation and training; this does not
+immediately retrain the model. A successful submission updates the encrypted transcript
+and its search index, retaining the provider contribution reference.
+
+New audio imports retain the original recording in a separate encrypted device-local
+cache, outside the search snapshot. This cache does not sync. For older imports or
+another device, use **Attach original WAV** (16 kHz mono PCM, up to 64 MiB). Segment
+end timestamps from Whisper are preserved; missing ends use the next segment's start,
+or the recording's end. Unusable sentence boundaries require re-transcription before
+contributing. Each contribution is limited to two minutes.
+
+The correction dialog also offers **Withdraw TAB training consent** for the receipts
+created on this device. Receipt capabilities are encrypted locally. The authenticated
+`/api/training/tab` proxy uses `Training:Tab:BaseUrl` (default `https://tab.coflnet.com`)
+and never forwards vault login credentials to TAB. Correction failures leave the
+original transcript unchanged and keep the edited text in the dialog for retry.
+
 ### youtube-transcript remote mode
 
 Set server config `Imports:YouTube:BaseUrl` and send `metadata.videoId`.

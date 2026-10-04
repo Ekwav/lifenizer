@@ -3,6 +3,7 @@ import '../../app_state.dart';
 import '../../image_widgets.dart';
 import '../../models.dart';
 import '../../services/source_links.dart';
+import '../../widgets/transcription_correction_dialog.dart';
 
 /// Displays the list of search results.
 ///
@@ -172,7 +173,17 @@ class _ConversationDetailSheet extends StatelessWidget {
   final Conversation conversation;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: state,
+    builder: (context, _) => _buildDetail(context),
+  );
+
+  Widget _buildDetail(BuildContext context) {
+    final conversation =
+        state.conversations
+            .where((item) => item.id == this.conversation.id)
+            .firstOrNull ??
+        this.conversation;
     final participants = conversation.participantIds
         .map(state.participantName)
         .join(', ');
@@ -273,12 +284,9 @@ class _ConversationDetailSheet extends StatelessWidget {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: AnimatedBuilder(
-                    animation: state,
-                    builder: (_, _) => ImageGallery(
-                      state: state,
-                      conversationId: conversation.id,
-                    ),
+                  child: ImageGallery(
+                    state: state,
+                    conversationId: conversation.id,
                   ),
                 ),
               ),
@@ -308,6 +316,18 @@ class _ConversationDetailSheet extends StatelessWidget {
                                 '${segment.createdAt.toCompactLocalString()}${segment.participantId == null ? '' : ' · ${state.participantName(segment.participantId!)}'}',
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
+                              if (conversation.source == 'audio' &&
+                                  segment.text.trim().isNotEmpty)
+                                TextButton.icon(
+                                  onPressed: () => showTranscriptionCorrection(
+                                    context,
+                                    state,
+                                    conversation,
+                                    segment,
+                                  ),
+                                  icon: const Icon(Icons.edit_note, size: 16),
+                                  label: const Text('Correct for TAB'),
+                                ),
                               if (link != null)
                                 TextButton.icon(
                                   onPressed: () => _openLink(link),

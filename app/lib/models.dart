@@ -169,6 +169,7 @@ class ConversationSegment {
     required this.text,
     this.participantId,
     this.offsetMs = 0,
+    this.endMs,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now().toUtc();
 
@@ -178,6 +179,7 @@ class ConversationSegment {
   final String text;
   final String? participantId;
   final int offsetMs;
+  final int? endMs;
   final DateTime createdAt;
 
   /// Serialize to JSON.
@@ -188,6 +190,7 @@ class ConversationSegment {
     'text': text,
     'participantId': participantId,
     'offsetMs': offsetMs,
+    if (endMs != null) 'endMs': endMs,
     'createdAt': createdAt.toJsonString(),
   };
 
@@ -199,6 +202,7 @@ class ConversationSegment {
       text: json['text'] as String,
       participantId: json['participantId'] as String?,
       offsetMs: json['offsetMs'] as int? ?? 0,
+      endMs: json['endMs'] as int?,
       createdAt: json.parseDateTime('createdAt'),
     );
   }
@@ -752,6 +756,7 @@ class NormalizedSegment {
     required this.text,
     this.participantName,
     this.offsetMs = 0,
+    this.endMs,
     this.createdAt,
   });
 
@@ -761,6 +766,7 @@ class NormalizedSegment {
   final String text;
   final String? participantName;
   final int offsetMs;
+  final int? endMs;
   final DateTime? createdAt;
 
   /// Serialize to JSON for caching/persistence.
@@ -772,6 +778,7 @@ class NormalizedSegment {
     'text': text,
     'participantName': participantName,
     'offsetMs': offsetMs,
+    if (endMs != null) 'endMs': endMs,
     if (createdAt != null) 'createdAt': createdAt!.toJsonString(),
   };
 
@@ -783,6 +790,7 @@ class NormalizedSegment {
       text: json['text'] as String,
       participantName: json['participantName'] as String?,
       offsetMs: json['offsetMs'] as int? ?? 0,
+      endMs: json['endMs'] as int?,
       createdAt: json.parseDateTime('createdAt'),
     );
   }
