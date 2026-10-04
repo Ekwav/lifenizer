@@ -18,6 +18,7 @@ Future<void> main([List<String> arguments = const []]) async {
   await appState.initialize();
   await appState.pairing.restore(autoUnlock: false);
   appState.emailImport.start();
+  appState.documentImport.start();
   installE2eBridge(appState);
   unawaited(ShareIntentService.instance.start(appState));
   await QuickActionService.instance.start(appState, arguments: arguments);

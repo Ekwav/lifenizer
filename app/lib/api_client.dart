@@ -121,6 +121,12 @@ class LifenizerApiClient {
     return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
   }
 
+  Future<Map<String, dynamic>> paperlessSettings() async {
+    final response = await _get('/api/imports/paperless/settings');
+    _ensureSuccess(response);
+    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+  }
+
   Future<int> push(List<SyncEnvelope> envelopes) async {
     final response = await _post('/api/sync/push', {
       'envelopes': envelopes.map((envelope) => envelope.toJson()).toList(),

@@ -12,6 +12,8 @@ import '../services/export_file_reader.dart';
 import '../services/discord_archive.dart';
 import '../services/export_watch_service.dart';
 import '../widgets/imap_import_panel.dart';
+import '../widgets/document_import_panel.dart';
+import '../widgets/discord_bot_import_panel.dart';
 import 'page_frame.dart';
 
 class ImportsPage extends StatefulWidget {
@@ -38,6 +40,17 @@ class _ImportsPageState extends State<ImportsPage> {
 
   bool _watchExport = false;
   bool _dragging = false;
+  String get _ownDiscordId {
+    final email = widget.state.rememberedEmail.toLowerCase();
+    for (final person in widget.state.participants) {
+      if (!person.identifiers.contains('email:$email')) continue;
+      for (final id in person.identifiers) {
+        if (id.startsWith('discord:')) return id.substring(8);
+      }
+    }
+    return '';
+  }
+
   bool get _desktop =>
       !kIsWeb &&
       const [
@@ -84,7 +97,7 @@ class _ImportsPageState extends State<ImportsPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Import an export',
+                      'Import files',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 12),
@@ -99,7 +112,7 @@ class _ImportsPageState extends State<ImportsPage> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Drop files here or choose a Discord data ZIP, Telegram JSON, WhatsApp text/ZIP, or Lifenizer JSON export. Discord updates merge by message ID; identical backups are skipped. For other formats, choose a source below.',
+                      'Drop PDFs, scans, or exports here. Choose a Discord data ZIP, Telegram JSON, WhatsApp text/ZIP, or Lifenizer JSON export. Discord updates merge by message ID; identical backups are skipped.',
                     ),
                     if (_desktop) ...[
                       CheckboxListTile(
@@ -265,6 +278,13 @@ class _ImportsPageState extends State<ImportsPage> {
             const SizedBox(height: 16),
             ImapImportPanel(state: widget.state),
             const SizedBox(height: 16),
+            DiscordBotImportPanel(
+              service: widget.state.discordImport,
+              ownUserId: _ownDiscordId,
+            ),
+            const SizedBox(height: 16),
+            DocumentImportPanel(state: widget.state),
+            const SizedBox(height: 16),
             _AudioImportPanel(state: widget.state),
             const SizedBox(height: 16),
             Wrap(
@@ -377,6 +397,16 @@ class _ImportsPageState extends State<ImportsPage> {
     bool useSource = false,
   }) async {
     if (!widget.state.isAuthenticated || widget.state.busy) return;
+    if (!useSource &&
+        _desktop &&
+        file.path != null &&
+        RegExp(
+          r'\.(pdf|png|jpe?g)$',
+          caseSensitive: false,
+        ).hasMatch(file.name)) {
+      await widget.state.importDocumentFile(file.path!);
+      return;
+    }
     if ((!useSource ||
             _sourceController.text.trim().toLowerCase() == 'discord') &&
         !kIsWeb &&
@@ -415,9 +445,8 @@ class _ImportsPageState extends State<ImportsPage> {
     try {
       for (final item in details.files) {
         if (item is DropItemDirectory) {
-          throw const FormatException(
-            'Drop an export file, rather than a folder.',
-          );
+          await widget.state.documentImport.folders.addFolder(item.path);
+          continue;
         }
         await _importExport(
           PlatformFile(

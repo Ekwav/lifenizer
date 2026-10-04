@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:app/api_client.dart';
+import 'package:app/services/discord_bot_import_service.dart';
 import 'package:app/app_state.dart';
 import 'package:app/services/local_vault_store.dart';
 import 'package:app/services/shared_import_source.dart';
@@ -19,6 +21,7 @@ class _ImportServer {
   final importSources = <String>[];
   Map<String, dynamic>? lastImport;
   bool failImport = false;
+  Map<String, dynamic>? normalizedOverride;
   Future<http.Response> handle(http.Request request) async {
     Object body;
     final path = request.url.path;
@@ -78,6 +81,11 @@ class _ImportServer {
     } else {
       return http.Response('not found', 404);
     }
+    if (path.startsWith('/api/imports/') &&
+        path != '/api/imports/capabilities' &&
+        normalizedOverride != null) {
+      body = normalizedOverride!;
+    }
     return http.Response(jsonEncode(body), 200);
   }
 }
@@ -113,7 +121,7 @@ void main() {
     },
   );
   test(
-    'shared PDF with explicitly extracted text preserves that text; binary PDF requires OCR',
+    'shared PDFs send binary content for extraction and preserve explicitly supplied OCR text',
     () async {
       final server = _ImportServer();
       final state = LifenizerAppState();
@@ -128,14 +136,16 @@ void main() {
         mimeType: 'application/pdf',
         bytes: [1, 2, 3],
       );
-      expect(state.error, contains('OCR first'));
-      expect(server.importSources, isEmpty);
+      expect(state.error, isNull);
+      expect(server.importSources.last, 'scanned-pdf');
+      expect(server.lastImport!['payloadBase64'], isNotEmpty);
       await state.importSharedPayload(
         fileName: 'scan.pdf',
         bytes: utf8.encode('%PDF-1.7 synthetic'),
       );
-      expect(state.error, contains('OCR first'));
-      expect(server.importSources, isEmpty);
+      expect(state.error, isNull);
+      expect(server.importSources.last, 'scanned-pdf');
+      expect(server.lastImport!['payloadBase64'], isNotEmpty);
       await state.importSharedPayload(
         fileName: 'invoice.pdf',
         mimeType: 'application/pdf',
@@ -143,7 +153,11 @@ void main() {
         text: 'Extracted invoice text',
       );
       expect(state.error, isNull);
-      expect(server.importSources, ['scanned-pdf']);
+      expect(server.importSources, [
+        'scanned-pdf',
+        'scanned-pdf',
+        'scanned-pdf',
+      ]);
       expect(server.lastImport!['text'], 'Extracted invoice text');
       state.dispose();
     },
@@ -192,6 +206,149 @@ void main() {
         ),
         throwsFormatException,
       );
+    },
+  );
+
+  test(
+    'bot replies merge with exports, index counterparts and survive encrypted restart',
+    () async {
+      final server = _ImportServer();
+      final disk = LocalVaultStore(
+        await databaseFactoryMemory.openDatabase('bot-merge'),
+      );
+      final state = LifenizerAppState(
+        localStore: disk,
+        apiFactory: (url) =>
+            LifenizerApiClient(baseUrl: url, client: MockClient(server.handle)),
+      );
+      addTearDown(() async {
+        state.dispose();
+        await disk.close();
+      });
+      Future<void> login({bool offline = false}) => state.login(
+        baseUrl: 'https://vault.example.test',
+        email: 'ekwav@example.test',
+        passphrase: 'private test vault phrase',
+        offline: offline,
+      );
+      await login();
+      final own = normalizeDiscordBotMessages(
+        {'id': '100', 'guild_id': '200', 'name': 'Project'},
+        [
+          {
+            'id': '301',
+            'author': {'id': '1', 'username': 'ekwav'},
+            'content': 'Meet tomorrow',
+            'timestamp': '2026-10-01T12:00:00Z',
+          },
+        ],
+      );
+      expect(await state.importDiscordBotBatch(own), isTrue);
+      final conversationId = state.conversations.single.id;
+      final bot = normalizeDiscordBotMessages(
+        {'id': '100', 'guild_id': '200', 'name': 'Project'},
+        [
+          {
+            'id': '301',
+            'author': {'id': '1', 'username': 'ekwav'},
+            'content': 'Meet tomorrow',
+            'timestamp': '2026-10-01T12:00:00Z',
+          },
+          {
+            'id': '302',
+            'author': {'id': '2', 'username': 'carol'},
+            'content': 'Rendezvous at noon',
+            'timestamp': '2026-10-01T12:01:00Z',
+          },
+        ],
+        ownUserId: '1',
+      );
+      expect(await state.importDiscordBotBatch(bot), isTrue);
+      expect(state.conversations.single.id, conversationId);
+      expect(state.conversations.single.segments, hasLength(2));
+      expect(state.search('carol rendezvous').single.id, conversationId);
+      expect(
+        state.participants.where((p) => p.identifiers.contains('discord:2')),
+        hasLength(1),
+      );
+      expect(jsonEncode(server.envelopes), isNot(contains('Rendezvous')));
+      await state.lock();
+      expect(await state.importDiscordBotBatch(bot), isFalse);
+      await login(offline: true);
+      expect(state.search('carol rendezvous').single.id, conversationId);
+    },
+  );
+
+  test(
+    'watched PDF bytes reach extraction and stable document text updates remain searchable',
+    () async {
+      final server = _ImportServer();
+      Map<String, dynamic> extracted(String text) => {
+        'source': 'scanned-pdf',
+        'plaintextCompute': true,
+        'message': 'Extracted PDF',
+        'participants': [],
+        'conversations': [
+          {
+            'title': 'Scan',
+            'source': 'scanned-pdf',
+            'sourceThreadId': 'scan:stable',
+            'participantNames': [],
+            'segments': [
+              {
+                'text': text,
+                'sourceMessageId': 'scan:stable',
+                'createdAt': '2026-10-01T12:00:00Z',
+              },
+            ],
+          },
+        ],
+      };
+      server.normalizedOverride = extracted('Invoice orchid amount 42');
+      final disk = LocalVaultStore(
+        await databaseFactoryMemory.openDatabase('document-import'),
+      );
+      final state = LifenizerAppState(
+        localStore: disk,
+        apiFactory: (url) =>
+            LifenizerApiClient(baseUrl: url, client: MockClient(server.handle)),
+      );
+      final directory = await Directory.systemTemp.createTemp(
+        'lifenizer-document-test-',
+      );
+      addTearDown(() async {
+        state.dispose();
+        await disk.close();
+        await directory.delete(recursive: true);
+      });
+      await state.login(
+        baseUrl: 'https://vault.example.test',
+        email: 'alice@example.test',
+        passphrase: 'private test vault phrase',
+      );
+      final file = File('${directory.path}/invoice.pdf');
+      await file.writeAsBytes(
+        utf8.encode('%PDF-1.7 synthetic transport fixture'),
+      );
+      expect(await state.importDocumentFile(file.path), isTrue);
+      expect(
+        server.lastImport!['payloadBase64'],
+        base64Encode(await file.readAsBytes()),
+      );
+      final documentId = (server.lastImport!['metadata'] as Map)['documentId'];
+      expect(documentId, isNot(contains(directory.path)));
+      expect(state.search('orchid'), hasLength(1));
+      server.normalizedOverride = extracted('Invoice violet amount 84');
+      expect(await state.importDocumentFile(file.path), isTrue);
+      expect((server.lastImport!['metadata'] as Map)['documentId'], documentId);
+      expect(state.conversations, hasLength(1));
+      expect(state.conversations.single.segments, hasLength(1));
+      expect(state.search('violet'), hasLength(1));
+      expect(state.search('orchid'), isEmpty);
+      expect(jsonEncode(server.envelopes), isNot(contains('Invoice violet')));
+      state.busy = true;
+      expect(await state.importDocumentFile(file.path), isFalse);
+      state.busy = false;
     },
   );
 

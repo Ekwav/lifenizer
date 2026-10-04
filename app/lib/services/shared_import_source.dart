@@ -7,6 +7,9 @@ String detectSharedImportSource({
   String? text,
 }) {
   final name = fileName.toLowerCase();
+  if (name.endsWith('.pdf') || mimeType == 'application/pdf') {
+    return 'scanned-pdf';
+  }
   final content = text?.trim().replaceFirst(RegExp(r'^\uFEFF'), '') ?? '';
   if (RegExp(
     r'^\u200e?\[?\d{1,4}[./-]\d{1,2}[./-]\d{1,4},?\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[APap][Mm])?(?:\]\s*|\s*-\s*)[^:\n]+:',

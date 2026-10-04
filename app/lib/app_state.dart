@@ -19,6 +19,10 @@ import 'services/pairing_store.dart';
 import 'services/local_vault_store.dart';
 import 'services/shared_import_source.dart';
 import 'services/discord_archive.dart';
+import 'services/export_file_reader.dart';
+import 'services/discord_bot_import_service.dart';
+import 'services/document_import_service.dart';
+import 'services/document_credentials.dart';
 
 import 'services/conversation_search_index.dart';
 import 'services/temporal_intent.dart';
@@ -35,18 +39,39 @@ class LifenizerAppState extends ChangeNotifier {
     this.apiFactory,
     PairingCredentialStore? pairingStore,
     ImapCredentialStore? imapStore,
+    DocumentCredentialStore? documentStore,
+    DiscordBotCredentialStore? discordStore,
   }) : _localStore = localStore {
     pairing = DevicePairingService(this, store: pairingStore);
     pairing.addListener(_notifyChanged);
     emailImport = EmailImportService(this, store: imapStore);
     emailImport.addListener(_notifyChanged);
+    documentImport = DocumentImportService(this, store: documentStore);
+    documentImport.addListener(_notifyChanged);
+    discordImport = DiscordBotImportService(
+      ingest: importDiscordBotBatch,
+      store: discordStore,
+    );
+    discordImport.addListener(_notifyChanged);
+    addListener(_updateDiscordIdentity);
   }
 
   late final DevicePairingService pairing;
   late final EmailImportService emailImport;
+  late final DocumentImportService documentImport;
+  late final DiscordBotImportService discordImport;
+
+  void _updateDiscordIdentity() => discordImport.setIdentity(
+    isAuthenticated && session != null
+        ? jsonEncode([apiBaseUrl, rememberedEmail, session!.userId])
+        : null,
+  );
 
   @override
   void dispose() {
+    removeListener(_updateDiscordIdentity);
+    discordImport.dispose();
+    documentImport.dispose();
     emailImport.dispose();
     pairing.dispose();
     super.dispose();
@@ -1055,12 +1080,6 @@ class LifenizerAppState extends ChangeNotifier {
           'tif',
           'tiff',
         }.contains(extension);
-    if (isScannedFile && normalizedText == null) {
-      reportError(
-        'This file needs OCR first. Import extracted text, or attach the image to a conversation.',
-      );
-      return;
-    }
     final isAudio =
         normalizedMime.startsWith('audio/') ||
         VaultImports._audioMimeTypesByExtension.containsKey(extension);
@@ -1074,7 +1093,11 @@ class LifenizerAppState extends ChangeNotifier {
               bytes.length >= 4 &&
               bytes[0] == 0x50 &&
               bytes[1] == 0x4b);
-      if (!isAudio && !isZip && decodedText == null && bytes != null) {
+      if (!isAudio &&
+          !isZip &&
+          !isScannedFile &&
+          decodedText == null &&
+          bytes != null) {
         decodedText = utf8.decode(bytes);
       }
       source = isAudio

@@ -1,6 +1,9 @@
 part of '../app_state.dart';
 
 extension VaultImports on LifenizerAppState {
+  Future<Map<String, dynamic>> paperlessSettings() =>
+      _requireApi().paperlessSettings();
+
   Future<void> importSource({
     required String source,
     String? title,
@@ -43,6 +46,9 @@ extension VaultImports on LifenizerAppState {
                     .toList(),
           payloadBase64: payloadBase64,
         ),
+        timeout: source == 'scanned-pdf'
+            ? const Duration(minutes: 10)
+            : const Duration(minutes: 2),
       );
       final added = await _ingestNormalizedImport(
         normalized,
@@ -54,6 +60,79 @@ extension VaultImports on LifenizerAppState {
           : 'Imported $added conversation(s) from $source · saved encrypted'
                 '${skipped > 0 ? ' · $skipped duplicate(s) skipped' : ''}';
     });
+  }
+
+  /// Folder cursors advance only after the encrypted vault save succeeds.
+  Future<bool> importDocumentFile(String path) async {
+    var saved = false;
+    await _run(() async {
+      if (!isAuthenticated) {
+        throw StateError('Unlock the vault to import documents.');
+      }
+      final file = XFile(path);
+      final bytes = await readExportBytes(
+        PlatformFile(
+          name: file.name,
+          size: await file.length(),
+          readStream: file.openRead(),
+        ),
+        maxBytes: 25 * 1024 * 1024,
+      );
+      final documentId = base64UrlEncode(
+        (await Sha256().hash(utf8.encode(path))).bytes,
+      );
+      final result = await _requireApi().importSource(
+        'scanned-pdf',
+        ImportSourceRequest(
+          title: file.name,
+          originalFileName: file.name,
+          payloadBase64: base64Encode(bytes),
+          metadata: {'documentId': documentId},
+        ),
+        timeout: const Duration(minutes: 10),
+      );
+      await _ingestNormalizedImport(result);
+      status = 'Document indexed · saved encrypted';
+      saved = true;
+    });
+    return saved;
+  }
+
+  Future<NormalizedImportResult?> importPaperlessPage(
+    Map<String, String> metadata,
+  ) async {
+    NormalizedImportResult? saved;
+    await _run(() async {
+      if (!isAuthenticated) {
+        throw StateError('Unlock the vault to import documents.');
+      }
+      final owner = session!.userId;
+      final result = await _requireApi().importSource(
+        'paperless',
+        ImportSourceRequest(metadata: metadata),
+        timeout: const Duration(minutes: 10),
+      );
+      if (!isAuthenticated || session!.userId != owner) {
+        throw StateError(
+          'The vault changed before the document import completed.',
+        );
+      }
+      await _ingestNormalizedImport(result);
+      saved = result;
+    });
+    return saved;
+  }
+
+  Future<bool> importDiscordBotBatch(NormalizedImportResult result) async {
+    var saved = false;
+    await _run(() async {
+      if (!isAuthenticated) {
+        throw StateError('Unlock the vault to import Discord messages.');
+      }
+      await _ingestNormalizedImport(result);
+      saved = true;
+    });
+    return saved;
   }
 
   /// Imports an audio recording for server-side transcription.
