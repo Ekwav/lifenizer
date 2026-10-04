@@ -31,4 +31,5 @@ public sealed record NormalizedSegment(
     DateTimeOffset? CreatedAt = null,
     string? ParticipantIdentifier = null,
     string? SourceMessageId = null,
-    IReadOnlyList<string>? AttachmentUrls = null);
+    IReadOnlyList<string>? AttachmentUrls = null,
+    int? EndMs = null);

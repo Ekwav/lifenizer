@@ -35,6 +35,8 @@ public static class ServiceExtensions
         services.AddHttpContextAccessor();
         services.AddMemoryCache();
         services.AddHttpClient("imports").ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddHttpClient(TabTrainingClient.HttpClientName, client => client.Timeout = TimeSpan.FromMinutes(2))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
         // CPU-based whisper-trained transcription is slow for longer recordings, so this client
         // gets a generous timeout distinct from the "imports" client used by fast provider calls.
@@ -105,6 +107,7 @@ public static class ServiceExtensions
         services.AddScoped<UserAccountService>();
         services.AddScoped<PlainImapImportClient>();
         services.AddScoped<WhisperTranscriptionClient>();
+        services.AddScoped<TabTrainingClient>();
         services.AddScoped<ProviderHttpImportClient>();
         services.AddScoped<ImportOrchestrator>();
 

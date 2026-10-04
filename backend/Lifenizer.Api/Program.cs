@@ -105,6 +105,7 @@ app.MapPairingEndpoints();
 app.MapSyncEndpoints();
 app.MapAnalysisEndpoints();
 app.MapImportEndpoints();
+app.MapTrainingEndpoints();
 app.MapUsageEndpoints();
 app.MapImageEndpoints();
 app.MapPremiumEndpoints();

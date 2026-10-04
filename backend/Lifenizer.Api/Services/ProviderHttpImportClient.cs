@@ -176,8 +176,10 @@ public sealed class ProviderHttpImportClient(
             var text = segment.Text.Trim();
             if (text.Length == 0) continue;
             var offsetMs = (int)Math.Round(segment.Start * 1000);
+            var endMs = segment.End is { } end && double.IsFinite(end) && end >= segment.Start && end * 1000 <= int.MaxValue
+                ? (int?)Math.Round(end * 1000) : null;
             var createdAt = recordedAt is null ? (DateTimeOffset?)null : recordedAt.Value + TimeSpan.FromMilliseconds(offsetMs);
-            segments.Add(new NormalizedSegment(text, null, offsetMs, createdAt));
+            segments.Add(new NormalizedSegment(text, null, offsetMs, createdAt, EndMs: endMs));
         }
 
         if (segments.Count == 0)

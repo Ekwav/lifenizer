@@ -134,6 +134,7 @@ runs as a **non-root user** (uid 1001) with no unnecessary capabilities.
 | `Whisper__BaseUrl` | Base URL of the self-hosted whisper-trained transcription service | `http://whisper-trained.tab:9000` |
 | `Whisper__Language` | Optional default transcription language (ISO code); unset means auto-detect | _(unset)_ |
 | `Imports__MaxRequestBytes` | Max request body size accepted by `POST /api/imports/{source}`, to fit base64-encoded audio uploads | `200000000` |
+| `Training__Tab__BaseUrl` | TAB notice, anonymous consent, selected speech contributions and consent withdrawal | `https://tab.coflnet.com` |
 
 > **Tip:** Inject all secrets via Kubernetes `Secret` objects and reference
 > them as environment variables or volume mounts rather than baking them into

@@ -130,10 +130,31 @@ public sealed class WhisperTranscriptionTests
             Assert.That(segments, Has.Count.EqualTo(2));
             Assert.That(segments[0].Text, Is.EqualTo("Hello there."));
             Assert.That(segments[0].OffsetMs, Is.EqualTo(0));
+            Assert.That(segments[0].EndMs, Is.EqualTo(1200));
             Assert.That(segments[1].Text, Is.EqualTo("Second part."));
             Assert.That(segments[1].OffsetMs, Is.EqualTo(2500));
+            Assert.That(segments[1].EndMs, Is.EqualTo(3700));
             Assert.That(result.Conversations[0].Metadata!["language"], Is.EqualTo("en"));
         });
+    }
+
+    [Test]
+    public async Task AudioImport_MissingOrReversedEndOffsets_AreNotInvented()
+    {
+        await using var mockApi = new MockHttpServer(_ => Json(new
+        {
+            text = "Two segments.",
+            segments = new object[]
+            {
+                new { start = 1.0, end = 0.5, text = "Reversed end." },
+                new { start = 2.0, text = "No end supplied." }
+            }
+        }));
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?> { ["Whisper:BaseUrl"] = mockApi.Url });
+        using var client = await AuthenticatedClientAsync(factory, "whisper-end-offsets@example.test");
+        var result = await ImportAsync(client, new ImportRequest(PayloadBase64: Convert.ToBase64String(Encoding.UTF8.GetBytes("synthetic audio"))));
+        Assert.That(result.Conversations[0].Segments.Select(segment => segment.EndMs), Is.EqualTo(new int?[] { null, null }));
+        Assert.That(result.Conversations[0].Segments.Select(segment => segment.OffsetMs), Is.EqualTo(new[] { 1000, 2000 }));
     }
 
     [Test]
