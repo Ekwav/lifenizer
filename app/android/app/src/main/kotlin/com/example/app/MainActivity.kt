@@ -19,9 +19,12 @@ class MainActivity : FlutterActivity() {
     private val pendingShares = mutableListOf<Map<String, String?>>()
     private val sharedUris = mutableSetOf<String>()
     private val reader = Executors.newSingleThreadExecutor()
+    private var deviceProtection: DeviceCredentialProtection? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        deviceProtection?.dispose()
+        deviceProtection = DeviceCredentialProtection(this, flutterEngine.dartExecutor.binaryMessenger)
         actions = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.lifenizer/quick_actions")
         shares = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.lifenizer/shares")
         actions.setMethodCallHandler { call, result ->
@@ -123,6 +126,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        deviceProtection?.dispose()
+        deviceProtection = null
         reader.shutdown()
         super.onDestroy()
     }
