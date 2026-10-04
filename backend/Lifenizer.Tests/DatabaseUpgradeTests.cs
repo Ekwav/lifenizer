@@ -27,6 +27,9 @@ public sealed class DatabaseUpgradeTests
                     db.Images.Add(new ImageRecord { Id = Guid.NewGuid(), UserId = userId, BlobPath = "existing-image", SizeBytes = 123 });
                 await db.SaveChangesAsync();
                 await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users DROP COLUMN PasswordHash");
+                await db.Database.ExecuteSqlRawAsync("DROP TABLE PairingStates");
+                await db.Database.ExecuteSqlRawAsync("DROP TABLE PairingRequests");
+                await db.Database.ExecuteSqlRawAsync("DROP TABLE PairedDevices");
                 if (schema == "legacy")
                 {
                     await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users DROP COLUMN StorageUsedBytes");
@@ -39,6 +42,9 @@ public sealed class DatabaseUpgradeTests
             await DatabaseSchema.UpgradeAsync(db);
             Assert.That(await db.Database.GetAppliedMigrationsAsync(), Is.Not.Empty);
             Assert.That(await db.Images.CountAsync(), Is.EqualTo(schema == "current" ? 1 : 0));
+            Assert.That(await db.PairingStates.CountAsync(), Is.Zero);
+            Assert.That(await db.PairingRequests.CountAsync(), Is.Zero);
+            Assert.That(await db.PairedDevices.CountAsync(), Is.Zero);
             if (schema != "new")
             {
                 var account = await db.Users.SingleAsync();

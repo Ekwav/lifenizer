@@ -328,7 +328,7 @@ public sealed class ApiIntegrationTests
 
         var pull = await client.GetFromJsonAsync<PullSyncResponse>("/api/sync/pull?since=0", JsonOptions);
         var page1 = SearchPulledEnvelopes(pull!, "common query", page: 1, pageSize: 5);
-        var page3 = SearchPulledEnvelopes(pull, "common query", page: 3, pageSize: 5);
+        var page3 = SearchPulledEnvelopes(pull!, "common query", page: 3, pageSize: 5);
 
         Assert.Multiple(() =>
         {

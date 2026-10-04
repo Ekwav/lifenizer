@@ -27,6 +27,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseForwardedHeaders();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -99,6 +100,7 @@ else
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", app = "lifenizer-next" })).AllowAnonymous();
 app.MapAuthEndpoints();
+app.MapPairingEndpoints();
 app.MapSyncEndpoints();
 app.MapAnalysisEndpoints();
 app.MapImportEndpoints();
@@ -109,4 +111,3 @@ app.MapPremiumEndpoints();
 app.Run();
 
 public partial class Program;
-

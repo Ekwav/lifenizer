@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Text.Json;
 
 namespace Lifenizer.Api.Services;
@@ -14,6 +15,27 @@ public sealed class WhisperTranscriptionClient(IHttpClientFactory httpClientFact
     public const string HttpClientName = "whisper";
 
     private const string DefaultBaseUrl = "http://whisper-trained.tab:9000";
+
+    public static HttpMessageHandler CreateHttpHandler(IConfiguration configuration)
+    {
+        var path = configuration["Whisper:UnixSocketPath"];
+        if (string.IsNullOrWhiteSpace(path)) return new HttpClientHandler { AllowAutoRedirect = false };
+        return new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            UseProxy = false,
+            ConnectCallback = async (_, cancellationToken) =>
+            {
+                var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                try
+                {
+                    await socket.ConnectAsync(new UnixDomainSocketEndPoint(path), cancellationToken);
+                    return new NetworkStream(socket, ownsSocket: true);
+                }
+                catch { socket.Dispose(); throw; }
+            }
+        };
+    }
 
     /// <summary>
     /// Sends audio bytes to whisper-trained's /asr endpoint and parses the transcript response.

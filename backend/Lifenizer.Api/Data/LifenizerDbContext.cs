@@ -8,9 +8,16 @@ public sealed class LifenizerDbContext(DbContextOptions<LifenizerDbContext> opti
     public DbSet<SyncEnvelopeRecord> SyncEnvelopes => Set<SyncEnvelopeRecord>();
     public DbSet<UsageEventRecord> UsageEvents => Set<UsageEventRecord>();
     public DbSet<ImageRecord> Images => Set<ImageRecord>();
+    public DbSet<PairingState> PairingStates => Set<PairingState>();
+    public DbSet<PairingRequest> PairingRequests => Set<PairingRequest>();
+    public DbSet<PairedDevice> PairedDevices => Set<PairedDevice>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<PairingState>().ToTable("PairingStates", table => table.HasCheckConstraint("CK_PairingState_Singleton", "Id = 1"));
+        modelBuilder.Entity<PairingState>().Property(state => state.Id).ValueGeneratedNever();
+        modelBuilder.Entity<PairingRequest>().HasIndex(request => new { request.UserId, request.ExpiresAtUnixSeconds });
+        modelBuilder.Entity<PairedDevice>().HasIndex(device => device.UserId);
         modelBuilder.Entity<UserAccount>(entity =>
         {
             entity.HasKey(user => user.Id);
