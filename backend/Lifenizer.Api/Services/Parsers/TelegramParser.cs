@@ -22,30 +22,41 @@ public sealed partial class TelegramParser : IImportParser
 
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
-        var messages = root.ValueKind == JsonValueKind.Array
-            ? root.EnumerateArray()
-            : root.TryGetProperty("messages", out var array) && array.ValueKind == JsonValueKind.Array
-                ? array.EnumerateArray()
-                : Enumerable.Empty<JsonElement>();
-
-        var participants = ParticipantRegistry.FromRequest(request);
-        var segments = new List<NormalizedSegment>();
-        foreach (var message in messages)
+        var chats = root.ValueKind == JsonValueKind.Object &&
+            root.TryGetProperty("chats", out var exportedChats) &&
+            exportedChats.ValueKind == JsonValueKind.Object
+            ? CommonParsing.EnumerateArray(exportedChats, "list")
+            : [root];
+        var conversations = new List<NormalizedConversation>();
+        var explicitTitle = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("chats", out _)
+            ? null : CommonParsing.Clean(request.Title);
+        foreach (var chat in chats)
         {
-            var content = TelegramText(message);
-            if (string.IsNullOrWhiteSpace(content)) continue;
-            var speaker = JsonFieldExtractor.GetString(message, "from", "actor") ?? "Unknown";
-            participants.TryAdd(speaker);
-            segments.Add(new SegmentBuilder()
-                .WithText(content.Trim())
-                .WithSpeaker(speaker)
-                .WithAutoOffset(segments.Count)
-                .WithTimestamp(CommonParsing.TryParseDate(JsonFieldExtractor.GetString(message, "date")))
-                .Build());
+            var messages = chat.ValueKind == JsonValueKind.Array
+                ? chat.EnumerateArray()
+                : CommonParsing.EnumerateArray(chat, "messages");
+            var participants = ParticipantRegistry.FromRequest(request);
+            var segments = new List<NormalizedSegment>();
+            foreach (var message in messages)
+            {
+                if (message.ValueKind != JsonValueKind.Object) continue;
+                var content = TelegramText(message);
+                if (string.IsNullOrWhiteSpace(content)) continue;
+                var speaker = JsonFieldExtractor.GetString(message, "from", "actor") ?? "Unknown";
+                participants.TryAdd(speaker);
+                segments.Add(new SegmentBuilder()
+                    .WithText(content.Trim())
+                    .WithSpeaker(speaker)
+                    .WithAutoOffset(segments.Count)
+                    .WithTimestamp(CommonParsing.TryParseDate(JsonFieldExtractor.GetString(message, "date")))
+                    .Build());
+            }
+            if (segments.Count == 0) continue;
+            var title = explicitTitle ?? JsonFieldExtractor.GetString(chat, "name") ?? "Telegram export";
+            conversations.Add(new NormalizedConversation(title, Source, participants.ToList(), segments));
         }
-
-        var title = CommonParsing.Clean(request.Title) ?? JsonFieldExtractor.GetString(root, "name") ?? "Telegram export";
-        return CommonParsing.Response(Source, $"Normalized {segments.Count} Telegram message(s).", [new NormalizedConversation(title, Source, participants.ToList(), segments)]);
+        return CommonParsing.Response(Source,
+            $"Normalized {conversations.Count} Telegram chat(s), {conversations.Sum(c => c.Segments.Count)} message(s).", conversations);
     }
 
     private static string? TelegramText(JsonElement message)

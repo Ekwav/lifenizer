@@ -23,6 +23,13 @@ public sealed class LifenizerBackupParser : IImportParser
 
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
+        var namesById = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var participant in CommonParsing.EnumerateArray(root, "participants"))
+        {
+            var id = JsonFieldExtractor.GetString(participant, "id");
+            var name = JsonFieldExtractor.GetString(participant, "displayName", "name");
+            if (id is not null && name is not null) namesById[id] = name;
+        }
         var conversations = new List<NormalizedConversation>();
         var items = CommonParsing.EnumerateArray(root, "conversations", "items", "data");
         foreach (var item in items)
@@ -30,6 +37,11 @@ public sealed class LifenizerBackupParser : IImportParser
             var title = JsonFieldExtractor.GetString(item, "title") ?? "Backup conversation";
             var convSource = JsonFieldExtractor.GetString(item, "source") ?? "backup";
             var participants = new List<string>();
+            foreach (var id in CommonParsing.EnumerateArray(item, "participantIds"))
+            {
+                if (id.ValueKind == JsonValueKind.String && namesById.TryGetValue(id.GetString()!, out var name))
+                    participants.Add(name);
+            }
             foreach (var p in CommonParsing.EnumerateArray(item, "participantNames", "participants"))
             {
                 if (p.ValueKind == JsonValueKind.String)
@@ -67,9 +79,13 @@ public sealed class LifenizerBackupParser : IImportParser
                 {
                     offsetMs = offsetMsJson.GetInt32();
                 }
+                var speaker = JsonFieldExtractor.GetString(segment, "participantName", "speaker");
+                var participantId = JsonFieldExtractor.GetString(segment, "participantId");
+                if (speaker is null && participantId is not null) namesById.TryGetValue(participantId, out speaker);
+                if (speaker is not null && !participants.Contains(speaker)) participants.Add(speaker);
                 segments.Add(new SegmentBuilder()
                     .WithText(segmentText)
-                    .WithSpeaker(JsonFieldExtractor.GetString(segment, "participantName", "speaker"))
+                    .WithSpeaker(speaker)
                     .WithOffset(offsetMs)
                     .WithTimestamp(CommonParsing.TryParseDate(JsonFieldExtractor.GetString(segment, "createdAt", "date")))
                     .Build());
@@ -88,7 +104,7 @@ public sealed class LifenizerBackupParser : IImportParser
 
         if (conversations.Count == 0)
         {
-            return CommonParsing.SingleConversation(Source, request, text, "Lifenizer backup");
+            return CommonParsing.Response(Source, "No text conversations found in this backup.", []);
         }
 
         return CommonParsing.Response(Source, $"Normalized {conversations.Count} backup conversation(s).", conversations);
