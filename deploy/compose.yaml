@@ -1,0 +1,46 @@
+name: lifenizer
+
+services:
+  api:
+    image: ${LIFENIZER_IMAGE:?Run scripts/deploy-compose.py first}
+    restart: unless-stopped
+    user: "${LIFENIZER_UID}:${LIFENIZER_GID}"
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      AllowedHosts: mail.coflnet.com;localhost
+      ConnectionStrings__Lifenizer: Data Source=/data/lifenizer.db
+      Artifacts__StorePath: /data/artifacts
+      Auth__AllowRegistration: "false"
+      Auth__AllowDevLogin: "false"
+      Auth__EnableFirebase: "false"
+      Cors__AllowedOrigins__0: https://mail.coflnet.com
+      Whisper__BaseUrl: http://localhost
+      Whisper__UnixSocketPath: /run/lifenizer-whisper/asr.sock
+    volumes:
+      - ./data:/data
+      - ./whisper:/run/lifenizer-whisper:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 1536m
+    networks: [proxy]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: proxy
+      traefik.http.routers.lifenizer.rule: Host(`mail.coflnet.com`) && (Path(`/lifenizer`) || PathPrefix(`/lifenizer/`))
+      traefik.http.routers.lifenizer.priority: "100"
+      traefik.http.routers.lifenizer.entrypoints: https
+      traefik.http.routers.lifenizer.tls: "true"
+      traefik.http.routers.lifenizer.tls.certresolver: http
+      traefik.http.routers.lifenizer.middlewares: lifenizer-prefix
+      traefik.http.middlewares.lifenizer-prefix.stripprefix.prefixes: /lifenizer
+      traefik.http.services.lifenizer.loadbalancer.server.port: "8080"
+
+networks:
+  proxy:
+    external: true

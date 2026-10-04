@@ -1,7 +1,93 @@
 # Deployment guide
 
-This document covers deploying the Lifenizer API as a containerised
-service in a hardened Kubernetes cluster.
+The mail server runs the single-replica API with Docker Compose, alongside its
+existing Traefik and Bitwarden services. Kubernetes examples follow below.
+
+## Mail server: install and upgrade
+
+Run from a clean, reviewed commit on the KDE machine:
+
+```bash
+./scripts/deploy-compose.py
+```
+
+Requirements: Docker, Python 3, SSH access to `mail.coflnet.com`, Trivy, and
+`qrencode`. The server needs Docker Compose v2, its existing `proxy` Docker
+network and `traefik` container. No registry credentials or cluster credentials
+are copied to the mail server.
+
+The installer builds the API image, rejects fixable high/critical vulnerabilities,
+loads the image over SSH, and deploys [compose.yaml](../deploy/compose.yaml) into
+`~/dev/lifenizer-next`. It preserves the older `~/dev/lifenizer` checkout and
+Bitwarden. The API has no published host port: Traefik serves it at
+`https://mail.coflnet.com/lifenizer`, strips that prefix, and forwards to port 8080.
+Only Traefik's current exact IP is trusted for forwarded headers. Run the installer
+again after recreating Traefik if its Docker address changes.
+
+The resulting connection link and QR code configure the server, account and vault
+without typing passwords. Open the link on the first device within one hour, then
+keep it unlocked while connecting the next. After the hour, an unlocked paired
+device must approve each new device. An unclaimed installation cannot be claimed
+after its deadline. Redeployment never silently extends that deadline.
+
+The private installer identity and QR are saved under
+`${XDG_STATE_HOME:-$HOME/.local/state}/lifenizer/compose` with owner-only access.
+Preserve `pairing.json` when moving deployment to another computer. The server gets
+only a hash of a derived enrollment proof; it never receives the link secret or
+the vault passphrase. Device credentials use Android secure storage or KDE's Secret
+Service. See [AUTH.md](AUTH.md) for the pairing and recovery model.
+
+```bash
+./scripts/deploy-compose.py --show-link  # Print the same link; does not extend time
+./scripts/deploy-compose.py --backup-only
+```
+
+SQLite and encrypted artifacts persist in `~/dev/lifenizer-next/data`. Before every
+upgrade, the installer briefly stops the API to archive data and configuration
+consistently, then restarts it. Backups live in the server's private `backups`
+directory; they include the signing secret and must stay private. Keep a separate
+copy off the server. These archives restore the server and encrypted data; a
+paired device's keyring is still needed to decrypt the vault.
+
+To restore, stop the API, preserve the current directory, extract the selected
+archive into a private directory, and run `docker compose up -d` there with the
+archived image available. Copying a live SQLite file without its WAL is not a
+valid backup. App exports are separate: use the app's import/share flow to import
+conversation backups, rather than extracting them into the server data directory.
+
+## Private transcription relay
+
+The mail API can use the existing KDE-to-Whisper tunnel without exposing Whisper
+publicly or copying Rancher credentials:
+
+```bash
+./integrations/kde/install-api.sh --with-whisper-forward
+./integrations/kde/install-whisper-relay.sh
+```
+
+The relay creates `~/dev/lifenizer-next/whisper/asr.sock` over SSH. Compose mounts
+its private directory and `Whisper__UnixSocketPath` connects only through that
+socket. The relay reconnects under the user systemd session. The socket grants
+access only to the operator/container user; no mail-server TCP port is opened.
+Whisper transcription requires the KDE machine, its user services and the existing
+Rancher tunnel to stay online. Encrypted sync is hosted on the mail server and
+continues independently. Recordings remain encrypted local drafts when transcription
+is unavailable and can be retried later.
+
+Build the native clients for this deployment before installing them:
+
+```bash
+cd app
+flutter build linux --release --dart-define=LIFENIZER_API_URL=https://mail.coflnet.com/lifenizer
+flutter build apk --release --dart-define=LIFENIZER_API_URL=https://mail.coflnet.com/lifenizer
+cd ..
+./integrations/kde/install.sh
+adb install -r app/build/app/outputs/flutter-apk/app-release.apk
+```
+
+The connection link supplies the URL as well, so it works with clients built using
+another default. The Android release currently uses the repository's development
+signing configuration; preserve that signing key for updates to existing installs.
 
 ---
 
