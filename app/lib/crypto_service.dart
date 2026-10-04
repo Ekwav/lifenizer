@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:cryptography/cryptography.dart';
 
+import 'services/vault_worker_io.dart'
+    if (dart.library.js_interop) 'services/vault_worker_web.dart';
+
 class EncryptedPayload {
   EncryptedPayload({
     required this.cipherText,
@@ -43,8 +46,19 @@ class VaultCrypto {
     );
   }
 
-  Future<EncryptedPayload> encryptJson(Map<String, dynamic> json) async {
+  Future<EncryptedPayload> encryptJson(
+    Map<String, dynamic> json, {
+    bool background = false,
+  }) async {
     final key = _requireKey();
+    if (background) {
+      final bytes = (await key.extractBytes()).toList();
+      try {
+        return await _encryptInWorker(json, bytes);
+      } finally {
+        bytes.fillRange(0, bytes.length, 0);
+      }
+    }
     final nonce = _algorithm.newNonce();
     final clearText = utf8.encode(jsonEncode(json));
     final box = await _algorithm.encrypt(
@@ -66,8 +80,17 @@ class VaultCrypto {
   Future<Map<String, dynamic>> decryptJson({
     required String cipherText,
     required String nonce,
+    bool background = false,
   }) async {
     final key = _requireKey();
+    if (background) {
+      final bytes = (await key.extractBytes()).toList();
+      try {
+        return await _decryptInWorker(cipherText, nonce, bytes);
+      } finally {
+        bytes.fillRange(0, bytes.length, 0);
+      }
+    }
     final packed = jsonDecode(utf8.decode(base64Decode(cipherText))) as Map;
     final box = SecretBox(
       base64Decode(packed['c'] as String),
@@ -86,3 +109,32 @@ class VaultCrypto {
     return key;
   }
 }
+
+// Keep closures outside VaultCrypto so workers capture only snapshot data/key
+// bytes, never the live app or an open local database.
+Future<EncryptedPayload> _encryptInWorker(
+  Map<String, dynamic> json,
+  List<int> bytes,
+) => runVaultWork(() async {
+  final crypto = VaultCrypto().._vaultKey = SecretKey(bytes);
+  try {
+    return await crypto.encryptJson(json);
+  } finally {
+    crypto.lock();
+    bytes.fillRange(0, bytes.length, 0);
+  }
+});
+
+Future<Map<String, dynamic>> _decryptInWorker(
+  String cipherText,
+  String nonce,
+  List<int> bytes,
+) => runVaultWork(() async {
+  final crypto = VaultCrypto().._vaultKey = SecretKey(bytes);
+  try {
+    return await crypto.decryptJson(cipherText: cipherText, nonce: nonce);
+  } finally {
+    crypto.lock();
+    bytes.fillRange(0, bytes.length, 0);
+  }
+});

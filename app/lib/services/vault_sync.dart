@@ -78,6 +78,7 @@ extension VaultSync on LifenizerAppState {
           final snapshot = await _crypto.decryptJson(
             cipherText: local['cipherText'] as String,
             nonce: local['nonce'] as String,
+            background: true,
           );
           _restoreSnapshot(snapshot);
         }
@@ -272,13 +273,16 @@ extension VaultSync on LifenizerAppState {
       await _queueImportedConversationRepairs();
       final advanced = pulled.cursor > syncCursor;
       syncCursor = pulled.cursor;
+      final finished = pulled.envelopes.length < 500 || !advanced;
+      if (finished) {
+        // Coalescing queues participant writes. Apply every pull page first so
+        // these writes cannot suppress later updates to the same person.
+        await _coalesceParticipantIdentities();
+      }
       await _persistLocal();
-      if (pulled.envelopes.length < 500 || !advanced) break;
+      if (finished) break;
     }
-    // Coalescing queues participant writes. Apply every pull page first so these
-    // writes cannot suppress a later page's updates to the same person.
-    await _coalesceParticipantIdentities();
-    await _persistLocal();
+    if (!busy) await _prepareSearchIndex();
     syncError = null;
     lastSyncedAt = DateTime.now();
     _notifyChanged();
@@ -304,7 +308,14 @@ extension VaultSync on LifenizerAppState {
         clientCreatedAt: DateTime.now().toUtc(),
       ),
     );
-    if (_vaultBatchDepth > 0) return;
+    if (_vaultBatchDepth > 0) {
+      // A stream of immediately completed crypto futures otherwise starves
+      // frames and input events during a large import.
+      if (_pendingSync.length % 50 == 0) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      return;
+    }
     await _flushVaultChanges();
   }
 
@@ -343,11 +354,12 @@ extension VaultSync on LifenizerAppState {
   Map<String, dynamic> _snapshot() => {
     'session': session!.toJson(),
     'cursor': syncCursor,
-    'participants': participants.map((e) => e.toJson()).toList(),
-    'conversations': conversations.map((e) => e.toJson()).toList(),
-    'relations': relations.map((e) => e.toJson()).toList(),
-    'savedSearches': savedSearches.map((e) => e.toJson()).toList(),
-    'pending': _pendingSync.map((e) => e.toJson()).toList(),
+    // Capture immutable records now; their JSON conversion runs in the worker.
+    'participants': participants.toList(),
+    'conversations': conversations.toList(),
+    'relations': relations.toList(),
+    'savedSearches': savedSearches.toList(),
+    'pending': _pendingSync.toList(),
     if (audioDraft != null) 'audioDraft': audioDraft,
   };
 
@@ -394,7 +406,7 @@ extension VaultSync on LifenizerAppState {
     if (_localStore == null || key == null || auth == null) return;
     final snapshot = _snapshot();
     final operation = _storageTail.then((_) async {
-      final payload = await _crypto.encryptJson(snapshot);
+      final payload = await _crypto.encryptJson(snapshot, background: true);
       await _localStore!.write(key, {
         'vaultSalt': auth.vaultSalt,
         'cipherText': payload.cipherText,

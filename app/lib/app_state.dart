@@ -90,6 +90,7 @@ class LifenizerAppState extends ChangeNotifier {
 
   ConversationSearchIndex? _searchIndex;
   bool _searchIndexDirty = true;
+  int _searchIndexRevision = 0;
   int _indexedConversationCount = -1;
   int _indexedRelationCount = -1;
   int _indexedParticipantCount = -1;
@@ -337,7 +338,7 @@ class LifenizerAppState extends ChangeNotifier {
 
     // Execute search using service
     final searchService = SearchService(index);
-    final results = searchService
+    final ranked = searchService
         .rankConversations(
           criteria,
           scorer,
@@ -346,6 +347,18 @@ class LifenizerAppState extends ChangeNotifier {
           maxResults: maxResults,
         )
         .cast<Conversation>();
+    final current = busy
+        ? {
+            for (final conversation in conversations)
+              conversation.id: conversation,
+          }
+        : null;
+    final results = current == null
+        ? ranked
+        : ranked
+              .where((conversation) => current.containsKey(conversation.id))
+              .map((conversation) => current[conversation.id]!)
+              .toList();
 
     _updateSearchContext(
       carryPrevious ? effectiveTokens.join(' ') : criteria.normalized,
@@ -694,7 +707,7 @@ class LifenizerAppState extends ChangeNotifier {
       _invalidateParticipantLookup();
       _markSearchIndexDirty();
       if (persist) await _pushEntity('participant', id, person.toJson());
-      notifyListeners();
+      if (_vaultBatchDepth == 0) notifyListeners();
     }
     return person;
   }
@@ -782,7 +795,7 @@ class LifenizerAppState extends ChangeNotifier {
         );
       }
     }
-    notifyListeners();
+    if (_vaultBatchDepth == 0) notifyListeners();
   }
 
   Future<void> _coalesceParticipantIdentities() async {
@@ -1403,6 +1416,7 @@ class LifenizerAppState extends ChangeNotifier {
 
   void _markSearchIndexDirty() {
     _searchIndexDirty = true;
+    _searchIndexRevision++;
   }
 
   String? _cleanFilter(String? value) {
@@ -1432,17 +1446,15 @@ class LifenizerAppState extends ChangeNotifier {
     );
   }
 
-  void _ensureSearchIndex() {
-    final needsRebuild =
-        _searchIndexDirty ||
-        _searchIndex == null ||
-        _indexedConversationCount != conversations.length ||
-        _indexedRelationCount != relations.length ||
-        _indexedParticipantCount != participants.length;
-    if (!needsRebuild) {
-      return;
-    }
+  bool get _needsSearchIndex =>
+      _searchIndexDirty ||
+      _searchIndex == null ||
+      _indexedConversationCount != conversations.length ||
+      _indexedRelationCount != relations.length ||
+      _indexedParticipantCount != participants.length;
 
+  (List<Conversation>, Map<String, String>, Map<String, String>)
+  _searchIndexInputs() {
     final participantSearchText = <String, String>{
       for (final participant in participants)
         participant.id:
@@ -1470,17 +1482,41 @@ class LifenizerAppState extends ChangeNotifier {
         ..write(relation.object);
     }
 
-    _searchIndex = ConversationSearchIndex.build(
-      conversations: conversations,
-      participantById: participantSearchText,
-      relationTextByConversation: relationTextByConversation.map(
+    return (
+      conversations.toList(),
+      participantSearchText,
+      relationTextByConversation.map(
         (key, value) => MapEntry(key, value.toString().toLowerCase()),
       ),
     );
+  }
+
+  void _installSearchIndex(ConversationSearchIndex index) {
+    _searchIndex = index;
     _searchIndexDirty = false;
     _indexedConversationCount = conversations.length;
     _indexedRelationCount = relations.length;
     _indexedParticipantCount = participants.length;
+  }
+
+  void _ensureSearchIndex() {
+    // Progress rebuilds keep the previous results while an import changes the
+    // vault. The final index is prepared off the UI isolate before busy clears.
+    if (busy || _syncInFlight != null || !_needsSearchIndex) return;
+    _installSearchIndex(_buildConversationSearchIndex(_searchIndexInputs()));
+  }
+
+  Future<void> _prepareSearchIndex() async {
+    if (!_needsSearchIndex || !_crypto.isUnlocked) return;
+    final revision = _searchIndexRevision;
+    final index = await compute(
+      _buildConversationSearchIndex,
+      _searchIndexInputs(),
+      debugLabel: 'conversation-search-index',
+    );
+    if (revision == _searchIndexRevision && _crypto.isUnlocked) {
+      _installSearchIndex(index);
+    }
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -1493,6 +1529,11 @@ class LifenizerAppState extends ChangeNotifier {
     } catch (exception) {
       error = exception.toString();
     } finally {
+      try {
+        await _prepareSearchIndex();
+      } catch (exception) {
+        error ??= 'Could not prepare search: $exception';
+      }
       busy = false;
       if (_pendingSync.isNotEmpty && syncError != null) {
         status =
@@ -1508,3 +1549,11 @@ class LifenizerAppState extends ChangeNotifier {
     return api;
   }
 }
+
+ConversationSearchIndex _buildConversationSearchIndex(
+  (List<Conversation>, Map<String, String>, Map<String, String>) inputs,
+) => ConversationSearchIndex.build(
+  conversations: inputs.$1,
+  participantById: inputs.$2,
+  relationTextByConversation: inputs.$3,
+);
