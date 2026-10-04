@@ -259,8 +259,8 @@ void main() {
       );
       state.dispose();
       other.dispose();
-      await disk.database.close();
-      await otherDisk.database.close();
+      await disk.close();
+      await otherDisk.close();
     },
   );
 

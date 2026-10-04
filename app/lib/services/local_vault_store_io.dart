@@ -1,10 +1,11 @@
 import 'package:path_provider/path_provider.dart';
-import 'package:sembast/sembast_io.dart';
+import 'local_vault_store.dart';
+import 'vault_database_worker.dart';
 
-Future<Database> openVaultDatabase() async {
+Future<LocalVaultStore> openVaultStore() async {
   final directory = await getApplicationSupportDirectory();
   await directory.create(recursive: true);
-  return databaseFactoryIo.openDatabase(
-    '${directory.path}/lifenizer-vaults.db',
+  return LocalVaultStore.remote(
+    await openVaultDatabaseWorker('${directory.path}/lifenizer-vaults.db'),
   );
 }

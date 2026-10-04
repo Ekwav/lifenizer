@@ -120,7 +120,7 @@ void main() {
       );
       crypto.lock();
       await state.lock();
-      await disk.database.close();
+      await disk.close();
     },
   );
 
@@ -151,6 +151,40 @@ void main() {
     );
     expect(first.syncCursor, server.envelopes.length);
   });
+
+  test(
+    'idle polling leaves the encrypted snapshot untouched but saves new remote data',
+    () async {
+      final server = _Server();
+      final disk = await store();
+      addTearDown(disk.close);
+      final state = device(server, disk);
+      addTearDown(state.dispose);
+      await login(state);
+      final key =
+          'vault:${jsonEncode(['https://vault.example.test', 'alice@example.test'])}';
+      final before = await disk.read(key);
+      await state.syncQuietly();
+      await state.pullSync();
+      expect(await disk.read(key), before);
+      final otherDisk = await store();
+      addTearDown(otherDisk.close);
+      final other = device(server, otherDisk);
+      addTearDown(other.dispose);
+      await login(other);
+      await other.addManualText(
+        title: 'New remote item',
+        participantNames: '',
+        text: 'Remote update',
+      );
+      await state.syncQuietly();
+      expect(await disk.read(key), isNot(before));
+      final restored = device(server, disk);
+      addTearDown(restored.dispose);
+      await login(restored, offline: true);
+      expect(restored.conversations.single.title, 'New remote item');
+    },
+  );
 
   test('bulk edits use bounded pushes and survive offline restart', () async {
     final server = _Server();
@@ -185,7 +219,7 @@ void main() {
     expect(jsonEncode(server.envelopes), isNot(contains('Person 204')));
     await state.lock();
     state.dispose();
-    await disk.database.close();
+    await disk.close();
   });
 
   test('nested import failure still saves completed edits', () async {
@@ -209,7 +243,7 @@ void main() {
     expect(state.participants.single.displayName, 'Preserved');
     await state.lock();
     state.dispose();
-    await disk.database.close();
+    await disk.close();
   });
 
   test(

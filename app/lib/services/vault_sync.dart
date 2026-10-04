@@ -224,6 +224,7 @@ extension VaultSync on LifenizerAppState {
 
   Future<void> _syncNow() async {
     final api = _requireApi();
+    var acknowledgedChanges = _pendingSync.isNotEmpty;
     while (_pendingSync.isNotEmpty) {
       final batch = <SyncEnvelope>[];
       var bytes = 0;
@@ -279,7 +280,13 @@ extension VaultSync on LifenizerAppState {
         // these writes cannot suppress later updates to the same person.
         await _coalesceParticipantIdentities();
       }
-      await _persistLocal();
+      if (acknowledgedChanges ||
+          pulled.envelopes.isNotEmpty ||
+          advanced ||
+          _pendingSync.isNotEmpty) {
+        await _persistLocal();
+        acknowledgedChanges = false;
+      }
       if (finished) break;
     }
     if (!busy) await _prepareSearchIndex();

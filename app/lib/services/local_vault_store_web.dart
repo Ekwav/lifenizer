@@ -1,4 +1,5 @@
 import 'package:sembast_web/sembast_web.dart';
+import 'local_vault_store.dart';
 
-Future<Database> openVaultDatabase() =>
-    databaseFactoryWeb.openDatabase('lifenizer-vaults');
+Future<LocalVaultStore> openVaultStore() async =>
+    LocalVaultStore(await databaseFactoryWeb.openDatabase('lifenizer-vaults'));
