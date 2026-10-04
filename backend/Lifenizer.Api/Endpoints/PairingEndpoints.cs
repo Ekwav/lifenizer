@@ -141,7 +141,8 @@ public static class PairingEndpoints
         {
             if (request.RefreshToken is null || request.RefreshToken.Length != 43) return Results.Unauthorized();
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-            var device = await db.PairedDevices.SingleOrDefaultAsync(device => device.Id == request.DeviceId, cancellationToken);
+            var deviceId = request.DeviceId ?? await db.PairingStates.Select(state => (Guid?)state.BootstrapDeviceId).SingleOrDefaultAsync(cancellationToken);
+            var device = await db.PairedDevices.SingleOrDefaultAsync(device => device.Id == deviceId, cancellationToken);
             var now = DateTimeOffset.UtcNow;
             if (device is null || device.ExpiresAtUnixSeconds <= now.ToUnixTimeSeconds() || !HashMatches(request.RefreshToken, device.RefreshTokenHash)) return Results.Unauthorized();
             var account = await db.Users.SingleAsync(user => user.Id == device.UserId, cancellationToken);

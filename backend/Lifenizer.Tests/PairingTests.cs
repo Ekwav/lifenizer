@@ -105,6 +105,33 @@ public sealed class PairingTests
     }
 
     [Test]
+    public async Task LostBootstrapResponseRecoversAfterHourOnlyWithOriginalRefreshSecret()
+    {
+        await using var harness = new Harness();
+        var firstEnrollment = harness.Enrollment("Desktop");
+        var noAccount = await harness.Client.PostAsJsonAsync("/api/pairing/refresh", new { refreshToken = firstEnrollment.RefreshToken });
+        Assert.That(noAccount.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        var first = await harness.Enroll(firstEnrollment.Request);
+        harness.Factory.Services.GetRequiredService<IConfiguration>()["Pairing:BootstrapExpiresAt"] = DateTimeOffset.UtcNow.AddHours(-1).ToString("O");
+        Assert.That((await harness.Client.PostAsJsonAsync("/api/pairing/refresh", new { refreshToken = new string('x', 43) })).StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        var secondary = harness.Enrollment("Phone");
+        await harness.Enroll(secondary.Request);
+        Assert.That((await harness.Client.PostAsJsonAsync("/api/pairing/refresh", new { refreshToken = secondary.RefreshToken })).StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        var recovered = await Json(await harness.Client.PostAsJsonAsync("/api/pairing/refresh", new { refreshToken = firstEnrollment.RefreshToken }));
+        Assert.Multiple(() =>
+        {
+            Assert.That(recovered.GetProperty("deviceId").GetGuid(), Is.EqualTo(first.GetProperty("deviceId").GetGuid()));
+            Assert.That(recovered.GetProperty("session").GetProperty("userId").GetGuid(), Is.EqualTo(first.GetProperty("session").GetProperty("userId").GetGuid()));
+            Assert.That(recovered.GetProperty("session").GetProperty("vaultSalt").GetString(), Is.EqualTo(first.GetProperty("session").GetProperty("vaultSalt").GetString()));
+            Assert.That(DateTimeOffset.Parse(recovered.GetProperty("bootstrapExpiresAt").GetString()!), Is.LessThan(DateTimeOffset.UtcNow));
+        });
+        using var scope = harness.Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<LifenizerDbContext>();
+        await db.PairedDevices.ExecuteUpdateAsync(setters => setters.SetProperty(device => device.ExpiresAtUnixSeconds, 0));
+        Assert.That((await harness.Client.PostAsJsonAsync("/api/pairing/refresh", new PairingRefreshRequest(null, firstEnrollment.RefreshToken))).StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
+    [Test]
     public async Task BootstrapCannotStartAfterDeadlineButBoundLinkRemainsApprovalOnly()
     {
         await using (var expired = new Harness(expired: true))
