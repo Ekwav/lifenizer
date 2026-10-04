@@ -12,6 +12,7 @@ Future<void> startDesktopRunner(
 ) async {
   final client = DBusClient.session();
   try {
+    await client.registerObject(LifenizerRunner(state, request));
     final ownership = await client.requestName(
       runnerBusName,
       flags: {DBusRequestNameFlag.doNotQueue},
@@ -20,7 +21,6 @@ Future<void> startDesktopRunner(
       await client.close();
       return;
     }
-    await client.registerObject(LifenizerRunner(state, request));
   } catch (_) {
     // Search in the app remains available without a desktop session bus.
     await client.close();
