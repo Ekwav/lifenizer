@@ -71,12 +71,25 @@ Use KRunner `life Alice holiday` to find conversations, or Ctrl+K inside the app
 Android builds provide launcher Search/Capture/Imports shortcuts, selected-text search,
 `ACTION_SEARCH`, and share targets. See [integration setup](docs/INTEGRATIONS.md).
 
+Drag backups onto **Imports**, or choose a file there. Discord data packages are
+read locally, including large ZIPs; enable **Watch this Discord export for changes**
+to import replacements automatically while the desktop app is open and unlocked.
+This does not fetch messages from Discord. See [supported imports](docs/IMPORTERS.md).
+For IMAP, use **Imports → Connect email** with your email username and app password;
+[email setup](docs/EMAIL.md) explains remembered credentials and automatic checks.
+
+People are detected from provider IDs and email addresses. In **People**, use
+**Link identity** or **Merge people** to connect a Discord account with an email
+contact. Matching names alone do not merge two known identities. Linked identities,
+aliases and conversation references sync encrypted; future imports reuse the person.
+
 Encrypted local snapshots and an encrypted retry queue survive app restarts. Paired
 devices unlock from their OS keyring, including offline. Manual accounts provide
 **Unlock this device offline** after an initial online unlock.
 Sync runs on resume and every 30 seconds while active. Capture typed text offline;
 recordings are saved encrypted locally until you explicitly send them to Whisper.
-Imports, transcription and relation extraction require the configured server.
+Provider imports, transcription and relation extraction require the configured server;
+local Discord ZIP imports can be saved offline and synced later.
 New image attachments are encrypted; historical plaintext image uploads require
 re-uploading to encrypt them. Image downloads currently require a connection.
 

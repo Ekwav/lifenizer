@@ -1,7 +1,9 @@
 # Conversation search
 
 Search runs on the decrypted vault on the device. It indexes conversation titles,
-message text, sources, tags, participant display names, and relation evidence.
+message text, sources, tags, participant display names, aliases, linked provider
+identifiers, and relation evidence. Merging people keeps their earlier names and
+identifiers searchable across the linked conversations.
 The server receives encrypted sync envelopes; searching never sends the query or
 plaintext search index to the server. Locking clears the in-memory vault and its
 index. Unlocking rebuilds the index from the restored encrypted snapshot.
@@ -71,3 +73,10 @@ then intersects indexed conversation IDs. Document scoring reuses that expansion
 instead of splitting and fuzzy-matching every transcript. Index rebuilding is
 proportional to archive text size; query expansion is proportional to vocabulary
 size. Large real exports and Android devices should be measured separately.
+
+The same KDE machine was also checked against an imported Discord archive with
+10,833 conversations, 126,281 messages and 1,272 detected people. After unlocking
+and building the index, 12 real KRunner calls for `discord`, `skyblock` and `auction`
+each returned eight results in 55–194 ms, including D-Bus client startup. The full
+encrypted vault restored with unchanged counts after locking and restarting the
+release app. These are desktop measurements; phone latency remains unmeasured.
