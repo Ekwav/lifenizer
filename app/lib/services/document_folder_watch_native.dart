@@ -192,6 +192,7 @@ class DocumentFolderWatchService extends ChangeNotifier {
     final identity = _identity!;
     final generation = _generation;
     var imported = 0;
+    var attempted = 0;
     try {
       error = null;
       for (final folder in List<String>.from(_folders)) {
@@ -210,38 +211,49 @@ class DocumentFolderWatchService extends ChangeNotifier {
               ).hasMatch(entry.path)) {
             continue;
           }
-          final stat = await entry.stat();
-          if (!_current(identity, generation) || state.busy) return;
-          if (stat.size == 0 || stat.size > 25 * 1024 * 1024) continue;
-          // Give scanners/downloaders time to finish replacing or writing the file.
-          if (DateTime.now().difference(stat.modified) <
-              const Duration(seconds: 5)) {
-            continue;
-          }
-          final stamp = '${stat.size}:${stat.modified.microsecondsSinceEpoch}';
-          if (_stamps[entry.path] == stamp) continue;
-          status = 'Indexing document ${imported + 1}…';
-          _notify();
-          if (!await (_importFile ?? state.importDocumentFile)(entry.path)) {
-            if (!_current(identity, generation)) return;
-            error =
-                state.error ?? 'Document import paused. It will be retried.';
-            return;
-          }
-          if (!_current(identity, generation)) return;
-          final after = await entry.stat();
-          if (!_current(identity, generation)) return;
-          if (after.size != stat.size || after.modified != stat.modified) {
+          late final String stamp;
+          try {
+            final stat = await entry.stat();
+            if (!_current(identity, generation) || state.busy) return;
+            if (stat.size == 0 || stat.size > 25 * 1024 * 1024) continue;
+            // Give scanners/downloaders time to finish replacing or writing the file.
+            if (DateTime.now().difference(stat.modified) <
+                const Duration(seconds: 5)) {
+              continue;
+            }
+            stamp = '${stat.size}:${stat.modified.microsecondsSinceEpoch}';
+            if (_stamps[entry.path] == stamp) continue;
+            if (attempted >= 100) {
+              status =
+                  '$imported documents indexed · continuing at the next check.';
+              return;
+            }
+            attempted++;
+            status = 'Indexing document $attempted…';
+            _notify();
+            if (!await (_importFile ?? state.importDocumentFile)(entry.path)) {
+              if (!_current(identity, generation) || state.busy) return;
+              error ??=
+                  '${entry.uri.pathSegments.last}: '
+                  '${state.error ?? 'Document import failed. It will be retried.'}';
+              continue;
+            }
+            if (!_current(identity, generation) || state.busy) return;
+            final after = await entry.stat();
+            if (!_current(identity, generation) || state.busy) return;
+            if (after.size != stat.size || after.modified != stat.modified) {
+              continue;
+            }
+          } catch (_) {
+            if (!_current(identity, generation) || state.busy) return;
+            error ??=
+                '${entry.uri.pathSegments.last} could not be imported. '
+                'It will be retried at the next check.';
             continue;
           }
           _stamps[entry.path] = stamp;
           await _save();
           imported++;
-          if (imported >= 100) {
-            status =
-                '$imported documents indexed · continuing at the next check.';
-            return;
-          }
         }
       }
       status =

@@ -147,4 +147,89 @@ void main() {
       expect(imported, 0);
     },
   );
+  test(
+    'a failed PDF stays retryable while other documents continue importing',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'lifenizer-doc-watch-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final bad = await _document('${directory.path}/bad.pdf', 'encrypted PDF');
+      final goodFolder = await Directory('${directory.path}/other').create();
+      final good = await _document(
+        '${goodFolder.path}/good.pdf',
+        'readable PDF',
+      );
+      final state = _Vault()
+        ..session = AuthSession(
+          authToken: 'token',
+          userId: 'owner',
+          vaultId: 'vault',
+          vaultSalt: 'salt',
+        );
+      addTearDown(state.dispose);
+      final store = _Store();
+      final imports = <String>[];
+      var throwBad = false;
+      final watcher = DocumentFolderWatchService(
+        state,
+        store: store,
+        importFile: (path) async {
+          imports.add(path);
+          if (path == bad.path) {
+            if (throwBad) throw const FormatException('Corrupt PDF');
+            return false;
+          }
+          return true;
+        },
+      );
+      addTearDown(watcher.dispose);
+      watcher.start();
+      await _settled(watcher);
+      await watcher.addFolder(directory.path);
+      imports.clear();
+      await watcher.addFolder(goodFolder.path);
+      expect(imports, [bad.path, good.path]);
+      expect((store.saved.values.single['stamps'] as Map).keys, [good.path]);
+      expect(watcher.error, contains('bad.pdf'));
+      imports.clear();
+      throwBad = true;
+      await watcher.check();
+      expect(imports, [bad.path]);
+      expect(watcher.error, isNotNull);
+      expect((store.saved.values.single['stamps'] as Map).keys, [good.path]);
+    },
+  );
+  test('failed imports count toward the 100-document per-pass limit', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'lifenizer-doc-watch-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    for (var index = 0; index < 101; index++) {
+      await _document('${directory.path}/scan$index.pdf', 'encrypted PDF');
+    }
+    final state = _Vault()
+      ..session = AuthSession(
+        authToken: 'token',
+        userId: 'owner',
+        vaultId: 'vault',
+        vaultSalt: 'salt',
+      );
+    addTearDown(state.dispose);
+    var attempted = 0;
+    final watcher = DocumentFolderWatchService(
+      state,
+      store: _Store(),
+      importFile: (_) async {
+        attempted++;
+        return false;
+      },
+    );
+    addTearDown(watcher.dispose);
+    watcher.start();
+    await _settled(watcher);
+    await watcher.addFolder(directory.path);
+    expect(attempted, 100);
+    expect(watcher.error, isNotNull);
+  });
 }

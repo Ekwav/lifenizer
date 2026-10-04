@@ -102,6 +102,8 @@ PNG and JPEG files. Only files directly in the selected folder are indexed;
 subdirectories are not traversed. Checks run while the app is open and unlocked.
 The saved folder path and file stamps stay in the OS credential store. Changed
 files are reimported into the existing document; unchanged files are skipped.
+Unreadable documents report their filename and remain retryable while other
+files continue importing. Each check attempts at most 100 changed documents.
 Locking pauses imports. Restarting the app restores the saved watch after unlock.
 
 The API extracts digital PDF text with Poppler and OCRs pages without text with
