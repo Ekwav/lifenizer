@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../app_state.dart';
@@ -43,6 +45,9 @@ class _VaultShellState extends State<VaultShell> {
   int _selectedPageIndex = 0;
   QuickAction? _searchAction;
   int _searchRevision = 0;
+  (String?, bool)? _lastMessage;
+  bool _messageDismissed = false;
+  Timer? _messageTimer;
 
   @override
   void initState() {
@@ -53,12 +58,18 @@ class _VaultShellState extends State<VaultShell> {
 
   @override
   void dispose() {
+    _messageTimer?.cancel();
     QuickActionService.instance.removeListener(_receiveAction);
     super.dispose();
   }
 
   void _receiveAction() {
     if (mounted) setState(_applyAction);
+  }
+
+  void _dismissMessage() {
+    _messageTimer?.cancel();
+    setState(() => _messageDismissed = true);
   }
 
   void _applyAction() {
@@ -83,6 +94,15 @@ class _VaultShellState extends State<VaultShell> {
         widget.state.error ?? widget.state.syncError ?? widget.state.status;
     final hasError =
         widget.state.error != null || widget.state.syncError != null;
+    final currentMessage = (message, hasError);
+    if (_lastMessage != currentMessage) {
+      _messageTimer?.cancel();
+      _lastMessage = currentMessage;
+      _messageDismissed = false;
+      if (message != null && !hasError) {
+        _messageTimer = Timer(const Duration(seconds: 8), _dismissMessage);
+      }
+    }
 
     return CallbackShortcuts(
       bindings: {
@@ -197,7 +217,7 @@ class _VaultShellState extends State<VaultShell> {
             );
           },
         ),
-        bottomSheet: message == null
+        bottomSheet: message == null || _messageDismissed
             ? null
             : Material(
                 elevation: 8,
@@ -207,7 +227,16 @@ class _VaultShellState extends State<VaultShell> {
                   color: !hasError
                       ? const Color(0xffecfeff)
                       : const Color(0xffffebee),
-                  child: Text(message),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(message)),
+                      IconButton(
+                        tooltip: 'Dismiss message',
+                        icon: const Icon(Icons.close),
+                        onPressed: _dismissMessage,
+                      ),
+                    ],
+                  ),
                 ),
               ),
       ),
