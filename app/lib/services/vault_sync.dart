@@ -177,6 +177,7 @@ extension VaultSync on LifenizerAppState {
 
   void _clearVault() {
     participants.clear();
+    _invalidateParticipantLookup();
     conversations.clear();
     relations.clear();
     savedSearches.clear();
@@ -263,6 +264,7 @@ extension VaultSync on LifenizerAppState {
         }
         _applyEntity(envelope.entityType, decoded[i]);
       }
+      await _coalesceParticipantIdentities();
       final advanced = pulled.cursor > syncCursor;
       syncCursor = pulled.cursor;
       await _persistLocal();
@@ -300,7 +302,13 @@ extension VaultSync on LifenizerAppState {
   /// Save related edits together before publishing them. If parsing fails,
   /// completed edits still enter the encrypted outbox and can be retried.
   Future<T> batchVaultChanges<T>(Future<T> Function() action) async {
-    if (_vaultBatchDepth == 0) await _syncInFlight;
+    if (_vaultBatchDepth == 0) {
+      try {
+        await _syncInFlight;
+      } catch (_) {
+        // Offline imports can proceed after a failed background sync.
+      }
+    }
     _vaultBatchDepth++;
     try {
       return await action();
@@ -343,6 +351,7 @@ extension VaultSync on LifenizerAppState {
     participants.addAll(
       json.parseObjectList('participants', Participant.fromJson),
     );
+    _invalidateParticipantLookup();
     conversations.addAll(
       json.parseObjectList('conversations', Conversation.fromJson),
     );
@@ -351,6 +360,7 @@ extension VaultSync on LifenizerAppState {
       json.parseObjectList('savedSearches', SavedSearch.fromJson),
     );
     _pendingSync.addAll(json.parseObjectList('pending', SyncEnvelope.fromJson));
+    _rewriteParticipantReferences();
     _markSearchIndexDirty();
   }
 

@@ -281,7 +281,9 @@ class LifenizerAppState extends ChangeNotifier {
     final criteria = SearchCriteria(
       query: query,
       source: source,
-      participantId: participantId,
+      participantId: participantId == null
+          ? null
+          : resolveParticipantId(participantId),
       tag: tag,
       favoritesOnly: favoritesOnly,
       useVector: useVector,
@@ -363,7 +365,9 @@ class LifenizerAppState extends ChangeNotifier {
     final results = search(
       query,
       source: source,
-      participantId: participantId,
+      participantId: participantId == null
+          ? null
+          : resolveParticipantId(participantId),
       tag: tag,
       favoritesOnly: favoritesOnly,
       useVector: useVector,
@@ -438,7 +442,8 @@ class LifenizerAppState extends ChangeNotifier {
         conversation.startedAt.toUtc().day,
       );
       timelineCounts.update(day, (count) => count + 1, ifAbsent: () => 1);
-      for (final participantId in conversation.participantIds.toSet()) {
+      for (final participantId
+          in conversation.participantIds.map(resolveParticipantId).toSet()) {
         participantCounts.update(
           participantId,
           (count) => count + 1,
@@ -483,52 +488,371 @@ class LifenizerAppState extends ChangeNotifier {
     );
   }
 
-  String participantName(String id) {
-    return participants
-        .firstWhere(
-          (participant) => participant.id == id,
-          orElse: () => Participant(id: id, displayName: id),
-        )
-        .displayName;
+  Map<String, Participant>? _participantLookup;
+  final Map<String, String> _resolvedParticipantIds = {};
+  final Set<String> _participantCycles = {};
+  final Map<String, Set<String>> _identityPeople = {};
+  final Map<String, Set<String>> _namePeople = {};
+  bool _hasParticipantRedirects = false;
+
+  void _invalidateParticipantLookup() {
+    _participantLookup = null;
+    _resolvedParticipantIds.clear();
+    _participantCycles.clear();
+    _identityPeople.clear();
+    _namePeople.clear();
   }
 
-  Future<List<String>> ensureParticipants(String input) async {
-    return ensureParticipantNames(
-      input
-          .split(',')
-          .map((name) => name.trim())
-          .where((name) => name.isNotEmpty),
-    );
-  }
-
-  Future<List<String>> ensureParticipantNames(Iterable<String> input) async {
-    final names = input
-        .map((name) => name.trim())
-        .where((name) => name.isNotEmpty)
-        .toSet()
-        .toList();
-    final ids = <String>[];
-    var addedParticipant = false;
-    for (final name in names) {
-      final existing = participants.where(
-        (participant) =>
-            participant.displayName.toLowerCase() == name.toLowerCase(),
+  Map<String, Participant> get _people {
+    if (_participantLookup == null ||
+        _participantLookup!.length != participants.length) {
+      _invalidateParticipantLookup();
+      _participantLookup = {
+        for (final person in participants) person.id: person,
+      };
+      _hasParticipantRedirects = participants.any(
+        (person) => person.mergedInto != null,
       );
-      if (existing.isNotEmpty) {
-        ids.add(existing.first.id);
-        continue;
+      for (final person in participants) {
+        final id = resolveParticipantId(person.id);
+        for (final identifier in person.identifiers) {
+          _identityPeople
+              .putIfAbsent(
+                Participant.normalizeIdentifier(identifier),
+                () => <String>{},
+              )
+              .add(id);
+        }
+        for (final name in [person.displayName, ...person.aliases]) {
+          _namePeople
+              .putIfAbsent(_personNameKey(name), () => <String>{})
+              .add(id);
+        }
       }
-      final participant = Participant(id: _uuid.v4(), displayName: name);
-      participants.add(participant);
-      addedParticipant = true;
-      ids.add(participant.id);
-      await _pushEntity('participant', participant.id, participant.toJson());
     }
-    if (addedParticipant) {
+    return _participantLookup!;
+  }
+
+  List<Participant> get activeParticipants {
+    final people = _people;
+    return people.values
+        .where(
+          (person) =>
+              person.mergedInto == null ||
+              _participantCycles.contains(person.id),
+        )
+        .toList();
+  }
+
+  String resolveParticipantId(String id) {
+    final people = _people;
+    if (!_hasParticipantRedirects) return id;
+    final path = <String>[];
+    var current = id;
+    while (true) {
+      final cached = _resolvedParticipantIds[current];
+      if (cached != null) {
+        current = cached;
+        break;
+      }
+      final cycleStart = path.indexOf(current);
+      if (cycleStart >= 0) {
+        final cycle = path.skip(cycleStart).toList()..sort();
+        current = cycle.first;
+        _participantCycles.add(current);
+        break;
+      }
+      path.add(current);
+      final target = people[current]?.mergedInto;
+      if (target == null) break;
+      current = target;
+    }
+    for (final source in path) {
+      _resolvedParticipantIds[source] = current;
+    }
+    return current;
+  }
+
+  Participant? participantById(String id) => _people[resolveParticipantId(id)];
+
+  String participantName(String id) => participantById(id)?.displayName ?? id;
+  static String _personNameKey(String name) =>
+      name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+  Future<List<String>> ensureParticipants(String input) =>
+      ensureParticipantNames(input.split(','));
+
+  Future<List<String>> ensureParticipantNames(Iterable<String> input) =>
+      batchVaultChanges(() async {
+        final ids = <String>{};
+        for (final name
+            in input
+                .map((name) => name.trim())
+                .where((name) => name.isNotEmpty)
+                .toSet()) {
+          ids.add((await ensureParticipantIdentity(name)).id);
+        }
+        return ids.toList();
+      });
+
+  Future<Participant> ensureExternalParticipant({
+    required String provider,
+    required String externalId,
+    String? displayName,
+    Iterable<String> aliases = const [],
+    bool persist = true,
+  }) => ensureParticipantIdentity(
+    displayName ?? '$provider:$externalId',
+    identifiers: ['$provider:$externalId'],
+    aliases: aliases,
+    persist: persist,
+  );
+
+  Future<Participant> ensureParticipantIdentity(
+    String displayName, {
+    Iterable<String> identifiers = const [],
+    Iterable<String> aliases = const [],
+    bool persist = true,
+  }) async {
+    final name = displayName.trim();
+    final identities = identifiers
+        .map(Participant.normalizeIdentifier)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (RegExp(r'^[^\s@]+@[^\s@]+$').hasMatch(name) ||
+        RegExp(r'^(?:discord|email):', caseSensitive: false).hasMatch(name)) {
+      final identifier = Participant.normalizeIdentifier(name);
+      if (identifier.isNotEmpty) identities.add(identifier);
+    }
+    if (name.isEmpty && identities.isEmpty) {
+      throw ArgumentError('A name or identity is required.');
+    }
+    final people = _people;
+    final exact = <String>{
+      for (final identity in identities) ...?_identityPeople[identity],
+    };
+    Participant? existing;
+    if (exact.isNotEmpty) {
+      final ordered = exact.toList()..sort();
+      existing = participantById(ordered.first);
+      for (final id in ordered.skip(1)) {
+        await _mergeParticipantRecords(id, ordered.first, persist: persist);
+      }
+      existing = participantById(ordered.first);
+    } else {
+      final byName = (_namePeople[_personNameKey(name)] ?? const <String>{})
+          .map((id) => people[id])
+          .whereType<Participant>()
+          .toList();
+      // A known provider identity must never attach to a different known ID just
+      // because the display names match. Ambiguous name-only imports stay separate.
+      if (byName.length == 1 &&
+          (identities.isEmpty || byName.single.identifiers.isEmpty)) {
+        existing = byName.single;
+      } else if (identities.isEmpty) {
+        final unknown = byName
+            .where((person) => person.identifiers.isEmpty)
+            .toList();
+        if (unknown.length == 1) existing = unknown.single;
+      }
+    }
+    final id =
+        existing?.id ??
+        (identities.isEmpty
+            ? _uuid.v4()
+            : _uuid.v5(
+                Namespace.url.value,
+                'lifenizer:person:${(identities.toList()..sort()).first}',
+              ));
+    final names = <String>{
+      ...?existing?.aliases,
+      ...aliases
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty),
+    };
+    if (existing != null && name.isNotEmpty && name != existing.displayName) {
+      names.add(name);
+    }
+    final person = Participant(
+      id: id,
+      displayName:
+          existing?.displayName ?? (name.isEmpty ? identities.first : name),
+      identifiers: {...?existing?.identifiers, ...identities}.toList()..sort(),
+      aliases: names.toList()..sort(),
+    );
+    if (existing == null ||
+        jsonEncode(existing.toJson()) != jsonEncode(person.toJson())) {
+      participants.removeWhere((item) => item.id == id);
+      participants.add(person);
+      _invalidateParticipantLookup();
       _markSearchIndexDirty();
+      if (persist) await _pushEntity('participant', id, person.toJson());
+      notifyListeners();
+    }
+    return person;
+  }
+
+  Future<void> addParticipantIdentity(String personId, String identifier) =>
+      _run(
+        () => batchVaultChanges(() async {
+          final person = participantById(personId);
+          if (person == null) throw ArgumentError('Choose an existing person.');
+          final canonical = Participant.normalizeIdentifier(identifier);
+          if (canonical.isEmpty ||
+              !RegExp(r'^[a-z][a-z0-9_-]*:[^\s]+$').hasMatch(canonical) ||
+              canonical.startsWith('email:') &&
+                  !RegExp(r'^email:[^\s@]+@[^\s@]+$').hasMatch(canonical)) {
+            throw ArgumentError('Enter a valid email or provider:id.');
+          }
+          final matched = await ensureParticipantIdentity(
+            person.displayName,
+            identifiers: [...person.identifiers, canonical],
+            aliases: person.aliases,
+          );
+          if (matched.id != person.id) {
+            await _mergeParticipantRecords(person.id, matched.id);
+          }
+          status = 'Identity linked; future imports use this person';
+        }),
+      );
+
+  Future<void> mergeParticipants(String sourceId, String targetId) => _run(
+    () => batchVaultChanges(() async {
+      await _mergeParticipantRecords(sourceId, targetId);
+      status = 'People merged; future imports use the same person';
+    }),
+  );
+
+  Future<void> _mergeParticipantRecords(
+    String sourceId,
+    String targetId, {
+    bool persist = true,
+    bool rewriteReferences = true,
+  }) async {
+    sourceId = resolveParticipantId(sourceId);
+    targetId = resolveParticipantId(targetId);
+    if (sourceId == targetId) return;
+    final source = participantById(sourceId);
+    final target = participantById(targetId);
+    if (source == null || target == null) {
+      throw ArgumentError('Choose two existing people.');
+    }
+    final combined = Participant(
+      id: target.id,
+      displayName: target.displayName,
+      identifiers: {...target.identifiers, ...source.identifiers}.toList()
+        ..sort(),
+      aliases: {
+        ...target.aliases,
+        ...source.aliases,
+        source.displayName,
+      }.where((name) => name != target.displayName).toList()..sort(),
+    );
+    final redirect = Participant(
+      id: source.id,
+      displayName: source.displayName,
+      identifiers: source.identifiers,
+      aliases: source.aliases,
+      mergedInto: target.id,
+    );
+    participants.removeWhere(
+      (person) => person.id == source.id || person.id == target.id,
+    );
+    participants.addAll([combined, redirect]);
+    _invalidateParticipantLookup();
+    final changed = rewriteReferences
+        ? _rewriteParticipantReferences()
+        : const <Conversation>[];
+    _markSearchIndexDirty();
+    if (persist) {
+      await _pushEntity('participant', combined.id, combined.toJson());
+      await _pushEntity('participant', redirect.id, redirect.toJson());
+      for (final conversation in changed) {
+        await _pushEntity(
+          'conversation',
+          conversation.id,
+          conversation.toJson(),
+        );
+      }
     }
     notifyListeners();
-    return ids;
+  }
+
+  Future<void> _coalesceParticipantIdentities() async {
+    _people;
+    final duplicates = _identityPeople.entries
+        .where((entry) => entry.key.contains(':') && entry.value.length > 1)
+        .map((entry) => entry.value.toList())
+        .toList();
+    if (duplicates.isEmpty) return;
+    var changed = false;
+    // The caller persists these envelopes with the pulled cursor. Syncing here
+    // would await our own in-flight pull; references are rewritten once per page.
+    _vaultBatchDepth++;
+    try {
+      for (final group in duplicates) {
+        final ids = group.map(resolveParticipantId).toSet().toList()..sort();
+        for (final source in ids.skip(1)) {
+          await _mergeParticipantRecords(
+            source,
+            ids.first,
+            rewriteReferences: false,
+          );
+          changed = true;
+        }
+      }
+      if (changed) {
+        for (final conversation in _rewriteParticipantReferences()) {
+          await _pushEntity(
+            'conversation',
+            conversation.id,
+            conversation.toJson(),
+          );
+        }
+      }
+    } finally {
+      _vaultBatchDepth--;
+    }
+  }
+
+  Conversation _canonicalConversation(Conversation conversation) {
+    _people;
+    if (!_hasParticipantRedirects) return conversation;
+    final ids = conversation.participantIds
+        .map(resolveParticipantId)
+        .toSet()
+        .toList();
+    final segments = conversation.segments.map((segment) {
+      final id = segment.participantId;
+      if (id == null || resolveParticipantId(id) == id) return segment;
+      return ConversationSegment.fromJson({
+        ...segment.toJson(),
+        'participantId': resolveParticipantId(id),
+      });
+    }).toList();
+    if (listEquals(ids, conversation.participantIds) &&
+        listEquals(segments, conversation.segments)) {
+      return conversation;
+    }
+    return Conversation.fromJson({
+      ...conversation.toJson(),
+      'participantIds': ids,
+      'segments': segments.map((segment) => segment.toJson()).toList(),
+    });
+  }
+
+  List<Conversation> _rewriteParticipantReferences() {
+    _people;
+    if (!_hasParticipantRedirects) return const [];
+    final changed = <Conversation>[];
+    for (var i = 0; i < conversations.length; i++) {
+      final canonical = _canonicalConversation(conversations[i]);
+      if (!identical(canonical, conversations[i])) {
+        conversations[i] = canonical;
+        changed.add(canonical);
+      }
+    }
+    return changed;
   }
 
   Future<void> importSharedPayload({
@@ -778,13 +1102,59 @@ class LifenizerAppState extends ChangeNotifier {
   void _applyEntity(String entityType, Map<String, dynamic> json) {
     switch (entityType) {
       case 'participant':
-        final participant = Participant.fromJson(json);
+        final incoming = Participant.fromJson(json);
+        final previous = _people[incoming.id];
+        final participant = Participant(
+          id: incoming.id,
+          displayName: previous?.displayName ?? incoming.displayName,
+          identifiers: {
+            ...?previous?.identifiers,
+            ...incoming.identifiers,
+          }.toList()..sort(),
+          aliases: {
+            ...?previous?.aliases,
+            ...incoming.aliases,
+            if (previous != null &&
+                previous.displayName != incoming.displayName)
+              incoming.displayName,
+          }.toList()..sort(),
+          mergedInto: previous?.mergedInto == null
+              ? incoming.mergedInto
+              : incoming.mergedInto == null
+              ? previous!.mergedInto
+              : ([previous!.mergedInto!, incoming.mergedInto!]..sort()).first,
+        );
         participants.removeWhere((item) => item.id == participant.id);
         participants.add(participant);
+        _invalidateParticipantLookup();
+        if (participant.mergedInto != null) {
+          final target = participantById(participant.id);
+          if (target != null && target.id != participant.id) {
+            final combined = Participant(
+              id: target.id,
+              displayName: target.displayName,
+              identifiers: {
+                ...target.identifiers,
+                ...participant.identifiers,
+              }.toList()..sort(),
+              aliases: {
+                ...target.aliases,
+                ...participant.aliases,
+                participant.displayName,
+              }.where((name) => name != target.displayName).toList()..sort(),
+            );
+            participants.removeWhere((item) => item.id == target.id);
+            participants.add(combined);
+            _invalidateParticipantLookup();
+          }
+        }
+        if (participant.mergedInto != null) _rewriteParticipantReferences();
         _markSearchIndexDirty();
         break;
       case 'conversation':
-        final conversation = Conversation.fromJson(json);
+        final conversation = _canonicalConversation(
+          Conversation.fromJson(json),
+        );
         conversations.removeWhere((item) => item.id == conversation.id);
         conversations.add(conversation);
         _markSearchIndexDirty();
@@ -900,9 +1270,11 @@ class LifenizerAppState extends ChangeNotifier {
       return;
     }
 
-    final participantById = <String, String>{
+    final participantSearchText = <String, String>{
       for (final participant in participants)
-        participant.id: participant.displayName.toLowerCase(),
+        participant.id:
+            participantById(participant.id)?.searchableText ??
+            participant.searchableText,
     };
     final relationTextByConversation = <String, StringBuffer>{};
     for (final relation in relations) {
@@ -927,7 +1299,7 @@ class LifenizerAppState extends ChangeNotifier {
 
     _searchIndex = ConversationSearchIndex.build(
       conversations: conversations,
-      participantById: participantById,
+      participantById: participantSearchText,
       relationTextByConversation: relationTextByConversation.map(
         (key, value) => MapEntry(key, value.toString().toLowerCase()),
       ),

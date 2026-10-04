@@ -110,29 +110,61 @@ class Participant {
     required this.id,
     required this.displayName,
     this.identifiers = const [],
+    this.aliases = const [],
+    this.mergedInto,
   });
 
   final String id;
   final String displayName;
   final List<String> identifiers;
+  final List<String> aliases;
 
-  /// Serialize to JSON.
+  /// A persistent redirect; stale imports and sync events cannot recreate this person.
+  final String? mergedInto;
+  String get searchableText =>
+      [displayName, ...aliases, ...identifiers].join(' ');
+
+  static String normalizeIdentifier(String identifier) {
+    final value = identifier.trim();
+    final colon = value.indexOf(':');
+    final provider = colon < 0
+        ? (value.contains('@') ? 'email' : '')
+        : value.substring(0, colon).toLowerCase();
+    var identity = colon < 0 ? value : value.substring(colon + 1).trim();
+    if (identity.isEmpty) return '';
+    if (provider == 'email') identity = identity.toLowerCase();
+    if (provider == 'discord' && RegExp(r'^\d+$').hasMatch(identity)) {
+      identity = identity.replaceFirst(RegExp(r'^0+(?=\d)'), '');
+    }
+    return provider.isEmpty ? identity : '$provider:$identity';
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'displayName': displayName,
     'identifiers': identifiers,
+    if (aliases.isNotEmpty) 'aliases': aliases,
+    if (mergedInto != null) 'mergedInto': mergedInto,
   };
-
   factory Participant.fromJson(Map<String, dynamic> json) => Participant(
     id: json['id'] as String,
     displayName: json['displayName'] as String,
-    identifiers: json.parseStringList('identifiers'),
+    identifiers: json
+        .parseStringList('identifiers')
+        .map(normalizeIdentifier)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(),
+    aliases: json.parseStringList('aliases'),
+    mergedInto: json['mergedInto'] as String?,
   );
 }
 
 /// Represents a single segment/message in a conversation with metadata.
 class ConversationSegment {
   ConversationSegment({
+    this.attachmentUrls = const [],
+    this.sourceMessageId,
     required this.id,
     required this.text,
     this.participantId,
@@ -140,6 +172,8 @@ class ConversationSegment {
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now().toUtc();
 
+  final List<String> attachmentUrls;
+  final String? sourceMessageId;
   final String id;
   final String text;
   final String? participantId;
@@ -148,6 +182,8 @@ class ConversationSegment {
 
   /// Serialize to JSON.
   Map<String, dynamic> toJson() => {
+    if (attachmentUrls.isNotEmpty) 'attachmentUrls': attachmentUrls,
+    if (sourceMessageId != null) 'sourceMessageId': sourceMessageId,
     'id': id,
     'text': text,
     'participantId': participantId,
@@ -157,6 +193,8 @@ class ConversationSegment {
 
   factory ConversationSegment.fromJson(Map<String, dynamic> json) {
     return ConversationSegment(
+      sourceMessageId: json['sourceMessageId'] as String?,
+      attachmentUrls: json.parseStringList('attachmentUrls'),
       id: json['id'] as String,
       text: json['text'] as String,
       participantId: json['participantId'] as String?,
@@ -169,6 +207,7 @@ class ConversationSegment {
 /// Represents a conversation/thread with metadata and segments.
 class Conversation {
   Conversation({
+    this.sourceThreadId,
     required this.id,
     required this.title,
     required this.source,
@@ -183,6 +222,7 @@ class Conversation {
   }) : startedAt = startedAt ?? DateTime.now().toUtc(),
        endedAt = endedAt ?? DateTime.now().toUtc();
 
+  final String? sourceThreadId;
   final String id;
   final String title;
   final String source;
@@ -208,6 +248,7 @@ class Conversation {
 
   /// Serialize to JSON.
   Map<String, dynamic> toJson() => {
+    if (sourceThreadId != null) 'sourceThreadId': sourceThreadId,
     'id': id,
     'title': title,
     'source': source,
@@ -222,6 +263,7 @@ class Conversation {
   };
 
   factory Conversation.fromJson(Map<String, dynamic> json) => Conversation(
+    sourceThreadId: json['sourceThreadId'] as String?,
     id: json['id'] as String,
     title: json['title'] as String,
     source: json['source'] as String,
@@ -602,21 +644,25 @@ class NormalizedParticipant {
   NormalizedParticipant({
     required this.displayName,
     this.identifiers = const [],
+    this.aliases = const [],
   });
 
   final String displayName;
   final List<String> identifiers;
+  final List<String> aliases;
 
   /// Serialize to JSON for caching/persistence.
   Map<String, dynamic> toJson() => {
     'displayName': displayName,
     'identifiers': identifiers,
+    if (aliases.isNotEmpty) 'aliases': aliases,
   };
 
   factory NormalizedParticipant.fromJson(Map<String, dynamic> json) {
     return NormalizedParticipant(
       displayName: json['displayName'] as String,
       identifiers: json.parseStringList('identifiers'),
+      aliases: json.parseStringList('aliases'),
     );
   }
 }
@@ -624,6 +670,8 @@ class NormalizedParticipant {
 /// Represents a conversation extracted during import normalization.
 class NormalizedConversation {
   NormalizedConversation({
+    this.participantIdentifiers = const [],
+    this.sourceThreadId,
     required this.title,
     required this.source,
     required this.participantNames,
@@ -631,6 +679,8 @@ class NormalizedConversation {
     this.artifactNames = const [],
   });
 
+  final List<String> participantIdentifiers;
+  final String? sourceThreadId;
   final String title;
   final String source;
   final List<String> participantNames;
@@ -639,6 +689,9 @@ class NormalizedConversation {
 
   /// Serialize to JSON for caching/persistence.
   Map<String, dynamic> toJson() => {
+    if (participantIdentifiers.isNotEmpty)
+      'participantIdentifiers': participantIdentifiers,
+    if (sourceThreadId != null) 'sourceThreadId': sourceThreadId,
     'title': title,
     'source': source,
     'participantNames': participantNames,
@@ -648,6 +701,8 @@ class NormalizedConversation {
 
   factory NormalizedConversation.fromJson(Map<String, dynamic> json) {
     return NormalizedConversation(
+      sourceThreadId: json['sourceThreadId'] as String?,
+      participantIdentifiers: json.parseStringList('participantIdentifiers'),
       title: json['title'] as String,
       source: json['source'] as String,
       participantNames: json.parseStringList('participantNames'),
@@ -663,12 +718,18 @@ class NormalizedConversation {
 /// Represents a segment/message extracted during import normalization.
 class NormalizedSegment {
   NormalizedSegment({
+    this.attachmentUrls = const [],
+    this.participantIdentifier,
+    this.sourceMessageId,
     required this.text,
     this.participantName,
     this.offsetMs = 0,
     this.createdAt,
   });
 
+  final List<String> attachmentUrls;
+  final String? participantIdentifier;
+  final String? sourceMessageId;
   final String text;
   final String? participantName;
   final int offsetMs;
@@ -676,6 +737,10 @@ class NormalizedSegment {
 
   /// Serialize to JSON for caching/persistence.
   Map<String, dynamic> toJson() => {
+    if (attachmentUrls.isNotEmpty) 'attachmentUrls': attachmentUrls,
+    if (participantIdentifier != null)
+      'participantIdentifier': participantIdentifier,
+    if (sourceMessageId != null) 'sourceMessageId': sourceMessageId,
     'text': text,
     'participantName': participantName,
     'offsetMs': offsetMs,
@@ -684,6 +749,9 @@ class NormalizedSegment {
 
   factory NormalizedSegment.fromJson(Map<String, dynamic> json) {
     return NormalizedSegment(
+      sourceMessageId: json['sourceMessageId'] as String?,
+      participantIdentifier: json['participantIdentifier'] as String?,
+      attachmentUrls: json.parseStringList('attachmentUrls'),
       text: json['text'] as String,
       participantName: json['participantName'] as String?,
       offsetMs: json['offsetMs'] as int? ?? 0,

@@ -84,6 +84,11 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_viewModel.participantFilter.isNotEmpty) {
+      _viewModel.participantFilter = widget.state.resolveParticipantId(
+        _viewModel.participantFilter,
+      );
+    }
     // Compute search results based on current filters
     final results = widget.state.search(
       _viewModel.queryController.text,
@@ -114,7 +119,7 @@ class _SearchPageState extends State<SearchPage> {
             SearchFilters(
               viewModel: _viewModel,
               availableSources: widget.state.availableSources,
-              availableParticipants: widget.state.participants
+              availableParticipants: widget.state.activeParticipants
                   .map((item) => item.id)
                   .toList(),
               availableTags: widget.state.allTags,

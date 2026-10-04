@@ -39,6 +39,7 @@ class ConversationSearchIndex {
   final Map<String, Set<String>> invertedIndex;
   final Map<String, double> idf;
   final double averageLength;
+  static final _digits = RegExp(r'^\d+$');
   static final _word = RegExp(r'[\p{L}\p{N}\p{M}]+', unicode: true);
 
   static ConversationSearchIndex build({
@@ -49,9 +50,12 @@ class ConversationSearchIndex {
     final docs = <String, IndexedConversation>{};
     final inverted = <String, Set<String>>{};
     for (final conversation in conversations) {
-      final participantText = conversation.participantIds
-          .map((id) => participantById[id] ?? id)
-          .join(' ');
+      final participantText = {
+        ...conversation.participantIds,
+        ...conversation.segments
+            .map((segment) => segment.participantId)
+            .whereType<String>(),
+      }.map((id) => participantById[id] ?? id).join(' ');
       final tokens = tokenize(
         '${conversation.searchableText} $participantText '
         '${relationTextByConversation[conversation.id] ?? ''}',
@@ -113,6 +117,10 @@ class ConversationSearchIndex {
   Map<String, Map<String, double>> expandTokens(List<String> tokens) {
     final expansions = <String, Map<String, double>>{};
     for (final token in tokens.toSet()) {
+      if (_digits.hasMatch(token)) {
+        expansions[token] = invertedIndex.containsKey(token) ? {token: 1} : {};
+        continue;
+      }
       final matches = <String, double>{};
       for (final indexed in invertedIndex.keys) {
         final quality = _matchQuality(token, indexed);
