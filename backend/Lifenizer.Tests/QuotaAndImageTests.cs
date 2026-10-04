@@ -60,6 +60,56 @@ public sealed class QuotaAndImageTests
     // -----------------------------------------------------------------------
 
     [Test]
+    public async Task ListImagesReturnsEmptyForANewAccountWithSqlite()
+    {
+        await using var factory = new LifenizerApiFactory();
+        using var client = factory.CreateClient();
+        var auth = await LoginAsync(client, "empty-images@example.test");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AuthToken);
+        using var scope = factory.Services.CreateScope();
+        Assert.That(scope.ServiceProvider.GetRequiredService<LifenizerDbContext>().Database.ProviderName, Is.EqualTo("Microsoft.EntityFrameworkCore.Sqlite"));
+        Assert.That(await client.GetFromJsonAsync<JsonElement[]>("/api/images", JsonOptions), Is.Empty);
+        Assert.That(await client.GetFromJsonAsync<JsonElement[]>("/api/images?conversationId=missing-chat", JsonOptions), Is.Empty);
+    }
+
+    [Test]
+    public async Task ListImagesSortsActualInstantsAndKeepsUserAndConversationIsolation()
+    {
+        await using var factory = new LifenizerApiFactory();
+        using var client = factory.CreateClient();
+        using var other = factory.CreateClient();
+        var auth = await LoginAsync(client, "image-owner@example.test");
+        var otherAuth = await LoginAsync(other, "other-image-owner@example.test");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AuthToken);
+        other.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", otherAuth.AuthToken);
+        var older = Image(auth.UserId, "shared-chat", DateTimeOffset.Parse("2026-10-03T12:00:00+02:00"));
+        var newer = Image(auth.UserId, "shared-chat", DateTimeOffset.Parse("2026-10-03T11:00:00+00:00"));
+        var differentChat = Image(auth.UserId, "other-chat", DateTimeOffset.Parse("2026-10-03T12:00:00+00:00"));
+        var otherOwner = Image(otherAuth.UserId, "shared-chat", DateTimeOffset.Parse("2026-10-03T13:00:00+00:00"));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<LifenizerDbContext>();
+            db.Images.AddRange(older, newer, differentChat, otherOwner);
+            await db.SaveChangesAsync();
+        }
+        var all = await client.GetFromJsonAsync<JsonElement[]>("/api/images", JsonOptions);
+        var chat = await client.GetFromJsonAsync<JsonElement[]>("/api/images?conversationId=shared-chat", JsonOptions);
+        var otherChat = await other.GetFromJsonAsync<JsonElement[]>("/api/images?conversationId=shared-chat", JsonOptions);
+        Assert.Multiple(() =>
+        {
+            Assert.That(all!.Select(image => image.GetProperty("id").GetGuid()), Is.EqualTo(new[] { differentChat.Id, newer.Id, older.Id }));
+            Assert.That(chat!.Select(image => image.GetProperty("id").GetGuid()), Is.EqualTo(new[] { newer.Id, older.Id }));
+            Assert.That(otherChat!.Single().GetProperty("id").GetGuid(), Is.EqualTo(otherOwner.Id));
+        });
+    }
+
+    private static ImageRecord Image(Guid owner, string conversationId, DateTimeOffset uploadedAt) => new()
+    {
+        Id = Guid.NewGuid(), UserId = owner, ConversationId = conversationId, UploadedAt = uploadedAt,
+        FileName = "opaque.bin", ContentType = "application/octet-stream", BlobPath = "unused.bin", SizeBytes = 1
+    };
+
+    [Test]
     public async Task UploadAndDownloadImage()
     {
         await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>

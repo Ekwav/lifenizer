@@ -197,7 +197,6 @@ public static class ImageEndpoints
                 query = query.Where(img => img.ConversationId == conversationId);
 
             var list = await query
-                .OrderByDescending(img => img.UploadedAt)
                 .Select(img => new
                 {
                     img.Id,
@@ -209,7 +208,8 @@ public static class ImageEndpoints
                 })
                 .ToListAsync(cancellationToken);
 
-            return Results.Ok(list);
+            // SQLite cannot translate DateTimeOffset ordering; filter and project before sorting.
+            return Results.Ok(list.OrderByDescending(img => img.UploadedAt));
         });
 
         return app;
