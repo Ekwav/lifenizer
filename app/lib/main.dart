@@ -8,6 +8,7 @@ import 'e2e_bridge.dart';
 import 'pages/login_page.dart';
 import 'share_intent_service.dart';
 import 'services/quick_action_service.dart';
+import 'services/export_watch_service.dart';
 import 'widgets/vault_shell.dart';
 
 Future<void> main([List<String> arguments = const []]) async {
@@ -19,6 +20,7 @@ Future<void> main([List<String> arguments = const []]) async {
   installE2eBridge(appState);
   unawaited(ShareIntentService.instance.start(appState));
   await QuickActionService.instance.start(appState, arguments: arguments);
+  await ExportWatchService.instance.start(appState);
   runApp(LifenizerApp(state: appState));
   if (!appState.pairing.busy) unawaited(appState.pairing.unlockSaved());
 }
@@ -49,6 +51,7 @@ class _LifenizerAppState extends State<LifenizerApp>
     _syncTimer?.cancel();
     unawaited(state.pairing.tick());
     unawaited(state.syncQuietly());
+    unawaited(ExportWatchService.instance.checkForChanges());
     _syncTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => state.syncQuietly(),

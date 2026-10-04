@@ -72,6 +72,9 @@ Notes:
 
 ### email (IMAP)
 
+Use **Imports → Connect email** in the app. See the [email setup guide](EMAIL.md)
+for credentials, automatic checks and TLS configuration.
+
 Required:
 
 - Server config `Imports:Imap:Host`
@@ -95,6 +98,38 @@ Required:
 Optional:
 
 - `limit` (1..50)
+
+### Discord data package (local desktop import)
+
+In the native desktop app, open **Imports → Choose backup or export**, or drag
+Discord's `package.zip` onto Imports. The reader opens the ZIP directory and
+inflates only `Account/user.json`, the message channel index, `channel.json` and
+`messages.json` under `Messages/` or German `Nachrichten/`. Activity files and
+media remain compressed; the whole package is never loaded or uploaded, and no
+plaintext extraction directory is created. Selected JSON is bounded to 8 MiB per
+entry and 256 MiB per import. Large packages use this local route rather than the
+64 MiB general upload route.
+
+[Discord's official data package](https://support.discord.com/hc/en-us/articles/360004957991-Your-Discord-Data-Package)
+contains your **own sent messages**, not other people's replies. Imports retain
+channel/message IDs, dates and attachment links. Account/recipient IDs identify
+people without guessing from shared display names; account email and Discord ID
+can identify the same person. Deleted recipients without IDs remain unlinked.
+Repeat exports merge appended messages and edits into existing threads while
+retaining older history and your favorites/tags. IDs are stable across devices.
+
+Enable **Watch this Discord export for changes** to import again when you
+replace the chosen ZIP with a newer export, while the desktop app is open and
+unlocked. Stop watching from Imports. The watched path is stored in the OS
+keyring, scoped to the account; message content stays in the encrypted vault.
+This watches a local export and does not fetch new messages from Discord.
+
+Continuous Discord access requires a separately authorized integration.
+[Discord RPC](https://docs.discord.com/developers/topics/rpc) uses OAuth and
+[restricted scopes](https://docs.discord.com/developers/topics/oauth2);
+personal-token [self-bot automation is prohibited](https://support.discord.com/hc/en-us/articles/115002192352-Automated-User-Accounts-Self-Bots).
+A bot can ingest channels it is permitted to access, with the required gateway
+intents and permissions; no such bot is configured by this importer.
 
 ### discord API mode
 
@@ -299,15 +334,16 @@ shows the detected source, added conversation count, and duplicate count.
 Importing an identical export again skips its conversations, even if the file is
 renamed, the app restarts, or another synced device imports it. Fingerprints live
 inside encrypted conversation records and encrypted local snapshots. Historical
-imports made before duplicate protection have no fingerprints. Changed exports
-are new imports; this does not merge appended messages into an existing thread
-or continuously watch a folder. Avoid importing the same changed export on two
+imports made before duplicate protection have no fingerprints. For formats without stable thread/message IDs, changed exports
+are new imports. Discord data packages and paginated email imports use stable
+IDs to merge updates. The optional Discord export watch is described above. Avoid importing the same changed export on two
 devices simultaneously before they sync.
 
 Shared files wait in memory while locked, are read from Android content grants
 after unlock, and leave no app-created plaintext share cache. Closing/restarting
-before import completes requires sharing again. Native sharing and the file
-picker accept files up to 64 MiB. The configured server processes readable
+before import completes requires sharing again. Native sharing and the general
+file picker accept files up to 64 MiB; native desktop Discord ZIP
+imports selectively read larger packages as described above. The configured server processes readable
 exports in plaintext, then the app encrypts the results before storage and sync.
 Encrypted WhatsApp/Signal database backups and encrypted Lifenizer cache files
 are not readable chat exports; use the messenger's chat export or connect the

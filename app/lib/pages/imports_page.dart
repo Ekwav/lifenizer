@@ -1,12 +1,16 @@
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart'
+    show kDebugMode, kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 import '../app_state.dart';
 import '../models.dart';
 import '../services/export_file_reader.dart';
+import '../services/discord_archive.dart';
+import '../services/export_watch_service.dart';
 import 'page_frame.dart';
 
 class ImportsPage extends StatefulWidget {
@@ -31,6 +35,16 @@ class _ImportsPageState extends State<ImportsPage> {
     text: '{}',
   );
 
+  bool _watchExport = false;
+  bool _dragging = false;
+  bool get _desktop =>
+      !kIsWeb &&
+      const [
+        TargetPlatform.linux,
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+      ].contains(defaultTargetPlatform);
+
   @override
   void dispose() {
     _sourceController.dispose();
@@ -45,229 +59,277 @@ class _ImportsPageState extends State<ImportsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PageFrame(
-      title: 'Imports',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Import an export',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Your configured server processes imports in plaintext. Results are encrypted before sync.',
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: widget.state.busy ? null : () => _pickExport(),
-                    icon: const Icon(Icons.upload_file),
-                    label: const Text('Choose backup or export'),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Share a Telegram JSON, WhatsApp text/ZIP, or Lifenizer JSON export here. Identical backups are skipped. For other formats, choose a source below.',
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      SizedBox(
-                        width: 220,
-                        child: TextField(
-                          controller: _sourceController,
-                          decoration: const InputDecoration(
-                            labelText: 'Source',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 300,
-                        child: TextField(
-                          controller: _titleController,
-                          decoration: const InputDecoration(
-                            labelText: 'Title',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 300,
-                        child: TextField(
-                          controller: _participantsController,
-                          decoration: const InputDecoration(
-                            labelText: 'Participants',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 240,
-                        child: TextField(
-                          controller: _fileController,
-                          decoration: const InputDecoration(
-                            labelText: 'Original file',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 220,
-                        child: TextField(
-                          controller: _mimeController,
-                          decoration: const InputDecoration(
-                            labelText: 'MIME type',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _textController,
-                    minLines: 5,
-                    maxLines: 9,
-                    decoration: const InputDecoration(
-                      labelText: 'Text or export payload',
-                      border: OutlineInputBorder(),
+    return DropTarget(
+      enable:
+          _desktop &&
+          widget.state.isAuthenticated &&
+          !widget.state.busy &&
+          (ModalRoute.of(context)?.isCurrent ?? true),
+      onDragEntered: (_) => setState(() => _dragging = true),
+      onDragExited: (_) => setState(() => _dragging = false),
+      onDragDone: _dropExports,
+      child: PageFrame(
+        title: 'Imports',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Card(
+              color: _dragging
+                  ? Theme.of(context).colorScheme.secondaryContainer
+                  : null,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Import an export',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _metadataController,
-                    minLines: 2,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Provider metadata JSON',
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Discord data packages are read locally. Other configured importers process plaintext on your server. Results are encrypted before sync.',
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: widget.state.busy ? null : _runImport,
-                        icon: const Icon(Icons.input),
-                        label: const Text('Send import and encrypt result'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: widget.state.busy
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: widget.state.busy ? null : () => _pickExport(),
+                      icon: const Icon(Icons.upload_file),
+                      label: const Text('Choose backup or export'),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Drop files here or choose a Discord data ZIP, Telegram JSON, WhatsApp text/ZIP, or Lifenizer JSON export. Discord updates merge by message ID; identical backups are skipped. For other formats, choose a source below.',
+                    ),
+                    if (_desktop) ...[
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _watchExport,
+                        onChanged: widget.state.busy
                             ? null
-                            : () => _pickExport(useSource: true),
-                        icon: const Icon(Icons.file_open),
-                        label: const Text('Choose file for this source'),
+                            : (value) =>
+                                  setState(() => _watchExport = value ?? false),
+                        title: const Text(
+                          'Watch this Discord export for changes',
+                        ),
+                        subtitle: const Text(
+                          'Import again when you replace the ZIP with a newer export, while the app is open and unlocked.',
+                        ),
                       ),
-                      if (kDebugMode)
-                        for (final source in const [
-                          'whatsapp',
-                          'telegram',
-                          'signal',
-                          'slack',
-                          'teams',
-                          'facebook-messenger',
-                          'instagram',
-                          'imessage',
-                          'mbox',
-                          'git',
-                          'browser-capture',
-                          'google-search-history',
-                          'bookmarks',
-                          'lifenizer-backup',
-                          'browser-history',
-                          'youtube-transcript',
-                          'audio',
-                          'scanned-pdf',
-                        ])
-                          OutlinedButton(
-                            onPressed: widget.state.busy
-                                ? null
-                                : () => widget.state.importSample(source),
-                            child: Text(source),
-                          ),
+                      ListenableBuilder(
+                        listenable: ExportWatchService.instance,
+                        builder: (context, _) {
+                          final path = ExportWatchService.instance.path;
+                          return path == null
+                              ? const SizedBox.shrink()
+                              : ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text('Watching Discord export'),
+                                  subtitle: Text(path),
+                                  trailing: TextButton(
+                                    onPressed: () => ExportWatchService.instance
+                                        .stopWatching(),
+                                    child: const Text('Stop'),
+                                  ),
+                                );
+                        },
+                      ),
                     ],
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        SizedBox(
+                          width: 220,
+                          child: TextField(
+                            controller: _sourceController,
+                            decoration: const InputDecoration(
+                              labelText: 'Source',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 300,
+                          child: TextField(
+                            controller: _titleController,
+                            decoration: const InputDecoration(
+                              labelText: 'Title',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 300,
+                          child: TextField(
+                            controller: _participantsController,
+                            decoration: const InputDecoration(
+                              labelText: 'Participants',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 240,
+                          child: TextField(
+                            controller: _fileController,
+                            decoration: const InputDecoration(
+                              labelText: 'Original file',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 220,
+                          child: TextField(
+                            controller: _mimeController,
+                            decoration: const InputDecoration(
+                              labelText: 'MIME type',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _textController,
+                      minLines: 5,
+                      maxLines: 9,
+                      decoration: const InputDecoration(
+                        labelText: 'Text or export payload',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _metadataController,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Provider metadata JSON',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: widget.state.busy ? null : _runImport,
+                          icon: const Icon(Icons.input),
+                          label: const Text('Send import and encrypt result'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: widget.state.busy
+                              ? null
+                              : () => _pickExport(useSource: true),
+                          icon: const Icon(Icons.file_open),
+                          label: const Text('Choose file for this source'),
+                        ),
+                        if (kDebugMode)
+                          for (final source in const [
+                            'whatsapp',
+                            'telegram',
+                            'signal',
+                            'slack',
+                            'teams',
+                            'facebook-messenger',
+                            'instagram',
+                            'imessage',
+                            'mbox',
+                            'git',
+                            'browser-capture',
+                            'google-search-history',
+                            'bookmarks',
+                            'lifenizer-backup',
+                            'browser-history',
+                            'youtube-transcript',
+                            'audio',
+                            'scanned-pdf',
+                          ])
+                            OutlinedButton(
+                              onPressed: widget.state.busy
+                                  ? null
+                                  : () => widget.state.importSample(source),
+                              child: Text(source),
+                            ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          _AudioImportPanel(state: widget.state),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              for (final capability in widget.state.importCapabilities)
-                SizedBox(
-                  width: 340,
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                capability.availableNow
-                                    ? Icons.check_circle_outline
-                                    : Icons.pending_outlined,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  capability.displayName,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(capability.source),
-                          const SizedBox(height: 8),
-                          Text(capability.status),
-                          const SizedBox(height: 8),
-                          Text(
-                            capability.requiresCredentials
-                                ? 'Requires provider credentials'
-                                : 'No provider credentials required',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          if (capability.acceptedFormats.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
+            const SizedBox(height: 16),
+            _AudioImportPanel(state: widget.state),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final capability in widget.state.importCapabilities)
+                  SizedBox(
+                    width: 340,
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
                               children: [
-                                for (final format in capability.acceptedFormats)
-                                  Chip(
-                                    visualDensity: VisualDensity.compact,
-                                    label: Text(format),
+                                Icon(
+                                  capability.availableNow
+                                      ? Icons.check_circle_outline
+                                      : Icons.pending_outlined,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    capability.displayName,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
                                   ),
+                                ),
                               ],
                             ),
+                            const SizedBox(height: 8),
+                            Text(capability.source),
+                            const SizedBox(height: 8),
+                            Text(capability.status),
+                            const SizedBox(height: 8),
+                            Text(
+                              capability.requiresCredentials
+                                  ? 'Requires provider credentials'
+                                  : 'No provider credentials required',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            if (capability.acceptedFormats.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  for (final format
+                                      in capability.acceptedFormats)
+                                    Chip(
+                                      visualDensity: VisualDensity.compact,
+                                      label: Text(format),
+                                    ),
+                                ],
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -301,25 +363,68 @@ class _ImportsPageState extends State<ImportsPage> {
       final file = result?.files.single;
       if (file == null || !mounted) return;
       if (!widget.state.isAuthenticated || widget.state.busy) return;
-      final bytes = await readExportBytes(file);
-      if (!mounted) return;
-      if (!widget.state.isAuthenticated || widget.state.busy) {
-        widget.state.reportError('Unlock your vault before importing a file.');
-        return;
-      }
-      if (useSource) {
-        await widget.state.importSource(
-          source: _sourceController.text.trim(),
-          title: _titleController.text,
-          participantNames: _participantsController.text,
-          originalFileName: file.name,
-          payloadBase64: base64Encode(bytes),
-        );
+      await _importExport(file, useSource: useSource);
+    } catch (exception) {
+      widget.state.reportError('Could not import this file: $exception');
+    }
+  }
+
+  Future<void> _importExport(
+    PlatformFile file, {
+    bool useSource = false,
+  }) async {
+    if (!widget.state.isAuthenticated || widget.state.busy) return;
+    if ((!useSource ||
+            _sourceController.text.trim().toLowerCase() == 'discord') &&
+        !kIsWeb &&
+        file.path != null &&
+        file.name.toLowerCase().endsWith('.zip') &&
+        await isDiscordArchive(file.path!)) {
+      if (!widget.state.isAuthenticated || widget.state.busy) return;
+      if (_desktop && _watchExport) {
+        await ExportWatchService.instance.watch(file.path!);
       } else {
-        await widget.state.importSharedPayload(
-          fileName: file.name,
-          bytes: bytes,
+        await widget.state.importDiscordArchive(file.path!);
+      }
+      return;
+    }
+    final bytes = await readExportBytes(file);
+    if (!mounted) return;
+    if (!widget.state.isAuthenticated || widget.state.busy) {
+      widget.state.reportError('Unlock your vault before importing a file.');
+      return;
+    }
+    if (useSource) {
+      await widget.state.importSource(
+        source: _sourceController.text.trim(),
+        title: _titleController.text,
+        participantNames: _participantsController.text,
+        originalFileName: file.name,
+        payloadBase64: base64Encode(bytes),
+      );
+    } else {
+      await widget.state.importSharedPayload(fileName: file.name, bytes: bytes);
+    }
+  }
+
+  Future<void> _dropExports(DropDoneDetails details) async {
+    setState(() => _dragging = false);
+    try {
+      for (final item in details.files) {
+        if (item is DropItemDirectory) {
+          throw const FormatException(
+            'Drop an export file, rather than a folder.',
+          );
+        }
+        await _importExport(
+          PlatformFile(
+            name: item.name,
+            size: await item.length(),
+            path: item.path,
+            readStream: item.openRead(),
+          ),
         );
+        if (widget.state.error != null) break;
       }
     } catch (exception) {
       widget.state.reportError('Could not import this file: $exception');

@@ -17,6 +17,7 @@ import 'services/device_pairing.dart';
 import 'services/pairing_store.dart';
 import 'services/local_vault_store.dart';
 import 'services/shared_import_source.dart';
+import 'services/discord_archive.dart';
 
 import 'services/conversation_search_index.dart';
 import 'services/temporal_intent.dart';

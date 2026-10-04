@@ -262,92 +262,214 @@ extension VaultImports on LifenizerAppState {
     }
   }
 
+  Future<void> importDiscordArchive(String path) => _run(() async {
+    if (!isAuthenticated) {
+      throw StateError('Unlock the vault before importing a Discord export.');
+    }
+    var changed = 0;
+    var read = 0;
+    await for (final result in readDiscordArchive(
+      path,
+      onProgress: (channels, total, messages) {
+        read = messages;
+        status =
+            'Reading Discord export · $channels/$total channels · $messages messages';
+        _notifyChanged();
+      },
+    )) {
+      changed += await _ingestNormalizedImport(result);
+    }
+    status =
+        'Discord export · $read messages · $changed conversation(s) added or updated · saved encrypted';
+  });
+
   Future<int> _ingestNormalizedImport(
     NormalizedImportResult result, {
     String? fingerprint,
-  }) async {
-    var added = 0;
-    final existing = conversations
+  }) => batchVaultChanges(() async {
+    var changed = 0;
+    final receipts = conversations
         .map((c) => c.importFingerprint)
         .whereType<String>()
         .toSet();
+    final threads = <String, int>{
+      for (var i = 0; i < conversations.length; i++)
+        if (conversations[i].sourceThreadId != null)
+          '${conversations[i].source}\u0000${conversations[i].sourceThreadId}':
+              i,
+    };
+    final identities = <String, String>{};
+    final names = <String, Set<String>>{};
+    for (final person in result.participants) {
+      final resolved = await ensureParticipantIdentity(
+        person.displayName,
+        identifiers: person.identifiers,
+        aliases: person.aliases,
+      );
+      for (final identifier in person.identifiers) {
+        identities[identifier] = resolved.id;
+      }
+      for (final name in [person.displayName, ...person.aliases]) {
+        names.putIfAbsent(name.toLowerCase(), () => {}).add(resolved.id);
+      }
+    }
+    Future<String> identity(String identifier) async {
+      final existing = identities[identifier];
+      if (existing != null) return resolveParticipantId(existing);
+      final person = await ensureParticipantIdentity(
+        identifier,
+        identifiers: [identifier],
+      );
+      return identities[identifier] = person.id;
+    }
+
     for (var index = 0; index < result.conversations.length; index++) {
       final normalized = result.conversations[index];
       final receipt = fingerprint == null ? null : '$fingerprint:$index';
-      if (receipt != null && existing.contains(receipt)) {
-        continue;
-      }
-      final participantIds = await ensureParticipantNames(
-        normalized.participantNames,
-      );
-      final nameToId = <String, String>{};
-      for (final participant in participants) {
-        nameToId[participant.displayName.toLowerCase()] = participant.id;
-      }
-      // Prefer the real historical timestamps carried by the imported
-      // segments (e.g. actual WhatsApp/email message dates) over defaulting
-      // to "now". Without this, every import would look like it happened at
-      // import time, which would make searching/filtering by time useless
-      // for anything that wasn't just imported. Conversation.startedAt/
-      // endedAt fall back to DateTime.now() automatically when null is
-      // passed, so sources without per-segment timestamps (e.g. audio
-      // without detected dates) keep today's default behavior.
-      final segmentTimestamps =
-          normalized.segments
-              .map((segment) => segment.createdAt)
-              .whereType<DateTime>()
-              .toList()
-            ..sort();
-      final derivedStartedAt = segmentTimestamps.isEmpty
+      if (receipt != null && receipts.contains(receipt)) continue;
+      final threadKey = normalized.sourceThreadId == null
           ? null
-          : segmentTimestamps.first;
-      final derivedEndedAt = segmentTimestamps.isEmpty
+          : '${normalized.source}\u0000${normalized.sourceThreadId}';
+      final previousIndex = threadKey == null ? null : threads[threadKey];
+      final previous = previousIndex == null
           ? null
-          : segmentTimestamps.last;
+          : conversations[previousIndex];
+      final conversationId =
+          previous?.id ??
+          (threadKey == null
+              ? _uuid.v4()
+              : _uuid.v5(Namespace.url.value, 'lifenizer:thread:$threadKey'));
+      final participantIds = <String>{
+        ...?previous?.participantIds.map(resolveParticipantId),
+      };
+      for (final identifier in normalized.participantIdentifiers) {
+        participantIds.add(await identity(identifier));
+      }
+      for (final name in normalized.participantNames) {
+        final candidates = names[name.toLowerCase()];
+        if (candidates?.length == 1) {
+          participantIds.add(resolveParticipantId(candidates!.single));
+        } else if (candidates == null) {
+          final person = await ensureParticipantIdentity(name);
+          participantIds.add(person.id);
+          names.putIfAbsent(name.toLowerCase(), () => {}).add(person.id);
+        }
+      }
+      final segments = [...?previous?.segments];
+      final messages = <String, int>{
+        for (var i = 0; i < segments.length; i++)
+          if (segments[i].sourceMessageId != null)
+            segments[i].sourceMessageId!: i,
+      };
+      for (final segment in normalized.segments) {
+        final messageIndex = segment.sourceMessageId == null
+            ? null
+            : messages[segment.sourceMessageId];
+        final old = messageIndex == null ? null : segments[messageIndex];
+        String? participantId;
+        if (segment.participantIdentifier != null) {
+          participantId = await identity(segment.participantIdentifier!);
+        } else if (segment.participantName != null) {
+          final candidates = names[segment.participantName!.toLowerCase()];
+          if (candidates?.length == 1) {
+            participantId = resolveParticipantId(candidates!.single);
+          }
+          if (candidates == null) {
+            participantId = (await ensureParticipantIdentity(
+              segment.participantName!,
+            )).id;
+            names
+                .putIfAbsent(segment.participantName!.toLowerCase(), () => {})
+                .add(participantId);
+          }
+        }
+        if (participantId != null) participantIds.add(participantId);
+        final imported = ConversationSegment(
+          id:
+              old?.id ??
+              (segment.sourceMessageId == null
+                  ? _uuid.v4()
+                  : _uuid.v5(
+                      Namespace.url.value,
+                      'lifenizer:message:$conversationId:${segment.sourceMessageId}',
+                    )),
+          sourceMessageId: segment.sourceMessageId,
+          text: segment.text,
+          participantId: participantId,
+          offsetMs: segment.offsetMs,
+          createdAt: segment.createdAt ?? old?.createdAt,
+          attachmentUrls: segment.attachmentUrls,
+        );
+        if (messageIndex == null) {
+          if (segment.sourceMessageId != null) {
+            messages[segment.sourceMessageId!] = segments.length;
+          }
+          segments.add(imported);
+        } else {
+          segments[messageIndex] = imported;
+        }
+      }
+      if (segments.isEmpty) {
+        segments.add(
+          ConversationSegment(
+            id: _uuid.v4(),
+            text: 'Imported ${result.source} item without text.',
+          ),
+        );
+      }
+      if (normalized.sourceThreadId != null) {
+        segments.sort((a, b) {
+          final byTime = a.createdAt.compareTo(b.createdAt);
+          return byTime != 0
+              ? byTime
+              : (a.sourceMessageId ?? a.id).compareTo(
+                  b.sourceMessageId ?? b.id,
+                );
+        });
+      }
+      final dates = segments.map((s) => s.createdAt).toList()..sort();
       final conversation = Conversation(
-        id: _uuid.v4(),
-        importFingerprint: receipt,
+        id: conversationId,
+        sourceThreadId: normalized.sourceThreadId,
+        importFingerprint: previous?.importFingerprint ?? receipt,
         title: normalized.title.trim().isEmpty
             ? 'Imported ${result.source}'
             : normalized.title.trim(),
         source: normalized.source,
-        participantIds: participantIds,
-        artifactNames: normalized.artifactNames,
-        tags: _suggestTags(
-          source: normalized.source,
-          title: normalized.title,
-          text: normalized.segments.map((segment) => segment.text).join('\n'),
-          artifactNames: normalized.artifactNames,
-        ),
-        startedAt: derivedStartedAt,
-        endedAt: derivedEndedAt,
-        segments: normalized.segments.isEmpty
-            ? [
-                ConversationSegment(
-                  id: _uuid.v4(),
-                  text: 'Imported ${result.source} item without text.',
-                ),
-              ]
-            : [
-                for (final segment in normalized.segments)
-                  ConversationSegment(
-                    id: _uuid.v4(),
-                    text: segment.text,
-                    participantId: segment.participantName == null
-                        ? null
-                        : nameToId[segment.participantName!.toLowerCase()],
-                    offsetMs: segment.offsetMs,
-                    createdAt: segment.createdAt,
-                  ),
-              ],
+        participantIds: participantIds.toList(),
+        artifactNames: {
+          ...?previous?.artifactNames,
+          ...normalized.artifactNames,
+        }.toList(),
+        tags: {
+          ...?previous?.tags,
+          ..._suggestTags(
+            source: normalized.source,
+            title: normalized.title,
+            text: normalized.segments.map((s) => s.text).join('\n'),
+            artifactNames: normalized.artifactNames,
+          ),
+        }.toList(),
+        isFavorite: previous?.isFavorite ?? false,
+        startedAt: dates.first,
+        endedAt: dates.last,
+        segments: segments,
       );
-      conversations.add(conversation);
-      added++;
+      if (previous != null &&
+          jsonEncode(previous.toJson()) == jsonEncode(conversation.toJson())) {
+        continue;
+      }
+      if (previousIndex == null) {
+        if (threadKey != null) threads[threadKey] = conversations.length;
+        conversations.add(conversation);
+      } else {
+        conversations[previousIndex] = conversation;
+      }
+      if (receipt != null) receipts.add(receipt);
+      changed++;
       await _pushEntity('conversation', conversation.id, conversation.toJson());
     }
-    if (added > 0) {
-      _markSearchIndexDirty();
-    }
-    return added;
-  }
+    if (changed > 0) _markSearchIndexDirty();
+    return changed;
+  });
 }
