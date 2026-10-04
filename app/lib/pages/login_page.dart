@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
 import '../app_state.dart';
+import '../widgets/sync_progress_indicator.dart';
 import 'connection_scanner_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -88,6 +89,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 8),
                   const Text('Your conversations, searchable on every device.'),
                   const SizedBox(height: 24),
+                  SyncProgressIndicator(progress: widget.state.syncProgress),
                   if (!kIsWeb) ...[
                     if (defaultTargetPlatform == TargetPlatform.android) ...[
                       FilledButton.icon(
@@ -134,7 +136,8 @@ class _LoginPageState extends State<LoginPage> {
                       label: const Text('Connect this device'),
                     ),
                     if (widget.state.pairing.busy) ...[
-                      const LinearProgressIndicator(),
+                      if (widget.state.syncProgress == null)
+                        const LinearProgressIndicator(),
                       if (widget.state.pairing.waitingForApproval)
                         TextButton(
                           onPressed: widget.state.pairing.cancel,
@@ -271,7 +274,7 @@ class _LoginPageState extends State<LoginPage> {
                         label: const Text('Unlock this device offline'),
                       ),
                   ],
-                  if (widget.state.busy)
+                  if (widget.state.busy && widget.state.syncProgress == null)
                     const LinearProgressIndicator(),
                   if (widget.state.error != null) ...[
                     const SizedBox(height: 12),

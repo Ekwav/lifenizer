@@ -16,6 +16,7 @@ import 'services/search_criteria.dart';
 import 'services/device_pairing.dart';
 import 'services/imap_import_service.dart';
 import 'services/pairing_store.dart';
+import 'services/sync_progress.dart';
 import 'services/local_vault_store.dart';
 import 'services/shared_import_source.dart';
 import 'services/discord_archive.dart';
@@ -86,6 +87,8 @@ class LifenizerAppState extends ChangeNotifier {
   Future<void>? _syncInFlight;
   Future<void> _storageTail = Future.value();
   String? syncError;
+  SyncProgress? syncProgress;
+  final Stopwatch _syncProgressClock = Stopwatch()..start();
   Map<String, dynamic>? audioDraft;
   Future<void> Function()? stopRecording;
   DateTime? lastSyncedAt;

@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../image_widgets.dart';
+import '../widgets/sync_progress_indicator.dart';
 import 'page_frame.dart';
 
 class SyncPage extends StatelessWidget {
@@ -24,6 +25,7 @@ class SyncPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SyncProgressIndicator(progress: state.syncProgress),
           Text('${state.pendingSyncCount} change(s) waiting to sync'),
           Text(
             state.lastSyncedAt == null
@@ -136,7 +138,9 @@ class SyncPage extends StatelessWidget {
             const SizedBox(height: 20),
           ],
           FilledButton.icon(
-            onPressed: state.busy ? null : state.pullSync,
+            onPressed: state.busy || (state.syncProgress?.active ?? false)
+                ? null
+                : state.pullSync,
             icon: const Icon(Icons.sync),
             label: const Text('Sync now'),
           ),

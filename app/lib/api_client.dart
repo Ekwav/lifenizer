@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import 'models.dart';
+import 'services/vault_worker_io.dart'
+    if (dart.library.js_interop) 'services/vault_worker_web.dart';
 
 class LifenizerApiClient {
   LifenizerApiClient({
@@ -134,17 +136,44 @@ class LifenizerApiClient {
     return response['cursor'] as int;
   }
 
-  Future<PullResult> pull(int since) async {
-    final response = await _get('/api/sync/pull', {'since': '$since'});
+  Future<PullResult> pull(
+    int since, {
+    void Function(int received, int? total)? onProgress,
+  }) async {
+    final response = onProgress == null
+        ? await _get('/api/sync/pull', {'since': '$since'})
+        : await _retry(() async {
+            final request = http.Request(
+              'GET',
+              _uri('/api/sync/pull', {'since': '$since'}),
+            )..headers.addAll(_headers());
+            final streamed = await _client
+                .send(request)
+                .timeout(const Duration(seconds: 30));
+            final bytes = BytesBuilder(copy: false);
+            final total = streamed.contentLength;
+            final successful =
+                streamed.statusCode >= 200 && streamed.statusCode < 300;
+            if (successful) onProgress(0, total);
+            // A stream timeout cancels the subscription when await-for exits.
+            // Keep receiving a large vault while bytes continue to arrive.
+            await for (final chunk in streamed.stream.timeout(
+              const Duration(seconds: 30),
+            )) {
+              bytes.add(chunk);
+              if (successful) onProgress(bytes.length, total);
+            }
+            return http.Response.bytes(
+              bytes.takeBytes(),
+              streamed.statusCode,
+              headers: streamed.headers,
+            );
+          });
     _ensureSuccess(response);
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final envelopes = (data['envelopes'] as List? ?? const [])
-        .map(
-          (item) =>
-              SyncEnvelope.fromJson(Map<String, dynamic>.from(item as Map)),
-        )
-        .toList();
-    return PullResult(cursor: data['cursor'] as int, envelopes: envelopes);
+    final bytes = response.bodyBytes;
+    return bytes.length > 64 * 1024
+        ? await _decodePullInWorker(bytes)
+        : _decodePull(bytes);
   }
 
   Future<List<RelationEdge>> extractRelations({
@@ -337,3 +366,16 @@ class QuotaExceededException implements Exception {
   @override
   String toString() => 'Quota exceeded: $body';
 }
+
+PullResult _decodePull(Uint8List bytes) {
+  final data = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+  final envelopes = (data['envelopes'] as List? ?? const [])
+      .map(
+        (item) => SyncEnvelope.fromJson(Map<String, dynamic>.from(item as Map)),
+      )
+      .toList();
+  return PullResult(cursor: data['cursor'] as int, envelopes: envelopes);
+}
+
+Future<PullResult> _decodePullInWorker(Uint8List bytes) =>
+    runVaultWork(() async => _decodePull(bytes));

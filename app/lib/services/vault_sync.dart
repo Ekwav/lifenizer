@@ -113,12 +113,14 @@ extension VaultSync on LifenizerAppState {
             // Cached conversations and sync remain usable without discovery.
           }
         }
+        if (!offline) _setSyncProgress(SyncStage.saving);
         await _persistLocal();
         await _localStore!.write('settings', {
           'apiBaseUrl': apiBaseUrl,
           'email': rememberedEmail,
           'deviceId': deviceId,
         });
+        if (!offline) _setSyncProgress(SyncStage.complete);
         status = offline
             ? 'Local vault unlocked · changes will sync when connected'
             : 'Vault unlocked';
@@ -190,6 +192,7 @@ extension VaultSync on LifenizerAppState {
     _pendingSync.clear();
     syncCursor = 0;
     syncError = null;
+    syncProgress = null;
     lastSyncedAt = null;
     _searchIndex = null;
     _markSearchIndexDirty();
@@ -222,8 +225,48 @@ extension VaultSync on LifenizerAppState {
     }
   }
 
+  void _setSyncProgress(
+    SyncStage stage, {
+    int completed = 0,
+    int? total,
+    int receivedBytes = 0,
+    int? totalBytes,
+    int? downloaded,
+    int? uploaded,
+    int? batch,
+    bool force = true,
+  }) {
+    syncProgress = SyncProgress(
+      stage: stage,
+      completed: completed,
+      total: total,
+      receivedBytes: receivedBytes,
+      totalBytes: totalBytes,
+      downloaded: downloaded ?? syncProgress?.downloaded ?? 0,
+      uploaded: uploaded ?? syncProgress?.uploaded ?? 0,
+      batch: batch ?? syncProgress?.batch ?? 0,
+    );
+    if (!force && _syncProgressClock.elapsedMilliseconds < 150) return;
+    _syncProgressClock.reset();
+    _notifyChanged();
+  }
+
   Future<void> _syncNow() async {
+    try {
+      await _transferSync();
+      _setSyncProgress(SyncStage.complete);
+    } catch (_) {
+      _setSyncProgress(SyncStage.failed);
+      rethrow;
+    }
+  }
+
+  Future<void> _transferSync() async {
     final api = _requireApi();
+    final uploadTotal = _pendingSync.length;
+    var uploaded = 0;
+    var downloaded = 0;
+    var page = 0;
     var acknowledgedChanges = _pendingSync.isNotEmpty;
     while (_pendingSync.isNotEmpty) {
       final batch = <SyncEnvelope>[];
@@ -241,21 +284,59 @@ extension VaultSync on LifenizerAppState {
       }
       // The push cursor may include unseen writes from another device.
       // Only a successful pull is allowed to advance our read cursor.
+      _setSyncProgress(
+        SyncStage.uploading,
+        completed: uploaded,
+        total: uploadTotal,
+        uploaded: uploaded,
+        downloaded: 0,
+        batch: 0,
+      );
       await api.push(batch);
+      uploaded += batch.length;
       final acknowledged = batch.map((e) => e.id).toSet();
       _pendingSync.removeWhere((e) => acknowledged.contains(e.id));
     }
     while (true) {
-      final pulled = await api.pull(syncCursor);
+      page++;
+      _setSyncProgress(
+        SyncStage.downloading,
+        downloaded: downloaded,
+        uploaded: uploaded,
+        batch: page,
+      );
+      final pulled = await api.pull(
+        syncCursor,
+        onProgress: (received, total) {
+          _setSyncProgress(
+            SyncStage.downloading,
+            receivedBytes: received,
+            totalBytes: total,
+            force: false,
+          );
+        },
+      );
+      _setSyncProgress(SyncStage.decrypting, total: pulled.envelopes.length);
       final decoded = <Map<String, dynamic>>[];
       for (final envelope in pulled.envelopes) {
         decoded.add(
           await _crypto.decryptJson(
             cipherText: envelope.cipherText,
             nonce: envelope.nonce,
+            background: envelope.cipherText.length > 64 * 1024,
           ),
         );
+        _setSyncProgress(
+          SyncStage.decrypting,
+          completed: decoded.length,
+          total: pulled.envelopes.length,
+          force: false,
+        );
+        if (decoded.length % 25 == 0) {
+          await Future<void>.delayed(Duration.zero);
+        }
       }
+      _setSyncProgress(SyncStage.applying, total: pulled.envelopes.length);
       for (var i = 0; i < pulled.envelopes.length; i++) {
         final envelope = pulled.envelopes[i];
         final pending = _pendingSync.any(
@@ -270,7 +351,15 @@ extension VaultSync on LifenizerAppState {
           continue;
         }
         _applyEntity(envelope.entityType, decoded[i]);
+        _setSyncProgress(
+          SyncStage.applying,
+          completed: i + 1,
+          total: pulled.envelopes.length,
+          force: false,
+        );
+        if ((i + 1) % 25 == 0) await Future<void>.delayed(Duration.zero);
       }
+      downloaded += pulled.envelopes.length;
       await _queueImportedConversationRepairs();
       final advanced = pulled.cursor > syncCursor;
       syncCursor = pulled.cursor;
@@ -284,12 +373,16 @@ extension VaultSync on LifenizerAppState {
           pulled.envelopes.isNotEmpty ||
           advanced ||
           _pendingSync.isNotEmpty) {
+        _setSyncProgress(SyncStage.saving, downloaded: downloaded);
         await _persistLocal();
         acknowledgedChanges = false;
       }
       if (finished) break;
     }
-    if (!busy) await _prepareSearchIndex();
+    if (_needsSearchIndex) {
+      _setSyncProgress(SyncStage.indexing);
+      await _prepareSearchIndex();
+    }
     syncError = null;
     lastSyncedAt = DateTime.now();
     _notifyChanged();

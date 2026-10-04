@@ -4,6 +4,7 @@ import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
 import 'package:app/crypto_service.dart';
 import 'package:app/services/local_vault_store.dart';
+import 'package:app/services/sync_progress.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -78,6 +79,59 @@ void main() {
     password: 'account password',
     passphrase: phrase,
     offline: offline,
+  );
+
+  test(
+    'initial sync exposes stages and counts, retries failure, and clears on lock',
+    () async {
+      final server = _Server();
+      final sourceDisk = await store();
+      final targetDisk = await store();
+      addTearDown(sourceDisk.close);
+      addTearDown(targetDisk.close);
+      final source = device(server, sourceDisk);
+      final target = device(server, targetDisk);
+      addTearDown(source.dispose);
+      addTearDown(target.dispose);
+      await login(source);
+      await source.addManualText(
+        title: 'Remote note',
+        participantNames: '',
+        text: 'encrypted content',
+      );
+      final stages = <SyncStage>[];
+      target.addListener(() {
+        if (target.syncProgress case final value?) {
+          stages.add(value.stage);
+        }
+      });
+      await login(target);
+      expect(target.error, isNull);
+      expect(
+        stages,
+        containsAll([
+          SyncStage.downloading,
+          SyncStage.decrypting,
+          SyncStage.applying,
+          SyncStage.saving,
+          SyncStage.indexing,
+          SyncStage.complete,
+        ]),
+      );
+      expect(target.syncProgress!.downloaded, server.envelopes.length);
+      expect(target.syncProgress!.active, isFalse);
+      server.offline = true;
+      await target.syncQuietly();
+      expect(target.syncProgress!.stage, SyncStage.failed);
+      expect(target.syncProgress!.active, isFalse);
+      expect(target.syncError, isNotNull);
+      server.offline = false;
+      await target.pullSync();
+      expect(target.syncProgress!.stage, SyncStage.complete);
+      expect(target.syncError, isNull);
+      await target.lock();
+      expect(target.syncProgress, isNull);
+    },
   );
 
   test(

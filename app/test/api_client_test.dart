@@ -8,7 +8,152 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+class _StreamingSyncClient extends http.BaseClient {
+  _StreamingSyncClient(this.sendResponse);
+  final Future<http.StreamedResponse> Function(http.BaseRequest) sendResponse;
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      sendResponse(request);
+}
+
 void main() {
+  testWidgets(
+    'stalled pull cancels the stream and stops progress after timeout',
+    (tester) async {
+      var cancelled = false;
+      final body = StreamController<List<int>>(
+        onCancel: () {
+          cancelled = true;
+        },
+      );
+      final progress = <int>[];
+      final client = _StreamingSyncClient(
+        (_) async => http.StreamedResponse(body.stream, 200),
+      );
+      final api = LifenizerApiClient(
+        baseUrl: 'https://example.test',
+        client: client,
+      );
+      Object? failure;
+      var finished = false;
+      unawaited(
+        api
+            .pull(0, onProgress: (received, _) => progress.add(received))
+            .then<void>(
+              (_) => finished = true,
+              onError: (Object error, StackTrace _) {
+                failure = error;
+                finished = true;
+              },
+            ),
+      );
+      await tester.pump();
+      expect(progress, [0]);
+      await tester.pump(const Duration(seconds: 31));
+      // Stream cancellation can complete on the real event loop.
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      expect(finished, isTrue);
+      expect(failure, isA<TimeoutException>());
+      expect(cancelled, isTrue);
+      final events = progress.length;
+      body.add(utf8.encode('{"cursor":0,"envelopes":[]}'));
+      await tester.pump();
+      expect(progress, hasLength(events));
+      unawaited(body.close());
+      await tester.pump();
+      client.close();
+    },
+  );
+
+  test(
+    'pull reports streamed bytes, preserves prefix and refreshes a 401',
+    () async {
+      var requests = 0;
+      var refreshes = 0;
+      final bytes = utf8.encode(
+        jsonEncode({'cursor': 42, 'envelopes': [], 'padding': 'x' * 70000}),
+      );
+      final progress = <(int, int?)>[];
+      final client = _StreamingSyncClient((request) async {
+        expect(
+          request.url.toString(),
+          'https://example.test/lifenizer/api/sync/pull?since=41',
+        );
+        requests++;
+        if (requests == 1) {
+          expect(request.headers['authorization'], 'Bearer old');
+          return http.StreamedResponse(
+            Stream.value(utf8.encode('unauthorized')),
+            401,
+          );
+        }
+        expect(request.headers['authorization'], 'Bearer refreshed');
+        return http.StreamedResponse(
+          Stream.fromIterable([bytes.sublist(0, 35000), bytes.sublist(35000)]),
+          200,
+          contentLength: bytes.length,
+        );
+      });
+      final api = LifenizerApiClient(
+        baseUrl: 'https://example.test/lifenizer',
+        authToken: 'old',
+        client: client,
+        refreshAuth: () async {
+          refreshes++;
+          return 'refreshed';
+        },
+      );
+      final result = await api.pull(
+        41,
+        onProgress: (received, total) => progress.add((received, total)),
+      );
+      expect(result.cursor, 42);
+      expect(result.envelopes, isEmpty);
+      expect(progress, [
+        (0, bytes.length),
+        (35000, bytes.length),
+        (bytes.length, bytes.length),
+      ]);
+      expect(refreshes, 1);
+      client.close();
+    },
+  );
+
+  test(
+    'pull reports unknown byte total without treating an error body as progress',
+    () async {
+      final progress = <(int, int?)>[];
+      var fail = false;
+      final client = _StreamingSyncClient(
+        (_) async => http.StreamedResponse(
+          Stream.value(
+            utf8.encode(fail ? 'failed' : '{"cursor":0,"envelopes":[]}'),
+          ),
+          fail ? 500 : 200,
+        ),
+      );
+      final api = LifenizerApiClient(
+        baseUrl: 'https://example.test',
+        client: client,
+      );
+      await api.pull(
+        0,
+        onProgress: (received, total) => progress.add((received, total)),
+      );
+      expect(progress.last.$1, greaterThan(0));
+      expect(progress.every((p) => p.$2 == null), isTrue);
+      progress.clear();
+      fail = true;
+      await expectLater(
+        api.pull(0, onProgress: (r, t) => progress.add((r, t))),
+        throwsA(isA<ApiException>()),
+      );
+      expect(progress, isEmpty);
+      client.close();
+    },
+  );
+
   test('invitation token is sent only for nonempty registration', () async {
     final requests = <http.Request>[];
     final client = MockClient((request) async {
