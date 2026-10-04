@@ -80,3 +80,37 @@ and building the index, 12 real KRunner calls for `discord`, `skyblock` and `auc
 each returned eight results in 55–194 ms, including D-Bus client startup. The full
 encrypted vault restored with unchanged counts after locking and restarting the
 release app. These are desktop measurements; phone latency remains unmeasured.
+
+## Import responsiveness
+
+Native clients serialize/encrypt large snapshots, decrypt saved vaults and build
+search indexes in background isolates. Imports keep the previous search index
+until the replacement is ready, and long transcripts render messages lazily as
+you scroll. Card previews are bounded to 500 characters. An unchanged sync poll
+does not rewrite the encrypted snapshot.
+
+One background isolate owns the native Sembast database, including encoding and
+file I/O. Saves explicitly compact the encrypted records because Sembast 3.8.7 can
+swallow lazy append errors. This adds a file rewrite but ensures write failures
+reach the app before its outbox or email cursor advances. The file format is
+unchanged; opening existing vaults and filesystem-failure recovery are tested.
+
+The synthetic snapshot benchmark uses 126,288 messages in 10,524 conversations
+and about 70 MB of ciphertext. On this KDE machine (2026-10-03, Dart JIT), maximum
+event-loop gaps measured with a 10 ms heartbeat changed as follows:
+
+| Operation | Previous main-isolate work | Background work |
+| --- | ---: | ---: |
+| JSON serialization and encryption | 7,555 ms | 167 ms |
+| Snapshot decryption and JSON parsing | 6,014 ms | 26 ms |
+| Encrypted database write | about 1,000 ms | 39 ms |
+
+These measure UI-isolate availability, not total import duration or a latency
+guarantee. The final background operations still took about 6.0 s, 5.3 s and 1.2 s
+respectively. The browser uses its existing single-isolate fallback.
+
+```sh
+cd app
+dart run tool/vault_snapshot_benchmark.dart 126281
+dart run tool/vault_snapshot_benchmark.dart 126281 --background --background-store
+```
