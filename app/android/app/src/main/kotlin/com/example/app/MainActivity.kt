@@ -1,5 +1,7 @@
 package com.lifenizer.app
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.app.SearchManager
 import android.content.Intent
 import android.net.Uri
@@ -11,6 +13,9 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
+    private var recordingPermission: MethodChannel.Result? = null
+    private var recordingPermissionGranted = false
+    private var resumed = false
     private lateinit var actions: MethodChannel
     private lateinit var shares: MethodChannel
     private var actionReady = false
@@ -73,6 +78,40 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        val recording = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.lifenizer/recording")
+        RecordingService.onStopRequested = { recording.invokeMethod("stop", null) }
+        recording.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "notificationPermission" -> {
+                    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        recordingPermission = result
+                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 9042)
+                    } else if (!resumed) {
+                        recordingPermission = result
+                        recordingPermissionGranted = true
+                    } else result.success(null)
+                }
+                "start" -> {
+                    if (!resumed) result.error("recording", "Start recording while Lifenizer is open.", null)
+                    else try {
+                        RecordingService.onStarted = { error ->
+                            if (error == null) result.success(null)
+                            else result.error("recording", error.message, null)
+                        }
+                        val service = Intent(this, RecordingService::class.java)
+                        if (Build.VERSION.SDK_INT >= 26) startForegroundService(service) else startService(service)
+                    } catch (error: Exception) {
+                        RecordingService.onStarted = null
+                        result.error("recording", error.message, null)
+                    }
+                }
+                "stop" -> {
+                    stopService(Intent(this, RecordingService::class.java))
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
         handleIntent(intent)
     }
 
@@ -125,7 +164,42 @@ class MainActivity : FlutterActivity() {
         if (shareReady) shares.invokeMethod("shares", items) else pendingShares.addAll(items)
     }
 
+    override fun onResume() {
+        super.onResume()
+        resumed = true
+        if (recordingPermissionGranted) {
+            recordingPermissionGranted = false
+            recordingPermission?.success(null)
+            recordingPermission = null
+        }
+    }
+
+    override fun onPause() {
+        resumed = false
+        super.onPause()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 9042) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && !resumed) {
+                recordingPermissionGranted = true
+            } else {
+                val result = recordingPermission
+                recordingPermission = null
+                if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) result?.success(null)
+                else result?.error("recording", "Allow notifications so the recording and Stop action remain visible.", null)
+            }
+        }
+    }
+
     override fun onDestroy() {
+        recordingPermission?.error("recording", "Recording permission request was interrupted.", null)
+        recordingPermission = null
+        RecordingService.onStarted?.invoke(IllegalStateException("Recording was interrupted."))
+        RecordingService.onStarted = null
+        RecordingService.onStopRequested = null
+        stopService(Intent(this, RecordingService::class.java))
         deviceProtection?.dispose()
         deviceProtection = null
         reader.shutdown()

@@ -24,6 +24,7 @@ import 'services/export_file_reader.dart';
 import 'services/discord_bot_import_service.dart';
 import 'services/document_import_service.dart';
 import 'services/document_credentials.dart';
+import 'services/recording_controller.dart';
 
 import 'services/conversation_search_index.dart';
 import 'services/search_index_worker_io.dart'
@@ -45,6 +46,8 @@ class LifenizerAppState extends ChangeNotifier {
     DocumentCredentialStore? documentStore,
     DiscordBotCredentialStore? discordStore,
   }) : _localStore = localStore {
+    recording = RecordingController(this);
+    stopRecording = recording.stop;
     pairing = DevicePairingService(this, store: pairingStore);
     pairing.addListener(_notifyChanged);
     emailImport = EmailImportService(this, store: imapStore);
@@ -63,6 +66,7 @@ class LifenizerAppState extends ChangeNotifier {
   late final EmailImportService emailImport;
   late final DocumentImportService documentImport;
   late final DiscordBotImportService discordImport;
+  late final RecordingController recording;
 
   void _updateDiscordIdentity() => discordImport.setIdentity(
     isAuthenticated && session != null
@@ -72,6 +76,8 @@ class LifenizerAppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    recording.dispose();
     _syncProgressTicker?.cancel();
     _progressStageClock?.stop();
     removeListener(_updateDiscordIdentity);
@@ -100,6 +106,7 @@ class LifenizerAppState extends ChangeNotifier {
   Future<void> Function()? stopRecording;
   DateTime? lastSyncedAt;
   bool _unlocking = false;
+  bool _disposed = false;
   int get pendingSyncCount => _pendingSync.length;
 
   final Uuid _uuid = const Uuid();
@@ -141,11 +148,13 @@ class LifenizerAppState extends ChangeNotifier {
   bool get isAuthenticated =>
       session != null && _crypto.isUnlocked && !_unlocking;
 
-  void _notifyChanged() => notifyListeners();
+  void _notifyChanged() {
+    if (!_disposed) notifyListeners();
+  }
 
   void reportError(String message) {
     error = message;
-    notifyListeners();
+    _notifyChanged();
   }
 
   void reportUnlockProgress(String? message) {

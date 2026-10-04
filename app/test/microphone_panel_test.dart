@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
 import 'package:app/services/local_vault_store.dart';
 import 'package:app/widgets/microphone_panel.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -127,9 +127,12 @@ void main() {
     recorder = _Recorder();
     RecordPlatform.instance = recorder;
   });
-  tearDown(() => RecordPlatform.instance = previous);
+  tearDown(() {
+    RecordPlatform.instance = previous;
+  });
 
   Future<_Vault> mount(WidgetTester tester) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     final vault = (await tester.runAsync(_Vault.open))!;
     await tester.pumpWidget(
       MaterialApp(
@@ -181,46 +184,52 @@ void main() {
 
   Future<void> remove(WidgetTester tester, _Vault vault) async {
     await tester.pumpWidget(const SizedBox());
-    await finish(tester, recorder.disposed.future);
+    await finish(tester, vault.state.recording.stop());
     vault.close();
+    await finish(tester, recorder.disposed.future);
   }
 
-  testWidgets('stop saves every PCM sample in an encrypted WAV draft', (
-    tester,
-  ) async {
-    final vault = await mount(tester);
-    await start(tester);
-    expect(find.textContaining('Recording ·'), findsOneWidget);
-    recorder.pcm.add(samples);
-    await tester.pump();
-    await tester.tap(find.text('Stop and save recording'));
-    await tester.pump();
-    await finish(tester, vault.state.stopRecording!());
-    await tester.pump();
-    await verifyDraft(vault);
-    expect(
-      find.text(
-        'Recording saved encrypted on this device. Ready to transcribe.',
-      ),
-      findsOneWidget,
-    );
-    expect(recorder.stops, 1);
-    await remove(tester, vault);
-  });
+  testWidgets(
+    'stop saves every PCM sample in an encrypted WAV draft',
+    (tester) async {
+      final vault = await mount(tester);
+      await start(tester);
+      expect(find.textContaining('Recording ·'), findsOneWidget);
+      recorder.pcm.add(samples);
+      await tester.pump();
+      await tester.tap(find.text('Stop and save recording'));
+      await tester.pump();
+      await finish(tester, vault.state.stopRecording!());
+      await tester.pump();
+      await verifyDraft(vault);
+      expect(
+        find.text(
+          'Recording saved encrypted on this device. Ready to transcribe.',
+        ),
+        findsOneWidget,
+      );
+      expect(recorder.stops, 1);
+      await remove(tester, vault);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
 
   testWidgets(
-    'navigation disposes recorder after preserving the captured draft',
+    'desktop navigation saves the draft while app state retains the recorder',
     (tester) async {
       final vault = await mount(tester);
       await start(tester);
       recorder.pcm.add(samples);
       await tester.pump();
       await tester.pumpWidget(const SizedBox());
-      await finish(tester, recorder.disposed.future);
+      await finish(tester, vault.state.recording.stop());
       await verifyDraft(vault);
-      expect(vault.state.stopRecording, isNull);
+      expect(recorder.disposed.isCompleted, isFalse);
+      expect(vault.state.stopRecording, isNotNull);
       vault.close();
+      await finish(tester, recorder.disposed.future);
     },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
   testWidgets(
@@ -246,30 +255,33 @@ void main() {
       expect(recorder.stops, 1);
       await remove(tester, vault);
     },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
-  testWidgets('disk-full stop preserves the recording until lock can save it', (
-    tester,
-  ) async {
-    final vault = await mount(tester);
-    await start(tester);
-    recorder.pcm.add(samples);
-    await tester.pump();
-    vault.store.failWrites = true;
-    await finish(tester, vault.state.lock());
-    expect(vault.state.isAuthenticated, isTrue);
-    expect(vault.state.error, contains('Disk full'));
-    expect(
-      base64Decode(vault.state.audioDraft!['payload'] as String).sublist(44),
-      samples,
-    );
-    vault.store.failWrites = false;
-    await finish(tester, vault.state.lock());
-    expect(vault.state.isAuthenticated, isFalse);
-    await finish(tester, vault.unlock(offline: true));
-    await verifyDraft(vault);
-    await remove(tester, vault);
-  });
+  testWidgets(
+    'disk-full stop preserves the recording until lock can save it',
+    (tester) async {
+      final vault = await mount(tester);
+      await start(tester);
+      recorder.pcm.add(samples);
+      await tester.pump();
+      vault.store.failWrites = true;
+      await finish(tester, vault.state.lock());
+      expect(vault.state.isAuthenticated, isTrue);
+      expect(vault.state.error, contains('Disk full'));
+      expect(
+        base64Decode(vault.state.audioDraft!['payload'] as String).sublist(44),
+        samples,
+      );
+      vault.store.failWrites = false;
+      await finish(tester, vault.state.lock());
+      expect(vault.state.isAuthenticated, isFalse);
+      await finish(tester, vault.unlock(offline: true));
+      await verifyDraft(vault);
+      await remove(tester, vault);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
 
   testWidgets(
     'denied microphone permission explains why recording is unavailable',
@@ -285,50 +297,57 @@ void main() {
       expect(vault.state.audioDraft, isNull);
       await remove(tester, vault);
     },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
-  testWidgets('hidden desktop window or browser tab saves recording', (
-    tester,
-  ) async {
-    final vault = await mount(tester);
-    await start(tester);
-    recorder.pcm.add(samples);
-    await tester.pump();
-    final saved = Completer<void>();
-    void onSaved() {
-      if (vault.state.audioDraft != null && !saved.isCompleted) {
-        saved.complete();
+  testWidgets(
+    'hidden desktop window or browser tab saves recording',
+    (tester) async {
+      final vault = await mount(tester);
+      await start(tester);
+      recorder.pcm.add(samples);
+      await tester.pump();
+      final saved = Completer<void>();
+      void onSaved() {
+        if (vault.state.audioDraft != null && !saved.isCompleted) {
+          saved.complete();
+        }
       }
-    }
 
-    vault.state.addListener(onSaved);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    await finish(tester, saved.future);
-    vault.state.removeListener(onSaved);
-    expect(recorder.stops, 1);
-    await verifyDraft(vault);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await remove(tester, vault);
-  });
+      vault.state.addListener(onSaved);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await finish(tester, saved.future);
+      vault.state.removeListener(onSaved);
+      expect(recorder.stops, 1);
+      await verifyDraft(vault);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await remove(tester, vault);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
 
-  testWidgets('background pause saves the active recording', (tester) async {
-    final vault = await mount(tester);
-    await start(tester);
-    recorder.pcm.add(samples);
-    await tester.pump();
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    await finish(tester, vault.state.stopRecording!());
-    await tester.pump();
-    await verifyDraft(vault);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await remove(tester, vault);
-  });
+  testWidgets(
+    'background pause saves the active recording',
+    (tester) async {
+      final vault = await mount(tester);
+      await start(tester);
+      recorder.pcm.add(samples);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await finish(tester, vault.state.stopRecording!());
+      await tester.pump();
+      await verifyDraft(vault);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await remove(tester, vault);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
 
   testWidgets(
     'background pause during startup does not leave a live recorder',
@@ -351,5 +370,6 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await remove(tester, vault);
     },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 }

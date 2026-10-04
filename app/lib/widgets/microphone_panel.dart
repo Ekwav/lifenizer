@@ -1,12 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:record/record.dart';
 
 import '../app_state.dart';
-import '../services/wav_audio.dart';
 
 class MicrophonePanel extends StatefulWidget {
   const MicrophonePanel({required this.state, super.key});
@@ -16,142 +13,32 @@ class MicrophonePanel extends StatefulWidget {
   State<MicrophonePanel> createState() => _MicrophonePanelState();
 }
 
-class _MicrophonePanelState extends State<MicrophonePanel>
-    with WidgetsBindingObserver {
-  final _recorder = AudioRecorder();
+class _MicrophonePanelState extends State<MicrophonePanel> {
   final _title = TextEditingController();
   final _people = TextEditingController();
-  final _pcm = BytesBuilder(copy: false);
-  StreamSubscription<Uint8List>? _stream;
-  Timer? _clock;
-  DateTime? _startedAt;
-  bool _recording = false;
   bool _working = false;
   bool _disposing = false;
-  Future<void>? _starting;
-  Future<void>? _stopping;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    widget.state.stopRecording = _finish;
+    widget.state.recording.addListener(_recordingChanged);
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.hidden ||
-        state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
-      unawaited(_finish());
-    }
-  }
-
-  Future<void> _finish() async {
-    await _starting;
-    await _stop();
-  }
-
-  Future<void> _finishAndDispose() async {
-    await _finish();
-    await _stream?.cancel();
-    await _recorder.dispose();
-    if (widget.state.stopRecording == _finish) {
-      widget.state.stopRecording = null;
-    }
+  void _recordingChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _disposing = true;
-    _clock?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-    unawaited(_finishAndDispose());
+    widget.state.recording.removeListener(_recordingChanged);
+    if (!widget.state.recording.supportsBackground) {
+      unawaited(widget.state.recording.stop());
+    }
     _title.dispose();
     _people.dispose();
     super.dispose();
-  }
-
-  Future<void> _start() =>
-      _starting ??= _startImpl().whenComplete(() => _starting = null);
-
-  Future<void> _startImpl() async {
-    setState(() {
-      _working = true;
-      _error = null;
-    });
-    try {
-      if (!await _recorder.hasPermission()) {
-        throw StateError(
-          'Microphone permission was denied. Enable it in your device settings.',
-        );
-      }
-      _pcm.clear();
-      final stream = await _recorder.startStream(
-        const RecordConfig(
-          encoder: AudioEncoder.pcm16bits,
-          sampleRate: 16000,
-          numChannels: 1,
-        ),
-      );
-      if (!mounted || _disposing) {
-        await _recorder.stop();
-        return;
-      }
-      _startedAt = DateTime.now();
-      _recording = true;
-      _stream = stream.listen(
-        (chunk) {
-          _pcm.add(chunk);
-          if (_pcm.length >= 16000 * 2 * 60 * 30 && !_working) _stop();
-        },
-        onError: (Object error) {
-          if (mounted && !_disposing) {
-            _error = 'Microphone interrupted: $error';
-            _stop();
-          }
-        },
-        onDone: () {
-          if (_recording && !_working) unawaited(_stop());
-        },
-      );
-      _clock = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted && !_disposing) setState(() {});
-      });
-    } catch (error) {
-      _error = error.toString();
-    } finally {
-      if (mounted && !_disposing) setState(() => _working = false);
-    }
-  }
-
-  Future<void> _stop() =>
-      _stopping ??= _stopImpl().whenComplete(() => _stopping = null);
-
-  Future<void> _stopImpl() async {
-    if (!_recording) return;
-    _working = true;
-    if (mounted && !_disposing) setState(() {});
-    try {
-      await _recorder.stop();
-      await _stream?.cancel();
-      _clock?.cancel();
-      if (_pcm.length == 0) {
-        throw StateError('No audio was captured. Check your microphone.');
-      }
-      await widget.state.saveAudioDraft(
-        encodeWav(_pcm.takeBytes()),
-        _startedAt!,
-      );
-    } catch (error) {
-      _error = error.toString();
-      widget.state.reportError('Could not save the recording: $error');
-    } finally {
-      _recording = false;
-      _working = false;
-      if (mounted && !_disposing) setState(() {});
-    }
   }
 
   Future<void> _transcribe() async {
@@ -175,10 +62,11 @@ class _MicrophonePanelState extends State<MicrophonePanel>
   @override
   Widget build(BuildContext context) {
     final draft = widget.state.audioDraft;
-    final seconds = _startedAt == null
+    final recording = widget.state.recording;
+    final seconds = recording.startedAt == null
         ? 0
-        : DateTime.now().difference(_startedAt!).inSeconds;
-    final disabled = _working || widget.state.busy;
+        : DateTime.now().difference(recording.startedAt!).inSeconds;
+    final disabled = _working || recording.working || widget.state.busy;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -190,8 +78,10 @@ class _MicrophonePanelState extends State<MicrophonePanel>
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Record here, then send to your Whisper server to transcribe. The transcript is encrypted before sync.',
+            Text(
+              recording.supportsBackground
+                  ? 'Recording continues when you leave this page or lock the screen. Stop here or from the notification, then send to Whisper. Recordings are saved encrypted on this device.'
+                  : 'Record here, then send to your Whisper server to transcribe. The transcript is encrypted before sync.',
             ),
             const SizedBox(height: 12),
             TextField(
@@ -205,12 +95,12 @@ class _MicrophonePanelState extends State<MicrophonePanel>
               ),
             ),
             const SizedBox(height: 12),
-            if (_recording) ...[
+            if (recording.recording) ...[
               Text(
                 'Recording · ${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')} · maximum 30 minutes',
               ),
               FilledButton.icon(
-                onPressed: disabled ? null : _stop,
+                onPressed: disabled ? null : recording.stop,
                 icon: const Icon(Icons.stop),
                 label: const Text('Stop and save recording'),
               ),
@@ -229,14 +119,14 @@ class _MicrophonePanelState extends State<MicrophonePanel>
               ),
             ] else
               FilledButton.icon(
-                onPressed: disabled ? null : _start,
+                onPressed: disabled ? null : recording.start,
                 icon: const Icon(Icons.mic),
                 label: const Text('Start microphone recording'),
               ),
-            if (_working) const LinearProgressIndicator(),
-            if (_error != null)
+            if (_working || recording.working) const LinearProgressIndicator(),
+            if (recording.error != null)
               Text(
-                _error!,
+                recording.error!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
           ],
