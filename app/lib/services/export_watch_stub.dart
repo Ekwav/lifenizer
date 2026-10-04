@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../app_state.dart';
 
 class ExportWatchService extends ChangeNotifier {
+  ExportWatchService({Future<void> Function(String)? importFile});
   static final instance = ExportWatchService();
   String? get path => null;
   Future<void> start(LifenizerAppState state) async {}

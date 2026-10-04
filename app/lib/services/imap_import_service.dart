@@ -299,6 +299,7 @@ class EmailImportService extends ChangeNotifier {
     status =
         'Email checking stopped. Imported conversations remain in your vault.';
     error = null;
+    _notify();
     try {
       await _connection;
       await _running;

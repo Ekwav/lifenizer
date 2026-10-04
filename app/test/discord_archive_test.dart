@@ -170,7 +170,7 @@ void main() {
         MaterialApp(
           home: AnimatedBuilder(
             animation: state,
-            builder: (context, _) => ImportsPage(state: state),
+            builder: (context, _) => Scaffold(body: ImportsPage(state: state)),
           ),
         ),
       );

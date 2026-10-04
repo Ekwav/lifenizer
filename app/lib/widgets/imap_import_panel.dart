@@ -130,7 +130,7 @@ class _ImapImportPanelState extends State<ImapImportPanel> {
                 ),
               if (service.connected || service.error != null)
                 TextButton(
-                  onPressed: enabled ? service.removeAccount : null,
+                  onPressed: service.removeAccount,
                   child: const Text('Stop & remove account'),
                 ),
             ],
