@@ -17,34 +17,88 @@ public sealed class ProviderHttpImportClient(
         var baseUrl = ProviderBaseUrl(request, "Imports:Paperless:BaseUrl", "Paperless");
         var token = ProviderSecret(request, "token", "Imports:Paperless:Token", "Paperless");
         var limit = int.TryParse(ImportTextParsers.Metadata(request, "limit"), out var parsedLimit) ? Math.Clamp(parsedLimit, 1, 50) : 10;
-        var uri = new Uri(new Uri(baseUrl.TrimEnd('/') + "/"), $"api/documents/?page_size={limit}");
+        var page = ImportTextParsers.Metadata(request, "page") is { } rawPage
+            ? int.TryParse(rawPage, out var parsedPage) && parsedPage > 0 ? parsedPage : throw new InvalidOperationException("Paperless page must be a positive integer.") : 1;
+        var since = ImportTextParsers.Metadata(request, "modifiedAfter");
+        if (since is not null && CommonParsing.TryParseDate(since) is null) throw new InvalidOperationException("Paperless modifiedAfter must be an ISO date-time.");
+        var root = new Uri(baseUrl.TrimEnd('/') + "/");
+        var relative = $"api/documents/?page_size={limit}&page={page}&ordering=modified,id" +
+            (since is null ? "" : "&modified__gte=" + Uri.EscapeDataString(since));
+        using var doc = JsonDocument.Parse(await PaperlessTextAsync(new Uri(root, relative), token, cancellationToken));
+        var conversations = new List<NormalizedConversation>();
+        DateTimeOffset? latest = CommonParsing.TryParseDate(since);
+        var correspondents = new Dictionary<string, string>();
+        foreach (var listed in CommonParsing.EnumerateArray(doc.RootElement, "results", "documents", "items"))
+        {
+            var id = JsonFieldExtractor.GetString(listed, "id") ?? throw new InvalidOperationException("Paperless document is missing its ID.");
+            if (!long.TryParse(id, out var numericId) || numericId <= 0) throw new InvalidOperationException("Paperless document ID is invalid.");
+            var document = listed;
+            JsonDocument? detail = null;
+            try
+            {
+                var content = JsonFieldExtractor.GetString(document, "content");
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    detail = JsonDocument.Parse(await PaperlessTextAsync(new Uri(root, $"api/documents/{id}/"), token, cancellationToken));
+                    document = detail.RootElement;
+                    content = JsonFieldExtractor.GetString(document, "content");
+                }
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    var bytes = await PaperlessBytesAsync(new Uri(root, $"api/documents/{id}/download/"), token, cancellationToken);
+                    content = PdfTextExtractor.Extract(bytes);
+                }
+                var title = JsonFieldExtractor.GetString(document, "title", "original_file_name") ?? "Paperless document";
+                var correspondent = CorrespondentName(document);
+                var correspondentId = document.TryGetProperty("correspondent", out var field) && field.ValueKind == JsonValueKind.Number ? field.ToString() : null;
+                if (correspondentId is not null)
+                {
+                    if (!correspondents.TryGetValue(correspondentId, out correspondent))
+                    {
+                        using var person = JsonDocument.Parse(await PaperlessTextAsync(new Uri(root, $"api/correspondents/{correspondentId}/"), token, cancellationToken));
+                        correspondent = JsonFieldExtractor.GetString(person.RootElement, "name") ?? "Paperless";
+                        correspondents[correspondentId] = correspondent;
+                    }
+                }
+                correspondent ??= "Paperless";
+                var identity = $"paperless:{root.AbsoluteUri}:{id}";
+                var metadata = new Dictionary<string, string>();
+                foreach (var key in new[] { "id", "created", "modified", "document_type", "archive_serial_number" })
+                    if (JsonFieldExtractor.GetString(document, key) is { } value) metadata[key] = value;
+                var modified = CommonParsing.TryParseDate(JsonFieldExtractor.GetString(document, "modified"));
+                if (modified is not null && (latest is null || modified > latest)) latest = modified;
+                conversations.Add(new NormalizedConversation(title, "paperless", [correspondent],
+                    [new NormalizedSegment(content, correspondent, 0, CommonParsing.TryParseDate(JsonFieldExtractor.GetString(document, "created")), SourceMessageId: identity)],
+                    JsonFieldExtractor.GetString(document, "original_file_name") is { } fileName ? [fileName] : [], metadata,
+                    SourceThreadId: identity, SourceUrl: new Uri(root, $"documents/{id}/details").AbsoluteUri));
+            }
+            finally { detail?.Dispose(); }
+        }
+        var hasMore = doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("next", out var next) && next.ValueKind != JsonValueKind.Null && !string.IsNullOrWhiteSpace(next.ToString());
+        return ImportTextParsers.Response("paperless", $"Fetched and normalized {conversations.Count} Paperless document(s).", conversations,
+            new Dictionary<string, string> { ["baseUrl"] = baseUrl, ["hasMore"] = hasMore ? "true" : "false", ["nextPage"] = hasMore ? checked(page + 1).ToString() : "", ["nextModifiedAfter"] = latest?.ToString("O") ?? "" });
+    }
+
+    private async Task<string> PaperlessTextAsync(Uri uri, string token, CancellationToken cancellationToken)
+        => System.Text.Encoding.UTF8.GetString(await PaperlessBytesAsync(uri, token, cancellationToken));
+
+    private async Task<byte[]> PaperlessBytesAsync(Uri uri, string token, CancellationToken cancellationToken)
+    {
         using var message = new HttpRequestMessage(HttpMethod.Get, uri);
         message.Headers.Authorization = new AuthenticationHeaderValue("Token", token);
-
-        var json = await SendForTextAsync(message, cancellationToken);
-        using var doc = JsonDocument.Parse(json);
-        var documents = CommonParsing.EnumerateArray(doc.RootElement, "results", "documents", "items");
-        var conversations = new List<NormalizedConversation>();
-        foreach (var document in documents)
+        using var response = await httpClientFactory.CreateClient("imports").SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"Paperless request failed with {(int)response.StatusCode}.");
+        if (response.Content.Headers.ContentLength > PdfTextExtractor.MaxBytes) throw new InvalidOperationException("Paperless response exceeds 25 MiB; reduce page size or split the document.");
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var output = new MemoryStream();
+        var buffer = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(buffer, cancellationToken)) != 0)
         {
-            var title = JsonFieldExtractor.GetString(document, "title", "original_file_name") ?? "Paperless document";
-            var correspondent = CorrespondentName(document) ?? "Paperless";
-            var content = JsonFieldExtractor.GetString(document, "content", "notes", "archive_serial_number") ?? title;
-            var metadata = new Dictionary<string, string>();
-            foreach (var key in new[] { "id", "created", "document_type", "archive_serial_number" })
-            {
-                if (JsonFieldExtractor.GetString(document, key) is { } value) metadata[key] = value;
-            }
-            conversations.Add(new NormalizedConversation(
-                title,
-                "paperless",
-                [correspondent],
-                [new NormalizedSegment(content, correspondent, 0, CommonParsing.TryParseDate(JsonFieldExtractor.GetString(document, "created")))],
-                JsonFieldExtractor.GetString(document, "original_file_name") is { } fileName ? [fileName] : [],
-                metadata));
+            if (output.Length + read > PdfTextExtractor.MaxBytes) throw new InvalidOperationException("Paperless response exceeds 25 MiB; reduce page size or split the document.");
+            output.Write(buffer, 0, read);
         }
-
-        return ImportTextParsers.Response("paperless", $"Fetched and normalized {conversations.Count} Paperless document(s).", conversations, new Dictionary<string, string> { ["baseUrl"] = baseUrl });
+        return output.ToArray();
     }
 
     public async Task<NormalizedImportResponse> ImportYouTubeTranscriptAsync(ImportRequest request, CancellationToken cancellationToken)

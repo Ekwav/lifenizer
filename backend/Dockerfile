@@ -25,6 +25,8 @@ RUN dotnet publish Lifenizer.Api/Lifenizer.Api.csproj \
 # ---------------------------------------------------------------------------- #
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 
+RUN apk add --no-cache poppler-utils tesseract-ocr tesseract-ocr-data-deu tesseract-ocr-data-eng
+
 # Harden: create a dedicated non-root user and group.
 RUN addgroup -S lifenizer && adduser -S -G lifenizer -u 1001 lifenizer
 

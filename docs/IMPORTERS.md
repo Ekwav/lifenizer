@@ -88,16 +88,78 @@ Optional:
 - Server config `Imports:Imap:UseTls` (default `true`); certificate validation cannot be disabled by a request
 - `limit` (1..25)
 
+### PDF and scan folders
+
+Use **Imports → Choose backup or export** or the source file picker for a PDF,
+PNG or JPEG scan. Native desktop users can also drag the document onto Imports.
+The `scanned-pdf` API source accepts a binary `payloadBase64` with `mimeType`
+`application/pdf`, `image/png` or `image/jpeg`; supplied `text` or
+`metadata.ocrText` remains supported. Optional `metadata.documentId` gives a
+stable thread and message ID for repeated imports of the same document.
+
+On the native desktop, select a scan folder or Downloads folder to watch PDFs,
+PNG and JPEG files. Only files directly in the selected folder are indexed;
+subdirectories are not traversed. Checks run while the app is open and unlocked.
+The saved folder path and file stamps stay in the OS credential store. Changed
+files are reimported into the existing document; unchanged files are skipped.
+Locking pauses imports. Restarting the app restores the saved watch after unlock.
+
+The API extracts digital PDF text with Poppler and OCRs pages without text with
+Tesseract, including mixed PDFs. Scanned pages render sequentially to at most
+2,000 pixels on the long side. Standalone PNG/JPEG images are limited to 25
+megapixels and 10,000 pixels per side. Documents are limited to 25 MiB, PDFs to
+100 pages, extracted text to 4 MiB and processing to two minutes per document.
+Invalid, encrypted, oversized or unreadable documents report a failure instead
+of indexing their binary bytes or claiming that extraction succeeded.
+
+The Docker API image supplies `poppler-utils`, `tesseract-ocr`,
+`tesseract-ocr-data-deu` and `tesseract-ocr-data-eng`. Bare installations need the
+equivalent native tools and language data on PATH. OCR uses installed German and
+English models, with a single-language fallback when only one is installed.
+Documents are processed in private temporary directories and removed afterward.
+The app stores and syncs the extracted text encrypted; original PDF/image bytes
+are not retained as vault artifacts. [Poppler text extraction](https://manpages.debian.org/bullseye/poppler-utils/pdftotext.1.en.html)
+and [Tesseract usage](https://tesseract-ocr.github.io/tessdoc/Command-Line-Usage.html)
+describe the underlying native tools.
+
 ### paperless
+
+Set server configuration `Imports:Paperless:BaseUrl` to the trusted Paperless
+installation. Compose maps `LIFENIZER_PAPERLESS_URL` to that setting; no guessed
+server URL is used. Request endpoint overrides and HTTP redirects are rejected.
+`GET /api/imports/paperless/settings` requires authentication and returns
+`{configured,baseUrl}` without credentials. In Imports, connect Paperless using
+its API token after checking this configured endpoint. The backend uses that
+token only for the current request; optional remembered credentials remain in
+the device OS credential store.
 
 Required:
 
 - Server config `Imports:Paperless:BaseUrl` (no request override)
-- `token` or config `Imports:Paperless:Token`
+- `metadata.token` or config `Imports:Paperless:Token`
 
-Optional:
+Optional metadata:
 
-- `limit` (1..50)
+- `limit` (page size 1..50, default 10)
+- `page` (positive page number, default 1)
+- `modifiedAfter` (ISO date-time; inclusive `modified__gte` filter)
+
+Documents are ordered by `modified,id`. The response diagnostics contain
+`hasMore`, `nextPage` and `nextModifiedAfter`. Keep the same `modifiedAfter`
+through a page loop and save cursor progress only after encrypting/persisting
+that page. The client maintains a modification watermark after a completed
+cycle and replays its overlap; stable document/thread IDs merge updated text.
+Offset pagination is not a transactional snapshot of the Paperless database.
+Provider `next` URLs are never followed: subsequent requests use the trusted
+configured base and the next page number.
+
+Imported records include Paperless OCR/text content, original document links,
+filenames and available metadata. Missing list content triggers a detail fetch;
+if still blank, the PDF download is extracted/OCRed with the same limits above.
+Numeric correspondent IDs are resolved to their names. Unreadable documents
+fail the page explicitly. Original document files are not stored in the vault.
+See the [Paperless REST API](https://docs.paperless-ngx.com/api/) for token access,
+document content and pagination.
 
 ### Discord data package (local desktop import)
 

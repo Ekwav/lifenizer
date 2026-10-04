@@ -36,11 +36,27 @@ public static class EmailNormalization
             var threadId = message.References.FirstOrDefault() ?? message.InReplyTo ?? messageId;
             var attachments = message.Attachments.Select(part => part.ContentDisposition?.FileName ?? part.ContentType.Name)
                 .Where(name => !string.IsNullOrWhiteSpace(name)).Cast<string>().ToArray();
+            var segments = new List<NormalizedSegment> { new(text.Trim(), sender is null ? null : Name(sender), 0,
+                message.Date == DateTimeOffset.MinValue ? null : message.Date, sender is null ? null : Identifier(sender), messageId) };
+            var pdfIndex = 0;
+            foreach (var attachment in message.Attachments.OfType<MimePart>())
+            {
+                var name = attachment.FileName ?? attachment.ContentType.Name ?? "attachment.pdf";
+                if (!attachment.ContentType.IsMimeType("application", "pdf") && !name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) continue;
+                using var decoded = new BoundedAttachmentStream();
+                if (attachment.Content is null) throw new InvalidOperationException("Email PDF attachment has no content.");
+                attachment.Content.DecodeTo(decoded);
+                var attachmentText = PdfTextExtractor.Extract(decoded.ToArray());
+                segments.Add(new NormalizedSegment($"PDF attachment: {name}\n{attachmentText}", sender is null ? null : Name(sender), 0,
+                    message.Date == DateTimeOffset.MinValue ? null : message.Date, sender is null ? null : Identifier(sender),
+                    messageId is null ? null : $"{messageId}:pdf:{pdfIndex}"));
+                pdfIndex++;
+            }
+            if (pdfIndex > 0) metadata["indexed-pdf-attachments"] = pdfIndex.ToString();
             conversations.Add(new NormalizedConversation(
                 message.Subject ?? request.Title ?? "Email message", source,
                 CommonParsing.ParticipantNames(request).Concat(identities.Select(Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-                [new NormalizedSegment(text.Trim(), sender is null ? null : Name(sender), 0,
-                    message.Date == DateTimeOffset.MinValue ? null : message.Date, sender is null ? null : Identifier(sender), messageId)],
+                segments,
                 attachments, metadata, identities.Select(Identifier).ToArray(), threadId));
         }
 
@@ -49,5 +65,18 @@ public static class EmailNormalization
             .Select(name => new NormalizedParticipant(name));
         return new NormalizedImportResponse(source, true, $"Normalized {conversations.Count} email message(s).",
             conversations, participants.Values.Concat(extras).ToArray(), diagnostics);
+    }
+    private sealed class BoundedAttachmentStream : MemoryStream
+    {
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            if (Length + count > PdfTextExtractor.MaxBytes) throw new InvalidOperationException("Email PDF attachment exceeds 25 MiB.");
+            base.Write(buffer, offset, count);
+        }
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            if (Length + buffer.Length > PdfTextExtractor.MaxBytes) throw new InvalidOperationException("Email PDF attachment exceeds 25 MiB.");
+            base.Write(buffer);
+        }
     }
 }

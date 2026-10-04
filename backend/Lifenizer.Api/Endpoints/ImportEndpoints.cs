@@ -12,7 +12,7 @@ public static class ImportEndpoints
         new("manual-text", "Manual text or chat paste", true, false, "Normalizes plaintext/chat paste into encrypted client sync.", ["text/plain", "text/markdown"]),
         new("audio", "Audio file upload", true, false, "Can call the self-hosted whisper-trained transcription service, then the client encrypts the transcript.", ["audio/wav", "audio/mpeg", "audio/mp4", "audio/ogg"]),
         new("live-recording", "Live VAD recording", true, false, "Client route groups VAD chunks into one encrypted conversation.", ["audio/wav"]),
-        new("scanned-pdf", "Scanned PDF", true, false, "Accepts supplied OCR text now; OCR providers can feed the same route.", ["application/pdf", "image/png", "image/jpeg", "text/plain"]),
+        new("scanned-pdf", "Scanned PDF", true, false, "Extracts PDF text and OCRs scanned pages/images; also accepts supplied OCR text.", ["application/pdf", "image/png", "image/jpeg", "text/plain"]),
         new("paperless", "Paperless", true, true, "Fetches Paperless document metadata/content from a configured base URL and token.", ["application/json"]),
         new("email", "Email", true, true, "Fetches mail from IMAP with request-scoped credentials and normalizes messages.", ["message/rfc822"]),
         new("whatsapp", "WhatsApp chat export", true, false, "Parses manual WhatsApp text exports.", ["text/plain", "application/zip"]),
@@ -39,6 +39,8 @@ public static class ImportEndpoints
         var group = app.MapGroup("/api/imports").WithTags("Imports");
 
         group.MapGet("/capabilities", () => Results.Ok(Capabilities)).AllowAnonymous();
+
+        group.MapGet("/paperless/settings", (IConfiguration configuration) => Results.Ok(new { configured = !string.IsNullOrWhiteSpace(configuration["Imports:Paperless:BaseUrl"]), baseUrl = configuration["Imports:Paperless:BaseUrl"] })).RequireAuthorization();
 
         group.MapGet("/email/settings", (PlainImapImportClient imap) => Results.Ok(imap.Settings())).RequireAuthorization();
 

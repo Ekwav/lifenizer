@@ -26,8 +26,27 @@ public sealed class ScannedPdfParser : IImportParser
     public NormalizedImportResponse Parse(ImportRequest request)
     {
         var ocrText = CommonParsing.Metadata(request, "ocrText") ?? string.Empty;
-        var fullText = CommonParsing.EffectiveText(request, ocrText);
-        return CommonParsing.SingleConversation(Source, request, fullText, "OCR text import");
+        var fullText = CommonParsing.Clean(request.Text) ?? CommonParsing.Clean(ocrText);
+        if (fullText is null)
+        {
+            if (string.IsNullOrWhiteSpace(request.PayloadBase64)) throw new InvalidOperationException("Document import requires a PDF/image payload or extracted text.");
+            if (request.PayloadBase64.Length > (PdfTextExtractor.MaxBytes + 2L) / 3 * 4) throw new InvalidOperationException("Document exceeds 25 MiB.");
+            byte[] bytes;
+            try { bytes = Convert.FromBase64String(request.PayloadBase64); }
+            catch (FormatException) { throw new InvalidOperationException("Document payloadBase64 is invalid."); }
+            var pdf = bytes.AsSpan(0, Math.Min(bytes.Length, 1024)).IndexOf("%PDF-"u8) >= 0;
+            var image = !pdf && (bytes.AsSpan().StartsWith(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }) ||
+                bytes.Length >= 2 && bytes[0] == 0xff && bytes[1] == 0xd8 ||
+                request.MimeType is "image/png" or "image/jpeg" ||
+                new[] { ".png", ".jpg", ".jpeg" }.Contains(Path.GetExtension(request.OriginalFileName ?? "").ToLowerInvariant()));
+            fullText = PdfTextExtractor.Extract(bytes, image);
+        }
+        var response = CommonParsing.SingleConversation(Source, request, fullText, "Document import");
+        if (CommonParsing.Metadata(request, "documentId") is not { } id) return response;
+        return response with { Conversations = response.Conversations.Select(conversation => conversation with
+        {
+            SourceThreadId = id, Segments = conversation.Segments.Select(segment => segment with { SourceMessageId = id }).ToArray()
+        }).ToArray() };
     }
 }
 
