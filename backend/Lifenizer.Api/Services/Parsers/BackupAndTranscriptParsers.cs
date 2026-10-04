@@ -24,11 +24,20 @@ public sealed class LifenizerBackupParser : IImportParser
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
         var namesById = new Dictionary<string, string>(StringComparer.Ordinal);
+        var identifiersById = new Dictionary<string, string>(StringComparer.Ordinal);
+        var profiles = new List<NormalizedParticipant>();
         foreach (var participant in CommonParsing.EnumerateArray(root, "participants"))
         {
             var id = JsonFieldExtractor.GetString(participant, "id");
             var name = JsonFieldExtractor.GetString(participant, "displayName", "name");
-            if (id is not null && name is not null) namesById[id] = name;
+            if (name is null) continue;
+            var identifiers = Strings(participant, "identifiers");
+            profiles.Add(new NormalizedParticipant(name, identifiers, Strings(participant, "aliases")));
+            if (id is not null)
+            {
+                namesById[id] = name;
+                if (identifiers.Length > 0) identifiersById[id] = identifiers[0];
+            }
         }
         var conversations = new List<NormalizedConversation>();
         var items = CommonParsing.EnumerateArray(root, "conversations", "items", "data");
@@ -37,10 +46,14 @@ public sealed class LifenizerBackupParser : IImportParser
             var title = JsonFieldExtractor.GetString(item, "title") ?? "Backup conversation";
             var convSource = JsonFieldExtractor.GetString(item, "source") ?? "backup";
             var participants = new List<string>();
+            var participantIdentifiers = Strings(item, "participantIdentifiers").ToList();
             foreach (var id in CommonParsing.EnumerateArray(item, "participantIds"))
             {
                 if (id.ValueKind == JsonValueKind.String && namesById.TryGetValue(id.GetString()!, out var name))
+                {
                     participants.Add(name);
+                    if (identifiersById.TryGetValue(id.GetString()!, out var identifier)) participantIdentifiers.Add(identifier);
+                }
             }
             foreach (var p in CommonParsing.EnumerateArray(item, "participantNames", "participants"))
             {
@@ -73,7 +86,9 @@ public sealed class LifenizerBackupParser : IImportParser
                 }
 
                 var segmentText = JsonFieldExtractor.GetString(segment, "text", "content", "message") ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(segmentText)) continue;
+                var sourceMessageId = JsonFieldExtractor.GetString(segment, "sourceMessageId");
+                var attachments = Strings(segment, "attachmentUrls");
+                if (string.IsNullOrWhiteSpace(segmentText) && sourceMessageId is null && attachments.Length == 0) continue;
                 var offsetMs = 0;
                 if (segment.TryGetProperty("offsetMs", out var offsetMsJson) && offsetMsJson.ValueKind == JsonValueKind.Number)
                 {
@@ -83,12 +98,12 @@ public sealed class LifenizerBackupParser : IImportParser
                 var participantId = JsonFieldExtractor.GetString(segment, "participantId");
                 if (speaker is null && participantId is not null) namesById.TryGetValue(participantId, out speaker);
                 if (speaker is not null && !participants.Contains(speaker)) participants.Add(speaker);
-                segments.Add(new SegmentBuilder()
-                    .WithText(segmentText)
-                    .WithSpeaker(speaker)
-                    .WithOffset(offsetMs)
-                    .WithTimestamp(CommonParsing.TryParseDate(JsonFieldExtractor.GetString(segment, "createdAt", "date")))
-                    .Build());
+                var participantIdentifier = JsonFieldExtractor.GetString(segment, "participantIdentifier");
+                if (participantIdentifier is null && participantId is not null) identifiersById.TryGetValue(participantId, out participantIdentifier);
+                segments.Add(new NormalizedSegment(
+                    segmentText, speaker, offsetMs,
+                    CommonParsing.TryParseDate(JsonFieldExtractor.GetString(segment, "createdAt", "date")),
+                    participantIdentifier, sourceMessageId, attachments));
             }
 
             if (segments.Count == 0) continue;
@@ -99,7 +114,12 @@ public sealed class LifenizerBackupParser : IImportParser
                 participants,
                 segments,
                 CommonParsing.EnumerateArray(item, "artifactNames", "artifacts").Where(value => value.ValueKind == JsonValueKind.String).Select(value => value.GetString()!).Where(value => !string.IsNullOrWhiteSpace(value)).ToArray(),
-                null));
+                item.TryGetProperty("metadata", out var metadata) && metadata.ValueKind == JsonValueKind.Object
+                    ? metadata.EnumerateObject().Where(value => value.Value.ValueKind == JsonValueKind.String).ToDictionary(value => value.Name, value => value.Value.GetString()!)
+                    : null,
+                participantIdentifiers.Distinct(StringComparer.Ordinal).ToArray(),
+                JsonFieldExtractor.GetString(item, "sourceThreadId"),
+                JsonFieldExtractor.GetString(item, "sourceUrl")));
         }
 
         if (conversations.Count == 0)
@@ -107,8 +127,13 @@ public sealed class LifenizerBackupParser : IImportParser
             return CommonParsing.Response(Source, "No text conversations found in this backup.", []);
         }
 
-        return CommonParsing.Response(Source, $"Normalized {conversations.Count} backup conversation(s).", conversations);
+        var response = CommonParsing.Response(Source, $"Normalized {conversations.Count} backup conversation(s).", conversations);
+        return response with { Participants = profiles.Concat(response.Participants.Where(person => !profiles.Any(profile => profile.DisplayName == person.DisplayName))).ToArray() };
     }
+    private static string[] Strings(JsonElement item, string key) => CommonParsing.EnumerateArray(item, key)
+        .Where(value => value.ValueKind == JsonValueKind.String).Select(value => value.GetString()!)
+        .Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
+
 }
 
 /// <summary>

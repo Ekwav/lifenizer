@@ -149,10 +149,25 @@ Stream<NormalizedImportResult> readDiscordArchive(
         );
       }
       final channelId = _id(channel['id']);
+      final guild = channel['guild'];
+      final guildId = guild is Map && guild['id'] != null
+          ? _id(guild['id'])
+          : null;
+      final guildName = guild is Map ? guild['name'] as String? : null;
+      final channelType = channel['type'] as String? ?? 'Channel';
+      final sourceUrl = guildId != null
+          ? 'https://discord.com/channels/$guildId/$channelId'
+          : ['DM', 'GROUP_DM'].contains(channelType)
+          ? 'https://discord.com/channels/@me/$channelId'
+          : null;
       final memberIds = <String>{ownId};
+      var unidentifiedRecipients = 0;
       if (channel['recipients'] is List) {
         for (final recipient in channel['recipients']) {
-          if (recipient == 'Deleted User') continue;
+          if (recipient == 'Deleted User') {
+            unidentifiedRecipients++;
+            continue;
+          }
           final id = _id(recipient is Map ? recipient['id'] : recipient);
           if (recipient is Map) people[id] = _person(recipient);
           memberIds.add(id);
@@ -231,8 +246,6 @@ Stream<NormalizedImportResult> readDiscordArchive(
               );
         }
         final name = channel['name'] as String?;
-        final guild = channel['guild'];
-        final guildName = guild is Map ? guild['name'] as String? : null;
         final title = name?.trim().isNotEmpty == true
             ? name!.trim()
             : channel['type'] == 'DM' && otherIds.any(people.containsKey)
@@ -243,6 +256,13 @@ Stream<NormalizedImportResult> readDiscordArchive(
             title: guildName == null ? title : '$guildName · $title',
             source: 'discord',
             sourceThreadId: 'discord:$channelId',
+            sourceUrl: sourceUrl,
+            metadata: {
+              'channelType': channelType,
+              'messageScope': 'own-sent-messages',
+              if (unidentifiedRecipients > 0)
+                'unidentifiedRecipients': '$unidentifiedRecipients',
+            },
             participantNames: [],
             participantIdentifiers: memberIds
                 .map((id) => 'discord:$id')
@@ -296,6 +316,7 @@ NormalizedParticipant _person(Map user, {String? alias}) {
   final username = user['username'] as String?;
   final globalName = user['global_name'] as String?;
   final email = user['email'] as String?;
+  final discriminator = user['discriminator'] as String?;
   return NormalizedParticipant(
     displayName: globalName?.trim().isNotEmpty == true
         ? globalName!
@@ -308,6 +329,10 @@ NormalizedParticipant _person(Map user, {String? alias}) {
     aliases: [
       if (alias?.trim().isNotEmpty == true) alias!.trim(),
       if (username?.trim().isNotEmpty == true) username!,
+      if (username?.trim().isNotEmpty == true &&
+          discriminator != null &&
+          discriminator != '0')
+        '$username#$discriminator',
       if (globalName?.trim().isNotEmpty == true) globalName!,
     ],
   );

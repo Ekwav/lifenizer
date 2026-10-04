@@ -117,6 +117,13 @@ people without guessing from shared display names; account email and Discord ID
 can identify the same person. Deleted recipients without IDs remain unlinked.
 Repeat exports merge appended messages and edits into existing threads while
 retaining older history and your favorites/tags. IDs are stable across devices.
+Conversation and message details provide **Open Discord chat** and **Open message** links.
+They use the original channel/message IDs and the exported guild ID. For a
+guild/thread whose guild ID is absent, the app leaves the link unavailable.
+DM/group links use the original DM channel ID. The Discord account opening
+the link must still have access. Guild/thread member lists and other people's
+replies are absent from the package, so the app does not infer membership from
+message mentions or thread titles. Known DM/group recipients use exported IDs.
 
 Enable **Watch this Discord export for changes** to import again when you
 replace the chosen ZIP with a newer export, while the desktop app is open and

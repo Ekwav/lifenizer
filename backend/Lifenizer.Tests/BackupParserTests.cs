@@ -47,6 +47,31 @@ public sealed class BackupParserTests
     }
 
     [Test]
+    public void DiscordSnapshotPreservesSourceLinksIdentityContextAndAttachmentOnlyMessages()
+    {
+        var result = new LifenizerBackupParser().Parse(new ImportRequest(Text: """
+            {"participants":[{"id":"author-id","displayName":"Author","identifiers":["discord:111","email:author@example.test"],"aliases":["Former author"]}],
+             "conversations":[{"title":"Example thread","source":"discord","sourceThreadId":"discord:333",
+               "sourceUrl":"https://discord.com/channels/555/333","metadata":{"messageScope":"own-sent-messages","channelType":"PUBLIC_THREAD"},
+               "participantIds":["author-id"],"segments":[{"text":"","sourceMessageId":"discord:999","participantId":"author-id",
+                 "attachmentUrls":["https://example.test/attachment"],"createdAt":"2025-06-15T09:00:00Z"}]}]}
+            """));
+        var conversation = result.Conversations.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(conversation.SourceThreadId, Is.EqualTo("discord:333"));
+            Assert.That(conversation.SourceUrl, Is.EqualTo("https://discord.com/channels/555/333"));
+            Assert.That(conversation.Metadata!["messageScope"], Is.EqualTo("own-sent-messages"));
+            Assert.That(conversation.ParticipantIdentifiers, Is.EqualTo(new[] { "discord:111" }));
+            Assert.That(conversation.Segments.Single().SourceMessageId, Is.EqualTo("discord:999"));
+            Assert.That(conversation.Segments.Single().ParticipantIdentifier, Is.EqualTo("discord:111"));
+            Assert.That(conversation.Segments.Single().AttachmentUrls, Is.EqualTo(new[] { "https://example.test/attachment" }));
+            Assert.That(result.Participants.Single().Identifiers, Is.EqualTo(new[] { "discord:111", "email:author@example.test" }));
+            Assert.That(result.Participants.Single().Aliases, Is.EqualTo(new[] { "Former author" }));
+        });
+    }
+
+    [Test]
     public void EmptyBackupDoesNotImportItsRawJsonAsConversationText()
     {
         var result = new LifenizerBackupParser().Parse(new ImportRequest(Text: "{\"conversations\":[]}"));

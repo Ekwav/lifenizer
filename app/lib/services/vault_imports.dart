@@ -431,6 +431,8 @@ extension VaultImports on LifenizerAppState {
       final conversation = Conversation(
         id: conversationId,
         sourceThreadId: normalized.sourceThreadId,
+        sourceUrl: normalized.sourceUrl ?? previous?.sourceUrl,
+        metadata: {...?previous?.metadata, ...normalized.metadata},
         importFingerprint: previous?.importFingerprint ?? receipt,
         title: normalized.title.trim().isEmpty
             ? 'Imported ${result.source}'

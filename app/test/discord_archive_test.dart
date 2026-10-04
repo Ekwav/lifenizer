@@ -18,6 +18,8 @@ void writeFixture(
   String path, {
   bool updated = false,
   bool largeActivity = false,
+  String channelType = 'DM',
+  bool guild = false,
 }) {
   final archive = Archive();
   void add(String name, Object value) {
@@ -38,8 +40,10 @@ void writeFixture(
   add('Nachrichten/index.json', {'333': 'Direct Message with Former friend'});
   add('Nachrichten/c333/channel.json', {
     'id': '333',
-    'type': 'DM',
-    'recipients': ['444', 'Deleted User'],
+    'type': channelType,
+    if (guild) 'guild': {'id': '555', 'name': 'Example server'},
+    if (['DM', 'GROUP_DM'].contains(channelType))
+      'recipients': ['444', 'Deleted User'],
   });
   add('Nachrichten/c333/messages.json', [
     {
@@ -88,6 +92,9 @@ void main() {
       final conversation = result.conversations.single;
       expect(conversation.title, 'DM · Former friend');
       expect(conversation.sourceThreadId, 'discord:333');
+      expect(conversation.sourceUrl, 'https://discord.com/channels/@me/333');
+      expect(conversation.metadata['messageScope'], 'own-sent-messages');
+      expect(conversation.metadata['unidentifiedRecipients'], '1');
       expect(conversation.participantIdentifiers, [
         'discord:111',
         'discord:444',
@@ -109,6 +116,29 @@ void main() {
         contains('email:author@example.test'),
       );
       expect(result.participants.last.displayName, 'Former friend');
+    },
+  );
+
+  test(
+    'guild links use the exported guild ID; missing guild metadata never invents a DM link',
+    () async {
+      writeFixture(path, channelType: 'PUBLIC_THREAD', guild: true);
+      var conversation = (await readDiscordArchive(
+        path,
+      ).toList()).single.conversations.single;
+      expect(conversation.sourceUrl, 'https://discord.com/channels/555/333');
+      expect(conversation.participantIdentifiers, ['discord:111']);
+      writeFixture(path, channelType: 'PUBLIC_THREAD');
+      conversation = (await readDiscordArchive(
+        path,
+      ).toList()).single.conversations.single;
+      expect(conversation.sourceUrl, isNull);
+      expect(conversation.metadata['channelType'], 'PUBLIC_THREAD');
+      writeFixture(path, channelType: 'GROUP_DM');
+      conversation = (await readDiscordArchive(
+        path,
+      ).toList()).single.conversations.single;
+      expect(conversation.sourceUrl, 'https://discord.com/channels/@me/333');
     },
   );
 
@@ -257,6 +287,12 @@ void main() {
       expect(state.error, isNull);
       final updated = state.conversations.single;
       expect(updated.id, original.id);
+      expect(updated.sourceUrl, original.sourceUrl);
+      final restored = Conversation.fromJson(
+        jsonDecode(jsonEncode(updated.toJson())) as Map<String, dynamic>,
+      );
+      expect(restored.sourceUrl, updated.sourceUrl);
+      expect(restored.metadata, updated.metadata);
       expect(updated.isFavorite, isTrue);
       expect(updated.tags, contains('custom'));
       expect(updated.segments, hasLength(3));

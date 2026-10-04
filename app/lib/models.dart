@@ -207,6 +207,8 @@ class ConversationSegment {
 /// Represents a conversation/thread with metadata and segments.
 class Conversation {
   Conversation({
+    this.sourceUrl,
+    this.metadata = const {},
     this.sourceThreadId,
     required this.id,
     required this.title,
@@ -221,6 +223,9 @@ class Conversation {
     DateTime? endedAt,
   }) : startedAt = startedAt ?? DateTime.now().toUtc(),
        endedAt = endedAt ?? DateTime.now().toUtc();
+
+  final String? sourceUrl;
+  final Map<String, String> metadata;
 
   final String? sourceThreadId;
   final String id;
@@ -248,6 +253,8 @@ class Conversation {
 
   /// Serialize to JSON.
   Map<String, dynamic> toJson() => {
+    if (sourceUrl != null) 'sourceUrl': sourceUrl,
+    if (metadata.isNotEmpty) 'metadata': metadata,
     if (sourceThreadId != null) 'sourceThreadId': sourceThreadId,
     'id': id,
     'title': title,
@@ -263,6 +270,10 @@ class Conversation {
   };
 
   factory Conversation.fromJson(Map<String, dynamic> json) => Conversation(
+    sourceUrl: json['sourceUrl'] as String?,
+    metadata: (json['metadata'] as Map? ?? const {}).map(
+      (key, value) => MapEntry('$key', '$value'),
+    ),
     sourceThreadId: json['sourceThreadId'] as String?,
     id: json['id'] as String,
     title: json['title'] as String,
@@ -676,6 +687,8 @@ class NormalizedParticipant {
 /// Represents a conversation extracted during import normalization.
 class NormalizedConversation {
   NormalizedConversation({
+    this.sourceUrl,
+    this.metadata = const {},
     this.participantIdentifiers = const [],
     this.sourceThreadId,
     required this.title,
@@ -684,6 +697,9 @@ class NormalizedConversation {
     required this.segments,
     this.artifactNames = const [],
   });
+
+  final String? sourceUrl;
+  final Map<String, String> metadata;
 
   final List<String> participantIdentifiers;
   final String? sourceThreadId;
@@ -695,6 +711,8 @@ class NormalizedConversation {
 
   /// Serialize to JSON for caching/persistence.
   Map<String, dynamic> toJson() => {
+    if (sourceUrl != null) 'sourceUrl': sourceUrl,
+    if (metadata.isNotEmpty) 'metadata': metadata,
     if (participantIdentifiers.isNotEmpty)
       'participantIdentifiers': participantIdentifiers,
     if (sourceThreadId != null) 'sourceThreadId': sourceThreadId,
@@ -707,6 +725,10 @@ class NormalizedConversation {
 
   factory NormalizedConversation.fromJson(Map<String, dynamic> json) {
     return NormalizedConversation(
+      sourceUrl: json['sourceUrl'] as String?,
+      metadata: (json['metadata'] as Map? ?? const {}).map(
+        (key, value) => MapEntry('$key', '$value'),
+      ),
       sourceThreadId: json['sourceThreadId'] as String?,
       participantIdentifiers: json.parseStringList('participantIdentifiers'),
       title: json['title'] as String,

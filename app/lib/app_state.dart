@@ -871,6 +871,8 @@ class LifenizerAppState extends ChangeNotifier {
       Conversation.fromJson({
         ...incoming.toJson(),
         'id': previous.id,
+        'sourceUrl': incoming.sourceUrl ?? previous.sourceUrl,
+        'metadata': {...previous.metadata, ...incoming.metadata},
         'participantIds': {
           ...previous.participantIds,
           ...incoming.participantIds,

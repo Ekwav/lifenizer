@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../app_state.dart';
 import '../../image_widgets.dart';
 import '../../models.dart';
+import '../../services/source_links.dart';
 
 /// Displays the list of search results.
 ///
@@ -85,9 +86,7 @@ class ConversationCard extends StatelessWidget {
     final participants = conversation.participantIds
         .map(state.participantName)
         .join(', ');
-    final preview = conversation.segments
-        .map((segment) => segment.text)
-        .join(' ');
+    final preview = _previewText(conversation);
     return Card(
       child: InkWell(
         borderRadius: const BorderRadius.all(Radius.circular(8)),
@@ -177,7 +176,13 @@ class _ConversationDetailSheet extends StatelessWidget {
     final participants = conversation.participantIds
         .map(state.participantName)
         .join(', ');
-    final fullText = conversation.segments.map(_formatSegmentLine).join('\n\n');
+    final sourceUrl = externalLinkUri(conversation.sourceUrl);
+    final ownMessagesOnly =
+        conversation.metadata['messageScope'] == 'own-sent-messages';
+    final directMessage = [
+      'DM',
+      'GROUP_DM',
+    ].contains(conversation.metadata['channelType']);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.75,
@@ -220,6 +225,34 @@ class _ConversationDetailSheet extends StatelessWidget {
                   ),
                 ),
               ),
+              if (sourceUrl != null)
+                SliverToBoxAdapter(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => _openLink(sourceUrl.toString()),
+                      icon: const Icon(Icons.open_in_new),
+                      label: Text(
+                        conversation.source == 'discord'
+                            ? 'Open Discord chat'
+                            : 'Open original',
+                      ),
+                    ),
+                  ),
+                ),
+              if (ownMessagesOnly)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'This export contains only your sent messages; other people’s replies are absent.'
+                      '${directMessage ? ' Known recipients are shown above.' : ' Discord did not include this channel’s other members.'}'
+                      '${conversation.metadata.containsKey('unidentifiedRecipients') ? ' Some deleted recipients have no usable identity.' : ''}'
+                      '${sourceUrl == null ? ' The original channel link is unavailable in this export.' : ''}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ),
               if (conversation.tags.isNotEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
@@ -255,20 +288,67 @@ class _ConversationDetailSheet extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    fullText.isEmpty ? 'No transcript.' : fullText,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+              if (conversation.segments.isEmpty)
+                const SliverToBoxAdapter(child: Text('No transcript.'))
+              else
+                SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final segment = conversation.segments[index];
+                    final link = discordMessageUrl(conversation, segment);
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 12, bottom: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            children: [
+                              Text(
+                                '${segment.createdAt.toCompactLocalString()}${segment.participantId == null ? '' : ' · ${state.participantName(segment.participantId!)}'}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              if (link != null)
+                                TextButton.icon(
+                                  onPressed: () => _openLink(link),
+                                  icon: const Icon(Icons.open_in_new, size: 16),
+                                  label: const Text('Open message'),
+                                ),
+                            ],
+                          ),
+                          if (segment.text.isNotEmpty)
+                            SelectableText(
+                              _formatSegmentLine(segment),
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          for (final attachment in segment.attachmentUrls)
+                            if (externalLinkUri(attachment) != null)
+                              TextButton.icon(
+                                onPressed: () => _openLink(attachment),
+                                icon: const Icon(Icons.attach_file, size: 16),
+                                label: Text(
+                                  Uri.parse(
+                                        attachment,
+                                      ).pathSegments.lastOrNull ??
+                                      'Attachment',
+                                ),
+                              ),
+                        ],
+                      ),
+                    );
+                  }, childCount: conversation.segments.length),
                 ),
-              ),
             ],
           ),
         );
       },
     );
+  }
+
+  Future<void> _openLink(String url) async {
+    if (!await openExternalLink(url)) {
+      state.reportError('Could not open the link in another app.');
+    }
   }
 }
 
@@ -285,4 +365,21 @@ String _formatSegmentLine(ConversationSegment segment) {
   final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
   final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
   return '[$minutes:$seconds] ${segment.text}';
+}
+
+String _previewText(Conversation conversation) {
+  final text = StringBuffer();
+  for (final segment in conversation.segments) {
+    if (segment.text.isEmpty) continue;
+    if (text.isNotEmpty) text.write(' ');
+    final remaining = 500 - text.length;
+    if (remaining <= 0) break;
+    text.write(
+      segment.text.length > remaining
+          ? segment.text.substring(0, remaining)
+          : segment.text,
+    );
+    if (text.length >= 500) break;
+  }
+  return text.toString();
 }
