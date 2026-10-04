@@ -1,10 +1,16 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:dbus/dbus.dart';
 
 import '../app_state.dart';
 import 'quick_action_service.dart';
+import 'export_watch_service.dart';
 
 const runnerBusName = 'com.lifenizer.Search';
 const runnerInterface = 'org.kde.krunner1';
+const controlInterface = 'com.lifenizer.Control';
 
 Future<void> startDesktopRunner(
   LifenizerAppState state,
@@ -29,12 +35,18 @@ Future<void> startDesktopRunner(
 
 /// KDE's D-Bus runner protocol; the only index is the unlocked app's memory.
 class LifenizerRunner extends DBusObject {
-  LifenizerRunner(this.state, this.request, {this.present = _presentWindow})
-    : super(DBusObjectPath('/runner'));
+  LifenizerRunner(
+    this.state,
+    this.request, {
+    this.present = _presentWindow,
+    Future<void> Function(String)? importFile,
+  }) : importFile = importFile ?? state.importDiscordArchive,
+       super(DBusObjectPath('/runner'));
 
   final LifenizerAppState state;
   final void Function(QuickAction) request;
   final Future<void> Function() present;
+  final Future<void> Function(String) importFile;
 
   static Future<void> _presentWindow() async {
     await QuickActionService.channel.invokeMethod<void>('present');
@@ -42,6 +54,33 @@ class LifenizerRunner extends DBusObject {
 
   @override
   List<DBusIntrospectInterface> introspect() => [
+    DBusIntrospectInterface(
+      controlInterface,
+      methods: [
+        for (final name in ['ImportFile', 'WatchExport'])
+          DBusIntrospectMethod(
+            name,
+            args: [
+              DBusIntrospectArgument(
+                DBusSignature('s'),
+                DBusArgumentDirection.in_,
+                name: 'path',
+              ),
+            ],
+          ),
+        DBusIntrospectMethod('Lock'),
+        DBusIntrospectMethod(
+          'Status',
+          args: [
+            DBusIntrospectArgument(
+              DBusSignature('s'),
+              DBusArgumentDirection.out,
+              name: 'status',
+            ),
+          ],
+        ),
+      ],
+    ),
     DBusIntrospectInterface(
       runnerInterface,
       methods: [
@@ -101,6 +140,69 @@ class LifenizerRunner extends DBusObject {
 
   @override
   Future<DBusMethodResponse> handleMethodCall(DBusMethodCall methodCall) async {
+    if (methodCall.interface == controlInterface) {
+      if (methodCall.name == 'Status' &&
+          methodCall.signature == DBusSignature('')) {
+        return DBusMethodSuccessResponse([
+          DBusString(
+            jsonEncode({
+              'unlocked': state.isAuthenticated,
+              'busy': state.busy,
+              'conversations': state.isAuthenticated
+                  ? state.conversations.length
+                  : 0,
+              'messages': state.isAuthenticated
+                  ? state.conversations.fold<int>(
+                      0,
+                      (n, c) => n + c.segments.length,
+                    )
+                  : 0,
+              'people': state.isAuthenticated ? state.participants.length : 0,
+              'pendingSync': state.pendingSyncCount,
+              'hasError': state.error != null,
+              'syncPaused': state.syncError != null,
+            }),
+          ),
+        ]);
+      }
+      if (state.busy || !state.isAuthenticated) {
+        return DBusMethodErrorResponse('com.lifenizer.NotReady', [
+          const DBusString(
+            'Unlock the vault and wait for the current operation.',
+          ),
+        ]);
+      }
+      if (methodCall.name == 'Lock' &&
+          methodCall.signature == DBusSignature('')) {
+        await state.lock();
+        return state.isAuthenticated
+            ? DBusMethodErrorResponse('com.lifenizer.SaveFailed')
+            : DBusMethodSuccessResponse();
+      }
+      if (['ImportFile', 'WatchExport'].contains(methodCall.name) &&
+          methodCall.signature == DBusSignature('s')) {
+        final path = methodCall.values.single.asString();
+        if (!path.startsWith('/') ||
+            !path.toLowerCase().endsWith('.zip') ||
+            !await File(path).exists()) {
+          return DBusMethodErrorResponse.invalidArgs();
+        }
+        request(const QuickAction(action: 'imports'));
+        await present();
+        final operation = methodCall.name == 'WatchExport'
+            ? ExportWatchService.instance.watch(path)
+            : importFile(path);
+        unawaited(
+          operation.catchError((Object _) {
+            state.reportError(
+              'The Discord export could not be imported. Check the selected file in Imports.',
+            );
+          }),
+        );
+        return DBusMethodSuccessResponse();
+      }
+      return DBusMethodErrorResponse.unknownMethod();
+    }
     if (methodCall.interface != runnerInterface) {
       return DBusMethodErrorResponse.unknownInterface();
     }

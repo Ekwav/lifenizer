@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:app/app_state.dart';
 import 'package:app/models.dart';
@@ -9,8 +10,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 class _Vault extends LifenizerAppState {
   bool unlocked = false;
+  String? importedPath;
   @override
   bool get isAuthenticated => unlocked;
+
+  Future<void> recordImport(String path) async {
+    importedPath = path;
+  }
 }
 
 void main() {
@@ -75,6 +81,7 @@ void main() {
         vault,
         (action) => opened = action,
         present: () async => presentations++,
+        importFile: vault.recordImport,
       );
       await exporter.requestName(runnerBusName);
       await exporter.registerObject(runner);
@@ -127,6 +134,34 @@ void main() {
           const DBusString('lifenizer://capture'),
         ]);
         expect(opened!.action, 'capture');
+        final status = await remote.callMethod(controlInterface, 'Status', []);
+        expect(
+          jsonDecode(status.returnValues.single.asString())['conversations'],
+          0,
+        );
+        final archive = File('${directory.path}/package.zip');
+        await archive.writeAsBytes([]);
+        await expectLater(
+          remote.callMethod(controlInterface, 'ImportFile', [
+            DBusString(archive.path),
+          ]),
+          throwsA(isA<DBusMethodResponseException>()),
+        );
+        expect(vault.importedPath, isNull);
+        vault.unlocked = true;
+        vault.busy = true;
+        await expectLater(
+          remote.callMethod(controlInterface, 'ImportFile', [
+            DBusString(archive.path),
+          ]),
+          throwsA(isA<DBusMethodResponseException>()),
+        );
+        vault.busy = false;
+        await remote.callMethod(controlInterface, 'ImportFile', [
+          DBusString(archive.path),
+        ]);
+        expect(vault.importedPath, archive.path);
+        expect(opened!.action, 'imports');
       } finally {
         await caller.close();
         await exporter.close();
