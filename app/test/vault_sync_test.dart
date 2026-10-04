@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
 import 'package:app/crypto_service.dart';
+import 'package:app/models.dart';
 import 'package:app/services/local_vault_store.dart';
 import 'package:app/services/sync_progress.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +13,7 @@ import 'package:http/testing.dart';
 import 'package:sembast/sembast_memory.dart';
 
 class _Server {
+  String authToken = 'private-token';
   final envelopes = <Map<String, dynamic>>[];
   final requests = <http.Request>[];
   bool offline = false;
@@ -24,7 +27,7 @@ class _Server {
     Object body;
     if (path.startsWith('/api/auth/')) {
       body = {
-        'authToken': 'private-token',
+        'authToken': authToken,
         'userId': 'user',
         'vaultId': 'vault',
         'vaultSalt': 'stable-salt',
@@ -79,6 +82,216 @@ void main() {
     password: 'account password',
     passphrase: phrase,
     offline: offline,
+  );
+
+  test(
+    'idle cached login keeps ciphertext unchanged and renews the offline session with an encrypted sidecar',
+    () async {
+      final server = _Server();
+      final disk = await store();
+      addTearDown(disk.close);
+      final initial = device(server, disk);
+      addTearDown(initial.dispose);
+      await login(initial);
+      await initial.addManualText(
+        title: 'Saved note',
+        participantNames: '',
+        text: 'Retain this content',
+      );
+      await initial.lock();
+      final key =
+          'vault:${jsonEncode(['https://vault.example.test', 'alice@example.test'])}';
+      final before = (await disk.read(key))!;
+      server.authToken = 'fresh-private-session';
+      final renewed = device(server, disk);
+      addTearDown(renewed.dispose);
+      final stages = <SyncStage>[];
+      renewed.addListener(() {
+        if (renewed.syncProgress case final value?) stages.add(value.stage);
+      });
+      await login(renewed);
+      expect(renewed.error, isNull);
+      expect(await disk.read(key), before);
+      expect(
+        stages,
+        containsAll([
+          SyncStage.readingLocal,
+          SyncStage.derivingKey,
+          SyncStage.decryptingLocal,
+          SyncStage.restoring,
+          SyncStage.indexing,
+        ]),
+      );
+      final sidecar = (await disk.read('$key:session'))!;
+      expect(sidecar['snapshotNonce'], before['nonce']);
+      expect(jsonEncode(sidecar), isNot(contains('fresh-private-session')));
+      server.offline = true;
+      final offline = device(server, disk);
+      addTearDown(offline.dispose);
+      await login(offline, offline: true);
+      expect(offline.error, isNull);
+      expect(offline.session!.authToken, 'fresh-private-session');
+      expect(
+        offline.conversations.single.segments.single.text,
+        'Retain this content',
+      );
+      expect(await disk.read(key), before);
+
+      await disk.write('$key:session', {
+        ...sidecar,
+        'cipherText': 'corrupted optional session',
+      });
+      final fallback = device(server, disk);
+      addTearDown(fallback.dispose);
+      await login(fallback, offline: true);
+      expect(fallback.error, isNull);
+      expect(fallback.session!.authToken, 'private-token');
+      expect(
+        fallback.conversations.single.segments.single.text,
+        'Retain this content',
+      );
+      await disk.write('$key:session', sidecar);
+
+      await renewed.updatePairedSession(
+        AuthSession(
+          authToken: 'newest-private-session',
+          userId: renewed.session!.userId,
+          vaultId: renewed.session!.vaultId,
+          vaultSalt: renewed.session!.vaultSalt,
+        ),
+      );
+      expect((await disk.read(key))!['nonce'], isNot(sidecar['snapshotNonce']));
+      final latest = device(server, disk);
+      addTearDown(latest.dispose);
+      await login(latest, offline: true);
+      expect(latest.error, isNull);
+      expect(latest.session!.authToken, 'newest-private-session');
+    },
+  );
+
+  test(
+    'cached restore yields between message chunks and persists genuine participant repairs',
+    () async {
+      final server = _Server();
+      final disk = await store();
+      addTearDown(disk.close);
+      final crypto = VaultCrypto();
+      addTearDown(crypto.lock);
+      await crypto.unlock(
+        email: 'alice@example.test',
+        passphrase: 'private vault phrase',
+        vaultSalt: 'stable-salt',
+      );
+      final time = DateTime.utc(2026, 10, 4);
+      final conversation = Conversation(
+        id: 'cached-thread',
+        title: 'Archived messages',
+        source: 'discord',
+        participantIds: ['old-person'],
+        sourceThreadId: 'discord:123',
+        sourceUrl: 'https://discord.com/channels/1/123',
+        metadata: {'channel': 'Archive'},
+        tags: ['archive'],
+        artifactNames: ['attachment.pdf'],
+        isFavorite: true,
+        importFingerprint: 'receipt',
+        startedAt: time,
+        endedAt: time,
+        segments: List.generate(
+          2000,
+          (index) => ConversationSegment(
+            id: 'message-$index',
+            text: 'Archived message $index',
+            sourceMessageId: '$index',
+            participantId: 'old-person',
+            createdAt: time,
+            offsetMs: index,
+            attachmentUrls: ['https://example.test/file-$index.pdf'],
+          ),
+        ),
+      );
+      final payload = await crypto.encryptJson({
+        'session': {
+          'authToken': 'private-token',
+          'userId': 'user',
+          'vaultId': 'vault',
+          'vaultSalt': 'stable-salt',
+        },
+        'cursor': 0,
+        'participants': [
+          Participant(
+            id: 'old-person',
+            displayName: 'Old identity',
+            mergedInto: 'person',
+          ).toJson(),
+          Participant(id: 'person', displayName: 'Connected person').toJson(),
+        ],
+        'conversations': [conversation.toJson()],
+        'relations': [],
+        'savedSearches': [],
+        'pending': [],
+      });
+      final key =
+          'vault:${jsonEncode(['https://vault.example.test', 'alice@example.test'])}';
+      await disk.write(key, {
+        'vaultSalt': 'stable-salt',
+        'cipherText': payload.cipherText,
+        'nonce': payload.nonce,
+      });
+      final state = device(server, disk);
+      addTearDown(state.dispose);
+      final counts = <int>[];
+      int? conversationsAtFirstYield;
+      var observedYield = false;
+      state.addListener(() {
+        if (state.syncProgress case final value?) {
+          if (value.stage == SyncStage.restoring && value.total == 2000) {
+            counts.add(value.completed);
+          }
+          if (value.stage == SyncStage.restoring &&
+              value.total == 2000 &&
+              !observedYield) {
+            observedYield = true;
+            unawaited(
+              Future<void>.delayed(Duration.zero, () {
+                conversationsAtFirstYield = state.conversations.length;
+              }),
+            );
+          }
+        }
+      });
+      await login(state, offline: true);
+      expect(state.error, isNull);
+      expect(counts, containsAll([0, 2000]));
+      expect(
+        conversationsAtFirstYield,
+        0,
+        reason:
+            'The event loop must run before the single large conversation is fully restored.',
+      );
+      final restored = state.conversations.single;
+      expect(restored.segments, hasLength(2000));
+      expect(restored.participantIds, ['person']);
+      expect(restored.segments.last.participantId, 'person');
+      expect(
+        restored.segments.last.attachmentUrls,
+        conversation.segments.last.attachmentUrls,
+      );
+      expect(restored.segments.last.offsetMs, 1999);
+      expect(restored.metadata, conversation.metadata);
+      expect(restored.sourceUrl, conversation.sourceUrl);
+      expect(restored.isFavorite, isTrue);
+      expect(restored.importFingerprint, conversation.importFingerprint);
+      final persisted = (await disk.read(key))!;
+      expect(persisted['nonce'], isNot(payload.nonce));
+      final saved = await crypto.decryptJson(
+        cipherText: persisted['cipherText'] as String,
+        nonce: persisted['nonce'] as String,
+      );
+      expect((saved['conversations'] as List).single['participantIds'], [
+        'person',
+      ]);
+    },
   );
 
   test(

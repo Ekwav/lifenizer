@@ -34,16 +34,17 @@ class VaultCrypto {
     required String email,
     required String passphrase,
     required String vaultSalt,
+    bool background = false,
   }) async {
-    final kdf = Pbkdf2(
-      macAlgorithm: Hmac.sha256(),
-      iterations: 180000,
-      bits: 256,
-    );
-    _vaultKey = await kdf.deriveKey(
-      secretKey: SecretKey(utf8.encode(passphrase)),
-      nonce: utf8.encode('lifenizer:$email:$vaultSalt'),
-    );
+    lock();
+    final bytes = background
+        ? await _deriveKeyInWorker(email, passphrase, vaultSalt)
+        : await _deriveKeyBytes(email, passphrase, vaultSalt);
+    try {
+      _vaultKey = SecretKeyData(bytes.toList(), overwriteWhenDestroyed: true);
+    } finally {
+      bytes.fillRange(0, bytes.length, 0);
+    }
   }
 
   Future<EncryptedPayload> encryptJson(
@@ -112,6 +113,39 @@ class VaultCrypto {
 
 // Keep closures outside VaultCrypto so workers capture only snapshot data/key
 // bytes, never the live app or an open local database.
+Future<List<int>> _deriveKeyInWorker(
+  String email,
+  String passphrase,
+  String salt,
+) => runVaultWork(() => _deriveKeyBytes(email, passphrase, salt));
+
+Future<List<int>> _deriveKeyBytes(
+  String email,
+  String passphrase,
+  String salt,
+) async {
+  final password = SecretKeyData(
+    utf8.encode(passphrase),
+    overwriteWhenDestroyed: true,
+  );
+  SecretKey? derived;
+  try {
+    derived =
+        await Pbkdf2(
+          macAlgorithm: Hmac.sha256(),
+          iterations: 180000,
+          bits: 256,
+        ).deriveKey(
+          secretKey: password,
+          nonce: utf8.encode('lifenizer:$email:$salt'),
+        );
+    return (await derived.extractBytes()).toList();
+  } finally {
+    derived?.destroy();
+    password.destroy();
+  }
+}
+
 Future<EncryptedPayload> _encryptInWorker(
   Map<String, dynamic> json,
   List<int> bytes,

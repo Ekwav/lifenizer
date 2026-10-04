@@ -3,6 +3,23 @@ import 'dart:math' as math;
 import '../models.dart';
 import 'string_distance_service.dart';
 
+typedef SearchIndexInputs = (
+  List<Conversation>,
+  Map<String, String>,
+  Map<String, String>,
+);
+
+class SearchIndexProgress {
+  const SearchIndexProgress(
+    this.completed,
+    this.total, {
+    this.finalizing = false,
+  });
+  final int completed;
+  final int total;
+  final bool finalizing;
+}
+
 class IndexedConversation {
   IndexedConversation({
     required this.conversation,
@@ -46,7 +63,25 @@ class ConversationSearchIndex {
     required List<Conversation> conversations,
     required Map<String, String> participantById,
     required Map<String, String> relationTextByConversation,
+    void Function(SearchIndexProgress)? onProgress,
   }) {
+    final progressClock = Stopwatch()..start();
+    void report(int completed, {bool finalizing = false, bool force = false}) {
+      if (onProgress == null ||
+          (!force && progressClock.elapsedMilliseconds < 150)) {
+        return;
+      }
+      progressClock.reset();
+      onProgress(
+        SearchIndexProgress(
+          completed,
+          conversations.length,
+          finalizing: finalizing,
+        ),
+      );
+    }
+
+    report(0, force: true);
     final docs = <String, IndexedConversation>{};
     final inverted = <String, Set<String>>{};
     for (final conversation in conversations) {
@@ -77,7 +112,10 @@ class ConversationSearchIndex {
         vectorNorm: 0,
         length: tokens.length,
       );
+      report(docs.length);
     }
+    report(docs.length, force: true);
+    report(0, finalizing: true, force: true);
     final idf = <String, double>{
       for (final entry in inverted.entries)
         entry.key: math.log(
@@ -105,7 +143,9 @@ class ConversationSearchIndex {
         vectorNorm: math.sqrt(norm),
         length: doc.length,
       );
+      report(withNorm.length, finalizing: true);
     }
+    report(withNorm.length, finalizing: true, force: true);
     return ConversationSearchIndex._(
       withNorm,
       inverted,

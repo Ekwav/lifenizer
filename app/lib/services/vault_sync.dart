@@ -36,6 +36,12 @@ extension VaultSync on LifenizerAppState {
       }
       _unlocking = true;
       try {
+        _setSyncProgress(
+          SyncStage.readingLocal,
+          downloaded: 0,
+          uploaded: 0,
+          batch: 0,
+        );
         await initialize();
         apiBaseUrl = baseUrl.trim().replaceFirst(RegExp(r'/+$'), '');
         final uri = Uri.tryParse(apiBaseUrl);
@@ -52,6 +58,7 @@ extension VaultSync on LifenizerAppState {
             LifenizerApiClient(baseUrl: apiBaseUrl);
         AuthSession? auth = pairedSession;
         if (!offline && auth == null) {
+          _setSyncProgress(SyncStage.authenticating, detail: 'Signing in');
           auth = password == null
               ? await anonymous.devLogin(
                   email: normalizedEmail,
@@ -68,19 +75,24 @@ extension VaultSync on LifenizerAppState {
             'Unlock online once on this device before using offline mode.',
           );
         }
+        _setSyncProgress(SyncStage.derivingKey);
         await _crypto.unlock(
           email: normalizedEmail,
           passphrase: passphrase,
           vaultSalt: auth?.vaultSalt ?? local!['vaultSalt'] as String,
+          background: true,
         );
         _clearVault();
+        var repaired = false;
         if (local != null) {
+          _setSyncProgress(SyncStage.decryptingLocal);
           final snapshot = await _crypto.decryptJson(
             cipherText: local['cipherText'] as String,
             nonce: local['nonce'] as String,
             background: true,
           );
-          _restoreSnapshot(snapshot);
+          repaired = await _restoreSnapshot(snapshot);
+          if (auth == null) await _restoreSessionForSnapshot(local);
         }
         session = auth ?? session;
         final current = session!;
@@ -96,6 +108,7 @@ extension VaultSync on LifenizerAppState {
               : null,
         );
         rememberedEmail = normalizedEmail;
+        final savedBeforeSync = _snapshotWriteRevision;
         if (!offline) {
           // Validate every remote ciphertext before exposing the unlocked UI.
           await _syncNow();
@@ -113,14 +126,21 @@ extension VaultSync on LifenizerAppState {
             // Cached conversations and sync remain usable without discovery.
           }
         }
-        if (!offline) _setSyncProgress(SyncStage.saving);
-        await _persistLocal();
+        _setSyncProgress(SyncStage.saving);
+        if (_snapshotWriteRevision == savedBeforeSync) {
+          if (local == null || repaired) {
+            await _persistLocal();
+          } else if (auth != null) {
+            await _persistSessionForSnapshot(local);
+          }
+        }
         await _localStore!.write('settings', {
           'apiBaseUrl': apiBaseUrl,
           'email': rememberedEmail,
           'deviceId': deviceId,
         });
-        if (!offline) _setSyncProgress(SyncStage.complete);
+        await _prepareSearchIndex();
+        _setSyncProgress(SyncStage.complete);
         status = offline
             ? 'Local vault unlocked · changes will sync when connected'
             : 'Vault unlocked';
@@ -192,7 +212,7 @@ extension VaultSync on LifenizerAppState {
     _pendingSync.clear();
     syncCursor = 0;
     syncError = null;
-    syncProgress = null;
+    _clearSyncProgress();
     lastSyncedAt = null;
     _searchIndex = null;
     _markSearchIndexDirty();
@@ -200,6 +220,14 @@ extension VaultSync on LifenizerAppState {
     _lastSearchAt = null;
     _lastSearchTopConversationIds = const [];
     _sessionQueryFrequency.clear();
+  }
+
+  void _clearSyncProgress() {
+    syncProgress = null;
+    _progressStageClock?.stop();
+    _progressStageClock = null;
+    _syncProgressTicker?.cancel();
+    _syncProgressTicker = null;
   }
 
   Future<void> pullSync() => _run(_synchronize);
@@ -234,8 +262,16 @@ extension VaultSync on LifenizerAppState {
     int? downloaded,
     int? uploaded,
     int? batch,
+    String? detail,
     bool force = true,
   }) {
+    final nextBatch = batch ?? syncProgress?.batch ?? 0;
+    if (syncProgress?.stage != stage ||
+        syncProgress?.detail != detail ||
+        syncProgress?.batch != nextBatch) {
+      _progressStageClock?.stop();
+      _progressStageClock = Stopwatch()..start();
+    }
     syncProgress = SyncProgress(
       stage: stage,
       completed: completed,
@@ -244,8 +280,22 @@ extension VaultSync on LifenizerAppState {
       totalBytes: totalBytes,
       downloaded: downloaded ?? syncProgress?.downloaded ?? 0,
       uploaded: uploaded ?? syncProgress?.uploaded ?? 0,
-      batch: batch ?? syncProgress?.batch ?? 0,
+      batch: nextBatch,
+      detail: detail,
+      stageClock: _progressStageClock,
     );
+    if (syncProgress!.active) {
+      _syncProgressTicker ??= Timer.periodic(
+        const Duration(milliseconds: 300),
+        (_) {
+          if (syncProgress?.active == true) _notifyChanged();
+        },
+      );
+    } else {
+      _syncProgressTicker?.cancel();
+      _syncProgressTicker = null;
+      _progressStageClock?.stop();
+    }
     if (!force && _syncProgressClock.elapsedMilliseconds < 150) return;
     _syncProgressClock.reset();
     _notifyChanged();
@@ -380,8 +430,7 @@ extension VaultSync on LifenizerAppState {
       if (finished) break;
     }
     if (_needsSearchIndex) {
-      _setSyncProgress(SyncStage.indexing);
-      await _prepareSearchIndex();
+      await _prepareSearchIndex(complete: false);
     }
     syncError = null;
     lastSyncedAt = DateTime.now();
@@ -463,7 +512,7 @@ extension VaultSync on LifenizerAppState {
     if (audioDraft != null) 'audioDraft': audioDraft,
   };
 
-  void _restoreSnapshot(Map<String, dynamic> json) {
+  Future<bool> _restoreSnapshot(Map<String, dynamic> json) async {
     audioDraft = json['audioDraft'] == null
         ? null
         : Map<String, dynamic>.from(json['audioDraft']);
@@ -473,16 +522,116 @@ extension VaultSync on LifenizerAppState {
       json.parseObjectList('participants', Participant.fromJson),
     );
     _invalidateParticipantLookup();
-    conversations.addAll(
-      json.parseObjectList('conversations', Conversation.fromJson),
+    final rawConversations = json['conversations'] as List? ?? const [];
+    final totalMessages = rawConversations.fold<int>(
+      0,
+      (count, raw) =>
+          count + (((raw as Map)['segments'] as List?)?.length ?? 0),
     );
+    var messages = 0;
+    void report({bool force = false}) => _setSyncProgress(
+      SyncStage.restoring,
+      completed: totalMessages == 0 ? conversations.length : messages,
+      total: totalMessages == 0 ? rawConversations.length : totalMessages,
+      detail: totalMessages == 0 ? 'Restoring local conversations' : null,
+      force: force,
+    );
+    report(force: true);
+    for (final raw in rawConversations) {
+      final item = Map<String, dynamic>.from(raw as Map);
+      final conversation = Conversation.fromJson({
+        ...item,
+        'segments': const [],
+      });
+      for (final segment in item['segments'] as List? ?? const []) {
+        conversation.segments.add(
+          ConversationSegment.fromJson(
+            Map<String, dynamic>.from(segment as Map),
+          ),
+        );
+        messages++;
+        if (messages % 250 == 0) {
+          report();
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+      conversations.add(conversation);
+      if (conversations.length % 50 == 0) {
+        report();
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+    report(force: true);
     relations.addAll(json.parseObjectList('relations', RelationEdge.fromJson));
     savedSearches.addAll(
       json.parseObjectList('savedSearches', SavedSearch.fromJson),
     );
     _pendingSync.addAll(json.parseObjectList('pending', SyncEnvelope.fromJson));
-    _rewriteParticipantReferences();
+    var repaired = false;
+    _people;
+    if (_hasParticipantRedirects) {
+      for (var i = 0; i < conversations.length; i++) {
+        final canonical = _canonicalConversation(conversations[i]);
+        if (!identical(canonical, conversations[i])) {
+          conversations[i] = canonical;
+          repaired = true;
+        }
+        if (i % 50 == 0) {
+          _setSyncProgress(
+            SyncStage.restoring,
+            completed: i + 1,
+            total: conversations.length,
+            detail: 'Connecting saved people',
+            force: false,
+          );
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+    }
     _markSearchIndexDirty();
+    return repaired;
+  }
+
+  Future<void> _restoreSessionForSnapshot(Map<String, dynamic> snapshot) async {
+    final key = _localVaultKey!;
+    final saved = await _localStore!.read('$key:session');
+    if (saved == null || saved['snapshotNonce'] != snapshot['nonce']) return;
+    try {
+      final value = await _crypto.decryptJson(
+        cipherText: saved['cipherText'] as String,
+        nonce: saved['nonce'] as String,
+      );
+      if (value['vaultKey'] != key) return;
+      final auth = AuthSession.fromJson(
+        Map<String, dynamic>.from(value['session'] as Map),
+      );
+      final cached = session!;
+      if (auth.userId == cached.userId &&
+          auth.vaultId == cached.vaultId &&
+          auth.vaultSalt == cached.vaultSalt) {
+        session = auth;
+      }
+    } catch (_) {
+      // The authenticated snapshot remains usable if its optional renewal is invalid.
+    }
+  }
+
+  Future<void> _persistSessionForSnapshot(Map<String, dynamic> snapshot) async {
+    final key = _localVaultKey!;
+    final auth = session!;
+    final operation = _storageTail.then((_) async {
+      final payload = await _crypto.encryptJson({
+        'vaultKey': key,
+        'session': auth.toJson(),
+      });
+      await _localStore!.write('$key:session', {
+        'snapshotNonce': snapshot['nonce'],
+        'cipherText': payload.cipherText,
+        'nonce': payload.nonce,
+      });
+    });
+    _storageTail = operation.catchError((Object _) {});
+    await operation;
   }
 
   Future<void> saveAudioDraft(List<int> bytes, DateTime recordedAt) async {
@@ -512,6 +661,7 @@ extension VaultSync on LifenizerAppState {
         'cipherText': payload.cipherText,
         'nonce': payload.nonce,
       });
+      _snapshotWriteRevision++;
     });
     _storageTail = operation.catchError((Object _) {});
     await operation;

@@ -26,6 +26,8 @@ import 'services/document_import_service.dart';
 import 'services/document_credentials.dart';
 
 import 'services/conversation_search_index.dart';
+import 'services/search_index_worker_io.dart'
+    if (dart.library.js_interop) 'services/search_index_worker_web.dart';
 import 'services/temporal_intent.dart';
 import 'services/search_scorer.dart';
 import 'services/search_service.dart';
@@ -70,6 +72,8 @@ class LifenizerAppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _syncProgressTicker?.cancel();
+    _progressStageClock?.stop();
     removeListener(_updateDiscordIdentity);
     discordImport.dispose();
     documentImport.dispose();
@@ -89,6 +93,9 @@ class LifenizerAppState extends ChangeNotifier {
   String? syncError;
   SyncProgress? syncProgress;
   final Stopwatch _syncProgressClock = Stopwatch()..start();
+  Stopwatch? _progressStageClock;
+  Timer? _syncProgressTicker;
+  int _snapshotWriteRevision = 0;
   Map<String, dynamic>? audioDraft;
   Future<void> Function()? stopRecording;
   DateTime? lastSyncedAt;
@@ -139,6 +146,21 @@ class LifenizerAppState extends ChangeNotifier {
   void reportError(String message) {
     error = message;
     notifyListeners();
+  }
+
+  void reportUnlockProgress(String? message) {
+    if (message == null) {
+      _clearSyncProgress();
+      _notifyChanged();
+    } else {
+      _setSyncProgress(
+        SyncStage.authenticating,
+        detail: message,
+        downloaded: 0,
+        uploaded: 0,
+        batch: 0,
+      );
+    }
   }
 
   /// Test-only hook: unlocks the local vault crypto and installs an
@@ -1532,16 +1554,31 @@ class LifenizerAppState extends ChangeNotifier {
     _installSearchIndex(_buildConversationSearchIndex(_searchIndexInputs()));
   }
 
-  Future<void> _prepareSearchIndex() async {
+  Future<void> _prepareSearchIndex({bool complete = true}) async {
     if (!_needsSearchIndex || !_crypto.isUnlocked) return;
     final revision = _searchIndexRevision;
-    final index = await compute(
-      _buildConversationSearchIndex,
-      _searchIndexInputs(),
-      debugLabel: 'conversation-search-index',
-    );
+    _setSyncProgress(SyncStage.indexing, total: conversations.length);
+    ConversationSearchIndex index;
+    try {
+      index = await prepareSearchIndex(_searchIndexInputs(), (progress) {
+        if (revision != _searchIndexRevision || !_crypto.isUnlocked) return;
+        _setSyncProgress(
+          SyncStage.indexing,
+          completed: progress.completed,
+          total: progress.total,
+          detail: progress.finalizing ? 'Finalizing search' : null,
+          force: progress.completed == 0,
+        );
+      });
+    } catch (_) {
+      if (revision == _searchIndexRevision && _crypto.isUnlocked) {
+        _setSyncProgress(SyncStage.failed);
+      }
+      rethrow;
+    }
     if (revision == _searchIndexRevision && _crypto.isUnlocked) {
       _installSearchIndex(index);
+      if (complete) _setSyncProgress(SyncStage.complete);
     }
   }
 
