@@ -269,13 +269,16 @@ extension VaultSync on LifenizerAppState {
         }
         _applyEntity(envelope.entityType, decoded[i]);
       }
-      await _coalesceParticipantIdentities();
       await _queueImportedConversationRepairs();
       final advanced = pulled.cursor > syncCursor;
       syncCursor = pulled.cursor;
       await _persistLocal();
       if (pulled.envelopes.length < 500 || !advanced) break;
     }
+    // Coalescing queues participant writes. Apply every pull page first so these
+    // writes cannot suppress a later page's updates to the same person.
+    await _coalesceParticipantIdentities();
+    await _persistLocal();
     syncError = null;
     lastSyncedAt = DateTime.now();
     _notifyChanged();

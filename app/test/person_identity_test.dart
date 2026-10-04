@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
+import 'package:app/crypto_service.dart';
 import 'package:app/models.dart';
 import 'package:app/pages/participants_page.dart';
 import 'package:app/services/local_vault_store.dart';
@@ -269,6 +270,93 @@ void main() {
         second.activeParticipants.single.identifiers,
         containsAll(['discord:123456789012345', 'email:mara@example.test']),
       );
+    },
+  );
+
+  test(
+    'later pull pages retain identity updates while earlier coalescing is pending',
+    () async {
+      final server = _Server();
+      final crypto = VaultCrypto();
+      await crypto.unlock(
+        email: 'owner@example.test',
+        passphrase: 'private person vault phrase',
+        vaultSalt: 'salt',
+      );
+      addTearDown(crypto.lock);
+      Future<Map<String, dynamic>> encrypted(Participant person) async {
+        final payload = await crypto.encryptJson(person.toJson());
+        return SyncEnvelope(
+          id: 'template',
+          deviceId: 'other-device',
+          entityType: 'participant',
+          entityId: person.id,
+          operation: 'upsert',
+          revision: 1,
+          cipherText: payload.cipherText,
+          nonce: payload.nonce,
+          keyId: payload.keyId,
+          clientCreatedAt: DateTime.utc(2026),
+        ).toJson();
+      }
+
+      final discord = await encrypted(
+        Participant(
+          id: 'b',
+          displayName: 'Nova',
+          identifiers: ['discord:123456789012345', 'email:mara@example.test'],
+        ),
+      );
+      final email = await encrypted(
+        Participant(
+          id: 'a',
+          displayName: 'Mara',
+          identifiers: ['email:mara@example.test'],
+        ),
+      );
+      final updated = await encrypted(
+        Participant(
+          id: 'a',
+          displayName: 'Mara',
+          identifiers: ['email:mara@example.test', 'email:work@example.test'],
+          aliases: ['Work alias'],
+        ),
+      );
+      for (var i = 0; i < 501; i++) {
+        server.envelopes.add({
+          ...(i == 1
+              ? email
+              : i == 500
+              ? updated
+              : discord),
+          'id': 'event-$i',
+          'serverSequence': i + 1,
+        });
+      }
+      final first = device(server, await store());
+      await login(first);
+      expect(first.activeParticipants, hasLength(1));
+      expect(first.activeParticipants.single.aliases, contains('Work alias'));
+      expect(
+        first.activeParticipants.single.identifiers,
+        containsAll(['discord:123456789012345', 'email:work@example.test']),
+      );
+      await first.pullSync();
+      expect(first.pendingSyncCount, 0);
+      final second = device(server, await store());
+      await login(second);
+      expect(second.activeParticipants, hasLength(1));
+      expect(second.activeParticipants.single.aliases, contains('Work alias'));
+      expect(
+        second.activeParticipants.single.identifiers,
+        first.activeParticipants.single.identifiers,
+      );
+      await second.pullSync();
+      await first.pullSync();
+      final count = server.envelopes.length;
+      await first.pullSync();
+      await second.pullSync();
+      expect(server.envelopes, hasLength(count));
     },
   );
 
