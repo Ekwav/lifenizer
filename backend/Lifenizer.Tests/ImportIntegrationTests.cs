@@ -701,12 +701,13 @@ internal sealed class MockImapServer : IAsyncDisposable
                     foreach (var id in uids!)
                     {
                         if (!messages.TryGetValue(id.Id, out var raw)) continue;
+                        var sequence = Array.IndexOf(messages.Keys.Order().ToArray(), id.Id) + 1;
                         if (line.Contains("RFC822.SIZE"))
-                            await writer.WriteLineAsync($"* 1 FETCH (UID {id.Id} RFC822.SIZE {ReportedMessageSize ?? (uint)Encoding.UTF8.GetByteCount(raw)})");
+                            await writer.WriteLineAsync($"* {sequence} FETCH (UID {id.Id} RFC822.SIZE {ReportedMessageSize ?? (uint)Encoding.UTF8.GetByteCount(raw)})");
                         else
                         {
                             var bytes = Encoding.UTF8.GetBytes(raw);
-                            await writer.WriteLineAsync($"* 1 FETCH (UID {id.Id} BODY[] {{{bytes.Length}}}");
+                            await writer.WriteLineAsync($"* {sequence} FETCH (UID {id.Id} BODY[] {{{bytes.Length}}}");
                             await stream.WriteAsync(bytes);
                             await writer.WriteLineAsync("");
                             await writer.WriteLineAsync(")");

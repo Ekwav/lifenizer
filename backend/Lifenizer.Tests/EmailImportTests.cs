@@ -78,6 +78,20 @@ public sealed class EmailImportTests
     }
 
     [Test]
+    public async Task LargeOrdinaryMessagesAutomaticallyShrinkThePageWithoutSkippingUids()
+    {
+        await using var server = new MockImapServer(new Dictionary<uint, string> { [2] = MimeEmail, [9] = MimeEmail })
+            { ReportedMessageSize = 14 * 1024 * 1024 };
+        var importer = Client(server);
+        var first = await importer.ImportAsync(Request(), CancellationToken.None);
+        Assert.That(first.Conversations.Single().Metadata!["imap-uid"], Is.EqualTo("2"));
+        Assert.That(first.Diagnostics!["hasMore"], Is.EqualTo("true"));
+        var second = await importer.ImportAsync(Request(new() { ["afterUid"] = first.Diagnostics["nextUid"], ["uidValidity"] = first.Diagnostics["uidValidity"] }), CancellationToken.None);
+        Assert.That(second.Conversations.Single().Metadata!["imap-uid"], Is.EqualTo("9"));
+        Assert.That(second.Diagnostics!["hasMore"], Is.EqualTo("false"));
+    }
+
+    [Test]
     public async Task MandatoryTlsFailsBeforeSendingCredentialsWhenServerCannotStartTls()
     {
         await using var server = new MockImapServer(MimeEmail);

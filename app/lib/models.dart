@@ -605,6 +605,7 @@ class NormalizedImportResult {
     required this.message,
     required this.conversations,
     required this.participants,
+    this.diagnostics = const {},
   });
 
   final String source;
@@ -612,6 +613,7 @@ class NormalizedImportResult {
   final String message;
   final List<NormalizedConversation> conversations;
   final List<NormalizedParticipant> participants;
+  final Map<String, String> diagnostics;
 
   /// Serialize to JSON for caching/persistence.
   Map<String, dynamic> toJson() => {
@@ -620,6 +622,7 @@ class NormalizedImportResult {
     'message': message,
     'conversations': conversations.map((c) => c.toJson()).toList(),
     'participants': participants.map((p) => p.toJson()).toList(),
+    'diagnostics': diagnostics,
   };
 
   factory NormalizedImportResult.fromJson(Map<String, dynamic> json) {
@@ -627,6 +630,9 @@ class NormalizedImportResult {
       source: json['source'] as String,
       plaintextCompute: json['plaintextCompute'] as bool? ?? true,
       message: json['message'] as String? ?? '',
+      diagnostics: (json['diagnostics'] as Map? ?? const {}).map(
+        (key, value) => MapEntry(key.toString(), value.toString()),
+      ),
       conversations: json.parseObjectList<NormalizedConversation>(
         'conversations',
         NormalizedConversation.fromJson,

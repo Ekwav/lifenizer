@@ -115,6 +115,12 @@ class LifenizerApiClient {
     return NormalizedImportResult.fromJson(response);
   }
 
+  Future<Map<String, dynamic>> imapSettings() async {
+    final response = await _get('/api/imports/email/settings');
+    _ensureSuccess(response);
+    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+  }
+
   Future<int> push(List<SyncEnvelope> envelopes) async {
     final response = await _post('/api/sync/push', {
       'envelopes': envelopes.map((envelope) => envelope.toJson()).toList(),

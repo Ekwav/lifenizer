@@ -52,8 +52,20 @@ public sealed class PlainImapImportClient(IConfiguration configuration)
             if (selected.Length > 0)
             {
                 var sizes = await folder.FetchAsync(selected, MessageSummaryItems.UniqueId | MessageSummaryItems.Size, cancellationToken);
-                if (sizes.Sum(message => (long)(message.Size ?? 0)) > MaxPageBytes)
-                    throw new InvalidOperationException("This IMAP page exceeds the 25 MiB download limit. Reduce the page size (limit); a single oversized email must be exported separately.");
+                var total = 0L;
+                var accepted = 0;
+                foreach (var uid in selected)
+                {
+                    var size = sizes.FirstOrDefault(message => message.UniqueId == uid)?.Size ?? 0;
+                    if (total + size > MaxPageBytes)
+                    {
+                        if (accepted == 0) throw new InvalidOperationException("This email exceeds the 25 MiB download limit. Move it out of the watched mailbox (export it first if needed), then retry.");
+                        break;
+                    }
+                    total += size;
+                    accepted++;
+                }
+                selected = selected.Take(accepted).ToArray();
             }
             var downloaded = 0L;
             var nextUid = afterUid;
@@ -100,7 +112,7 @@ public sealed class PlainImapImportClient(IConfiguration configuration)
         public void Report(long bytesTransferred)
         {
             Bytes = bytesTransferred;
-            if (bytesTransferred > limit) throw new InvalidOperationException("This IMAP page exceeds the 25 MiB download limit. Reduce the page size or export the oversized email separately.");
+            if (bytesTransferred > limit) throw new InvalidOperationException("This IMAP page exceeds the 25 MiB download limit. Reduce the page size; move any oversized email out of the watched mailbox (export it first if needed), then retry.");
         }
     }
 

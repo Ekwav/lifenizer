@@ -14,6 +14,7 @@ import 'image_service.dart';
 import 'models.dart';
 import 'services/search_criteria.dart';
 import 'services/device_pairing.dart';
+import 'services/imap_import_service.dart';
 import 'services/pairing_store.dart';
 import 'services/local_vault_store.dart';
 import 'services/shared_import_source.dart';
@@ -26,21 +27,27 @@ import 'services/search_service.dart';
 
 part 'services/vault_sync.dart';
 part 'services/vault_imports.dart';
+part 'services/vault_email.dart';
 
 class LifenizerAppState extends ChangeNotifier {
   LifenizerAppState({
     LocalVaultStore? localStore,
     this.apiFactory,
     PairingCredentialStore? pairingStore,
+    ImapCredentialStore? imapStore,
   }) : _localStore = localStore {
     pairing = DevicePairingService(this, store: pairingStore);
     pairing.addListener(_notifyChanged);
+    emailImport = EmailImportService(this, store: imapStore);
+    emailImport.addListener(_notifyChanged);
   }
 
   late final DevicePairingService pairing;
+  late final EmailImportService emailImport;
 
   @override
   void dispose() {
+    emailImport.dispose();
     pairing.dispose();
     super.dispose();
   }

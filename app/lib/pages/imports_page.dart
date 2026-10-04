@@ -11,6 +11,7 @@ import '../models.dart';
 import '../services/export_file_reader.dart';
 import '../services/discord_archive.dart';
 import '../services/export_watch_service.dart';
+import '../widgets/imap_import_panel.dart';
 import 'page_frame.dart';
 
 class ImportsPage extends StatefulWidget {
@@ -261,6 +262,8 @@ class _ImportsPageState extends State<ImportsPage> {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            ImapImportPanel(state: widget.state),
             const SizedBox(height: 16),
             _AudioImportPanel(state: widget.state),
             const SizedBox(height: 16),
