@@ -109,6 +109,15 @@ These measure UI-isolate availability, not total import duration or a latency
 guarantee. The final background operations still took about 6.0 s, 5.3 s and 1.2 s
 respectively. The browser uses its existing single-isolate fallback.
 
+Refreshing the real Discord archive above and finishing encrypted sync took
+620 seconds in the installed Linux release. During that refresh, 1,153 D-Bus
+status calls had a median response of 17 ms, a 95th percentile of 81 ms and a
+maximum of 1,509 ms; one KRunner query returned eight results in 100 ms. These
+measure service responsiveness rather than frame times. Occasional pauses and
+the roughly ten-minute bulk refresh remain; the change reduces blocking work,
+not the amount of data processed. Final counts were unchanged with no pending
+sync writes or reported errors.
+
 ```sh
 cd app
 dart run tool/vault_snapshot_benchmark.dart 126281
