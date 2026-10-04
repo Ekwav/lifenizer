@@ -152,6 +152,66 @@ void main() {
     expect(first.syncCursor, server.envelopes.length);
   });
 
+  test('bulk edits use bounded pushes and survive offline restart', () async {
+    final server = _Server();
+    final disk = await store();
+    var state = device(server, disk);
+    await login(state);
+    server.offline = true;
+    await state.batchVaultChanges(() async {
+      for (var i = 0; i < 205; i++) {
+        await state.ensureParticipants('Person $i');
+      }
+      expect(server.envelopes, isEmpty);
+    });
+    expect(state.pendingSyncCount, 205);
+    await state.lock();
+    state.dispose();
+    state = device(server, disk);
+    await login(state, offline: true);
+    expect(state.participants, hasLength(205));
+    expect(state.pendingSyncCount, 205);
+    server.offline = false;
+    server.requests.clear();
+    await state.pullSync();
+    expect(state.error, isNull);
+    expect(state.pendingSyncCount, 0);
+    final pushes = server.requests.where((r) => r.url.path == '/api/sync/push');
+    expect(
+      pushes.map((r) => (jsonDecode(r.body)['envelopes'] as List).length),
+      [100, 100, 5],
+    );
+    expect(server.envelopes, hasLength(205));
+    expect(jsonEncode(server.envelopes), isNot(contains('Person 204')));
+    await state.lock();
+    state.dispose();
+    await disk.database.close();
+  });
+
+  test('nested import failure still saves completed edits', () async {
+    final server = _Server();
+    final disk = await store();
+    final state = device(server, disk);
+    await login(state);
+    await expectLater(
+      state.batchVaultChanges(() async {
+        await state.batchVaultChanges(
+          () => state.ensureParticipants('Preserved'),
+        );
+        throw const FormatException('Damaged next archive entry');
+      }),
+      throwsFormatException,
+    );
+    expect(server.envelopes, hasLength(1));
+    expect(state.pendingSyncCount, 0);
+    await state.lock();
+    await login(state, offline: true);
+    expect(state.participants.single.displayName, 'Preserved');
+    await state.lock();
+    state.dispose();
+    await disk.database.close();
+  });
+
   test(
     'offline outbox survives restart encrypted; lost push responses retry once',
     () async {

@@ -221,8 +221,20 @@ extension VaultSync on LifenizerAppState {
 
   Future<void> _syncNow() async {
     final api = _requireApi();
-    final batch = List<SyncEnvelope>.of(_pendingSync);
-    if (batch.isNotEmpty) {
+    while (_pendingSync.isNotEmpty) {
+      final batch = <SyncEnvelope>[];
+      var bytes = 0;
+      for (final envelope in _pendingSync) {
+        // Ciphertext is ASCII. Leave ample room for envelope JSON below
+        // Kestrel's request limit when a large archive is imported offline.
+        final size = envelope.cipherText.length + 1024;
+        if (batch.isNotEmpty &&
+            (batch.length == 100 || bytes + size > 8 * 1024 * 1024)) {
+          break;
+        }
+        batch.add(envelope);
+        bytes += size;
+      }
       // The push cursor may include unseen writes from another device.
       // Only a successful pull is allowed to advance our read cursor.
       await api.push(batch);
@@ -281,6 +293,26 @@ extension VaultSync on LifenizerAppState {
         clientCreatedAt: DateTime.now().toUtc(),
       ),
     );
+    if (_vaultBatchDepth > 0) return;
+    await _flushVaultChanges();
+  }
+
+  /// Save related edits together before publishing them. If parsing fails,
+  /// completed edits still enter the encrypted outbox and can be retried.
+  Future<T> batchVaultChanges<T>(Future<T> Function() action) async {
+    if (_vaultBatchDepth == 0) await _syncInFlight;
+    _vaultBatchDepth++;
+    try {
+      return await action();
+    } finally {
+      _vaultBatchDepth--;
+      if (_vaultBatchDepth == 0 && _pendingSync.isNotEmpty) {
+        await _flushVaultChanges();
+      }
+    }
+  }
+
+  Future<void> _flushVaultChanges() async {
     // Persist the outbox before making a network request. Retrying the same
     // envelope ID is safe even when a response is lost after server acceptance.
     await _persistLocal();

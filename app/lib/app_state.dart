@@ -49,6 +49,7 @@ class LifenizerAppState extends ChangeNotifier {
   String rememberedEmail = '';
   String? _localVaultKey;
   final List<SyncEnvelope> _pendingSync = [];
+  int _vaultBatchDepth = 0;
   Future<void>? _syncInFlight;
   Future<void> _storageTail = Future.value();
   String? syncError;
