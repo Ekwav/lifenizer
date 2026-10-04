@@ -17,6 +17,16 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(":app")
+    if (name == "integration_test") {
+        configurations.configureEach {
+            resolutionStrategy.eachDependency {
+                if (requested.group == "androidx.test" && requested.name == "runner" && requested.version == "1.2+") {
+                    // Keep Flutter's test plugin on the runner used by our verified builds.
+                    useVersion("1.3.0")
+                }
+            }
+        }
+    }
 }
 
 tasks.register<Delete>("clean") {
