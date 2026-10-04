@@ -46,7 +46,7 @@ def print_link(state, directory):
           "Later connections require approval on an already connected device. Keep this link private.", flush=True)
     if shutil.which("qrencode"):
         run("qrencode", "-t", "ANSIUTF8", input=link)
-        run("qrencode", "-t", "PNG", "-o", str(directory / "connect.png"), input=link)
+        run("qrencode", "-t", "PNG", "-s", "8", "-o", str(directory / "connect.png"), input=link)
         print(f"QR image: {directory / 'connect.png'}")
 
 
