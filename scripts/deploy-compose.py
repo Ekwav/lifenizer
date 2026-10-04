@@ -12,6 +12,8 @@ import secrets
 import shlex
 import shutil
 import subprocess
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -105,9 +107,18 @@ def main():
     remote(args.host, {"action": "install", "image": image, "proxy": info["proxy"],
                        "bootstrapHash": bootstrap_hash, "expiresAt": state["expiresAt"],
                        "compose": (REPO / "deploy/compose.yaml").read_text()})
-    with urllib.request.urlopen(SERVER + "/health", timeout=20) as response:
-        if json.load(response).get("app") != "lifenizer-next":
-            raise SystemExit("Unexpected public health response")
+    # Docker health can pass before Traefik has discovered the new container.
+    deadline = time.monotonic() + 60
+    while True:
+        try:
+            with urllib.request.urlopen(SERVER + "/health", timeout=10) as response:
+                if json.load(response).get("app") == "lifenizer-next":
+                    break
+        except (urllib.error.URLError, ValueError, TimeoutError):
+            pass
+        if time.monotonic() >= deadline:
+            raise SystemExit("Public HTTPS route is not ready; check Traefik before connecting devices")
+        time.sleep(2)
     print_link(state, directory)
 
 
