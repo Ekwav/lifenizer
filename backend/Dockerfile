@@ -12,8 +12,9 @@ COPY Lifenizer.Api/Lifenizer.Api.csproj    Lifenizer.Api/
 
 RUN dotnet restore Lifenizer.Api/Lifenizer.Api.csproj
 
-# Copy remaining source and publish a self-contained, trimmed release build.
-COPY . .
+# Copy only application source and publish a release build.
+COPY Lifenizer.Core/ Lifenizer.Core/
+COPY Lifenizer.Api/ Lifenizer.Api/
 RUN dotnet publish Lifenizer.Api/Lifenizer.Api.csproj \
       --configuration Release \
       --no-restore \
