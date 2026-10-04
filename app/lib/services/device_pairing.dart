@@ -15,6 +15,7 @@ class DevicePairingService extends ChangeNotifier {
   final LifenizerAppState state;
   final PairingCredentialStore _store;
   Map<String, dynamic>? _credentials;
+  DeviceProtection _protection = DeviceProtection.keyring;
   final List<Map<String, dynamic>> pending = [];
   bool busy = false;
   bool waitingForApproval = false;
@@ -27,6 +28,12 @@ class DevicePairingService extends ChangeNotifier {
   Future<String?>? _refreshing;
 
   bool get isPaired => _credentials?['email'] is String;
+  bool get higherSecurity => _protection != DeviceProtection.keyring;
+  String get protectionMode => switch (_protection) {
+    DeviceProtection.keyring => 'system',
+    DeviceProtection.password => 'password',
+    DeviceProtection.biometric => 'biometric',
+  };
   bool matchesVault(String server, String email) =>
       isPaired &&
       _credentials!['server'] == server &&
@@ -78,13 +85,14 @@ class DevicePairingService extends ChangeNotifier {
     if (kIsWeb) return;
     try {
       _credentials = await _store.read();
+      _protection = PairingCredentialStore.protectionOf(_credentials);
       if (!isPaired) {
         _credentials = null;
       }
       notifyListeners();
       if (isPaired) {
         _startTimer();
-        if (autoUnlock) await unlockSaved();
+        if (autoUnlock && !higherSecurity) await unlockSaved();
       }
     } catch (_) {
       error =
@@ -93,16 +101,25 @@ class DevicePairingService extends ChangeNotifier {
     }
   }
 
-  Future<void> unlockSaved() async {
-    if (!isPaired || busy || state.busy) return;
+  Future<void> unlockSaved({
+    String? password,
+    bool authenticate = false,
+  }) async {
+    if (!isPaired || busy || state.busy || state.isAuthenticated) return;
+    if (higherSecurity && !authenticate) return;
+    final generation = _generation;
     busy = true;
     error = null;
     notifyListeners();
     try {
-      final credentials = await _store.read();
+      final credentials = await _store.readForUnlock(
+        password: password,
+        authenticate: authenticate,
+      );
       if (credentials == null || credentials['email'] is! String) {
         throw StateError('Device keyring credentials are missing.');
       }
+      if (generation != _generation) return;
       _credentials = credentials;
       AuthSession? auth;
       try {
@@ -129,6 +146,7 @@ class DevicePairingService extends ChangeNotifier {
       } catch (_) {
         /* Offline unlock uses the encrypted local session. */
       }
+      if (generation != _generation) return;
       await state.login(
         baseUrl: credentials['server'] as String,
         email: credentials['email'] as String,
@@ -149,9 +167,17 @@ class DevicePairingService extends ChangeNotifier {
       }
       _startTimer();
     } catch (_) {
-      error =
-          'Could not unlock this device. Check the device keyring and connection.';
+      error = higherSecurity
+          ? 'Could not unlock this device. Check your device password or fingerprint/PIN verification and retry.'
+          : 'Could not unlock this device. Check the device keyring and connection.';
     } finally {
+      if (!state.isAuthenticated) {
+        _store.forgetUnlock();
+        _credentials?.remove('secret');
+        _credentials?.remove('vaultPassphrase');
+        _credentials?.remove('refreshToken');
+        _credentials?.remove('pendingEnrollment');
+      }
       busy = false;
       notifyListeners();
     }
@@ -159,6 +185,8 @@ class DevicePairingService extends ChangeNotifier {
   }
 
   void onLocked() {
+    _generation++;
+    _store.forgetUnlock();
     _credentials?.remove('secret');
     _credentials?.remove('vaultPassphrase');
     _credentials?.remove('refreshToken');
@@ -166,6 +194,50 @@ class DevicePairingService extends ChangeNotifier {
     pending.clear();
     message = null;
     notifyListeners();
+  }
+
+  Future<bool> enableProtection(
+    String mode, {
+    String? password,
+    String? currentPassword,
+  }) async {
+    if (busy ||
+        state.busy ||
+        !state.isAuthenticated ||
+        !_currentVault ||
+        _credentials?['vaultPassphrase'] is! String) {
+      error = 'Unlock this paired vault before changing device security.';
+      notifyListeners();
+      return false;
+    }
+    final target = switch (mode) {
+      'system' => DeviceProtection.keyring,
+      'password' => DeviceProtection.password,
+      'biometric' => DeviceProtection.biometric,
+      _ => throw ArgumentError('Unknown device protection.'),
+    };
+    busy = true;
+    error = null;
+    notifyListeners();
+    try {
+      await _store.setProtection(
+        target,
+        Map<String, dynamic>.from(_credentials!),
+        password: password,
+        currentPassword: currentPassword,
+      );
+      _protection = target;
+      if (state.isAuthenticated) state.status = 'Device security updated';
+      return true;
+    } catch (_) {
+      error =
+          'Device security was not changed. Check your current password or fingerprint/PIN verification and try again.';
+      return false;
+    } finally {
+      if (!state.isAuthenticated) onLocked();
+      busy = false;
+      notifyListeners();
+    }
   }
 
   Future<void> connect(String connectionLink) async {
@@ -176,6 +248,12 @@ class DevicePairingService extends ChangeNotifier {
     }
     if (busy || state.busy || state.isAuthenticated) {
       error = 'Lock this vault before connecting another device or account.';
+      notifyListeners();
+      return;
+    }
+    if (higherSecurity && isPaired) {
+      error =
+          'Unlock this device and disable Device security before changing its connection.';
       notifyListeners();
       return;
     }
@@ -512,6 +590,8 @@ class DevicePairingService extends ChangeNotifier {
   void dispose() {
     _generation++;
     _timer?.cancel();
+    _store.forgetUnlock();
+    _credentials = null;
     super.dispose();
   }
 }

@@ -7,6 +7,7 @@ import '../models.dart';
 import '../image_widgets.dart';
 import '../widgets/sync_progress_indicator.dart';
 import 'page_frame.dart';
+import '../widgets/device_security_dialog.dart';
 
 class SyncPage extends StatelessWidget {
   const SyncPage({required this.state, super.key});
@@ -46,6 +47,13 @@ class SyncPage extends StatelessWidget {
                   : () => _showPairingCode(context),
               icon: const Icon(Icons.qr_code),
               label: const Text('Add device'),
+            ),
+            TextButton.icon(
+              onPressed: state.busy || state.pairing.busy
+                  ? null
+                  : () => showDeviceSecurityDialog(context, state),
+              icon: const Icon(Icons.security),
+              label: const Text('Device security'),
             ),
             const SizedBox(height: 8),
             Text(
@@ -168,6 +176,10 @@ class SyncPage extends StatelessWidget {
                   else ...[
                     const Text(
                       'Open Lifenizer on your phone and tap Scan connection QR.',
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Vault keys transfer encrypted between devices over HTTPS. Keep this QR private and compare the verification code before approving a device.',
                     ),
                     const SizedBox(height: 12),
                     FittedBox(

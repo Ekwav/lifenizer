@@ -14,6 +14,7 @@ import '../pages/search_page.dart';
 import '../pages/sync_page.dart';
 import '../pricing_page.dart';
 import '../services/quick_action_service.dart';
+import 'device_security_dialog.dart';
 
 /// Refactored shell widget for the Lifenizer vault.
 ///
@@ -70,6 +71,46 @@ class _VaultShellState extends State<VaultShell> {
   void _dismissMessage() {
     _messageTimer?.cancel();
     setState(() => _messageDismissed = true);
+  }
+
+  Future<void> _lock() async {
+    if (!widget.state.pairing.matchesVault(
+          widget.state.apiBaseUrl,
+          widget.state.rememberedEmail,
+        ) ||
+        widget.state.pairing.higherSecurity) {
+      await widget.state.lock();
+      return;
+    }
+    final action = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Lock vault'),
+        content: const Text(
+          'This device unlocks from Android secure storage or KDE Wallet without an app password. Device security adds an optional unlock prompt.\n\nVault storage and sync are encrypted. Server processing can read submitted content; original source files keep their own protection.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('security'),
+            child: const Text('Device security'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop('lock'),
+            child: const Text('Lock vault'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'security') {
+      await showDeviceSecurityDialog(context, widget.state);
+    } else if (action == 'lock') {
+      await widget.state.lock();
+    }
   }
 
   void _applyAction() {
@@ -144,7 +185,7 @@ class _VaultShellState extends State<VaultShell> {
             IconButton(
               tooltip: 'Lock vault',
               icon: const Icon(Icons.lock_outline),
-              onPressed: widget.state.busy ? null : widget.state.lock,
+              onPressed: widget.state.busy ? null : _lock,
             ),
             if (widget.state.busy)
               const Padding(

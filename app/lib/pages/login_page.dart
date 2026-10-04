@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../app_state.dart';
 import '../widgets/sync_progress_indicator.dart';
+import '../widgets/device_security_dialog.dart';
 import 'connection_scanner_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -69,6 +70,18 @@ class _LoginPageState extends State<LoginPage> {
     await widget.state.pairing.connect(link);
   }
 
+  Future<void> _unlockDevice() async {
+    String? password;
+    if (widget.state.pairing.protectionMode == 'password') {
+      password = await requestDevicePassword(context);
+      if (!mounted || password == null) return;
+    }
+    await widget.state.pairing.unlockSaved(
+      password: password,
+      authenticate: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     body: SafeArea(
@@ -107,7 +120,7 @@ class _LoginPageState extends State<LoginPage> {
                         onPressed:
                             widget.state.busy || widget.state.pairing.busy
                             ? null
-                            : widget.state.pairing.unlockSaved,
+                            : _unlockDevice,
                         icon: const Icon(Icons.lock_open),
                         label: const Text('Unlock this device'),
                       ),
