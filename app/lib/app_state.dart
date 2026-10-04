@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:cryptography/cryptography.dart';
 
 import 'api_client.dart';
 import 'crypto_service.dart';
@@ -15,6 +16,7 @@ import 'services/search_criteria.dart';
 import 'services/device_pairing.dart';
 import 'services/pairing_store.dart';
 import 'services/local_vault_store.dart';
+import 'services/shared_import_source.dart';
 
 import 'services/conversation_search_index.dart';
 import 'services/temporal_intent.dart';
@@ -539,32 +541,58 @@ class LifenizerAppState extends ChangeNotifier {
     final normalizedMime = (mimeType ?? '').trim().toLowerCase();
     final normalizedText = text?.trim();
     final lowerName = normalizedName.toLowerCase();
+    final extension = lowerName.split('.').last;
 
-    String source = 'manual-text';
-    if (lowerName.endsWith('.mbox')) {
-      source = 'mbox';
-    } else if (lowerName.endsWith('.patch') ||
-        lowerName.endsWith('.diff') ||
-        lowerName.contains('git')) {
-      source = 'git';
-    } else if (lowerName.contains('bookmark')) {
-      source = 'bookmarks';
-    } else if (lowerName.contains('google') && lowerName.contains('search')) {
-      source = 'google-search-history';
-    } else if (lowerName.contains('history')) {
-      source = 'browser-history';
-    } else if (lowerName.contains('backup') ||
-        lowerName.endsWith('.lifenizerbackup')) {
-      source = 'lifenizer-backup';
-    } else if (normalizedMime.startsWith('audio/') ||
-        VaultImports._audioMimeTypesByExtension.containsKey(lowerName.split('.').last)) {
-      source = 'audio';
-    } else if (normalizedMime.startsWith('image/') ||
-        normalizedMime == 'application/pdf') {
-      source = 'scanned-pdf';
-    } else if (normalizedMime == 'text/uri-list' ||
-        normalizedText?.startsWith('http') == true) {
-      source = 'browser-capture';
+    final isScannedFile =
+        normalizedMime.startsWith('image/') ||
+        normalizedMime == 'application/pdf' ||
+        const {
+          'pdf',
+          'png',
+          'jpg',
+          'jpeg',
+          'webp',
+          'gif',
+          'heic',
+          'avif',
+          'bmp',
+          'tif',
+          'tiff',
+        }.contains(extension);
+    if (isScannedFile && normalizedText == null) {
+      reportError(
+        'This file needs OCR first. Import extracted text, or attach the image to a conversation.',
+      );
+      return;
+    }
+    final isAudio =
+        normalizedMime.startsWith('audio/') ||
+        VaultImports._audioMimeTypesByExtension.containsKey(extension);
+    String source;
+    String? decodedText = normalizedText;
+    try {
+      final isZip =
+          lowerName.endsWith('.zip') ||
+          normalizedMime.contains('zip') ||
+          (bytes != null &&
+              bytes.length >= 4 &&
+              bytes[0] == 0x50 &&
+              bytes[1] == 0x4b);
+      if (!isAudio && !isZip && decodedText == null && bytes != null) {
+        decodedText = utf8.decode(bytes);
+      }
+      source = isAudio
+          ? 'audio'
+          : isScannedFile
+          ? 'scanned-pdf'
+          : detectSharedImportSource(
+              fileName: normalizedName,
+              mimeType: isZip ? 'application/zip' : normalizedMime,
+              text: decodedText,
+            );
+    } on FormatException catch (exception) {
+      reportError(exception.message);
+      return;
     }
 
     if (source == 'audio' && bytes != null && bytes.isNotEmpty) {
@@ -581,26 +609,21 @@ class LifenizerAppState extends ChangeNotifier {
         title: normalizedName.isEmpty ? 'Shared conversation' : normalizedName,
         participantNames: '',
         source: source,
-        text:
-            normalizedText ??
-            (bytes == null ? '' : utf8.decode(bytes, allowMalformed: true)),
+        text: decodedText ?? '',
       );
     }
-    if (source == 'scanned-pdf' && bytes != null && normalizedText == null) {
-      reportError(
-        'This file needs OCR first. Import extracted text, or attach the image to a conversation.',
-      );
-      return;
-    }
-
     final payloadBase64 = bytes == null || bytes.isEmpty
         ? null
         : base64Encode(bytes);
 
     await importSource(
       source: source,
-      title: normalizedName.isEmpty ? 'Shared import' : normalizedName,
-      text: payloadBase64 == null ? normalizedText : null,
+      title: source == 'telegram'
+          ? null
+          : normalizedName.isEmpty
+          ? 'Shared import'
+          : normalizedName,
+      text: payloadBase64 == null || isScannedFile ? decodedText : null,
       originalFileName: normalizedName.isEmpty ? null : normalizedName,
       mimeType: normalizedMime.isEmpty ? null : normalizedMime,
       metadata: {...metadata, 'shared': 'true'},

@@ -79,7 +79,7 @@ class ShareIntentService {
             error.message ?? 'The shared file could not be read.',
           );
         } finally {
-          if (uri != null && !_pending.contains(payload)) {
+          if (uri != null && !_pending.any((item) => item['uri'] == uri)) {
             await channel.invokeMethod<void>('releaseSharedFile', uri);
           }
         }

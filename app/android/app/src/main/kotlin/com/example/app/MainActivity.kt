@@ -94,12 +94,15 @@ class MainActivity : FlutterActivity() {
             return
         }
         if (intent.action != Intent.ACTION_SEND && intent.action != Intent.ACTION_SEND_MULTIPLE) return
-        val uris = if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
+        val streams = if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
             if (Build.VERSION.SDK_INT >= 33) intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
             else intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
         } else listOfNotNull(if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
             else intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
-        val items = uris.filter { it.scheme == "content" }.map { uri ->
+        val uris = (streams + (0 until (intent.clipData?.itemCount ?: 0)).mapNotNull {
+            intent.clipData?.getItemAt(it)?.uri
+        }).filter { it.scheme == "content" }.distinct()
+        val items = uris.map { uri ->
             sharedUris.add(uri.toString())
             var name = "Shared file"
             var mimeType = intent.type

@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:app/app_state.dart';
+import 'package:app/api_client.dart';
 import 'package:app/share_intent_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 class _ShareVault extends LifenizerAppState {
   bool unlocked = false;
@@ -35,8 +39,106 @@ class _ShareVault extends LifenizerAppState {
   }
 }
 
+class _BackupVault extends LifenizerAppState {
+  bool unlocked = false;
+  @override
+  bool get isAuthenticated => unlocked;
+  void unlock() {
+    unlocked = true;
+    notifyListeners();
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'repeated shared Telegram backup retains URI until both imports and skips duplicate conversation',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      final vault = _BackupVault();
+      final released = Completer<void>();
+      var grantAvailable = true;
+      var reads = 0;
+      final sources = <String>[];
+      await vault.debugAuthenticateForTesting(
+        LifenizerApiClient(
+          baseUrl: 'https://vault.example.test',
+          client: MockClient((request) async {
+            if (request.url.path.startsWith('/api/imports/')) {
+              sources.add(request.url.path.split('/').last);
+              return http.Response(
+                jsonEncode({
+                  'source': 'telegram',
+                  'plaintextCompute': true,
+                  'message': 'Normalized Telegram export',
+                  'participants': [],
+                  'conversations': [
+                    {
+                      'title': 'Atlas',
+                      'source': 'telegram',
+                      'participantNames': [],
+                      'segments': [
+                        {'text': 'Atlas deadline'},
+                      ],
+                    },
+                  ],
+                }),
+                200,
+              );
+            }
+            return http.Response(
+              jsonEncode({'cursor': 1, 'envelopes': []}),
+              200,
+            );
+          }),
+        ),
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(ShareIntentService.channel, (call) async {
+            if (call.method == 'initialShares') {
+              return [
+                for (var i = 0; i < 2; i++)
+                  {
+                    'uri': 'content://synthetic/result.json',
+                    'fileName': 'result.json',
+                    'mimeType': 'application/json',
+                  },
+              ];
+            }
+            if (call.method == 'readSharedFile') {
+              expect(grantAvailable, isTrue);
+              reads++;
+              return Uint8List.fromList(
+                utf8.encode(
+                  '{"name":"Atlas","messages":[{"from":"Alice","text":"Atlas deadline"}]}',
+                ),
+              );
+            }
+            if (call.method == 'releaseSharedFile') {
+              grantAvailable = false;
+              released.complete();
+              return null;
+            }
+            throw MissingPluginException();
+          });
+      try {
+        await ShareIntentService.instance.start(vault);
+        expect(reads, 0);
+        vault.unlock();
+        await released.future;
+        expect(reads, 2);
+        expect(sources, ['telegram', 'telegram']);
+        expect(vault.conversations, hasLength(1));
+        expect(vault.status, contains('Already imported'));
+      } finally {
+        await ShareIntentService.instance.stop();
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(ShareIntentService.channel, null);
+        debugDefaultTargetPlatformOverride = null;
+        vault.dispose();
+      }
+    },
+  );
   test(
     'shared content waits for unlock and releases URI after import',
     () async {

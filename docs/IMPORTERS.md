@@ -2,6 +2,8 @@
 
 This page describes all currently supported import sources in Lifenizer Next, including accepted payload formats and metadata keys for provider-backed routes.
 
+For Telegram, WhatsApp and Lifenizer exports, use **Imports → Choose backup or export** or share the file to Lifenizer on Android. See [the share and file-picker guide](#android-share-target-and-file-picker) below.
+
 ## Endpoints
 
 - `GET /api/imports/capabilities`
@@ -31,7 +33,7 @@ Notes:
 
 - `text` is the simplest route for manual/imported content.
 - `payloadBase64` is supported for binary/export payloads.
-- If `mimeType` or `originalFileName` indicates zip, the importer extracts text-like entries from the archive.
+- If `mimeType` or `originalFileName` indicates ZIP, the importer extracts the first preferred text-like entry. It does not merge several chats or import archived media.
 
 ## Supported Sources
 
@@ -273,17 +275,43 @@ Recommended browser extension flow:
 
 This works for custom extensions and automation scripts alike.
 
-## Android Share Target
+## Android Share Target and File Picker
 
-The Android app is configured as a share target for text and files (`SEND` / `SEND_MULTIPLE`).
+On Android, share an exported file to **Lifenizer**, unlock the vault, and the
+Imports page opens automatically. On Android, KDE and the web app, use
+**Imports → Choose backup or export** to select a file directly.
 
-Behavior:
+The app detects these readable exports from their contents:
 
-- Shared URLs/text route to `browser-capture` or `manual-text`.
-- Shared backups route to `lifenizer-backup` (filename heuristics + JSON).
-- Shared audio routes to Whisper with a transcription timeout; text and URLs are captured locally. Other exports use supported importer routes. Binary PDFs/images require extracted OCR text or an image attachment; importing them does not pretend to perform OCR.
+- Telegram Desktop JSON: one chat's `result.json`, or a full export containing
+  `chats.list`. Chats, speakers, rich text and historical message dates stay separate.
+- WhatsApp **Export chat** text, including bracketed and dash-separated timestamps.
+  A ZIP with a WhatsApp filename uses its exported chat text; ZIPs should contain
+  one chat. Media inside ZIPs is not imported as attachments.
+- Lifenizer JSON with `conversations` and `segments`. Snapshots that also include
+  a top-level participant list resolve participant IDs to names.
 
-The app queues incoming share intents and ingests them once the vault is unlocked.
+For a ZIP with an ambiguous name, or another supported format, enter its source
+in the form and use **Choose file for this source**. Unknown JSON and CSV require
+an explicit source; they are not silently stored as chat text. The import result
+shows the detected source, added conversation count, and duplicate count.
+
+Importing an identical export again skips its conversations, even if the file is
+renamed, the app restarts, or another synced device imports it. Fingerprints live
+inside encrypted conversation records and encrypted local snapshots. Historical
+imports made before duplicate protection have no fingerprints. Changed exports
+are new imports; this does not merge appended messages into an existing thread
+or continuously watch a folder. Avoid importing the same changed export on two
+devices simultaneously before they sync.
+
+Shared files wait in memory while locked, are read from Android content grants
+after unlock, and leave no app-created plaintext share cache. Closing/restarting
+before import completes requires sharing again. Native sharing and the file
+picker accept files up to 64 MiB. The configured server processes readable
+exports in plaintext, then the app encrypts the results before storage and sync.
+Encrypted WhatsApp/Signal database backups and encrypted Lifenizer cache files
+are not readable chat exports; use the messenger's chat export or connect the
+original Lifenizer vault instead.
 
 ### IMAP provider import
 
@@ -308,3 +336,6 @@ The app queues incoming share intents and ingests them once the vault is unlocke
 Importer coverage is exercised by integration tests in:
 
 - `backend/Lifenizer.Tests/ImportIntegrationTests.cs`
+- `backend/Lifenizer.Tests/BackupParserTests.cs`
+- `app/test/backup_import_test.dart`
+- `app/test/share_intent_test.dart`

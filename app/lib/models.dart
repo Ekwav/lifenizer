@@ -177,6 +177,7 @@ class Conversation {
     this.artifactNames = const [],
     this.tags = const [],
     this.isFavorite = false,
+    this.importFingerprint,
     DateTime? startedAt,
     DateTime? endedAt,
   }) : startedAt = startedAt ?? DateTime.now().toUtc(),
@@ -190,6 +191,9 @@ class Conversation {
   final List<String> artifactNames;
   final List<String> tags;
   final bool isFavorite;
+
+  /// Content receipt stored only inside the encrypted conversation envelope.
+  final String? importFingerprint;
   final DateTime startedAt;
   final DateTime endedAt;
 
@@ -212,6 +216,7 @@ class Conversation {
     'artifactNames': artifactNames,
     'tags': tags,
     'isFavorite': isFavorite,
+    if (importFingerprint != null) 'importFingerprint': importFingerprint,
     'startedAt': startedAt.toJsonString(),
     'endedAt': endedAt.toJsonString(),
   };
@@ -228,6 +233,7 @@ class Conversation {
     artifactNames: json.parseStringList('artifactNames'),
     tags: json.parseStringList('tags'),
     isFavorite: json['isFavorite'] as bool? ?? false,
+    importFingerprint: json['importFingerprint'] as String?,
     startedAt: json.parseDateTimeRequired('startedAt'),
     endedAt: json.parseDateTimeRequired('endedAt'),
   );

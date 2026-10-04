@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
 import '../app_state.dart';
 import '../models.dart';
+import '../services/export_file_reader.dart';
 import 'page_frame.dart';
 
 class ImportsPage extends StatefulWidget {
@@ -60,6 +63,16 @@ class _ImportsPageState extends State<ImportsPage> {
                   const SizedBox(height: 12),
                   const Text(
                     'Your configured server processes imports in plaintext. Results are encrypted before sync.',
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: widget.state.busy ? null : () => _pickExport(),
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Choose backup or export'),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Share a Telegram JSON, WhatsApp text/ZIP, or Lifenizer JSON export here. Identical backups are skipped. For other formats, choose a source below.',
                   ),
                   const SizedBox(height: 12),
                   Wrap(
@@ -147,6 +160,13 @@ class _ImportsPageState extends State<ImportsPage> {
                         onPressed: widget.state.busy ? null : _runImport,
                         icon: const Icon(Icons.input),
                         label: const Text('Send import and encrypt result'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: widget.state.busy
+                            ? null
+                            : () => _pickExport(useSource: true),
+                        icon: const Icon(Icons.file_open),
+                        label: const Text('Choose file for this source'),
                       ),
                       if (kDebugMode)
                         for (final source in const [
@@ -270,6 +290,40 @@ class _ImportsPageState extends State<ImportsPage> {
           : _mimeController.text.trim(),
       metadata: metadata,
     );
+  }
+
+  Future<void> _pickExport({bool useSource = false}) async {
+    try {
+      final result = await FilePicker.pickFiles(
+        withData: false,
+        withReadStream: true,
+      );
+      final file = result?.files.single;
+      if (file == null || !mounted) return;
+      if (!widget.state.isAuthenticated || widget.state.busy) return;
+      final bytes = await readExportBytes(file);
+      if (!mounted) return;
+      if (!widget.state.isAuthenticated || widget.state.busy) {
+        widget.state.reportError('Unlock your vault before importing a file.');
+        return;
+      }
+      if (useSource) {
+        await widget.state.importSource(
+          source: _sourceController.text.trim(),
+          title: _titleController.text,
+          participantNames: _participantsController.text,
+          originalFileName: file.name,
+          payloadBase64: base64Encode(bytes),
+        );
+      } else {
+        await widget.state.importSharedPayload(
+          fileName: file.name,
+          bytes: bytes,
+        );
+      }
+    } catch (exception) {
+      widget.state.reportError('Could not import this file: $exception');
+    }
   }
 }
 

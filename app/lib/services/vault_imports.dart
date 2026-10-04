@@ -13,6 +13,19 @@ extension VaultImports on LifenizerAppState {
   }) async {
     await _run(() async {
       final api = _requireApi();
+      final content = payloadBase64 == null
+          ? utf8.encode(text?.trim() ?? '')
+          : base64Decode(payloadBase64);
+      final fingerprint = content.isEmpty
+          ? null
+          : base64UrlEncode(
+              (await Sha256().hash([
+                ...utf8.encode('$source\u0000'),
+                ...content,
+              ])).bytes,
+            );
+      status = 'Importing $source…';
+      _notifyChanged();
       final normalized = await api.importSource(
         source,
         ImportSourceRequest(
@@ -31,8 +44,15 @@ extension VaultImports on LifenizerAppState {
           payloadBase64: payloadBase64,
         ),
       );
-      await _ingestNormalizedImport(normalized);
-      status = '${normalized.message} Encrypted and synced.';
+      final added = await _ingestNormalizedImport(
+        normalized,
+        fingerprint: fingerprint,
+      );
+      final skipped = normalized.conversations.length - added;
+      status = added == 0 && skipped > 0
+          ? 'Already imported · $skipped conversation(s) skipped ($source)'
+          : 'Imported $added conversation(s) from $source · saved encrypted'
+                '${skipped > 0 ? ' · $skipped duplicate(s) skipped' : ''}';
     });
   }
 
@@ -242,9 +262,21 @@ extension VaultImports on LifenizerAppState {
     }
   }
 
-  Future<void> _ingestNormalizedImport(NormalizedImportResult result) async {
-    var addedConversation = false;
-    for (final normalized in result.conversations) {
+  Future<int> _ingestNormalizedImport(
+    NormalizedImportResult result, {
+    String? fingerprint,
+  }) async {
+    var added = 0;
+    final existing = conversations
+        .map((c) => c.importFingerprint)
+        .whereType<String>()
+        .toSet();
+    for (var index = 0; index < result.conversations.length; index++) {
+      final normalized = result.conversations[index];
+      final receipt = fingerprint == null ? null : '$fingerprint:$index';
+      if (receipt != null && existing.contains(receipt)) {
+        continue;
+      }
       final participantIds = await ensureParticipantNames(
         normalized.participantNames,
       );
@@ -274,6 +306,7 @@ extension VaultImports on LifenizerAppState {
           : segmentTimestamps.last;
       final conversation = Conversation(
         id: _uuid.v4(),
+        importFingerprint: receipt,
         title: normalized.title.trim().isEmpty
             ? 'Imported ${result.source}'
             : normalized.title.trim(),
@@ -309,11 +342,12 @@ extension VaultImports on LifenizerAppState {
               ],
       );
       conversations.add(conversation);
-      addedConversation = true;
+      added++;
       await _pushEntity('conversation', conversation.id, conversation.toJson());
     }
-    if (addedConversation) {
+    if (added > 0) {
       _markSearchIndexDirty();
     }
+    return added;
   }
 }
