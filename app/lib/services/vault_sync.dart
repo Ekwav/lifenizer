@@ -179,6 +179,7 @@ extension VaultSync on LifenizerAppState {
     participants.clear();
     _invalidateParticipantLookup();
     conversations.clear();
+    _importedConversationRepairs.clear();
     relations.clear();
     savedSearches.clear();
     images.clear();
@@ -255,16 +256,21 @@ extension VaultSync on LifenizerAppState {
       }
       for (var i = 0; i < pulled.envelopes.length; i++) {
         final envelope = pulled.envelopes[i];
-        if (_pendingSync.any(
+        final pending = _pendingSync.any(
           (pending) =>
               pending.entityType == envelope.entityType &&
               pending.entityId == envelope.entityId,
-        )) {
+        );
+        final importedThread =
+            envelope.entityType == 'conversation' &&
+            decoded[i]['sourceThreadId'] != null;
+        if (pending && !importedThread) {
           continue;
         }
         _applyEntity(envelope.entityType, decoded[i]);
       }
       await _coalesceParticipantIdentities();
+      await _queueImportedConversationRepairs();
       final advanced = pulled.cursor > syncCursor;
       syncCursor = pulled.cursor;
       await _persistLocal();

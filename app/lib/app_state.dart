@@ -642,7 +642,6 @@ class LifenizerAppState extends ChangeNotifier {
     Participant? existing;
     if (exact.isNotEmpty) {
       final ordered = exact.toList()..sort();
-      existing = participantById(ordered.first);
       for (final id in ordered.skip(1)) {
         await _mergeParticipantRecords(id, ordered.first, persist: persist);
       }
@@ -817,6 +816,155 @@ class LifenizerAppState extends ChangeNotifier {
             conversation.toJson(),
           );
         }
+      }
+    } finally {
+      _vaultBatchDepth--;
+    }
+  }
+
+  final Map<String, Conversation> _importedConversationRepairs = {};
+
+  Conversation _mergeImportedConversation(
+    Conversation previous,
+    Conversation incoming,
+  ) {
+    String messageKey(ConversationSegment segment) =>
+        segment.sourceMessageId == null
+        ? 'local:${segment.id}'
+        : 'source:${segment.sourceMessageId}';
+    final incomingMessageKeys = incoming.segments.map(messageKey).toSet();
+    final messages = {
+      for (final segment in previous.segments) messageKey(segment): segment,
+    };
+    for (final segment in incoming.segments) {
+      final old = messages[messageKey(segment)];
+      messages[messageKey(segment)] = old == null
+          ? segment
+          : ConversationSegment.fromJson({
+              ...segment.toJson(),
+              'id': old.id,
+              'participantId': segment.participantId ?? old.participantId,
+              'attachmentUrls': {
+                ...old.attachmentUrls,
+                ...segment.attachmentUrls,
+              }.toList()..sort(),
+            });
+    }
+    final segments = messages.values.toList()
+      ..sort((a, b) {
+        final date = a.createdAt.compareTo(b.createdAt);
+        if (date != 0) return date;
+        final offset = a.offsetMs.compareTo(b.offsetMs);
+        return offset != 0 ? offset : messageKey(a).compareTo(messageKey(b));
+      });
+    final starts = [
+      previous.startedAt,
+      incoming.startedAt,
+      if (segments.isNotEmpty) segments.first.createdAt,
+    ]..sort();
+    final ends = [
+      previous.endedAt,
+      incoming.endedAt,
+      if (segments.isNotEmpty) segments.last.createdAt,
+    ]..sort();
+    return _canonicalConversation(
+      Conversation.fromJson({
+        ...incoming.toJson(),
+        'id': previous.id,
+        'participantIds': {
+          ...previous.participantIds,
+          ...incoming.participantIds,
+        }.toList()..sort(),
+        'segments': segments.map((segment) => segment.toJson()).toList(),
+        'artifactNames': {
+          ...previous.artifactNames,
+          ...incoming.artifactNames,
+        }.toList()..sort(),
+        'tags': {...previous.tags, ...incoming.tags}.toList()..sort(),
+        'isFavorite':
+            previous.segments.every(
+              (segment) => incomingMessageKeys.contains(messageKey(segment)),
+            )
+            ? incoming.isFavorite
+            : previous.isFavorite || incoming.isFavorite,
+        'startedAt': starts.first.toUtc().toIso8601String(),
+        'endedAt': ends.last.toUtc().toIso8601String(),
+      }),
+    );
+  }
+
+  bool _sameImportedConversation(Conversation left, Conversation right) {
+    Map<String, dynamic> comparable(Conversation conversation) {
+      final json = conversation.toJson();
+      json['participantIds'] =
+          conversation.participantIds.map(resolveParticipantId).toSet().toList()
+            ..sort();
+      json['tags'] = conversation.tags.toSet().toList()..sort();
+      json['artifactNames'] = conversation.artifactNames.toSet().toList()
+        ..sort();
+      final segments =
+          conversation.segments.map((segment) {
+            final value = segment.toJson();
+            // The local ID stays stable for UI references; the provider message ID
+            // determines equality so old random local IDs cannot cause repair loops.
+            if (segment.sourceMessageId != null) value.remove('id');
+            value['attachmentUrls'] = segment.attachmentUrls.toSet().toList()
+              ..sort();
+            if (segment.participantId != null) {
+              value['participantId'] = resolveParticipantId(
+                segment.participantId!,
+              );
+            }
+            return value;
+          }).toList()..sort(
+            (a, b) => '${a['sourceMessageId'] ?? a['id']}'.compareTo(
+              '${b['sourceMessageId'] ?? b['id']}',
+            ),
+          );
+      json['segments'] = segments;
+      return json;
+    }
+
+    return jsonEncode(comparable(left)) == jsonEncode(comparable(right));
+  }
+
+  Future<void> _queueImportedConversationRepairs() async {
+    if (_importedConversationRepairs.isEmpty) return;
+    final incoming = Map<String, Conversation>.from(
+      _importedConversationRepairs,
+    );
+    _importedConversationRepairs.clear();
+    final currentById = {
+      for (final conversation in conversations) conversation.id: conversation,
+    };
+    final pendingById = {
+      for (final envelope in _pendingSync.where(
+        (e) => e.entityType == 'conversation',
+      ))
+        envelope.entityId: envelope,
+    };
+    _vaultBatchDepth++;
+    try {
+      for (final entry in incoming.entries) {
+        final current = currentById[entry.key];
+        if (current == null ||
+            _sameImportedConversation(current, entry.value)) {
+          continue;
+        }
+        final pending = pendingById[entry.key];
+        if (pending != null) {
+          final decoded = await _crypto.decryptJson(
+            cipherText: pending.cipherText,
+            nonce: pending.nonce,
+          );
+          if (_sameImportedConversation(
+            current,
+            Conversation.fromJson(decoded),
+          )) {
+            continue;
+          }
+        }
+        await _pushEntity('conversation', current.id, current.toJson());
       }
     } finally {
       _vaultBatchDepth--;
@@ -1160,9 +1308,24 @@ class LifenizerAppState extends ChangeNotifier {
         _markSearchIndexDirty();
         break;
       case 'conversation':
-        final conversation = _canonicalConversation(
-          Conversation.fromJson(json),
-        );
+        final incoming = _canonicalConversation(Conversation.fromJson(json));
+        final previous = conversations
+            .where((item) => item.id == incoming.id)
+            .firstOrNull;
+        final importedThread =
+            previous != null &&
+            incoming.sourceThreadId != null &&
+            previous.sourceThreadId == incoming.sourceThreadId &&
+            previous.source == incoming.source;
+        final conversation = importedThread
+            ? _mergeImportedConversation(previous, incoming)
+            : incoming;
+        if (importedThread &&
+            !_sameImportedConversation(conversation, incoming)) {
+          _importedConversationRepairs[conversation.id] = incoming;
+        } else {
+          _importedConversationRepairs.remove(conversation.id);
+        }
         conversations.removeWhere((item) => item.id == conversation.id);
         conversations.add(conversation);
         _markSearchIndexDirty();
