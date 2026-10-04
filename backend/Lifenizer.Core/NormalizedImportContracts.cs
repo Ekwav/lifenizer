@@ -18,10 +18,14 @@ public sealed record NormalizedConversation(
     IReadOnlyList<string> ParticipantNames,
     IReadOnlyList<NormalizedSegment> Segments,
     IReadOnlyList<string>? ArtifactNames = null,
-    IReadOnlyDictionary<string, string>? Metadata = null);
+    IReadOnlyDictionary<string, string>? Metadata = null,
+    IReadOnlyList<string>? ParticipantIdentifiers = null,
+    string? SourceThreadId = null);
 
 public sealed record NormalizedSegment(
     string Text,
     string? ParticipantName = null,
     int OffsetMs = 0,
-    DateTimeOffset? CreatedAt = null);
+    DateTimeOffset? CreatedAt = null,
+    string? ParticipantIdentifier = null,
+    string? SourceMessageId = null);

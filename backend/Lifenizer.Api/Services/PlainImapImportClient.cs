@@ -1,211 +1,132 @@
-using System.Net.Mail;
-using System.Net.Security;
+using System.Globalization;
+using System.Net;
 using System.Net.Sockets;
-using System.Text;
-using System.Text.RegularExpressions;
+using Lifenizer.Api.Services.Parsers;
 using Lifenizer.Core;
+using MailKit;
+using MailKit.Net.Imap;
+using MailKit.Search;
+using MailKit.Security;
+using MimeKit;
 
 namespace Lifenizer.Api.Services;
 
-public sealed partial class PlainImapImportClient(IConfiguration configuration)
+// The public service name is retained for compatibility; MailKit owns IMAP and TLS.
+public sealed class PlainImapImportClient(IConfiguration configuration)
 {
+    private const long MaxPageBytes = 25 * 1024 * 1024;
+    public object Settings()
+    {
+        var (host, port, tls) = ConnectionSettings();
+        return new { configured = !string.IsNullOrWhiteSpace(host), host, port, tls = tls.ToString(), useTls = tls != SecureSocketOptions.None };
+    }
+
     public async Task<NormalizedImportResponse> ImportAsync(ImportRequest request, CancellationToken cancellationToken)
     {
-        if (new[] { "host", "port", "useTls", "allowInvalidCertificate" }.Any(key => ImportTextParsers.Metadata(request, key) is not null))
-            throw new InvalidOperationException("IMAP endpoint and TLS settings are configuration-only; set Imports:Imap on the server.");
-        var host = configuration["Imports:Imap:Host"];
-        if (string.IsNullOrWhiteSpace(host)) throw new InvalidOperationException("Email import requires configuration Imports:Imap:Host.");
-        var port = configuration.GetValue("Imports:Imap:Port", 993);
+        if (new[] { "host", "port", "useTls", "socketOptions", "allowInvalidCertificate" }.Any(key => request.Metadata?.ContainsKey(key) == true))
+            throw new InvalidOperationException("The IMAP endpoint and TLS settings must be configured on the server.");
+        var (host, port, tls) = ConnectionSettings();
+        if (string.IsNullOrWhiteSpace(host)) throw new InvalidOperationException("The IMAP host is not configured.");
         var username = Required(request, "username");
         var password = Required(request, "password");
-        var mailbox = ImportTextParsers.Metadata(request, "mailbox") ?? "INBOX";
-        var useTls = configuration.GetValue("Imports:Imap:UseTls", true);
-        var limit = int.TryParse(ImportTextParsers.Metadata(request, "limit"), out var parsedLimit) ? Math.Clamp(parsedLimit, 1, 25) : 10;
-
-        using var tcp = new TcpClient();
-        await tcp.ConnectAsync(host, port, cancellationToken);
-        await using var networkStream = tcp.GetStream();
-        Stream stream = networkStream;
-        if (useTls)
+        var mailbox = CommonParsing.Metadata(request, "mailbox") ?? "INBOX";
+        if (new[] { username, password, mailbox }.Any(value => value.Contains('\r') || value.Contains('\n')))
+            throw new InvalidOperationException("IMAP credentials and mailbox must not contain newlines.");
+        var limit = int.TryParse(CommonParsing.Metadata(request, "limit"), out var parsedLimit) ? Math.Clamp(parsedLimit, 1, 25) : 10;
+        var afterUid = Cursor(request, "afterUid");
+        var previousValidity = Cursor(request, "uidValidity");
+        if (afterUid > 0 && previousValidity == 0) throw new InvalidOperationException("uidValidity is required when resuming afterUid.");
+        var messages = new List<(MimeMessage Message, Dictionary<string, string>? Metadata)>();
+        using var client = new ImapClient { Timeout = 30_000 };
+        try
         {
-            var ssl = new SslStream(networkStream, leaveInnerStreamOpen: false, (_, _, _, errors) => errors == SslPolicyErrors.None);
-            await ssl.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = host }, cancellationToken);
-            stream = ssl;
-        }
-
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 8192, leaveOpen: true);
-        await using var writer = new StreamWriter(stream, Encoding.UTF8, bufferSize: 8192, leaveOpen: true) { NewLine = "\r\n", AutoFlush = true };
-
-        await reader.ReadLineAsync(cancellationToken);
-        await SendAsync(writer, reader, "A001", $"LOGIN {Quote(username)} {Quote(password)}", cancellationToken);
-        await SendAsync(writer, reader, "A002", $"SELECT {Quote(mailbox)}", cancellationToken);
-        var searchResponse = await SendAsync(writer, reader, "A003", "SEARCH ALL", cancellationToken);
-        var messageIds = SearchIds(searchResponse).Take(limit).ToArray();
-
-        var conversations = new List<NormalizedConversation>();
-        foreach (var messageId in messageIds)
-        {
-            var fetchResponse = await SendAsync(writer, reader, NextTag(), $"FETCH {messageId} BODY.PEEK[]", cancellationToken);
-            var rawMessage = ExtractLiteral(fetchResponse);
-            if (rawMessage is null) continue;
-            conversations.Add(ParseMessage(rawMessage, request));
-        }
-
-        await SendAsync(writer, reader, NextTag(), "LOGOUT", cancellationToken);
-
-        return ImportTextParsers.Response(
-            "email",
-            $"Fetched and normalized {conversations.Count} email message(s) from {mailbox}.",
-            conversations,
-            new Dictionary<string, string> { ["host"] = host, ["mailbox"] = mailbox });
-    }
-
-    private static NormalizedConversation ParseMessage(string rawMessage, ImportRequest request)
-    {
-        var split = HeaderBodySeparatorRegex().Split(rawMessage, 2);
-        var headers = ParseHeaders(split[0]);
-        var body = split.Length > 1 ? DecodeBody(split[1]) : string.Empty;
-        var subject = Header(headers, "Subject") ?? ImportTextParsers.Metadata(request, "defaultTitle") ?? "Email message";
-        var from = Header(headers, "From") ?? "Unknown sender";
-        var to = Header(headers, "To");
-        var cc = Header(headers, "Cc");
-        var participants = ImportTextParsers.ParticipantNames(request).ToList();
-        foreach (var name in EmailNames(from).Concat(EmailNames(to)).Concat(EmailNames(cc)))
-        {
-            if (!participants.Contains(name, StringComparer.OrdinalIgnoreCase)) participants.Add(name);
-        }
-
-        var metadata = new Dictionary<string, string>();
-        foreach (var key in new[] { "Message-Id", "Date", "From", "To", "Cc" })
-        {
-            if (Header(headers, key) is { } value) metadata[key.ToLowerInvariant()] = value;
-        }
-
-        var sender = EmailNames(from).FirstOrDefault() ?? from;
-        return new NormalizedConversation(
-            subject,
-            "email",
-            participants,
-            [new NormalizedSegment(body.Trim(), sender, 0, DateTimeOffset.TryParse(Header(headers, "Date"), out var date) ? date : DateTimeOffset.UtcNow)],
-            [],
-            metadata);
-    }
-
-    private static Dictionary<string, string> ParseHeaders(string headerText)
-    {
-        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        string? currentKey = null;
-        foreach (var rawLine in headerText.Split('\n'))
-        {
-            var line = rawLine.TrimEnd('\r');
-            if ((line.StartsWith(' ') || line.StartsWith('\t')) && currentKey is not null)
+            await client.ConnectAsync(host, port, tls, cancellationToken);
+            await client.AuthenticateAsync(username, password, cancellationToken);
+            var folder = mailbox.Equals("INBOX", StringComparison.OrdinalIgnoreCase) ? client.Inbox : await client.GetFolderAsync(mailbox, cancellationToken);
+            await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+            var reset = previousValidity != 0 && previousValidity != folder.UidValidity;
+            if (reset) afterUid = 0;
+            IList<UniqueId> found = afterUid == uint.MaxValue ? [] : await folder.SearchAsync(
+                SearchQuery.Uids(new UniqueIdRange(new UniqueId(afterUid + 1), UniqueId.MaxValue)), cancellationToken);
+            var selected = found.Where(uid => uid.Id > afterUid).OrderBy(uid => uid.Id).Take(limit).ToArray();
+            if (selected.Length > 0)
             {
-                headers[currentKey] += " " + line.Trim();
-                continue;
+                var sizes = await folder.FetchAsync(selected, MessageSummaryItems.UniqueId | MessageSummaryItems.Size, cancellationToken);
+                if (sizes.Sum(message => (long)(message.Size ?? 0)) > MaxPageBytes)
+                    throw new InvalidOperationException("This IMAP page exceeds the 25 MiB download limit. Reduce the page size (limit); a single oversized email must be exported separately.");
             }
-
-            var index = line.IndexOf(':');
-            if (index <= 0) continue;
-            currentKey = line[..index];
-            headers[currentKey] = line[(index + 1)..].Trim();
-        }
-        return headers;
-    }
-
-    private static IEnumerable<string> EmailNames(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) yield break;
-        foreach (var part in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            MailAddress? parsed = null;
-            try
+            var downloaded = 0L;
+            var nextUid = afterUid;
+            foreach (var uid in selected)
             {
-                parsed = new MailAddress(part);
+                try
+                {
+                    var progress = new BoundedProgress(MaxPageBytes - downloaded);
+                    var message = await folder.GetMessageAsync(uid, cancellationToken, progress);
+                    downloaded += progress.Bytes;
+                    messages.Add((message, new Dictionary<string, string>
+                    {
+                        ["imap-uid"] = uid.Id.ToString(CultureInfo.InvariantCulture),
+                        ["imap-uid-validity"] = folder.UidValidity.ToString(CultureInfo.InvariantCulture),
+                        ["imap-message-id"] = $"imap:{host}/{username}/{folder.FullName}/{folder.UidValidity}/{uid.Id}"
+                    }));
+                }
+                catch (MessageNotFoundException) { /* An expunge between SEARCH and FETCH is safe to skip. */ }
+                nextUid = uid.Id;
             }
-            catch (FormatException)
+            var diagnostics = new Dictionary<string, string>
             {
-                // Some exports contain bare names rather than RFC addresses.
-            }
-
-            var name = parsed?.DisplayName;
-            if (string.IsNullOrWhiteSpace(name)) name = parsed?.Address ?? part;
-            if (!string.IsNullOrWhiteSpace(name)) yield return name.Trim('"', ' ');
+                ["host"] = host, ["mailbox"] = folder.FullName,
+                ["uidValidity"] = folder.UidValidity.ToString(CultureInfo.InvariantCulture),
+                ["nextUid"] = nextUid.ToString(CultureInfo.InvariantCulture),
+                ["hasMore"] = found.Any(uid => uid.Id > nextUid) ? "true" : "false",
+                ["cursorReset"] = reset ? "true" : "false"
+            };
+            var result = EmailNormalization.Response("email", request, messages, diagnostics);
+            await client.DisconnectAsync(true, cancellationToken);
+            return result;
         }
-    }
-
-    private static string DecodeBody(string value)
-    {
-        return value
-            .Replace("=\r\n", string.Empty, StringComparison.Ordinal)
-            .Replace("=\n", string.Empty, StringComparison.Ordinal)
-            .Replace("=20", " ", StringComparison.Ordinal)
-            .Trim();
-    }
-
-    private static async Task<string> SendAsync(StreamWriter writer, StreamReader reader, string tag, string command, CancellationToken cancellationToken)
-    {
-        await writer.WriteLineAsync($"{tag} {command}".AsMemory(), cancellationToken);
-        var builder = new StringBuilder();
-        while (true)
+        catch (Exception exception) when (exception is MailKit.Security.AuthenticationException or CommandException or ProtocolException or IOException or SocketException or NotSupportedException or SslHandshakeException)
         {
-            var line = await reader.ReadLineAsync(cancellationToken);
-            if (line is null) break;
-            builder.AppendLine(line);
-            if (line.StartsWith(tag + " ", StringComparison.OrdinalIgnoreCase)) break;
+            throw new InvalidOperationException("IMAP connection, TLS, authentication, or mailbox access failed. Check the configured server and account credentials.");
         }
+        finally { foreach (var (message, _) in messages) message.Dispose(); }
+    }
 
-        var response = builder.ToString();
-        if (!response.Contains($"{tag} OK", StringComparison.OrdinalIgnoreCase))
+    private sealed class BoundedProgress(long limit) : ITransferProgress
+    {
+        public long Bytes { get; private set; }
+        public void Report(long bytesTransferred, long totalSize) => Report(bytesTransferred);
+        public void Report(long bytesTransferred)
         {
-            throw new InvalidOperationException($"IMAP {command.Split(' ')[0]} command failed.");
-        }
-        return response;
-    }
-
-    private static IEnumerable<string> SearchIds(string response)
-    {
-        foreach (Match match in SearchLineRegex().Matches(response))
-        {
-            foreach (var id in match.Groups["ids"].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                yield return id;
-            }
+            Bytes = bytesTransferred;
+            if (bytesTransferred > limit) throw new InvalidOperationException("This IMAP page exceeds the 25 MiB download limit. Reduce the page size or export the oversized email separately.");
         }
     }
 
-    private static string? ExtractLiteral(string response)
+    private (string Host, int Port, SecureSocketOptions Tls) ConnectionSettings()
     {
-        var match = LiteralRegex().Match(response);
-        return match.Success ? match.Groups["body"].Value.TrimEnd('\r', '\n') : null;
+        var host = configuration["Imports:Imap:Host"] ?? "";
+        var port = configuration.GetValue("Imports:Imap:Port", 993);
+        if (port is < 1 or > 65535) throw new InvalidOperationException("The configured IMAP port is invalid.");
+        var tls = configuration.GetValue("Imports:Imap:UseTls", true)
+            ? port == 143 ? SecureSocketOptions.StartTls : SecureSocketOptions.SslOnConnect
+            : SecureSocketOptions.None;
+        if (configuration["Imports:Imap:SocketOptions"] is { Length: > 0 } option &&
+            (!Enum.TryParse(option, true, out tls) || tls is not (SecureSocketOptions.None or SecureSocketOptions.StartTls or SecureSocketOptions.SslOnConnect)))
+            throw new InvalidOperationException("IMAP SocketOptions must require TLS (SslOnConnect or StartTls).");
+        if (tls == SecureSocketOptions.None && !(host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || IPAddress.TryParse(host, out var address) && IPAddress.IsLoopback(address)))
+            throw new InvalidOperationException("Plaintext IMAP is allowed only for loopback test servers.");
+        return (host, port, tls);
     }
 
-    private static string? Header(Dictionary<string, string> headers, string key)
+    private static string Required(ImportRequest request, string key) => CommonParsing.Metadata(request, key)
+        ?? throw new InvalidOperationException($"IMAP {key} is required.");
+    private static uint Cursor(ImportRequest request, string key)
     {
-        return headers.TryGetValue(key, out var value) ? value : null;
+        var value = CommonParsing.Metadata(request, key);
+        if (value is null) return 0;
+        return uint.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var cursor)
+            ? cursor : throw new InvalidOperationException($"IMAP {key} must be an unsigned integer.");
     }
-
-    private static string Required(ImportRequest request, string key)
-    {
-        return ImportTextParsers.Metadata(request, key)
-            ?? throw new InvalidOperationException($"Email import requires metadata.{key}.");
-    }
-
-    private static string Quote(string value)
-    {
-        if (value.Contains('\r') || value.Contains('\n')) throw new InvalidOperationException("IMAP values cannot contain line breaks.");
-        return '"' + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + '"';
-    }
-
-    private static int tagCounter = 4;
-
-    private static string NextTag() => $"A{Interlocked.Increment(ref tagCounter):000}";
-
-    [GeneratedRegex(@"\r?\n\r?\n")]
-    private static partial Regex HeaderBodySeparatorRegex();
-
-    [GeneratedRegex(@"\* SEARCH (?<ids>[0-9 ]*)", RegexOptions.IgnoreCase)]
-    private static partial Regex SearchLineRegex();
-
-    [GeneratedRegex(@"\{\d+\}\r?\n(?<body>.*?)\r?\n\)\r?\nA\d+ OK", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
-    private static partial Regex LiteralRegex();
 }

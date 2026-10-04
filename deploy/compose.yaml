@@ -18,6 +18,9 @@ services:
       Cors__AllowedOrigins__0: https://mail.coflnet.com
       Whisper__BaseUrl: http://localhost
       Whisper__UnixSocketPath: /run/lifenizer-whisper/asr.sock
+      Imports__Imap__Host: ${LIFENIZER_IMAP_HOST:-mail.coflnet.com}
+      Imports__Imap__Port: ${LIFENIZER_IMAP_PORT:-993}
+      Imports__Imap__UseTls: "true"
     volumes:
       - ./data:/data
       - ./whisper:/run/lifenizer-whisper:ro

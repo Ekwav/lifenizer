@@ -25,6 +25,11 @@ public sealed class ImportIntegrationTests
             ["Imports:Imap:UseTls"] = "false"
         });
         using var client = await AuthenticatedClientAsync(factory, "alice@example.test");
+        using var anonymous = factory.CreateClient();
+        Assert.That((await anonymous.GetAsync("/api/imports/email/settings")).StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        var settings = await client.GetFromJsonAsync<JsonElement>("/api/imports/email/settings");
+        Assert.That(settings.GetProperty("host").GetString(), Is.EqualTo("127.0.0.1"));
+        Assert.That(settings.GetProperty("configured").GetBoolean(), Is.True);
 
         var response = await client.PostAsJsonAsync("/api/imports/email", new ImportRequest(
             Metadata: new Dictionary<string, string>
@@ -33,7 +38,7 @@ public sealed class ImportIntegrationTests
                 ["password"] = "placeholder-imap-secret",
                 ["mailbox"] = "INBOX"
             }), JsonOptions);
-        response.EnsureSuccessStatusCode();
+        Assert.That(response.IsSuccessStatusCode, Is.True, await response.Content.ReadAsStringAsync() + " Commands:" + string.Join(";", imap.Commands));
 
         var result = await response.Content.ReadFromJsonAsync<NormalizedImportResponse>(JsonOptions);
 
@@ -628,82 +633,98 @@ internal sealed class MockHttpServer : IAsyncDisposable
 internal sealed class MockImapServer : IAsyncDisposable
 {
     private readonly TcpListener listener;
-    private readonly string rawMessage;
+    private readonly IReadOnlyDictionary<uint, string> messages;
     private readonly CancellationTokenSource cancellation = new();
     private readonly Task loop;
-
-    public MockImapServer(string rawMessage)
+    public MockImapServer(string rawMessage) : this(new Dictionary<uint, string> { [1] = rawMessage }) { }
+    public MockImapServer(IReadOnlyDictionary<uint, string> messages)
     {
-        this.rawMessage = rawMessage;
+        this.messages = messages;
         listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         Port = ((IPEndPoint)listener.LocalEndpoint).Port;
         loop = Task.Run(HandleAsync);
     }
-
     public int Port { get; }
-
+    public uint UidValidity { get; set; } = 123;
+    public uint? ReportedMessageSize { get; set; }
+    public List<string> Commands { get; } = [];
     public async ValueTask DisposeAsync()
     {
         cancellation.Cancel();
         listener.Stop();
-        try
-        {
-            await loop;
-        }
-        catch (SocketException)
-        {
-        }
-        catch (ObjectDisposedException)
-        {
-        }
+        try { await loop; }
+        catch (Exception exception) when (exception is SocketException or ObjectDisposedException or OperationCanceledException) { }
         cancellation.Dispose();
     }
-
     private async Task HandleAsync()
     {
-        using var client = await listener.AcceptTcpClientAsync(cancellation.Token);
-        await using var stream = client.GetStream();
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 8192, leaveOpen: true);
-        await using var writer = new StreamWriter(stream, new UTF8Encoding(false), bufferSize: 8192, leaveOpen: true) { NewLine = "\r\n", AutoFlush = true };
-        await writer.WriteLineAsync("* OK Mock IMAP ready");
-
         while (!cancellation.IsCancellationRequested)
         {
-            var line = await reader.ReadLineAsync(cancellation.Token);
-            if (line is null) break;
-            var tag = line.Split(' ', 2)[0];
-            if (line.Contains("LOGIN", StringComparison.OrdinalIgnoreCase))
+            using var client = await listener.AcceptTcpClientAsync(cancellation.Token);
+            await using var stream = client.GetStream();
+            using var reader = new StreamReader(stream, Encoding.UTF8, false, 8192, true);
+            await using var writer = new StreamWriter(stream, new UTF8Encoding(false), 8192, true) { NewLine = "\r\n", AutoFlush = true };
+            await writer.WriteLineAsync("* OK [CAPABILITY IMAP4rev1] Mock IMAP ready");
+            while (!cancellation.IsCancellationRequested)
             {
-                await writer.WriteLineAsync($"{tag} OK LOGIN completed");
-            }
-            else if (line.Contains("SELECT", StringComparison.OrdinalIgnoreCase))
-            {
-                await writer.WriteLineAsync("* 1 EXISTS");
-                await writer.WriteLineAsync($"{tag} OK SELECT completed");
-            }
-            else if (line.Contains("SEARCH", StringComparison.OrdinalIgnoreCase))
-            {
-                await writer.WriteLineAsync("* SEARCH 1");
-                await writer.WriteLineAsync($"{tag} OK SEARCH completed");
-            }
-            else if (line.Contains("FETCH", StringComparison.OrdinalIgnoreCase))
-            {
-                var length = Encoding.UTF8.GetByteCount(rawMessage);
-                await writer.WriteLineAsync($"* 1 FETCH (BODY[] {{{length}}}");
-                await writer.WriteLineAsync(rawMessage);
-                await writer.WriteLineAsync(")");
-                await writer.WriteLineAsync($"{tag} OK FETCH completed");
-            }
-            else if (line.Contains("LOGOUT", StringComparison.OrdinalIgnoreCase))
-            {
-                await writer.WriteLineAsync("* BYE Mock IMAP logging out");
-                await writer.WriteLineAsync($"{tag} OK LOGOUT completed");
-                break;
-            }
-            else
-            {
-                await writer.WriteLineAsync($"{tag} BAD unsupported command");
+                var line = await reader.ReadLineAsync(cancellation.Token);
+                if (line is null) break;
+                var pieces = line.Split(' ', 3);
+                var tag = pieces[0];
+                var command = pieces[1].ToUpperInvariant();
+                // No authentication secrets are retained in the command trace.
+                Commands.Add(command == "LOGIN" ? "LOGIN" : line[(tag.Length + 1)..]);
+                if (command == "CAPABILITY")
+                    await writer.WriteLineAsync("* CAPABILITY IMAP4rev1");
+                else if (command == "LOGIN") { }
+                else if (command is "LIST" or "LSUB")
+                    await writer.WriteLineAsync("* LIST (\\HasNoChildren) \"/\" \"INBOX\"");
+                else if (command == "EXAMINE")
+                {
+                    await writer.WriteLineAsync("* FLAGS (\\Seen)");
+                    await writer.WriteLineAsync($"* {messages.Count} EXISTS");
+                    await writer.WriteLineAsync($"* OK [UIDVALIDITY {UidValidity}] valid");
+                    await writer.WriteLineAsync($"* OK [UIDNEXT {messages.Keys.Max() + 1}] next");
+                }
+                else if (line.Contains("UID SEARCH", StringComparison.OrdinalIgnoreCase))
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(line, @"UID (\d+):\*");
+                    var after = match.Success ? uint.Parse(match.Groups[1].Value) : 1;
+                    await writer.WriteLineAsync("* SEARCH " + string.Join(' ', messages.Keys.Where(uid => uid >= after).Order()));
+                }
+                else if (line.Contains("UID FETCH", StringComparison.OrdinalIgnoreCase))
+                {
+                    var uidSet = pieces[2].Split(' ')[1];
+                    var uids = new MailKit.UniqueIdSet();
+                    MailKit.UniqueIdSet.TryParse(uidSet, out uids);
+                    foreach (var id in uids!)
+                    {
+                        if (!messages.TryGetValue(id.Id, out var raw)) continue;
+                        if (line.Contains("RFC822.SIZE"))
+                            await writer.WriteLineAsync($"* 1 FETCH (UID {id.Id} RFC822.SIZE {ReportedMessageSize ?? (uint)Encoding.UTF8.GetByteCount(raw)})");
+                        else
+                        {
+                            var bytes = Encoding.UTF8.GetBytes(raw);
+                            await writer.WriteLineAsync($"* 1 FETCH (UID {id.Id} BODY[] {{{bytes.Length}}}");
+                            await stream.WriteAsync(bytes);
+                            await writer.WriteLineAsync("");
+                            await writer.WriteLineAsync(")");
+                        }
+                    }
+                }
+                else if (command == "LOGOUT")
+                {
+                    await writer.WriteLineAsync("* BYE Mock IMAP logging out");
+                    await writer.WriteLineAsync($"{tag} OK LOGOUT completed");
+                    break;
+                }
+                else
+                {
+                    await writer.WriteLineAsync($"{tag} BAD unsupported command");
+                    continue;
+                }
+                await writer.WriteLineAsync(command == "EXAMINE" ? $"{tag} OK [READ-ONLY] completed" : $"{tag} OK completed");
             }
         }
     }

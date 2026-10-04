@@ -40,6 +40,8 @@ public static class ImportEndpoints
 
         group.MapGet("/capabilities", () => Results.Ok(Capabilities)).AllowAnonymous();
 
+        group.MapGet("/email/settings", (PlainImapImportClient imap) => Results.Ok(imap.Settings())).RequireAuthorization();
+
         group.MapPost("/{source}", async ([FromRoute] string source, [FromBody] ImportRequest request, ImportOrchestrator orchestrator, CancellationToken cancellationToken) =>
         {
             var capability = Capabilities.FirstOrDefault(c => string.Equals(c.Source, source, StringComparison.OrdinalIgnoreCase));

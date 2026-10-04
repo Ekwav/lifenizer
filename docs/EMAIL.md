@@ -1,0 +1,15 @@
+# Email import
+
+The API fetches one mailbox using credentials supplied for that request. It never stores the IMAP password or starts a server background job. Email is plaintext on the IMAP/API hosts during normalization; the app encrypts the result before local persistence and vault sync.
+
+The operator configures `Imports:Imap:Host`, `Port` (default `993`) and `UseTls` (default `true`). Port 993 uses TLS immediately. Port 143 requires STARTTLS. An explicit `SocketOptions` may select `SslOnConnect` or mandatory `StartTls`; opportunistic TLS is rejected. Normal certificate validation remains enabled. `UseTls=false` is accepted only for loopback test servers. Request metadata cannot override the host, port, TLS or certificate checks.
+
+An authenticated `GET /api/imports/email/settings` returns `{configured,host,port,tls,useTls}` without credentials. Configure a host before importing. The Compose installation defaults to `mail.coflnet.com:993`; an email account and, where supported, its app password are still required. The account password is independent of the vault password or pairing secret.
+
+`POST /api/imports/email` accepts the existing import request with metadata `username`, `password`, optional `mailbox` (default `INBOX`), and `limit` (default 10, maximum 25). Password whitespace is preserved. MailKit opens the mailbox read-only and fetches `BODY.PEEK[]`, so imports do not mark messages as read. A page downloads at most 25 MiB, checked against reported sizes before fetching and actual transfer progress. Oversized pages fail without providing a new cursor; reduce `limit` or export an oversized message separately.
+
+Resume with metadata `afterUid` and `uidValidity`, copied from response diagnostics `nextUid` and `uidValidity` after the app has saved the encrypted result. UIDs are fetched in ascending order; `hasMore` indicates another page. If the server changes UIDVALIDITY, import restarts from the beginning with `cursorReset=true`. Message/thread identities allow the app to merge the replay. Expunged messages between search and fetch are skipped safely. The cursor does not track edits to already imported messages, moves between mailboxes, or deletions on the mail server.
+
+Live IMAP and local mbox/RFC822 exports share MimeKit decoding for encoded headers, multipart alternatives, transfer encodings and MIME charsets. Plain text is preferred, with an HTML text fallback. Attachments contribute filenames only; their content is not indexed or imported as file artifacts. Contacts retain decoded display names and canonical `email:lowercase-address` identifiers. Conversations carry participant identifiers and the first References/In-Reply-To thread identifier; segments carry sender identifiers, Message-ID and message date. Messages without Message-ID use a mailbox/UID identity for live IMAP.
+
+References: [MailKit TLS options](https://mimekit.net/docs/html/T_MailKit_Security_SecureSocketOptions.htm), [UIDVALIDITY](https://mimekit.net/docs/html/P_MailKit_IMailFolder_UidValidity.htm), [MimeParser](https://mimekit.net/docs/html/T_MimeKit_MimeParser.htm).
