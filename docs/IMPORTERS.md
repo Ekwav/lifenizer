@@ -198,7 +198,10 @@ Continuous Discord access requires a separately authorized integration.
 [restricted scopes](https://docs.discord.com/developers/topics/oauth2);
 personal-token [self-bot automation is prohibited](https://support.discord.com/hc/en-us/articles/115002192352-Automated-User-Accounts-Self-Bots).
 A bot can ingest channels it is permitted to access, with the required gateway
-intents and permissions; no such bot is configured by this importer.
+intents and permissions. **Imports → Discord bot: history & live messages**
+connects an authorized bot on a native client, reads channel history, and indexes
+live messages and their real authors. See [Discord bot setup](DISCORD.md) for
+server/channel selection, counterpart identities, credentials and limitations.
 
 ### discord API mode
 
