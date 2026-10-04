@@ -10,29 +10,66 @@ class LifenizerApiClient {
   LifenizerApiClient({
     required this.baseUrl,
     this.authToken,
+    this.refreshAuth,
     http.Client? client,
   }) : _client = client ?? http.Client();
 
   final String baseUrl;
-  final String? authToken;
+  String? authToken;
+  final Future<String?> Function()? refreshAuth;
   final http.Client _client;
 
-  LifenizerApiClient authenticated(String token) {
+  LifenizerApiClient authenticated(
+    String token, {
+    Future<String?> Function()? refreshAuth,
+  }) {
     return LifenizerApiClient(
       baseUrl: baseUrl,
       authToken: token,
+      refreshAuth: refreshAuth,
       client: _client,
     );
+  }
+
+  Future<Map<String, dynamic>> requestPairing(Map<String, dynamic> body) =>
+      _post('/api/pairing/request', body, authenticated: false);
+  Future<Map<String, dynamic>> pollPairing(String id, String token) => _post(
+    '/api/pairing/$id/poll',
+    {'requestToken': token},
+    authenticated: false,
+  );
+  Future<Map<String, dynamic>> refreshPairing(String? id, String token) =>
+      _post('/api/pairing/refresh', {
+        'deviceId': id,
+        'refreshToken': token,
+      }, authenticated: false);
+  Future<List<Map<String, dynamic>>> pendingPairings() async {
+    final response = await _get('/api/pairing/pending');
+    _ensureSuccess(response);
+    return (jsonDecode(response.body) as List)
+        .map((value) => Map<String, dynamic>.from(value as Map))
+        .toList();
+  }
+
+  Future<void> approvePairing(String id, Map<String, dynamic> transfer) async {
+    await _post('/api/pairing/$id/approve', transfer);
+  }
+
+  Future<void> denyPairing(String id) async {
+    await _post('/api/pairing/$id/deny', {});
   }
 
   Future<AuthSession> accountLogin({
     required String email,
     required String password,
     bool register = false,
+    String? registrationToken,
   }) async => AuthSession.fromJson(
     await _post(register ? '/api/auth/register' : '/api/auth/login', {
       'email': email,
       'password': password,
+      if (register && registrationToken?.trim().isNotEmpty == true)
+        'registrationToken': registrationToken!.trim(),
     }, authenticated: false),
   );
 
@@ -86,9 +123,7 @@ class LifenizerApiClient {
   }
 
   Future<PullResult> pull(int since) async {
-    final response = await _client
-        .get(_uri('/api/sync/pull', {'since': '$since'}), headers: _headers())
-        .timeout(const Duration(seconds: 20));
+    final response = await _get('/api/sync/pull', {'since': '$since'});
     _ensureSuccess(response);
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final envelopes = (data['envelopes'] as List? ?? const [])
@@ -133,22 +168,23 @@ class LifenizerApiClient {
     String contentType, {
     String? conversationId,
   }) async {
-    final uri = _uri('/api/images');
-    final req = http.MultipartRequest('POST', uri)
-      ..headers.addAll(_headers())
-      ..files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          bytes,
-          filename: fileName,
-          contentType: MediaType.parse(contentType),
-        ),
-      );
-    if (conversationId != null) {
-      req.fields['conversationId'] = conversationId;
-    }
-    final streamed = await _client.send(req);
-    final resp = await http.Response.fromStream(streamed);
+    final resp = await _retry(() async {
+      final uri = _uri('/api/images');
+      final req = http.MultipartRequest('POST', uri)
+        ..headers.addAll(_headers())
+        ..files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            bytes,
+            filename: fileName,
+            contentType: MediaType.parse(contentType),
+          ),
+        );
+      if (conversationId != null) {
+        req.fields['conversationId'] = conversationId;
+      }
+      return http.Response.fromStream(await _client.send(req));
+    });
     if (resp.statusCode == 402) throw QuotaExceededException(resp.body);
     _ensureSuccess(resp);
     return ImageItem.fromJson(
@@ -160,10 +196,7 @@ class LifenizerApiClient {
     final query = conversationId != null
         ? {'conversationId': conversationId}
         : null;
-    final response = await _client.get(
-      _uri('/api/images', query),
-      headers: _headers(),
-    );
+    final response = await _get('/api/images', query);
     _ensureSuccess(response);
     final data = jsonDecode(response.body) as List;
     return data
@@ -172,17 +205,14 @@ class LifenizerApiClient {
   }
 
   Future<void> deleteImage(String id) async {
-    final response = await _client.delete(
-      _uri('/api/images/$id'),
-      headers: _headers(),
+    final response = await _retry(
+      () => _client.delete(_uri('/api/images/$id'), headers: _headers()),
     );
     _ensureSuccess(response);
   }
 
   Future<Uint8List> downloadImage(String id) async {
-    final response = await _client
-        .get(_uri('/api/images/$id'), headers: _headers())
-        .timeout(const Duration(seconds: 30));
+    final response = await _get('/api/images/$id');
     _ensureSuccess(response);
     return response.bodyBytes;
   }
@@ -192,10 +222,7 @@ class LifenizerApiClient {
   // ---------------------------------------------------------------------------
 
   Future<QuotaStatus> getQuotaStatus() async {
-    final response = await _client.get(
-      _uri('/api/premium/status'),
-      headers: _headers(),
-    );
+    final response = await _get('/api/premium/status');
     _ensureSuccess(response);
     return QuotaStatus.fromJson(
       Map<String, dynamic>.from(jsonDecode(response.body) as Map),
@@ -213,16 +240,42 @@ class LifenizerApiClient {
     bool authenticated = true,
     Duration? timeout,
   }) async {
-    final request = _client.post(
-      _uri(path),
-      headers: _headers(authenticated: authenticated),
-      body: jsonEncode(body),
-    );
-    final response = await request.timeout(
-      timeout ?? const Duration(seconds: 30),
+    final response = await _retry(
+      () => _client
+          .post(
+            _uri(path),
+            headers: _headers(authenticated: authenticated),
+            body: jsonEncode(body),
+          )
+          .timeout(timeout ?? const Duration(seconds: 30)),
+      authenticated: authenticated,
     );
     _ensureSuccess(response);
-    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+    return response.body.isEmpty
+        ? <String, dynamic>{}
+        : Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+  }
+
+  Future<http.Response> _get(String path, [Map<String, String>? query]) =>
+      _retry(
+        () => _client
+            .get(_uri(path, query), headers: _headers())
+            .timeout(const Duration(seconds: 30)),
+      );
+
+  Future<http.Response> _retry(
+    Future<http.Response> Function() request, {
+    bool authenticated = true,
+  }) async {
+    var response = await request();
+    if (authenticated && response.statusCode == 401 && refreshAuth != null) {
+      final token = await refreshAuth!();
+      if (token != null) {
+        authToken = token;
+        response = await request();
+      }
+    }
+    return response;
   }
 
   Uri _uri(String path, [Map<String, String>? query]) {

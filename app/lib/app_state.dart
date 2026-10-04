@@ -12,6 +12,8 @@ import 'package:image_picker/image_picker.dart';
 import 'image_service.dart';
 import 'models.dart';
 import 'services/search_criteria.dart';
+import 'services/device_pairing.dart';
+import 'services/pairing_store.dart';
 import 'services/local_vault_store.dart';
 
 import 'services/conversation_search_index.dart';
@@ -23,8 +25,22 @@ part 'services/vault_sync.dart';
 part 'services/vault_imports.dart';
 
 class LifenizerAppState extends ChangeNotifier {
-  LifenizerAppState({LocalVaultStore? localStore, this.apiFactory})
-    : _localStore = localStore;
+  LifenizerAppState({
+    LocalVaultStore? localStore,
+    this.apiFactory,
+    PairingCredentialStore? pairingStore,
+  }) : _localStore = localStore {
+    pairing = DevicePairingService(this, store: pairingStore);
+    pairing.addListener(_notifyChanged);
+  }
+
+  late final DevicePairingService pairing;
+
+  @override
+  void dispose() {
+    pairing.dispose();
+    super.dispose();
+  }
 
   final LifenizerApiClient Function(String)? apiFactory;
   LocalVaultStore? _localStore;

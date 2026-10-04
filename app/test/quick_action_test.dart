@@ -14,6 +14,18 @@ class _Vault extends LifenizerAppState {
 }
 
 void main() {
+  test('connect deep link preserves the private fragment and API prefix', () {
+    const link =
+        'lifenizer://connect?server=https%3A%2F%2Fexample.test%2Flifenizer#v=1&secret=private&until=1234';
+    final action = QuickAction.fromUri(Uri.parse(link));
+    expect(action?.action, 'connect');
+    expect(action?.connectionUri, link);
+    expect(
+      Uri.parse(action!.connectionUri!).fragment,
+      'v=1&secret=private&until=1234',
+    );
+  });
+
   test('links decode query and retain only known navigation actions', () {
     final action = QuickAction.fromUri(
       Uri.parse('lifenizer://search?q=Alice%20caf%C3%A9&conversation=a'),

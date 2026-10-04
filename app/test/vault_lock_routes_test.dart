@@ -36,7 +36,7 @@ void main() {
       state.closeVault();
       await tester.pumpAndSettle();
       expect(find.text('Private transcript in a modal route'), findsNothing);
-      expect(find.text('Enter vault'), findsOneWidget);
+      expect(find.text('Connect this device'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       state.dispose();
     },

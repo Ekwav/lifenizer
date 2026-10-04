@@ -43,6 +43,7 @@
                 <data android:scheme="lifenizer" android:host="search" />
                 <data android:scheme="lifenizer" android:host="capture" />
                 <data android:scheme="lifenizer" android:host="imports" />
+                <data android:scheme="lifenizer" android:host="connect" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

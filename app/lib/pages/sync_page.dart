@@ -13,6 +13,10 @@ class SyncPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final quota = state.quotaStatus;
+    final paired = state.pairing.matchesVault(
+      state.apiBaseUrl,
+      state.rememberedEmail,
+    );
     return PageFrame(
       title: 'Sync',
       child: Column(
@@ -25,9 +29,59 @@ class SyncPage extends StatelessWidget {
                 : 'Last synced ${state.lastSyncedAt!.toCompactLocalString()}',
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Use the same API URL, account and vault passphrase on your computer and phone. Changes sync automatically while the app is open.',
+          Text(
+            paired
+                ? 'Devices connected with your link share this encrypted vault. Changes sync automatically while the app is open.'
+                : 'Use the same API URL, account and vault passphrase on your computer and phone. Changes sync automatically while the app is open.',
           ),
+          if (paired) ...[
+            const SizedBox(height: 12),
+            Text(
+              state.pairing.automaticApprovalActive
+                  ? 'New devices with your connection link connect automatically until ${state.pairing.automaticApprovalUntil!.toLocal()}.'
+                  : 'New devices need your approval. Compare the code on both devices.',
+            ),
+            for (final request in state.pairing.pending)
+              ListTile(
+                title: Text(request['deviceName'] as String),
+                subtitle: Text(
+                  'Verification code ${request['verificationCode']}',
+                ),
+                trailing: Wrap(
+                  children: [
+                    TextButton(
+                      onPressed: state.busy
+                          ? null
+                          : () async {
+                              try {
+                                await state.pairing.deny(request);
+                              } catch (_) {
+                                state.reportError(
+                                  'Could not deny this device. Try again.',
+                                );
+                              }
+                            },
+                      child: const Text('Deny'),
+                    ),
+                    FilledButton(
+                      onPressed: state.busy
+                          ? null
+                          : () async {
+                              try {
+                                await state.pairing.approve(request);
+                              } catch (_) {
+                                state.reportError(
+                                  'Could not approve this device. Try again.',
+                                );
+                              }
+                            },
+                      child: const Text('Approve'),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          if (state.pairing.error != null) Text(state.pairing.error!),
           if (state.syncError != null) Text(state.syncError!),
           const SizedBox(height: 20),
           // Storage indicator

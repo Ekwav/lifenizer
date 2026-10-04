@@ -16,7 +16,9 @@ extension VaultSync on LifenizerAppState {
     required String passphrase,
     String? password,
     bool register = false,
+    String? registrationToken,
     bool offline = false,
+    AuthSession? pairedSession,
   }) async {
     await _run(() async {
       if (passphrase.isEmpty || email.trim().isEmpty) {
@@ -48,8 +50,8 @@ extension VaultSync on LifenizerAppState {
         final anonymous =
             apiFactory?.call(apiBaseUrl) ??
             LifenizerApiClient(baseUrl: apiBaseUrl);
-        AuthSession? auth;
-        if (!offline) {
+        AuthSession? auth = pairedSession;
+        if (!offline && auth == null) {
           auth = password == null
               ? await anonymous.devLogin(
                   email: normalizedEmail,
@@ -59,8 +61,9 @@ extension VaultSync on LifenizerAppState {
                   email: normalizedEmail,
                   password: password,
                   register: register,
+                  registrationToken: registrationToken,
                 );
-        } else if (local == null) {
+        } else if (offline && local == null) {
           throw StateError(
             'Unlock online once on this device before using offline mode.',
           );
@@ -85,7 +88,12 @@ extension VaultSync on LifenizerAppState {
             'The server vault changed. Your local vault was preserved.',
           );
         }
-        _api = anonymous.authenticated(current.authToken);
+        _api = anonymous.authenticated(
+          current.authToken,
+          refreshAuth: pairing.matchesVault(apiBaseUrl, normalizedEmail)
+              ? pairing.refreshAccess
+              : null,
+        );
         rememberedEmail = normalizedEmail;
         if (!offline) {
           // Validate every remote ciphertext before exposing the unlocked UI.
@@ -125,6 +133,20 @@ extension VaultSync on LifenizerAppState {
     });
   }
 
+  Future<void> updatePairedSession(AuthSession auth) async {
+    final current = session;
+    if (current == null ||
+        !_crypto.isUnlocked ||
+        current.userId != auth.userId ||
+        current.vaultId != auth.vaultId ||
+        current.vaultSalt != auth.vaultSalt) {
+      throw StateError('Paired session does not match this vault.');
+    }
+    session = auth;
+    _api!.authToken = auth.authToken;
+    await _persistLocal();
+  }
+
   Future<void> lock() async {
     if (busy) return;
     busy = true;
@@ -143,6 +165,7 @@ extension VaultSync on LifenizerAppState {
       _api = null;
       session = null;
       _clearVault();
+      pairing.onLocked();
       status = 'Vault locked';
     } catch (exception) {
       error = 'Could not save and lock the vault: $exception';

@@ -15,10 +15,12 @@ Future<void> main([List<String> arguments = const []]) async {
   SemanticsBinding.instance.ensureSemantics();
   final appState = LifenizerAppState();
   await appState.initialize();
+  await appState.pairing.restore(autoUnlock: false);
   installE2eBridge(appState);
   unawaited(ShareIntentService.instance.start(appState));
-  unawaited(QuickActionService.instance.start(appState, arguments: arguments));
+  await QuickActionService.instance.start(appState, arguments: arguments);
   runApp(LifenizerApp(state: appState));
+  if (!appState.pairing.busy) unawaited(appState.pairing.unlockSaved());
 }
 
 class LifenizerApp extends StatefulWidget {
@@ -45,6 +47,7 @@ class _LifenizerAppState extends State<LifenizerApp>
 
   void _resumeSync() {
     _syncTimer?.cancel();
+    unawaited(state.pairing.tick());
     unawaited(state.syncQuietly());
     _syncTimer = Timer.periodic(
       const Duration(seconds: 30),

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
+import 'package:app/crypto_service.dart';
 import 'package:app/services/local_vault_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -77,6 +78,50 @@ void main() {
     password: 'account password',
     passphrase: phrase,
     offline: offline,
+  );
+
+  test(
+    'registration forwards an invitation without persisting it in the vault or settings',
+    () async {
+      final server = _Server();
+      final disk = await store();
+      final state = device(server, disk);
+      const invitation = 'synthetic-unique-invitation';
+      await state.login(
+        baseUrl: 'https://vault.example.test',
+        email: 'alice@example.test',
+        password: 'account password',
+        passphrase: 'private vault phrase',
+        register: true,
+        registrationToken: invitation,
+      );
+      expect(state.error, isNull);
+      final request = server.requests.singleWhere(
+        (r) => r.url.path == '/api/auth/register',
+      );
+      expect(jsonDecode(request.body)['registrationToken'], invitation);
+      final encrypted = (await disk.read(
+        'vault:${jsonEncode(['https://vault.example.test', 'alice@example.test'])}',
+      ))!;
+      final crypto = VaultCrypto();
+      await crypto.unlock(
+        email: 'alice@example.test',
+        passphrase: 'private vault phrase',
+        vaultSalt: 'stable-salt',
+      );
+      final snapshot = await crypto.decryptJson(
+        cipherText: encrypted['cipherText'] as String,
+        nonce: encrypted['nonce'] as String,
+      );
+      expect(jsonEncode(snapshot), isNot(contains(invitation)));
+      expect(
+        jsonEncode(await disk.read('settings')),
+        isNot(contains(invitation)),
+      );
+      crypto.lock();
+      await state.lock();
+      await disk.database.close();
+    },
   );
 
   test('push cannot skip unseen writes by another device', () async {

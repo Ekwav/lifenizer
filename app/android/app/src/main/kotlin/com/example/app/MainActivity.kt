@@ -84,8 +84,8 @@ class MainActivity : FlutterActivity() {
         val action = when (intent.action) {
             Intent.ACTION_SEARCH -> mapOf("action" to "search", "query" to intent.getStringExtra(SearchManager.QUERY).orEmpty())
             Intent.ACTION_PROCESS_TEXT -> mapOf("action" to "search", "query" to intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString().orEmpty())
-            Intent.ACTION_VIEW -> intent.data?.takeIf { it.scheme == "lifenizer" && it.host in listOf("search", "capture", "imports") }?.let {
-                mapOf("action" to it.host, "query" to it.getQueryParameter("q").orEmpty(), "conversationId" to it.getQueryParameter("conversation"))
+            Intent.ACTION_VIEW -> intent.data?.takeIf { it.scheme == "lifenizer" && it.host in listOf("search", "capture", "imports", "connect") }?.let {
+                mapOf("action" to it.host, "uri" to it.toString(), "query" to it.getQueryParameter("q").orEmpty(), "conversationId" to it.getQueryParameter("conversation"))
             }
             else -> null
         }
