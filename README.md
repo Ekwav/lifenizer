@@ -16,6 +16,7 @@ The backend exposes:
 - `POST /api/auth/register` and `POST /api/auth/login`
 - `POST /api/auth/firebase` (explicit opt-in only)
 - `POST /api/auth/dev-login` for local/e2e when enabled
+- `/api/pairing/*` for one-link enrollment, device approval and session refresh
 - `POST /api/sync/push`
 - `GET /api/sync/pull?since=0`
 - `GET /api/imports/capabilities`
@@ -52,12 +53,17 @@ See `docs/ARCHITECTURE.md`, `docs/IMPORTERS.md`, and `docs/PLACEHOLDERS.md` for 
 
 ## Daily use on KDE and Android
 
-Start a private local API with `./scripts/run-api.sh`. Its database, artifacts and
-signing key persist under `~/.local/state/lifenizer/`; development login is disabled.
-For a server deployment, configure HTTPS and the provider endpoints as described in
-[deployment](docs/DEPLOYMENT.md). Both devices must use the same reachable API URL.
-Create an account once, then enter the same account and vault passphrase on each device.
-The account password authenticates sync; the separate vault passphrase stays on-device.
+Deploy the mail server with `./scripts/deploy-compose.py`, following
+[deployment](docs/DEPLOYMENT.md). Installation prints a connection link and QR code.
+Open that link on KDE and Android: it configures the server, account and encrypted
+vault without typing passwords. Keep the first device unlocked while adding the next.
+Connections are automatic for one hour, then require approval in **Sync** on a
+connected device. Native credentials stay in Android secure storage or KDE Wallet.
+
+For local development, `./scripts/run-api.sh` keeps its database, artifacts and
+signing key under `~/.local/state/lifenizer/`; development login is disabled.
+The optional manual account flow uses a separate account password and vault
+passphrase, with the latter staying on-device.
 
 Build `app/` with `flutter build linux --release`, then run
 `./integrations/kde/install.sh` from the repository root. Open Lifenizer and unlock it.
@@ -65,8 +71,9 @@ Use KRunner `life Alice holiday` to find conversations, or Ctrl+K inside the app
 Android builds provide launcher Search/Capture/Imports shortcuts, selected-text search,
 `ACTION_SEARCH`, and share targets. See [integration setup](docs/INTEGRATIONS.md).
 
-Encrypted local snapshots and an encrypted retry queue survive app restarts. Unlock
-once online, then use **Unlock this device offline** without contacting the server.
+Encrypted local snapshots and an encrypted retry queue survive app restarts. Paired
+devices unlock from their OS keyring, including offline. Manual accounts provide
+**Unlock this device offline** after an initial online unlock.
 Sync runs on resume and every 30 seconds while active. Capture typed text offline;
 recordings are saved encrypted locally until you explicitly send them to Whisper.
 Imports, transcription and relation extraction require the configured server.

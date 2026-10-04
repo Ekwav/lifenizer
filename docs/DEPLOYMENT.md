@@ -49,9 +49,10 @@ directory; they include the signing secret and must stay private. Keep a separat
 copy off the server. These archives restore the server and encrypted data; a
 paired device's keyring is still needed to decrypt the vault.
 
-To restore, stop the API, preserve the current directory, extract the selected
-archive into a private directory, and run `docker compose up -d` there with the
-archived image available. Copying a live SQLite file without its WAL is not a
+To restore, stop the API and move its current `data`, `.env`, and `compose.yaml`
+into a separate private recovery directory. Extract the selected archive back into
+`~/dev/lifenizer-next`, then run `docker compose up -d` there with the archived image
+available. Keep its existing `whisper` directory in place. Copying a live SQLite file without its WAL is not a
 valid backup. App exports are separate: use the app's import/share flow to import
 conversation backups, rather than extracting them into the server data directory.
 
