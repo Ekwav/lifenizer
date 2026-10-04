@@ -18,6 +18,40 @@ public sealed class AccountAuthTests
     private const string Password = "correct horse battery account password";
 
     [Test]
+    public async Task PrivateRegistrationRequiresInvitationButLoginDoesNot()
+    {
+        const string invitation = "private-invitation-for-this-test";
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?> { ["Auth:RegistrationToken"] = invitation });
+        using var client = factory.CreateClient();
+        foreach (var token in new string?[] { null, string.Empty, "wrong", invitation + "extra" })
+        {
+            var rejected = await client.PostAsJsonAsync("/api/auth/register", new RegisterAccountRequest("alice@example.test", Password, RegistrationToken: token));
+            Assert.That(rejected.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+            Assert.That(await rejected.Content.ReadAsStringAsync(), Does.Contain("invalid_invitation"));
+        }
+        using (var scope = factory.Services.CreateScope())
+            Assert.That(await scope.ServiceProvider.GetRequiredService<LifenizerDbContext>().Users.CountAsync(), Is.Zero);
+        var accepted = await client.PostAsJsonAsync("/api/auth/register", new RegisterAccountRequest("alice@example.test", Password, RegistrationToken: invitation));
+        accepted.EnsureSuccessStatusCode();
+        (await client.PostAsJsonAsync("/api/auth/login", new AccountLoginRequest("alice@example.test", Password))).EnsureSuccessStatusCode();
+    }
+
+    [Test]
+    public async Task DisabledRegistrationRejectsValidInvitationAndCreatesNoAccount()
+    {
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Auth:AllowRegistration"] = "false", ["Auth:RegistrationToken"] = "invitation"
+        });
+        using var client = factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/auth/register", new RegisterAccountRequest("alice@example.test", Password, RegistrationToken: "invitation"));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("registration_disabled"));
+        using var scope = factory.Services.CreateScope();
+        Assert.That(await scope.ServiceProvider.GetRequiredService<LifenizerDbContext>().Users.CountAsync(), Is.Zero);
+    }
+
+    [Test]
     public async Task AccountLoginReturnsSameVaultAndSyncsAcrossDevices()
     {
         await using var factory = new LifenizerApiFactory(new Dictionary<string, string?> { ["Auth:AllowDevLogin"] = "false" });

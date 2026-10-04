@@ -7,7 +7,7 @@ public sealed record DevLoginRequest(
     string? DisplayName = null,
     string? ProviderId = null);
 
-public sealed record RegisterAccountRequest(string Email, string Password, string? DisplayName = null);
+public sealed record RegisterAccountRequest(string Email, string Password, string? DisplayName = null, string? RegistrationToken = null);
 
 public sealed record AccountLoginRequest(string Email, string Password);
 

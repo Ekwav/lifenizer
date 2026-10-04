@@ -1,4 +1,6 @@
 using System.Net.Mail;
+using System.Security.Cryptography;
+using System.Text;
 using FirebaseAdmin.Auth;
 using Lifenizer.Api.Data;
 using Lifenizer.Api.Services;
@@ -17,8 +19,19 @@ public static class AuthEndpoints
             [FromBody] RegisterAccountRequest request,
             UserAccountService users,
             AuthTokenService tokens,
+            IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
+            if (!configuration.GetValue("Auth:AllowRegistration", true))
+                return Results.Json(new { error = "registration_disabled" }, statusCode: StatusCodes.Status403Forbidden);
+            var invitation = configuration["Auth:RegistrationToken"];
+            if (!string.IsNullOrEmpty(invitation))
+            {
+                var expected = SHA256.HashData(Encoding.UTF8.GetBytes(invitation));
+                var supplied = SHA256.HashData(Encoding.UTF8.GetBytes(request.RegistrationToken ?? string.Empty));
+                if (!CryptographicOperations.FixedTimeEquals(expected, supplied))
+                    return Results.Json(new { error = "invalid_invitation" }, statusCode: StatusCodes.Status403Forbidden);
+            }
             if (!ValidEmail(request.Email)) return Results.BadRequest(new { error = "valid_email_required" });
             if (request.Password is null || request.Password.Length is < 12 or > 1024)
                 return Results.BadRequest(new { error = "password_length_12_to_1024" });
