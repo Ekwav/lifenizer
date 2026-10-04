@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:app/crypto_service.dart';
 import 'package:app/models.dart';
+import 'package:app/services/conversation_search_index.dart';
+import 'package:app/services/search_index_worker_io.dart';
 import 'package:app/services/vault_database_worker.dart';
 import 'package:sembast/sembast_io.dart';
 
@@ -93,15 +95,56 @@ Future<void> main(List<String> arguments) async {
       }
     }),
   );
+  if (arguments.contains('--startup')) {
+    crypto.lock();
+    metrics.add(
+      await measured(
+        'derive-vault-key',
+        () => crypto.unlock(
+          email: 'benchmark@example.test',
+          passphrase: 'Synthetic benchmark secret',
+          vaultSalt: 'synthetic-salt',
+          background: arguments.contains('--background'),
+        ),
+      ),
+    );
+  }
+  Map<String, dynamic>? restored;
   metrics.add(
     await measured('decrypt-and-parse', () async {
-      await crypto.decryptJson(
+      restored = await crypto.decryptJson(
         cipherText: payload!.cipherText,
         nonce: payload!.nonce,
         background: arguments.contains('--background'),
       );
     }),
   );
+  if (arguments.contains('--startup')) {
+    late List<Conversation> models;
+    metrics.add(
+      await measured('restore-conversation-models', () async {
+        models = (restored!['conversations'] as List)
+            .map(
+              (item) =>
+                  Conversation.fromJson(Map<String, dynamic>.from(item as Map)),
+            )
+            .toList(growable: false);
+      }),
+    );
+    metrics.add(
+      await measured('prepare-search', () async {
+        if (arguments.contains('--background')) {
+          await prepareSearchIndex((models, const {}, const {}), (_) {});
+        } else {
+          ConversationSearchIndex.build(
+            conversations: models,
+            participantById: const {},
+            relationTextByConversation: const {},
+          );
+        }
+      }),
+    );
+  }
   stdout.writeln(
     jsonEncode({
       'conversations': conversationCount,

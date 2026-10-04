@@ -89,6 +89,13 @@ until the replacement is ready, and long transcripts render messages lazily as
 you scroll. Card previews are bounded to 500 characters. An unchanged sync poll
 does not rewrite the encrypted snapshot.
 
+Cached unlock restores messages in yielding batches and reports actual message
+counts. Native key derivation and search preparation run in background isolates;
+search reports conversation counts for tokenization and finalization. Progress
+shows stage elapsed time and a measured remaining-time estimate when counts are
+available. Unchanged cached startup also avoids a full snapshot rewrite, storing
+only the refreshed session encrypted and bound to the cached snapshot instead.
+
 One background isolate owns the native Sembast database, including encoding and
 file I/O. Saves explicitly compact the encrypted records because Sembast 3.8.7 can
 swallow lazy append errors. This adds a file rewrite but ensures write failures
@@ -122,4 +129,9 @@ sync writes or reported errors.
 cd app
 dart run tool/vault_snapshot_benchmark.dart 126281
 dart run tool/vault_snapshot_benchmark.dart 126281 --background --background-store
+dart run tool/vault_snapshot_benchmark.dart 126281 --startup --background --background-store
 ```
+
+`--startup` also measures key derivation, model restoration and search preparation.
+Its model-restoration measurement intentionally uses the ordinary synchronous
+model parser; the app yields during restoration to keep progress visible.

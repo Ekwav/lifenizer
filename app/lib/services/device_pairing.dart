@@ -108,10 +108,16 @@ class DevicePairingService extends ChangeNotifier {
     if (!isPaired || busy || state.busy || state.isAuthenticated) return;
     if (higherSecurity && !authenticate) return;
     final generation = _generation;
+    var loginStarted = false;
     busy = true;
     error = null;
     notifyListeners();
     try {
+      state.reportUnlockProgress(
+        higherSecurity
+            ? 'Verifying device protection'
+            : 'Reading paired device credentials',
+      );
       final credentials = await _store.readForUnlock(
         password: password,
         authenticate: authenticate,
@@ -121,6 +127,7 @@ class DevicePairingService extends ChangeNotifier {
       }
       if (generation != _generation) return;
       _credentials = credentials;
+      state.reportUnlockProgress('Refreshing device access');
       AuthSession? auth;
       try {
         final result = await _api(credentials['server'] as String)
@@ -147,6 +154,7 @@ class DevicePairingService extends ChangeNotifier {
         /* Offline unlock uses the encrypted local session. */
       }
       if (generation != _generation) return;
+      loginStarted = true;
       await state.login(
         baseUrl: credentials['server'] as String,
         email: credentials['email'] as String,
@@ -171,6 +179,9 @@ class DevicePairingService extends ChangeNotifier {
           ? 'Could not unlock this device. Check your device password or fingerprint/PIN verification and retry.'
           : 'Could not unlock this device. Check the device keyring and connection.';
     } finally {
+      if (!loginStarted && generation == _generation) {
+        state.reportUnlockProgress(null);
+      }
       if (!state.isAuthenticated) {
         _store.forgetUnlock();
         _credentials?.remove('secret');

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../services/quick_action_service.dart';
+import '../services/sync_progress.dart';
+import '../widgets/sync_progress_indicator.dart';
 import 'page_frame.dart';
 import 'search/search_filters.dart';
 import 'search/search_input_field.dart';
@@ -107,6 +109,8 @@ class _SearchPageState extends State<SearchPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (widget.state.syncProgress?.stage == SyncStage.indexing)
+              SyncProgressIndicator(progress: widget.state.syncProgress),
             // Search input field
             SearchInputField(
               viewModel: _viewModel,
