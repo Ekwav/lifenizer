@@ -88,7 +88,9 @@ def main():
     revision = run("git", "rev-parse", "--short=12", "HEAD", cwd=REPO, capture_output=True).stdout.strip()
     tag = f"lifenizer-api:{revision}"
     run("docker", "build", "--pull", "--tag", tag, str(REPO / "backend"))
-    run("trivy", "image", "--scanners", "vuln", "--severity", "HIGH,CRITICAL", "--ignore-unfixed", "--exit-code", "1", tag)
+    # Other applications may be scanning concurrently; Trivy locks its cache.
+    scan_cache = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "lifenizer/trivy"
+    run("trivy", "--cache-dir", str(scan_cache), "image", "--scanners", "vuln", "--severity", "HIGH,CRITICAL", "--ignore-unfixed", "--exit-code", "1", tag)
     digest = run("docker", "image", "inspect", "--format", "{{.Id}}", tag, capture_output=True).stdout.strip()[7:19]
     image = f"{tag}-{digest}"
     run("docker", "tag", tag, image)
