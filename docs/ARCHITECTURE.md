@@ -57,6 +57,8 @@ Concrete request examples and accepted metadata keys are documented in `docs/IMP
 
 The Flutter client consumes normalized import results, creates local participants/conversations, encrypts them with the vault key, and pushes ciphertext sync envelopes.
 
+Desktop only: `BrowserHistoryWatchService` keeps YouTube/TikTok viewing history current without any provider API. It copies the local Firefox/Chromium history database to a temp file, reads only YouTube/TikTok video visits (via `package:sqlite3`), maps them to Takeout/TikTok-shaped JSON on the client and sends them through the normal `youtube-watch-history` / `tiktok-watch-history` imports, so no backend change is involved. See IMPORTERS.md, "Keeping viewing history updated from the browser".
+
 ## Data Flow
 
 1. User logs in with the self-hosted account password.

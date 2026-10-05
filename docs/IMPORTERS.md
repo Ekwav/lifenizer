@@ -267,6 +267,50 @@ or unavailable, waits the `Retry-After` of each 429 and continues, and stops aft
 consecutive `provider_blocked` answers. TikTok shows "No transcript available for
 TikTok": there is no video download or speech/OCR pipeline.
 
+#### Keeping viewing history updated from the browser (desktop)
+
+Neither the YouTube Data API (watch history was removed in 2016) nor TikTok offers a
+watch-history API, so OAuth is not possible. After an initial Takeout / TikTok export, the
+desktop app can instead read the **local browser history database**:
+**Imports → Viewing history → Keep updated from browser history**.
+
+- **Platforms**: Linux, macOS, Windows. Android, iOS and web show a note: they cannot read
+  browser history, and videos watched in the YouTube or TikTok phone apps cannot be read at all
+  (re-import a Takeout or TikTok export for those).
+- **Profiles**: Firefox (`places.sqlite`, also Snap, Flatpak and `~/.config/mozilla`) and the
+  Chromium family (Chrome, Chromium, Brave, Edge, Vivaldi, incl. Flatpak/Snap; `History`) are
+  detected and listed with checkboxes; macOS and Windows locations are best effort. A history
+  file can also be picked by hand. Newly selected profiles import from now on (optionally the
+  last 30 days).
+- **Reading**: browsers lock their database, so the file (and its `-wal`) is copied to a temp
+  directory, opened with `query_only`, queried and the copy deleted. Firefox: `moz_places` ×
+  `moz_historyvisits` (`visit_date`, µs since 1970); Chromium: `urls` × `visits` (`visit_time`,
+  µs since 1601-01-01). Only rows whose URL contains `youtube.com/`, `youtu.be/` or `tiktok.com/`
+  newer than the profile's stamp are selected; nothing else is read or uploaded.
+- **Mapping**: YouTube `watch?v=`, `youtu.be/<id>`, `m.`/`music.` hosts and `/shorts/<id>` become
+  Takeout-shaped entries `{header, title (" - YouTube" suffix removed), titleUrl:
+  "https://www.youtube.com/watch?v=<id>", time: "yyyy-MM-ddTHH:mm:ssZ"}`; TikTok
+  `tiktok.com/@user/video/<id>` becomes `{"Activity":{"Video Browsing History":{"VideoList":
+  [{"Date":"yyyy-MM-dd HH:mm:ss","Link":…}]}}}` (UTC). `vm.tiktok.com` short links cannot be
+  resolved and are skipped. The payloads go through the normal `youtube-watch-history` /
+  `tiktok-watch-history` import in batches of at most 500 entries, so the existing parsers and
+  merge by `sourceThreadId` fold browser visits and Takeout imports into the same conversations
+  (same video id: one conversation, one segment per watch, deduplicated by watch second). No
+  backend change was needed.
+- **Polling**: on enable, on app resume and every interval (default 60 minutes, 15 minutes to
+  24 hours) while the app is in the foreground; there is no background service. The per-profile
+  stamp advances only after all its batches were imported; a failure leaves it so the visits are
+  retried (the merge makes that idempotent). Settings, stamps and counters are kept per vault
+  identity in the OS credential store.
+- **Auto transcripts** (default off): "Fetch transcripts for new videos automatically (max N per
+  day)", N defaults to 20. After a check that imported videos it fetches captions for up to
+  `min(new videos, N − fetched today)` newest videos with the normal `enrichWatchedVideo` flow
+  (honours `Retry-After`; after three consecutive `provider_blocked` answers automatic fetching
+  pauses for 6 hours).
+- **Library**: `package:sqlite3` (v3) bundles SQLite through Dart build hooks, so no system
+  `libsqlite3` is required at runtime, including for the Linux/KDE build. Building native
+  targets needs a C toolchain (clang or gcc), which Flutter desktop builds already require.
+
 #### Camera photo auto-import
 
 **Imports → Camera photos → Auto-import camera photos** imports new photos through the

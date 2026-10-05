@@ -27,6 +27,7 @@ import 'services/export_file_reader.dart';
 import 'services/discord_bot_import_service.dart';
 import 'services/document_import_service.dart';
 import 'services/document_credentials.dart';
+import 'services/browser_history_watch_service.dart';
 import 'services/camera_roll_watch_service.dart';
 import 'services/recording_controller.dart';
 import 'services/audio_cache_io.dart'
@@ -75,6 +76,8 @@ class LifenizerAppState extends ChangeNotifier {
     documentImport.addListener(_notifyChanged);
     cameraRoll = CameraRollWatchService(this, store: documentStore);
     cameraRoll.addListener(_notifyChanged);
+    browserHistory = BrowserHistoryWatchService(this, store: documentStore);
+    browserHistory.addListener(_notifyChanged);
     discordImport = DiscordBotImportService(
       ingest: importDiscordBotBatch,
       store: discordStore,
@@ -87,6 +90,7 @@ class LifenizerAppState extends ChangeNotifier {
   late final EmailImportService emailImport;
   late final DocumentImportService documentImport;
   late final CameraRollWatchService cameraRoll;
+  late final BrowserHistoryWatchService browserHistory;
   late final DiscordBotImportService discordImport;
   late final RecordingController recording;
 
@@ -105,6 +109,7 @@ class LifenizerAppState extends ChangeNotifier {
     removeListener(_updateDiscordIdentity);
     discordImport.dispose();
     documentImport.dispose();
+    browserHistory.dispose();
     cameraRoll.dispose();
     emailImport.dispose();
     pairing.dispose();
