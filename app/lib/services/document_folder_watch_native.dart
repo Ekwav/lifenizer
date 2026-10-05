@@ -206,7 +206,7 @@ class DocumentFolderWatchService extends ChangeNotifier {
           if (!_current(identity, generation) || state.busy) return;
           if (entry is! File ||
               !RegExp(
-                r'\.(pdf|png|jpe?g)$',
+                r'\.(pdf|png|jpe?g|webp|heic|heif)$',
                 caseSensitive: false,
               ).hasMatch(entry.path)) {
             continue;

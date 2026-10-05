@@ -45,9 +45,15 @@ class ImageService {
     return _processXFile(file);
   }
 
-  static Future<CapturedImage> _processXFile(XFile file) async {
-    final rawBytes = await file.readAsBytes();
+  static Future<CapturedImage> _processXFile(XFile file) async =>
+      processBytes(await file.readAsBytes(), file.name);
 
+  /// Compresses raw image [rawBytes] like a picked photo. Desktop platforms
+  /// keep the original bytes.
+  static Future<CapturedImage> processBytes(
+    Uint8List rawBytes,
+    String name,
+  ) async {
     // Compression plugins support Android, iOS and macOS. Desktop picking
     // already receives size limits, so retain its bytes on other platforms.
     if (kIsWeb ||
@@ -58,7 +64,7 @@ class ImageService {
         ].contains(defaultTargetPlatform)) {
       return CapturedImage(
         bytes: rawBytes,
-        fileName: _safeFileName(file.name),
+        fileName: _safeFileName(name),
         contentType: _contentType(rawBytes),
       );
     }
@@ -74,7 +80,7 @@ class ImageService {
     final bytes = Uint8List.fromList(compressed);
     return CapturedImage(
       bytes: bytes,
-      fileName: _safeFileName(file.name, forceJpeg: true),
+      fileName: _safeFileName(name, forceJpeg: true),
       contentType: 'image/jpeg',
     );
   }

@@ -6,6 +6,7 @@ import android.app.SearchManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -15,6 +16,7 @@ import java.util.concurrent.Executors
 class MainActivity : FlutterActivity() {
     private var recordingPermission: MethodChannel.Result? = null
     private var recordingPermissionGranted = false
+    private var imagesPermission: MethodChannel.Result? = null
     private var resumed = false
     private lateinit var actions: MethodChannel
     private lateinit var shares: MethodChannel
@@ -112,8 +114,39 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        val media = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.lifenizer/media")
+        media.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "cameraFolders" -> {
+                    @Suppress("DEPRECATION")
+                    val dcim = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
+                    val folders = listOf(java.io.File(dcim, "Camera"), java.io.File(dcim, "OpenCamera"))
+                        .filter { it.isDirectory }
+                        .map { it.absolutePath }
+                    result.success(folders)
+                }
+                "hasImagesPermission" -> result.success(
+                    checkSelfPermission(imagesPermissionName()) == PackageManager.PERMISSION_GRANTED
+                )
+                "requestImagesPermission" -> {
+                    if (checkSelfPermission(imagesPermissionName()) == PackageManager.PERMISSION_GRANTED) {
+                        result.success(true)
+                    } else if (imagesPermission != null) {
+                        result.error("media", "A photo permission request is already open.", null)
+                    } else {
+                        imagesPermission = result
+                        requestPermissions(arrayOf(imagesPermissionName()), 9043)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
         handleIntent(intent)
     }
+
+    private fun imagesPermissionName() =
+        if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES
+        else Manifest.permission.READ_EXTERNAL_STORAGE
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -181,6 +214,11 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 9043) {
+            val result = imagesPermission
+            imagesPermission = null
+            result?.success(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+        }
         if (requestCode == 9042) {
             if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && !resumed) {
                 recordingPermissionGranted = true
@@ -194,6 +232,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        imagesPermission?.error("media", "Photo permission request was interrupted.", null)
+        imagesPermission = null
         recordingPermission?.error("recording", "Recording permission request was interrupted.", null)
         recordingPermission = null
         RecordingService.onStarted?.invoke(IllegalStateException("Recording was interrupted."))

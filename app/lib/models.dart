@@ -311,12 +311,17 @@ class SavedSearch {
     this.tag,
     this.from,
     this.to,
+    this.hideConsumed = false,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now().toUtc();
 
   final String id;
   final String title;
   final String query;
+
+  /// True when the search hides consumed media (watch history, browsing).
+  /// Absent in older saved searches, which therefore keep showing everything.
+  final bool hideConsumed;
   final String? source;
   final String? participantId;
   final String? tag;
@@ -338,6 +343,7 @@ class SavedSearch {
     'tag': tag,
     if (from != null) 'from': from!.toJsonString(),
     if (to != null) 'to': to!.toJsonString(),
+    if (hideConsumed) 'hideConsumed': true,
     'createdAt': createdAt.toJsonString(),
   };
 
@@ -353,6 +359,7 @@ class SavedSearch {
     // backward compatible.
     from: json.parseDateTime('from'),
     to: json.parseDateTime('to'),
+    hideConsumed: json['hideConsumed'] == true,
     createdAt: json.parseDateTimeRequired('createdAt'),
   );
 }
@@ -549,6 +556,7 @@ class ImportCapability {
     required this.requiresCredentials,
     required this.status,
     required this.acceptedFormats,
+    this.fileNameHints = const [],
   });
 
   final String source;
@@ -558,6 +566,10 @@ class ImportCapability {
   final String status;
   final List<String> acceptedFormats;
 
+  /// File-name patterns (`watch-history.json|html`, `user_data*.json`) the
+  /// server lists for client-side source detection.
+  final List<String> fileNameHints;
+
   /// Serialize to JSON for caching/persistence.
   Map<String, dynamic> toJson() => {
     'source': source,
@@ -566,6 +578,7 @@ class ImportCapability {
     'requiresCredentials': requiresCredentials,
     'status': status,
     'acceptedFormats': acceptedFormats,
+    'fileNameHints': fileNameHints,
   };
 
   factory ImportCapability.fromJson(Map<String, dynamic> json) {
@@ -576,6 +589,7 @@ class ImportCapability {
       requiresCredentials: json['requiresCredentials'] as bool,
       status: json['status'] as String,
       acceptedFormats: json.parseStringList('acceptedFormats'),
+      fileNameHints: json.parseStringList('fileNameHints'),
     );
   }
 }

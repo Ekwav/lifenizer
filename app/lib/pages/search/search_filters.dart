@@ -100,6 +100,16 @@ class SearchFilters extends StatelessWidget {
             onFilterChanged();
           },
         ),
+        FilterChip(
+          key: const Key('search-hide-consumed'),
+          avatar: const Icon(Icons.visibility_off_outlined, size: 18),
+          label: const Text('Hide consumed media'),
+          selected: viewModel.hideConsumed,
+          onSelected: (value) {
+            viewModel.hideConsumed = value;
+            onFilterChanged();
+          },
+        ),
         OutlinedButton.icon(
           onPressed: onClearFilters,
           icon: const Icon(Icons.filter_alt_off_outlined),

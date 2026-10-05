@@ -1,5 +1,6 @@
 import 'search_criteria.dart';
 import 'search_scorer.dart';
+import 'source_categories.dart';
 import '../models.dart';
 import 'conversation_search_index.dart';
 
@@ -34,7 +35,7 @@ class SearchService {
   ///
   /// This method:
   /// 1. Looks up candidate conversations from the inverted index
-  /// 2. Applies source, participant, tag, and favorites filters
+  /// 2. Applies source, participant, tag, favorites and consumed-media filters
   /// 3. Scores remaining conversations using lexical, vector, temporal, and
   ///    continuity signals
   /// 4. Sorts by score (descending) and then by recency
@@ -95,6 +96,10 @@ class SearchService {
       if (criteria.favoritesOnly && !conversation.isFavorite) {
         continue;
       }
+      final category = categoryForSource(conversation.source);
+      if (!criteria.includeConsumed && category == SourceCategory.consumed) {
+        continue;
+      }
       if (hasDateRange &&
           !_matchesDateRange(conversation, fromFilter, toFilter)) {
         continue;
@@ -133,6 +138,10 @@ class SearchService {
           useVector: false,
         );
       }
+
+      // Consumed media and documents rank below equally good personal chats,
+      // also in the empty-query timeline.
+      score *= categoryWeight(category);
 
       scored.add(_ScoredItem(conversation: conversation, score: score));
     }

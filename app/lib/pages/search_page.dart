@@ -99,6 +99,7 @@ class _SearchPageState extends State<SearchPage> {
       tag: _viewModel.tagFilter,
       from: _viewModel.fromFilter,
       to: _viewModel.toFilter,
+      includeConsumed: !_viewModel.hideConsumed,
       maxResults: _resultLimit + 1,
     );
 
@@ -165,6 +166,7 @@ class _SearchPageState extends State<SearchPage> {
                           tag: savedSearch.tag,
                           from: savedSearch.from,
                           to: savedSearch.to,
+                          hideConsumed: savedSearch.hideConsumed,
                         );
                       }),
                     ),
@@ -214,6 +216,7 @@ class _SearchPageState extends State<SearchPage> {
       if (_viewModel.tagFilter.isNotEmpty) '#${_viewModel.tagFilter}',
       if (_viewModel.participantFilter.isNotEmpty)
         widget.state.participantName(_viewModel.participantFilter),
+      if (_viewModel.hideConsumed) 'no consumed media',
       if (_viewModel.hasDateRange)
         'when: '
             '${_viewModel.fromFilter?.toCompactLocalDateString() ?? '…'} – '
@@ -227,6 +230,7 @@ class _SearchPageState extends State<SearchPage> {
       tag: _viewModel.tagFilter,
       from: _viewModel.fromFilter,
       to: _viewModel.toFilter,
+      hideConsumed: _viewModel.hideConsumed,
     );
   }
 }

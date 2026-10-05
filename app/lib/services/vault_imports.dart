@@ -1,5 +1,24 @@
 part of '../app_state.dart';
 
+/// Outcome of the latest [VaultImports.importSource] call, for panels that
+/// summarize an import (for example viewing history).
+class ImportSummary {
+  const ImportSummary({
+    required this.source,
+    required this.added,
+    required this.skipped,
+    this.diagnostics = const {},
+  });
+  final String source;
+
+  /// Conversations created or updated.
+  final int added;
+
+  /// Conversations that were already present and unchanged.
+  final int skipped;
+  final Map<String, String> diagnostics;
+}
+
 extension VaultImports on LifenizerAppState {
   Future<Map<String, dynamic>> paperlessSettings() =>
       _requireApi().paperlessSettings();
@@ -55,6 +74,12 @@ extension VaultImports on LifenizerAppState {
         fingerprint: fingerprint,
       );
       final skipped = normalized.conversations.length - added;
+      lastImportSummary = ImportSummary(
+        source: source,
+        added: added,
+        skipped: skipped,
+        diagnostics: normalized.diagnostics,
+      );
       status = added == 0 && skipped > 0
           ? 'Already imported · $skipped conversation(s) skipped ($source)'
           : 'Imported $added conversation(s) from $source · saved encrypted'
@@ -63,6 +88,10 @@ extension VaultImports on LifenizerAppState {
   }
 
   /// Folder cursors advance only after the encrypted vault save succeeds.
+  ///
+  /// Camera-style images (JPEG/PNG/WebP/HEIC) go to the `photo` source with the
+  /// file's modification time as capture-time fallback; PDFs and other scans
+  /// stay `scanned-pdf`.
   Future<bool> importDocumentFile(String path) async {
     var saved = false;
     await _run(() async {
@@ -78,6 +107,12 @@ extension VaultImports on LifenizerAppState {
         ),
         maxBytes: 25 * 1024 * 1024,
       );
+      if (isPhotoFile(file.name)) {
+        await _importPhotoBytes(bytes, file.name, await _lastModified(file));
+        status = 'Photo indexed · saved encrypted';
+        saved = true;
+        return;
+      }
       final documentId = base64UrlEncode(
         (await Sha256().hash(utf8.encode(path))).bytes,
       );
@@ -96,6 +131,100 @@ extension VaultImports on LifenizerAppState {
       saved = true;
     });
     return saved;
+  }
+
+  Future<DateTime?> _lastModified(XFile file) async {
+    try {
+      return await file.lastModified();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Imports one camera photo through the `photo` source (OCR conversation).
+  ///
+  /// Returns the id of the created or updated conversation, or null when the
+  /// import failed ([error] then holds the reason). [capturedAt] is only a
+  /// fallback; the server prefers the EXIF capture time.
+  Future<String?> importPhotoFile(String path, {DateTime? capturedAt}) async {
+    String? conversationId;
+    await _run(() async {
+      if (!isAuthenticated) {
+        throw StateError('Unlock the vault to import photos.');
+      }
+      final file = XFile(path);
+      final size = await file.length();
+      if (size > maxPhotoBytes) {
+        throw const FormatException('Photos larger than 25 MiB are skipped.');
+      }
+      final bytes = await readExportBytes(
+        PlatformFile(name: file.name, size: size, readStream: file.openRead()),
+        maxBytes: maxPhotoBytes,
+      );
+      conversationId = await _importPhotoBytes(
+        bytes,
+        file.name,
+        capturedAt ?? await _lastModified(file),
+      );
+      status = 'Photo indexed · saved encrypted';
+    });
+    return conversationId;
+  }
+
+  /// Stores a compressed copy of an imported photo in the image vault, linked
+  /// to [conversationId] so it appears in that conversation's gallery. Throws
+  /// [QuotaExceededException] when the storage quota is used up; callers treat
+  /// that as a non-fatal status.
+  Future<void> keepPhotoInVault(String path, String conversationId) async {
+    final file = XFile(path);
+    final raw = await file.readAsBytes();
+    final captured = await ImageService.processBytes(raw, file.name);
+    await uploadCapturedImage(captured, conversationId: conversationId);
+  }
+
+  Future<String?> _importPhotoBytes(
+    List<int> bytes,
+    String fileName,
+    DateTime? capturedAt,
+  ) async {
+    final normalized = await _requireApi().importSource(
+      'photo',
+      ImportSourceRequest(
+        title: fileName,
+        originalFileName: fileName,
+        mimeType: _photoMimeType(fileName),
+        payloadBase64: base64Encode(bytes),
+        metadata: photoMetadata(capturedAt),
+      ),
+      timeout: const Duration(minutes: 5),
+    );
+    await _ingestNormalizedImport(normalized);
+    final threadId = normalized.conversations.firstOrNull?.sourceThreadId;
+    return conversations
+        .where((c) => c.source == 'photo' && c.sourceThreadId == threadId)
+        .firstOrNull
+        ?.id;
+  }
+
+  /// `metadata` of a `photo` import: client capture time fallback and the
+  /// device's UTC offset (used when the EXIF date has no offset).
+  static Map<String, String> photoMetadata(DateTime? capturedAt) {
+    final moment = capturedAt ?? DateTime.now();
+    return {
+      'capturedAt': moment.toUtc().toIso8601String(),
+      'utcOffsetMinutes': '${moment.toLocal().timeZoneOffset.inMinutes}',
+    };
+  }
+
+  static String _photoMimeType(String fileName) {
+    final extension = fileName.toLowerCase().split('.').last;
+    return switch (extension) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      'heic' => 'image/heic',
+      'heif' => 'image/heif',
+      _ => 'image/jpeg',
+    };
   }
 
   Future<NormalizedImportResult?> importPaperlessPage(
@@ -521,7 +650,7 @@ extension VaultImports on LifenizerAppState {
         id: conversationId,
         sourceThreadId: normalized.sourceThreadId,
         sourceUrl: normalized.sourceUrl ?? previous?.sourceUrl,
-        metadata: {...?previous?.metadata, ...normalized.metadata},
+        metadata: _mergeImportMetadata(previous?.metadata, normalized.metadata),
         importFingerprint: previous?.importFingerprint ?? receipt,
         title: normalized.title.trim().isEmpty
             ? 'Imported ${result.source}'
@@ -563,4 +692,212 @@ extension VaultImports on LifenizerAppState {
     }
     return changed;
   });
+}
+
+/// Largest photo accepted by the `photo` importer.
+const int maxPhotoBytes = 25 * 1024 * 1024;
+
+/// Re-importing a watch history reports `transcript: none`; keep a transcript
+/// (or unavailable) marker that enrichment already stored.
+Map<String, String> _mergeImportMetadata(
+  Map<String, String>? previous,
+  Map<String, String> incoming,
+) {
+  final merged = {...?previous, ...incoming};
+  final earlier = previous?['transcript'];
+  if (incoming['transcript'] == 'none' &&
+      (earlier == 'youtube-captions' || earlier == 'unavailable')) {
+    merged['transcript'] = earlier!;
+  }
+  return merged;
+}
+
+extension VaultTranscriptEnrichment on LifenizerAppState {
+  /// Fetches YouTube captions for the watched video [conversationId] and
+  /// merges the timed segments into that conversation (no second
+  /// conversation). A 404 marks it `transcript: unavailable` so bulk runs do
+  /// not retry it.
+  Future<TranscriptResult> enrichWatchedVideo(String conversationId) async {
+    try {
+      if (!_crypto.isUnlocked) {
+        return const TranscriptResult(
+          TranscriptOutcome.failed,
+          message: 'Unlock the vault to fetch transcripts.',
+        );
+      }
+      final api = _requireApi();
+      final index = conversations.indexWhere((c) => c.id == conversationId);
+      if (index < 0) {
+        return const TranscriptResult(
+          TranscriptOutcome.unsupported,
+          message: 'Conversation not found.',
+        );
+      }
+      final conversation = conversations[index];
+      final videoId =
+          conversation.metadata['videoId'] ??
+          (conversation.sourceThreadId?.startsWith('youtube:') == true
+              ? conversation.sourceThreadId!.substring(8)
+              : null);
+      if (conversation.source != 'youtube-watch-history' || videoId == null) {
+        return const TranscriptResult(
+          TranscriptOutcome.unsupported,
+          message: 'Transcripts are only available for YouTube videos.',
+        );
+      }
+      if (conversation.metadata['transcript'] == 'youtube-captions') {
+        return const TranscriptResult(TranscriptOutcome.alreadyEnriched);
+      }
+      final NormalizedImportResult fetched;
+      try {
+        fetched = await api.importSource(
+          'youtube-transcript',
+          ImportSourceRequest(
+            title: conversation.title,
+            metadata: {'videoId': videoId},
+          ),
+          timeout: const Duration(minutes: 1),
+        );
+      } on ApiException catch (exception) {
+        if (exception.statusCode == 404) {
+          await _updateWatchedVideo(conversationId, null, {
+            'transcript': 'unavailable',
+          });
+          return TranscriptResult(
+            TranscriptOutcome.unavailable,
+            message: 'No public captions for this video.',
+          );
+        }
+        if (exception.statusCode == 429) {
+          return TranscriptResult(
+            exception.errorCode == 'provider_blocked'
+                ? TranscriptOutcome.blocked
+                : TranscriptOutcome.rateLimited,
+            retryAfter: exception.retryAfter,
+            message: 'YouTube caption fetching is rate limited.',
+          );
+        }
+        return TranscriptResult(
+          TranscriptOutcome.failed,
+          message: exception.toString(),
+        );
+      }
+      final transcript = fetched.conversations.firstOrNull;
+      if (transcript == null || transcript.segments.isEmpty) {
+        await _updateWatchedVideo(conversationId, null, {
+          'transcript': 'unavailable',
+        });
+        return const TranscriptResult(TranscriptOutcome.unavailable);
+      }
+      await _updateWatchedVideo(
+        conversationId,
+        (current) {
+          final kept = current.segments
+              .where(
+                (segment) =>
+                    segment.sourceMessageId?.startsWith('transcript:') != true,
+              )
+              .toList();
+          final stamp = current.endedAt;
+          for (var i = 0; i < transcript.segments.length; i++) {
+            final segment = transcript.segments[i];
+            final messageId = 'transcript:$videoId:$i';
+            kept.add(
+              ConversationSegment(
+                id: _uuid.v5(
+                  Namespace.url.value,
+                  'lifenizer:message:$conversationId:$messageId',
+                ),
+                sourceMessageId: messageId,
+                text: segment.text,
+                offsetMs: segment.offsetMs,
+                endMs: segment.endMs,
+                createdAt: stamp,
+              ),
+            );
+          }
+          return kept;
+        },
+        {
+          'transcript': 'youtube-captions',
+          'transcriptSource': 'youtube-captions',
+          if (transcript.metadata['language'] != null)
+            'language': transcript.metadata['language']!,
+          if (transcript.metadata['kind'] != null)
+            'kind': transcript.metadata['kind']!,
+        },
+      );
+      return const TranscriptResult(TranscriptOutcome.merged);
+    } catch (exception) {
+      return TranscriptResult(
+        TranscriptOutcome.failed,
+        message: exception.toString(),
+      );
+    }
+  }
+
+  /// Replaces segments (via [segments]) and metadata of one conversation and
+  /// marks it changed so the chunked vault and incremental index update.
+  Future<void> _updateWatchedVideo(
+    String conversationId,
+    List<ConversationSegment> Function(Conversation current)? segments,
+    Map<String, String> metadata,
+  ) => batchVaultChanges(() async {
+    final index = conversations.indexWhere((c) => c.id == conversationId);
+    if (index < 0) return;
+    final current = conversations[index];
+    final nextSegments = segments == null
+        ? current.segments
+        : segments(current);
+    final updated = Conversation(
+      id: current.id,
+      sourceThreadId: current.sourceThreadId,
+      sourceUrl: current.sourceUrl,
+      metadata: {...current.metadata, ...metadata},
+      importFingerprint: current.importFingerprint,
+      title: current.title,
+      source: current.source,
+      participantIds: current.participantIds,
+      artifactNames: current.artifactNames,
+      tags: current.tags,
+      isFavorite: current.isFavorite,
+      startedAt: current.startedAt,
+      endedAt: current.endedAt,
+      segments: nextSegments,
+    );
+    conversations[index] = updated;
+    _markConversationChanged(updated.id);
+    await _pushEntity('conversation', updated.id, updated.toJson());
+  }).then((_) => _prepareSearchIndex()).then((_) => _notifyChanged());
+
+  /// Ids of the most recently watched YouTube videos that still lack a
+  /// transcript decision (neither captions nor marked unavailable).
+  List<String> recentVideosNeedingTranscript({int limit = 25}) {
+    DateTime watched(Conversation c) =>
+        DateTime.tryParse(c.metadata['lastWatchedAt'] ?? '') ?? c.endedAt;
+    final candidates =
+        conversations
+            .where(
+              (c) =>
+                  c.source == 'youtube-watch-history' &&
+                  (c.metadata['transcript'] ?? 'none') == 'none',
+            )
+            .toList()
+          ..sort((a, b) => watched(b).compareTo(watched(a)));
+    return [for (final c in candidates.take(limit)) c.id];
+  }
+
+  /// Sequentially fetches transcripts for the newest watched videos.
+  Future<TranscriptBatchProgress> enrichRecentWatchedVideos({
+    int limit = 25,
+    required TranscriptBatchCancel cancel,
+    void Function(TranscriptBatchProgress progress)? onProgress,
+    Future<void> Function(Duration pause)? wait,
+  }) => runTranscriptBatch(
+    conversationIds: recentVideosNeedingTranscript(limit: limit),
+    enrich: enrichWatchedVideo,
+    wait: wait ?? (pause) => cancellableDelay(pause, cancel),
+    cancel: cancel,
+    onProgress: onProgress,
+  );
 }

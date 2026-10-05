@@ -13,6 +13,7 @@ class SearchCriteria {
     this.useVector = true,
     this.from,
     this.to,
+    this.includeConsumed = true,
   }) : _query = query;
 
   final String _query;
@@ -21,6 +22,9 @@ class SearchCriteria {
   final String? tag;
   final bool favoritesOnly;
   final bool useVector;
+
+  /// When false, consumed media (watch/browsing history) is filtered out.
+  final bool includeConsumed;
 
   /// Inclusive start of an optional date-range filter (calendar date, as
   /// picked by the user in their local timezone).
@@ -93,5 +97,6 @@ class SearchCriteria {
       'SearchCriteria(query=$normalized, source=$normalizedSource, '
       'participantId=$normalizedParticipantId, tag=$normalizedTag, '
       'favoritesOnly=$favoritesOnly, useVector=$useVector, '
-      'from=$normalizedFrom, to=$normalizedTo)';
+      'from=$normalizedFrom, to=$normalizedTo, '
+      'includeConsumed=$includeConsumed)';
 }

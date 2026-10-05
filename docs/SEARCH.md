@@ -41,6 +41,26 @@ requiring the date phrase to occur in their text. Ordinary words such as `time`,
 `year`, and `search` remain searchable topics. The explicit When filter requires
 a conversation's time span to overlap its inclusive calendar-date range.
 
+## Source categories and ranking weights
+
+Sources are grouped (`app/lib/services/source_categories.dart`):
+
+| Category | Sources | Weight |
+| --- | --- | --- |
+| personal | everything else (chats, mail, recordings, notes, ...) | 1.0 |
+| documents | `scanned-pdf`, `paperless`, `photo` | 0.9 |
+| consumed | `youtube-watch-history`, `tiktok-watch-history`, `youtube-transcript`, `browser-history`, `google-search-history`, `bookmarks`, `browser-capture` | 0.6 |
+
+The weight multiplies the final score (lexical + vector + recency/temporal), also for
+the empty-query timeline, so an equally matching personal chat always outranks a watched
+video or document, and recent chats outrank recent watch history. Weights are constants
+in `source_categories.dart`. Result cards show a **Consumed** badge for the consumed
+category; watch-history cards without participants show "platform • channel • watched N×".
+
+The **Hide consumed media** filter chip (`SearchCriteria.includeConsumed`, default true)
+removes consumed items entirely. Saved searches store it as `hideConsumed` only when set,
+so older saved searches keep showing everything.
+
 ## Repeatable relevance and performance checks
 
 ```sh

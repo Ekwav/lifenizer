@@ -363,7 +363,14 @@ class LifenizerApiClient {
 
   void _ensureSuccess(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, response.body);
+      final retry = int.tryParse(response.headers['retry-after'] ?? '');
+      throw ApiException(
+        response.statusCode,
+        response.body,
+        retryAfter: retry == null || retry < 0
+            ? null
+            : Duration(seconds: retry),
+      );
     }
   }
 }
@@ -376,10 +383,24 @@ class PullResult {
 }
 
 class ApiException implements Exception {
-  ApiException(this.statusCode, this.body);
+  ApiException(this.statusCode, this.body, {this.retryAfter});
 
   final int statusCode;
   final String body;
+
+  /// Parsed `Retry-After` header (seconds form), when the server sent one.
+  final Duration? retryAfter;
+
+  /// Machine-readable `error` code of a JSON error body, e.g.
+  /// `transcript_unavailable` or `provider_blocked`.
+  String? get errorCode {
+    try {
+      final decoded = jsonDecode(body);
+      return decoded is Map ? decoded['error']?.toString() : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   String toString() => 'API $statusCode: $body';

@@ -226,6 +226,71 @@ check), `rate_limited` (429 + `Retry-After`: one fetch at a time per vault and 3
 per vault, in memory). This reads public captions from the server, so YouTube sees the server IP and the
 video id, not the user. It may break whenever YouTube changes its page or APIs.
 
+### Client detection of photos and viewing history
+
+The app (not the server) decides the source for files it imports (file picker,
+drag and drop, Android share target, folder watch):
+
+- Images (`.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, `.heif`, or an `image/*` type
+  of those formats) are sent to `photo`, with `metadata.capturedAt` = the file's
+  last-modified time (fallback only; EXIF wins on the server) and
+  `metadata.utcOffsetMinutes` = the device's offset. PDFs stay `scanned-pdf`. Other
+  image formats (GIF, BMP, TIFF, AVIF) still go to `scanned-pdf`.
+- Watch histories are recognised by content first: a JSON array whose items have
+  header `YouTube*` and a `titleUrl` is `youtube-watch-history`; JSON containing a
+  `Video Browsing History` key, or text with `Date:`/`Link:` lines, is
+  `tiktok-watch-history`; HTML containing `watch-history` or YouTube "Watched"
+  `content-cell`s is `youtube-watch-history`. Otherwise the capability
+  `fileNameHints` (cached from `GET /api/imports/capabilities`, with built-in
+  defaults) are matched against the file name (`watch-history.json|html`,
+  `user_data*.json`, `Video Browsing History.txt`, `Browsing History.txt`).
+- A dropped ZIP is searched for the right entry (`watch-history.json` preferred over
+  `.html`, then the TikTok files; shallowest path wins) instead of the first text
+  entry; only that entry is uploaded.
+
+**Imports → Viewing history** explains the exports (Google Takeout → "YouTube and
+YouTube Music" → History → JSON; TikTok → Settings → Download your data → JSON),
+offers a file picker and summarises videos imported / already present / entries
+without a video link. Watched videos are category **Consumed** (see SEARCH.md).
+
+#### Transcript enrichment (client)
+
+`enrichWatchedVideo(conversationId)` calls `youtube-transcript` with the video id and
+merges the returned timed segments into the existing `youtube-watch-history`
+conversation (`sourceMessageId transcript:<videoId>:<n>`, replaced on a repeat) instead
+of keeping a second conversation. Metadata then holds `transcript=youtube-captions`,
+`language`, `kind`. A 404 stores `transcript=unavailable` so the video is not retried;
+re-importing the history keeps either marker. Result cards of YouTube videos without a
+transcript have **Fetch transcript**; the Viewing history panel has **Fetch transcripts
+for the 25 most recent videos**: sequential, cancellable, skips videos already enriched
+or unavailable, waits the `Retry-After` of each 429 and continues, and stops after three
+consecutive `provider_blocked` answers. TikTok shows "No transcript available for
+TikTok": there is no video download or speech/OCR pipeline.
+
+#### Camera photo auto-import
+
+**Imports → Camera photos → Auto-import camera photos** imports new photos through the
+`photo` source (OCR conversation) and, with **Keep photo in vault** (default on), also
+uploads the compressed, encrypted image to the image vault linked to the created
+conversation so it appears in its gallery. If the storage quota is exhausted the OCR
+import still succeeds and a note is shown. Files over 25 MiB are skipped; hidden
+(`.trashed-*`, `.pending-*`) files are ignored; files modified in the last 5 seconds wait.
+
+- **Android**: watches `DCIM/Camera` (and `DCIM/OpenCamera`) via the `com.lifenizer/media`
+  MethodChannel (`cameraFolders`, `hasImagesPermission`, `requestImagesPermission`),
+  requesting `READ_MEDIA_IMAGES` (API 33+) or `READ_EXTERNAL_STORAGE` (up to API 32).
+- **Desktop**: the user picks a folder (for example a synced camera folder).
+- iOS and web: not available.
+
+inotify is unreliable on shared storage, so the app polls: when enabled, when the app
+resumes, and every 10 minutes while it is in the foreground. **There is no background
+service**: photos taken while the app is closed or locked are imported at the next
+resume. Only photos modified after the stored stamp are imported; the stamp starts at the
+time of enabling (or 7 days earlier with "Also import photos from the last 7 days") and
+advances only after the encrypted vault save succeeded. Failed photos stay pending and are
+retried. Settings, stamp and counters are stored per vault identity in the OS credential
+store, like the document folder watch.
+
 ### paperless
 
 Set server configuration `Imports:Paperless:BaseUrl` to the trusted Paperless

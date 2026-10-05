@@ -14,6 +14,7 @@ class SearchViewModel {
     required this.tagFilter,
     this.fromFilter,
     this.toFilter,
+    this.hideConsumed = false,
   });
 
   /// Controller for the search query text field.
@@ -34,6 +35,9 @@ class SearchViewModel {
   /// Inclusive end of the "When" date-range filter (null = open).
   DateTime? toFilter;
 
+  /// True when consumed media (watch/browsing history) is hidden.
+  bool hideConsumed;
+
   /// True when a date-range filter is active.
   bool get hasDateRange => fromFilter != null || toFilter != null;
 
@@ -45,6 +49,7 @@ class SearchViewModel {
     tagFilter = '';
     fromFilter = null;
     toFilter = null;
+    hideConsumed = false;
   }
 
   /// Updates the query text.
@@ -60,7 +65,9 @@ class SearchViewModel {
     String? tag,
     DateTime? from,
     DateTime? to,
+    bool hideConsumed = false,
   }) {
+    this.hideConsumed = hideConsumed;
     queryController.text = query;
     sourceFilter = source ?? '';
     participantFilter = participantId ?? '';

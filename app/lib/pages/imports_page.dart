@@ -13,6 +13,8 @@ import '../services/discord_archive.dart';
 import '../services/export_watch_service.dart';
 import '../widgets/imap_import_panel.dart';
 import '../widgets/document_import_panel.dart';
+import '../widgets/camera_photos_panel.dart';
+import '../widgets/viewing_history_panel.dart';
 import '../widgets/discord_bot_import_panel.dart';
 import 'page_frame.dart';
 
@@ -285,6 +287,10 @@ class _ImportsPageState extends State<ImportsPage> {
             const SizedBox(height: 16),
             DocumentImportPanel(state: widget.state),
             const SizedBox(height: 16),
+            CameraPhotosPanel(state: widget.state),
+            const SizedBox(height: 16),
+            ViewingHistoryPanel(state: widget.state),
+            const SizedBox(height: 16),
             _AudioImportPanel(state: widget.state),
             const SizedBox(height: 16),
             Wrap(
@@ -401,7 +407,7 @@ class _ImportsPageState extends State<ImportsPage> {
         _desktop &&
         file.path != null &&
         RegExp(
-          r'\.(pdf|png|jpe?g)$',
+          r'\.(pdf|png|jpe?g|webp|heic|heif)$',
           caseSensitive: false,
         ).hasMatch(file.name)) {
       await widget.state.importDocumentFile(file.path!);

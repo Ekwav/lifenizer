@@ -20,11 +20,14 @@ import 'services/pairing_store.dart';
 import 'services/sync_progress.dart';
 import 'services/local_vault_store.dart';
 import 'services/shared_import_source.dart';
+import 'services/source_categories.dart';
+import 'services/transcript_enrichment.dart';
 import 'services/discord_archive.dart';
 import 'services/export_file_reader.dart';
 import 'services/discord_bot_import_service.dart';
 import 'services/document_import_service.dart';
 import 'services/document_credentials.dart';
+import 'services/camera_roll_watch_service.dart';
 import 'services/recording_controller.dart';
 import 'services/audio_cache_io.dart'
     if (dart.library.js_interop) 'services/audio_cache_web.dart'
@@ -64,6 +67,8 @@ class LifenizerAppState extends ChangeNotifier {
     emailImport.addListener(_notifyChanged);
     documentImport = DocumentImportService(this, store: documentStore);
     documentImport.addListener(_notifyChanged);
+    cameraRoll = CameraRollWatchService(this, store: documentStore);
+    cameraRoll.addListener(_notifyChanged);
     discordImport = DiscordBotImportService(
       ingest: importDiscordBotBatch,
       store: discordStore,
@@ -75,6 +80,7 @@ class LifenizerAppState extends ChangeNotifier {
   late final DevicePairingService pairing;
   late final EmailImportService emailImport;
   late final DocumentImportService documentImport;
+  late final CameraRollWatchService cameraRoll;
   late final DiscordBotImportService discordImport;
   late final RecordingController recording;
 
@@ -93,6 +99,7 @@ class LifenizerAppState extends ChangeNotifier {
     removeListener(_updateDiscordIdentity);
     discordImport.dispose();
     documentImport.dispose();
+    cameraRoll.dispose();
     emailImport.dispose();
     pairing.dispose();
     super.dispose();
@@ -171,6 +178,9 @@ class LifenizerAppState extends ChangeNotifier {
   DateTime? _lastSearchAt;
   List<String> _lastSearchTopConversationIds = const [];
   final Map<String, int> _sessionQueryFrequency = <String, int>{};
+
+  /// Summary of the most recent import, or null before the first one.
+  ImportSummary? lastImportSummary;
 
   QuotaStatus? quotaStatus;
   final List<ImageItem> images = [];
@@ -367,6 +377,7 @@ class LifenizerAppState extends ChangeNotifier {
     bool useVector = true,
     DateTime? from,
     DateTime? to,
+    bool includeConsumed = true,
     int? maxResults,
   }) {
     _ensureSearchIndex();
@@ -380,6 +391,7 @@ class LifenizerAppState extends ChangeNotifier {
         favoritesOnly: favoritesOnly,
         from: from,
         to: to,
+        includeConsumed: includeConsumed,
         maxResults: maxResults,
       );
     }
@@ -396,6 +408,7 @@ class LifenizerAppState extends ChangeNotifier {
       useVector: useVector,
       from: from,
       to: to,
+      includeConsumed: includeConsumed,
     );
 
     final now = DateTime.now().toUtc();
@@ -478,6 +491,7 @@ class LifenizerAppState extends ChangeNotifier {
     bool favoritesOnly = false,
     DateTime? from,
     DateTime? to,
+    bool includeConsumed = true,
     int? maxResults,
   }) {
     if (conversations.isEmpty) return const [];
@@ -491,6 +505,7 @@ class LifenizerAppState extends ChangeNotifier {
       favoritesOnly: favoritesOnly,
       from: from,
       to: to,
+      includeConsumed: includeConsumed,
     );
     final now = DateTime.now().toUtc();
     final lexical = TemporalIntent.lexicalQuery(criteria.normalized);
@@ -523,6 +538,10 @@ class LifenizerAppState extends ChangeNotifier {
         continue;
       }
       if (criteria.favoritesOnly && !conversation.isFavorite) continue;
+      if (!criteria.includeConsumed &&
+          categoryForSource(conversation.source) == SourceCategory.consumed) {
+        continue;
+      }
       if (fromFilter != null || toFilter != null) {
         final a = conversation.startedAt.toUtc();
         final b = conversation.endedAt.toUtc();
@@ -1232,13 +1251,33 @@ class LifenizerAppState extends ChangeNotifier {
     List<int>? bytes,
     Map<String, String> metadata = const {},
   }) async {
-    final normalizedName = (fileName ?? '').trim();
-    final normalizedMime = (mimeType ?? '').trim().toLowerCase();
+    var normalizedName = (fileName ?? '').trim();
+    var normalizedMime = (mimeType ?? '').trim().toLowerCase();
     final normalizedText = text?.trim();
+    final hints = _fileNameHints();
+    // A Takeout or TikTok ZIP is reduced to its watch-history entry rather
+    // than the first text file inside.
+    if (bytes != null &&
+        (normalizedName.toLowerCase().endsWith('.zip') ||
+            normalizedMime.contains('zip') ||
+            (bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4b))) {
+      final entry = selectWatchHistoryZipEntry(bytes, fileNameHints: hints);
+      if (entry != null) {
+        bytes = entry.bytes;
+        normalizedName = entry.name;
+        normalizedMime = entry.name.toLowerCase().endsWith('.json')
+            ? 'application/json'
+            : entry.name.toLowerCase().endsWith('.html')
+            ? 'text/html'
+            : 'text/plain';
+      }
+    }
     final lowerName = normalizedName.toLowerCase();
     final extension = lowerName.split('.').last;
+    final isPhoto = isPhotoFile(lowerName, normalizedMime);
 
     final isScannedFile =
+        isPhoto ||
         normalizedMime.startsWith('image/') ||
         normalizedMime == 'application/pdf' ||
         const {
@@ -1276,12 +1315,15 @@ class LifenizerAppState extends ChangeNotifier {
       }
       source = isAudio
           ? 'audio'
+          : isPhoto
+          ? 'photo'
           : isScannedFile
           ? 'scanned-pdf'
           : detectSharedImportSource(
               fileName: normalizedName,
               mimeType: isZip ? 'application/zip' : normalizedMime,
               text: decodedText,
+              fileNameHints: hints,
             );
     } on FormatException catch (exception) {
       reportError(exception.message);
@@ -1319,9 +1361,27 @@ class LifenizerAppState extends ChangeNotifier {
       text: payloadBase64 == null || isScannedFile ? decodedText : null,
       originalFileName: normalizedName.isEmpty ? null : normalizedName,
       mimeType: normalizedMime.isEmpty ? null : normalizedMime,
-      metadata: {...metadata, 'shared': 'true'},
+      metadata: {
+        ...metadata,
+        'shared': 'true',
+        if (source == 'photo')
+          'utcOffsetMinutes': '${DateTime.now().timeZoneOffset.inMinutes}',
+      },
       payloadBase64: payloadBase64,
     );
+  }
+
+  /// `fileNameHints` of the server's capabilities, falling back to the
+  /// built-in defaults until capabilities were fetched.
+  Map<String, List<String>> _fileNameHints() {
+    final hints = <String, List<String>>{
+      for (final capability in importCapabilities)
+        if (capability.fileNameHints.isNotEmpty)
+          capability.source: capability.fileNameHints,
+    };
+    return hints.isEmpty
+        ? defaultFileNameHints
+        : {...defaultFileNameHints, ...hints};
   }
 
   Future<void> addManualText({
@@ -1448,6 +1508,7 @@ class LifenizerAppState extends ChangeNotifier {
     String? tag,
     DateTime? from,
     DateTime? to,
+    bool hideConsumed = false,
   }) async {
     await _run(() async {
       final savedSearch = SavedSearch(
@@ -1459,6 +1520,7 @@ class LifenizerAppState extends ChangeNotifier {
         tag: _cleanFilter(tag),
         from: from,
         to: to,
+        hideConsumed: hideConsumed,
       );
       savedSearches.removeWhere((item) => item.id == savedSearch.id);
       savedSearches.add(savedSearch);

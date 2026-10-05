@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../app_state.dart';
 import '../../image_widgets.dart';
 import '../../models.dart';
+import '../../services/source_categories.dart';
+import '../../services/transcript_enrichment.dart';
 import '../../services/source_links.dart';
 import '../../widgets/transcription_correction_dialog.dart';
 
@@ -113,7 +115,25 @@ class ConversationCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              Text('${conversation.source} • $participants'),
+              Text(
+                participants.isEmpty
+                    ? watchHistoryLine(conversation) ??
+                          '${conversation.source} • $participants'
+                    : '${conversation.source} • $participants',
+              ),
+              if (categoryForSource(conversation.source) ==
+                  SourceCategory.consumed) ...[
+                const SizedBox(height: 4),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(
+                    key: Key('consumed-badge'),
+                    label: Text('Consumed'),
+                    visualDensity: VisualDensity.compact,
+                    avatar: Icon(Icons.visibility_outlined, size: 16),
+                  ),
+                ),
+              ],
               const SizedBox(height: 2),
               Text(
                 conversation.startedAt.toCompactLocalString(),
@@ -137,9 +157,134 @@ class ConversationCard extends StatelessWidget {
               ],
               const SizedBox(height: 8),
               Text(preview, maxLines: 3, overflow: TextOverflow.ellipsis),
+              TranscriptAction(state: state, conversation: conversation),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// "YouTube • Channel • watched 3×" for watch-history conversations, or null.
+String? watchHistoryLine(Conversation conversation) {
+  final platform = switch (conversation.source) {
+    'youtube-watch-history' => 'YouTube',
+    'tiktok-watch-history' => 'TikTok',
+    _ => null,
+  };
+  if (platform == null) return null;
+  final channel = conversation.metadata['channel']?.trim();
+  final count = int.tryParse(conversation.metadata['watchCount'] ?? '');
+  return [
+    platform,
+    if (channel != null && channel.isNotEmpty) channel,
+    if (count != null) 'watched $count×',
+  ].join(' • ');
+}
+
+/// Per-conversation transcript action for watched videos: a "Fetch
+/// transcript" button for YouTube, a short explanation for TikTok.
+class TranscriptAction extends StatefulWidget {
+  const TranscriptAction({
+    required this.state,
+    required this.conversation,
+    super.key,
+  });
+
+  final LifenizerAppState state;
+  final Conversation conversation;
+
+  @override
+  State<TranscriptAction> createState() => _TranscriptActionState();
+}
+
+class _TranscriptActionState extends State<TranscriptAction> {
+  bool _loading = false;
+  String? _message;
+
+  Future<void> _fetch() async {
+    setState(() {
+      _loading = true;
+      _message = null;
+    });
+    final result = await widget.state.enrichWatchedVideo(
+      widget.conversation.id,
+    );
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _message = switch (result.outcome) {
+        TranscriptOutcome.merged => 'Transcript added.',
+        TranscriptOutcome.unavailable => 'This video has no public captions.',
+        TranscriptOutcome.rateLimited ||
+        TranscriptOutcome.blocked => 'YouTube is rate limiting; try later.',
+        _ => result.message ?? 'Could not fetch the transcript.',
+      };
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final conversation =
+        widget.state.conversations
+            .where((item) => item.id == widget.conversation.id)
+            .firstOrNull ??
+        widget.conversation;
+    if (conversation.source == 'tiktok-watch-history') {
+      return const Padding(
+        padding: EdgeInsets.only(top: 8),
+        child: Tooltip(
+          message:
+              'TikTok exports contain only video links. Reading or '
+              'transcribing the video needs a video download and speech/OCR '
+              'pipeline, which Lifenizer does not have.',
+          child: Text(
+            'No transcript available for TikTok',
+            key: Key('tiktok-no-transcript'),
+          ),
+        ),
+      );
+    }
+    if (conversation.source != 'youtube-watch-history') {
+      return const SizedBox.shrink();
+    }
+    final status = conversation.metadata['transcript'] ?? 'none';
+    if (status == 'youtube-captions') {
+      return const Padding(
+        padding: EdgeInsets.only(top: 8),
+        child: Text('Transcript available', key: Key('transcript-present')),
+      );
+    }
+    if (status == 'unavailable') {
+      return const Padding(
+        padding: EdgeInsets.only(top: 8),
+        child: Text(
+          'No public captions for this video',
+          key: Key('transcript-unavailable'),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        children: [
+          TextButton.icon(
+            key: const Key('fetch-transcript'),
+            onPressed: _loading || widget.state.busy ? null : _fetch,
+            icon: _loading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.subtitles_outlined, size: 18),
+            label: const Text('Fetch transcript'),
+          ),
+          if (_message != null) Text(_message!),
+        ],
       ),
     );
   }
@@ -229,10 +374,22 @@ class _ConversationDetailSheet extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 4, bottom: 12),
                   child: Text(
-                    '${conversation.source} • $participants',
+                    participants.isEmpty
+                        ? watchHistoryLine(conversation) ??
+                              '${conversation.source} • $participants'
+                        : '${conversation.source} • $participants',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TranscriptAction(
+                    state: state,
+                    conversation: conversation,
                   ),
                 ),
               ),
