@@ -41,6 +41,9 @@ Notes:
 
 - `manual-text`
 - `scanned-pdf`
+- `photo`
+- `youtube-watch-history`
+- `tiktok-watch-history`
 - `live-recording`
 - `whatsapp`
 - `telegram`
@@ -123,6 +126,105 @@ The app stores and syncs the extracted text encrypted; original PDF/image bytes
 are not retained as vault artifacts. [Poppler text extraction](https://manpages.debian.org/bullseye/poppler-utils/pdftotext.1.en.html)
 and [Tesseract usage](https://tesseract-ocr.github.io/tessdoc/Command-Line-Usage.html)
 describe the underlying native tools.
+
+### photo
+
+One camera image per request (JPEG, PNG, WebP, HEIC/HEIF; at most 25 MiB, 25
+megapixels, 10,000 px per side), sent like `scanned-pdf` as `payloadBase64`:
+
+```json
+{
+  "originalFileName": "IMG_0001.jpg",
+  "mimeType": "image/jpeg",
+  "payloadBase64": "<base64 image bytes>",
+  "metadata": { "capturedAt": "2024-05-06T07:08:09Z", "utcOffsetMinutes": "120" }
+}
+```
+
+`metadata.capturedAt` (ISO 8601) and `metadata.utcOffsetMinutes` are optional.
+Capture time is EXIF `DateTimeOriginal` (then `DateTimeDigitized`/`DateTime`), with the EXIF
+`OffsetTimeOriginal` when present, else `utcOffsetMinutes`, else UTC; if the image has no EXIF date
+the client `capturedAt` is used, else the import time (`metadata.capturedAtSource` is
+`exif`, `client` or `import`). The response contains ONE conversation with `source: "photo"`,
+`sourceThreadId: "photo:<sha256 of the bytes>"` (re-importing the same image updates the same
+conversation, which is how the client de-duplicates), `sourceUrl` unset, title = first meaningful
+OCR line (max 80 chars) or `Photo yyyy-MM-dd HH:mm`, one segment per OCR paragraph (max 200, each
+with `createdAt = capturedAt` and `sourceMessageId = <sha256>:<n>`), or a single segment holding the
+file name when no text was found. Metadata: `capturedAt`, `capturedAtSource`, `fileName`, `mimeType`,
+`cameraMake`, `cameraModel` (when present), `width`, `height`, `ocr` (`tesseract` or `none`),
+`hasGps` (`true`/`false`) and `contentSha256`. GPS coordinates are read only to set `hasGps` and are
+never returned or stored. OCR reuses the PDF Tesseract setup (German + English models already in the
+Docker image, no new packages). HEIC/HEIF: metadata is read but no decoder exists, so `ocr` is
+`none`; convert to JPEG on the device first if text search is wanted. WebP OCR depends on the
+installed Leptonica build and silently falls back to `ocr: none`. EXIF is parsed with
+[MetadataExtractor](https://github.com/drewnoakes/metadata-extractor-dotnet) 2.9.3 (Apache-2.0).
+
+### youtube-watch-history and tiktok-watch-history
+
+Send the export file as `text` (or `payloadBase64`; a zip uses the existing first-text-entry rule,
+so extract `watch-history.json` / `watch-history.html` first for multi-file Takeout archives):
+
+```json
+{ "originalFileName": "watch-history.json", "mimeType": "application/json", "text": "<file contents>" }
+```
+
+Capabilities list `fileNameHints` (`watch-history.json|html`, `user_data*.json`,
+`Video Browsing History.txt`, `Browsing History.txt`) for client-side detection; the server does no
+content-based source detection.
+
+Model: ONE conversation per distinct video, `source` = the import source, `sourceThreadId` =
+`youtube:<videoId>` / `tiktok:<videoId>`, `sourceUrl` = video URL, one segment per watch
+(`createdAt` = watch time, `sourceMessageId` = `<platform>:<videoId>@<unix seconds>`). Repeated
+watches in one export, and overlapping later exports, therefore merge into the same conversation
+and never duplicate a watch. Metadata: `platform`, `videoId`, `videoUrl`, `channel`, `channelUrl`
+(YouTube), `watchCount`, `firstWatchedAt`, `lastWatchedAt`, `watchedAt` (= last watch) and
+`transcript: "none"`. Response `diagnostics` report `entries`, `videos` and skipped counts.
+
+YouTube: JSON items `{title, titleUrl, subtitles[0].{name,url}, time}` and the HTML `content-cell`
+variant are supported. Titles lose the known "Watched "/"Angesehen: " style prefixes only when
+present. Entries without a video URL (removed videos, community posts) are skipped and counted in
+`skippedWithoutVideoUrl`; removed videos whose title is just the URL are kept as
+`YouTube video <id>`. The channel becomes the conversation participant with identifier
+`youtube:<channelUrl or name>`. JSON/ISO times are converted to UTC from their offset; HTML times use
+the zone abbreviation (UTC, GMT, CET/CEST, MEZ/MESZ, EST..PDT, `GMT+1` ...) and are assumed UTC when
+the zone is unknown (`diagnostics.assumedUtcTimes`).
+
+TikTok: JSON `Activity > Video Browsing History > VideoList[{Date,Link}]` (other lists such as
+likes are ignored) and the `Date:`/`Link:` text variant. Times are UTC. Exports contain no titles or
+channels: title is `TikTok video <id>` and there are no participants.
+
+Enrichment (not part of this import): the client may fetch a transcript for one YouTube video later
+with `POST /api/imports/youtube-transcript` and body
+`{"title":"<video title>","metadata":{"videoId":"<videoId>","language":"de"}}` (`language` optional).
+The response is a separate `youtube-transcript` conversation; the client may link it via
+`metadata.videoId`. TikTok has no equivalent: transcripts or OCR are not possible server-side because
+there is no video download or frame pipeline.
+
+#### youtube-transcript remote mode
+
+Precedence: (1) request `text` is parsed locally; (2) if `Imports:YouTube:BaseUrl` is set, that external
+service (`GET /api/transcripts/{videoId}`) is used; (3) otherwise, if `Imports:YouTube:BuiltInCaptions`
+is true (default), the built-in fetcher below; (4) otherwise the call fails with `invalid_import_request`.
+`GET /api/imports/capabilities` appends the effective "Remote mode" state to the `youtube-transcript` status.
+
+Built-in fetcher (`YouTubeCaptionFetcher`), best effort and unofficial: it GETs
+`https://www.youtube.com/watch?v=<id>` (desktop User-Agent, `CONSENT`/`SOCS` cookies, retried once if the
+EU consent page appears), reads `captionTracks` from the embedded `ytInitialPlayerResponse`, picks a track
+(request `metadata.language`, then manual de/en, then any manual, then ASR) and downloads its `baseUrl`
+with `fmt=json3`. If the page has no tracks or the download is empty (web caption URLs may require a PO
+token), it falls back once to the innertube `youtubei/v1/player` endpoint with the ANDROID client, the
+approach youtube-transcript-api uses today. Result: `source: youtube-transcript`, one segment per caption
+event (`offsetMs`, `endMs`, HTML entities decoded) and metadata `videoId`, `videoUrl`, `language`, `kind`
+(`asr`|`manual`), `transcriptSource: youtube-captions`; the title is the request title or YouTube's
+`videoDetails.title`.
+
+Limits and errors: `videoId` must match `^[A-Za-z0-9_-]{11}$` (`invalid_import_request`, 400); 10 s HTTP
+timeout, redirects only within youtube.com/googlevideo.com, watch page <= 4 MB, transcript <= 2 MB
+(`response_too_large`, 502); `transcript_unavailable` (404, no public captions), `video_unavailable`
+(404, private/removed/age-gated), `provider_blocked` (429 + `Retry-After`, YouTube rate limiting or bot
+check), `rate_limited` (429 + `Retry-After`: one fetch at a time per vault and 30 fetches per 10 minutes
+per vault, in memory). This reads public captions from the server, so YouTube sees the server IP and the
+video id, not the user. It may break whenever YouTube changes its page or APIs.
 
 ### paperless
 

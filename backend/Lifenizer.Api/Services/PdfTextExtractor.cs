@@ -11,16 +11,18 @@ public static partial class PdfTextExtractor
     private const int MaxTextBytes = 4 * 1024 * 1024;
     private static readonly SemaphoreSlim Slots = new(2);
 
-    public static string Extract(byte[] bytes, bool image = false)
+    /// <param name="allowEmpty">Return an empty string instead of throwing when no text was found (photos without text).</param>
+    /// <param name="validateSize">Skip the built-in PNG/JPEG dimension check when the caller validated the image itself (WebP).</param>
+    public static string Extract(byte[] bytes, bool image = false, bool allowEmpty = false, bool validateSize = true)
     {
         if (bytes.Length is 0 or > MaxBytes) throw new InvalidOperationException("Document must be between 1 byte and 25 MiB.");
-        if (image) ValidateImageSize(bytes);
+        if (image && validateSize) ValidateImageSize(bytes);
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-        try { return ExtractAsync(bytes, image, timeout.Token).GetAwaiter().GetResult(); }
+        try { return ExtractAsync(bytes, image, allowEmpty, timeout.Token).GetAwaiter().GetResult(); }
         catch (OperationCanceledException) { throw new InvalidOperationException("Document extraction exceeded the two minute limit. Split the document and retry."); }
     }
 
-    private static async Task<string> ExtractAsync(byte[] bytes, bool image, CancellationToken cancellationToken)
+    private static async Task<string> ExtractAsync(byte[] bytes, bool image, bool allowEmpty, CancellationToken cancellationToken)
     {
         await Slots.WaitAsync(cancellationToken);
         var directory = Path.Combine(Path.GetTempPath(), "lifenizer-document-" + Guid.NewGuid().ToString("N"));
@@ -57,7 +59,7 @@ public static partial class PdfTextExtractor
                 }
             }
             var result = string.Join("\n\n", texts).Trim();
-            if (result.Length == 0) throw new InvalidOperationException("No readable text was found in the document, including OCR.");
+            if (result.Length == 0 && !allowEmpty) throw new InvalidOperationException("No readable text was found in the document, including OCR.");
             return result;
         }
         finally

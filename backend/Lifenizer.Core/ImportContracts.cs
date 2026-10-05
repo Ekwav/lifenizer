@@ -6,7 +6,8 @@ public sealed record ImportCapability(
     bool AvailableNow,
     bool RequiresCredentials,
     string Status,
-    string[] AcceptedFormats);
+    string[] AcceptedFormats,
+    string[]? FileNameHints = null);
 
 public sealed record ImportRequest(
     string? Title = null,

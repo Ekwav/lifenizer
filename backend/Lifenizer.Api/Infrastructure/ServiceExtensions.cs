@@ -156,6 +156,11 @@ public static class ServiceExtensions
         registry.Register(new BookmarksParser());
         registry.Register(new GoogleSearchHistoryParser());
 
+        // Photo and watch-history parsers
+        registry.Register(new PhotoParser());
+        registry.Register(new YouTubeWatchHistoryParser());
+        registry.Register(new TikTokWatchHistoryParser());
+
         // Data backup parsers
         registry.Register(new LifenizerBackupParser());
         registry.Register(new TranscriptParser());
