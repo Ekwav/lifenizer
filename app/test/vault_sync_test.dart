@@ -631,7 +631,7 @@ void main() {
       await state.saveAudioDraft([1, 2, 3], DateTime.utc(2026, 10, 3));
       await state.lock();
       await login(state, offline: true);
-      expect(state.audioDraft?['payload'], base64Encode([1, 2, 3]));
+      expect(await state.loadAudioDraftPayload(), [1, 2, 3]);
       await state.discardAudioDraft();
       await state.lock();
       await login(state, offline: true);

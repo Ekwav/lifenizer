@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
@@ -68,8 +67,15 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
     final title = (draft['title'] as String? ?? '').trim();
     setState(() => _working = true);
     try {
+      final bytes = await widget.state.loadAudioDraftPayload();
+      if (bytes == null) {
+        widget.state.reportError(
+          'The saved recording could not be read. Record it again.',
+        );
+        return;
+      }
       await widget.state.importAudioBytes(
-        bytes: base64Decode(draft['payload'] as String),
+        bytes: bytes,
         fileName: 'recording.wav',
         mimeType: 'audio/wav',
         title: title.isEmpty ? 'Recorded conversation' : title,

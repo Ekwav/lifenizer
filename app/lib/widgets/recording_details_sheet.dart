@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
@@ -55,7 +53,7 @@ class RecordingStorageNote extends StatelessWidget {
 }
 
 String recordingLengthLabel(Map<String, dynamic> draft) {
-  final bytes = (base64.normalize(draft['payload'] as String).length * 3) ~/ 4;
+  final bytes = draft['payloadBytes'] as int? ?? 0;
   final seconds = ((bytes - 44) / 32000).round().clamp(0, 1 << 30);
   return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
 }

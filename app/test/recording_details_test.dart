@@ -65,6 +65,11 @@ class _MemoryStore extends LocalVaultStore {
   final records = <String, Map<String, dynamic>>{};
   bool failWrites = false;
   @override
+  Future<void> deleteMany(Iterable<String> keys) async {
+    keys.forEach(records.remove);
+  }
+
+  @override
   Future<Map<String, dynamic>?> read(String key) async => records[key];
   @override
   Future<void> write(String key, Map<String, dynamic> value) async {

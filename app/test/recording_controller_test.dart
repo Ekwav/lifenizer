@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:app/app_state.dart';
 import 'package:app/widgets/microphone_panel.dart';
@@ -116,10 +115,12 @@ void main() {
         expect(recorder.starts, 1);
         expect(recorder.stops, 0);
         await tester.runAsync(state.stopRecording!);
-        expect(
-          base64Decode(state.audioDraft!['payload'] as String).sublist(44),
-          [1, 2, 3, 4],
-        );
+        expect((await state.loadAudioDraftPayload())!.sublist(44), [
+          1,
+          2,
+          3,
+          4,
+        ]);
         expect(nativeCalls, ['notificationPermission', 'start', 'stop']);
       } finally {
         await close(tester);
@@ -148,10 +149,7 @@ void main() {
           await reply.future;
         });
         expect(state.recording.recording, isFalse);
-        expect(
-          base64Decode(state.audioDraft!['payload'] as String).sublist(44),
-          [5, 6],
-        );
+        expect((await state.loadAudioDraftPayload())!.sublist(44), [5, 6]);
         expect(recorder.stops, 1);
         expect(nativeCalls.last, 'stop');
       } finally {

@@ -234,7 +234,8 @@ void main() {
 
       store.written.clear();
       await state.saveAudioDraft([4, 5], DateTime.utc(2026, 1, 3));
-      expect(store.written, [_key]);
+      // The audio goes to its own record; no conversation chunk is touched.
+      expect(store.written, ['$_key:audio-draft', _key]);
       store.written.clear();
       await state.discardAudioDraft();
       expect(store.written, [_key]);
@@ -276,7 +277,7 @@ void main() {
         stages,
         containsAll([SyncStage.decryptingLocal, SyncStage.restoring]),
       );
-      expect(restored.audioDraft?['payload'], base64Encode([9]));
+      expect(await restored.loadAudioDraftPayload(), [9]);
       await restored.lock();
       restored.dispose();
     },

@@ -102,6 +102,32 @@ class VaultCrypto {
     return Map<String, dynamic>.from(jsonDecode(utf8.decode(clearText)) as Map);
   }
 
+  /// Decrypts a record produced by [load]. With [background] the loader runs
+  /// inside the worker isolate (so file bytes never cross to the main isolate);
+  /// it must capture only sendable values such as a path.
+  Future<Map<String, dynamic>> decryptLoaded(
+    Future<({String cipherText, String nonce})> Function() load, {
+    required String expectedNonce,
+    List<String> alternateNonces = const [],
+    bool background = false,
+  }) async {
+    final key = _requireKey();
+    if (background) {
+      final bytes = (await key.extractBytes()).toList();
+      try {
+        return await _decryptLoadedInWorker(
+          load,
+          expectedNonce,
+          alternateNonces,
+          bytes,
+        );
+      } finally {
+        bytes.fillRange(0, bytes.length, 0);
+      }
+    }
+    return _decryptLoaded(this, load, expectedNonce, alternateNonces);
+  }
+
   SecretKey _requireKey() {
     final key = _vaultKey;
     if (key == null) {
@@ -167,6 +193,35 @@ Future<Map<String, dynamic>> _decryptInWorker(
   final crypto = VaultCrypto().._vaultKey = SecretKey(bytes);
   try {
     return await crypto.decryptJson(cipherText: cipherText, nonce: nonce);
+  } finally {
+    crypto.lock();
+    bytes.fillRange(0, bytes.length, 0);
+  }
+});
+
+Future<Map<String, dynamic>> _decryptLoaded(
+  VaultCrypto crypto,
+  Future<({String cipherText, String nonce})> Function() load,
+  String expectedNonce,
+  List<String> alternateNonces,
+) async {
+  final record = await load();
+  if (record.nonce != expectedNonce &&
+      !alternateNonces.contains(record.nonce)) {
+    throw StateError('Stored chunk does not match the vault.');
+  }
+  return crypto.decryptJson(cipherText: record.cipherText, nonce: record.nonce);
+}
+
+Future<Map<String, dynamic>> _decryptLoadedInWorker(
+  Future<({String cipherText, String nonce})> Function() load,
+  String expectedNonce,
+  List<String> alternateNonces,
+  List<int> bytes,
+) => runVaultWork(() async {
+  final crypto = VaultCrypto().._vaultKey = SecretKey(bytes);
+  try {
+    return await _decryptLoaded(crypto, load, expectedNonce, alternateNonces);
   } finally {
     crypto.lock();
     bytes.fillRange(0, bytes.length, 0);

@@ -63,6 +63,11 @@ class _MemoryStore extends LocalVaultStore {
   final records = <String, Map<String, dynamic>>{};
   bool failWrites = false;
   @override
+  Future<void> deleteMany(Iterable<String> keys) async {
+    keys.forEach(records.remove);
+  }
+
+  @override
   Future<Map<String, dynamic>?> read(String key) async => records[key];
   @override
   Future<void> write(String key, Map<String, dynamic> value) async {
@@ -153,15 +158,15 @@ void main() {
   }
 
   final samples = Uint8List.fromList([0, 1, 2, 3, 4, 5, 6, 7]);
-  Future<void> verifyDraft(_Vault vault) async {
+  Future<void> verifyDraft(WidgetTester tester, _Vault vault) async {
     final draft = vault.state.audioDraft!;
-    final wav = base64Decode(draft['payload'] as String);
+    final wav = (await tester.runAsync(vault.state.loadAudioDraftPayload))!;
     expect(ascii.decode(wav.sublist(0, 4)), 'RIFF');
     expect(ascii.decode(wav.sublist(8, 12)), 'WAVE');
     expect(wav.sublist(44), samples);
     expect(DateTime.parse(draft['recordedAt'] as String).isUtc, isTrue);
     final raw = jsonEncode(await vault.store.read(_Vault.key));
-    expect(raw, isNot(contains(draft['payload'] as String)));
+    expect(raw, isNot(contains(base64Encode(wav))));
     expect(raw, isNot(contains('private-vault-passphrase')));
     expect(raw, isNot(contains('audioDraft')));
   }
@@ -202,7 +207,7 @@ void main() {
       await tester.pump();
       await finish(tester, vault.state.stopRecording!());
       await tester.pump();
-      await verifyDraft(vault);
+      await verifyDraft(tester, vault);
       expect(
         find.text(
           'Recording saved encrypted on this device. Ready to transcribe.',
@@ -224,7 +229,7 @@ void main() {
       await tester.pump();
       await tester.pumpWidget(const SizedBox());
       await finish(tester, vault.state.recording.stop());
-      await verifyDraft(vault);
+      await verifyDraft(tester, vault);
       expect(recorder.disposed.isCompleted, isFalse);
       expect(vault.state.stopRecording, isNotNull);
       vault.close();
@@ -252,7 +257,7 @@ void main() {
       expect(vault.state.isAuthenticated, isFalse);
       expect(vault.state.audioDraft, isNull);
       await finish(tester, vault.unlock(offline: true));
-      await verifyDraft(vault);
+      await verifyDraft(tester, vault);
       expect(recorder.stops, 1);
       await remove(tester, vault);
     },
@@ -270,15 +275,12 @@ void main() {
       await finish(tester, vault.state.lock());
       expect(vault.state.isAuthenticated, isTrue);
       expect(vault.state.error, contains('Disk full'));
-      expect(
-        base64Decode(vault.state.audioDraft!['payload'] as String).sublist(44),
-        samples,
-      );
+      expect((await vault.state.loadAudioDraftPayload())!.sublist(44), samples);
       vault.store.failWrites = false;
       await finish(tester, vault.state.lock());
       expect(vault.state.isAuthenticated, isFalse);
       await finish(tester, vault.unlock(offline: true));
-      await verifyDraft(vault);
+      await verifyDraft(tester, vault);
       await remove(tester, vault);
     },
     variant: TargetPlatformVariant.only(TargetPlatform.linux),
@@ -321,7 +323,7 @@ void main() {
       await finish(tester, saved.future);
       vault.state.removeListener(onSaved);
       expect(recorder.stops, 1);
-      await verifyDraft(vault);
+      await verifyDraft(tester, vault);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await remove(tester, vault);
@@ -341,7 +343,7 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       await finish(tester, vault.state.stopRecording!());
       await tester.pump();
-      await verifyDraft(vault);
+      await verifyDraft(tester, vault);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);

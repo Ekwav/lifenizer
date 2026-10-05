@@ -34,6 +34,10 @@ import 'services/audio_cache_io.dart'
     as audio_cache;
 import 'services/wav_audio.dart';
 import 'services/vault_chunks.dart';
+import 'services/vault_chunk_store.dart';
+import 'services/vault_chunk_store_sembast.dart';
+import 'services/vault_chunk_store_platform_io.dart'
+    if (dart.library.js_interop) 'services/vault_chunk_store_platform_web.dart';
 import 'services/vault_worker_io.dart'
     if (dart.library.js_interop) 'services/vault_worker_web.dart'
     show vaultWorkerCount;
@@ -53,12 +57,14 @@ part 'services/vault_training.dart';
 class LifenizerAppState extends ChangeNotifier {
   LifenizerAppState({
     LocalVaultStore? localStore,
+    VaultChunkStore? chunkStore,
     this.apiFactory,
     PairingCredentialStore? pairingStore,
     ImapCredentialStore? imapStore,
     DocumentCredentialStore? documentStore,
     DiscordBotCredentialStore? discordStore,
-  }) : _localStore = localStore {
+  }) : _localStore = localStore,
+       _chunkStore = chunkStore {
     recording = RecordingController(this);
     stopRecording = recording.stop;
     pairing = DevicePairingService(this, store: pairingStore);
@@ -107,6 +113,10 @@ class LifenizerAppState extends ChangeNotifier {
 
   final LifenizerApiClient Function(String)? apiFactory;
   LocalVaultStore? _localStore;
+  VaultChunkStore? _chunkStore;
+  // Set when the loaded chunks live in another store than the current one: the
+  // next save rewrites them there, then removes the old records.
+  int? _chunkMigrationFrom;
   String rememberedEmail = '';
   String? _localVaultKey;
   final List<SyncEnvelope> _pendingSync = [];
@@ -119,7 +129,17 @@ class LifenizerAppState extends ChangeNotifier {
   Stopwatch? _progressStageClock;
   Timer? _syncProgressTicker;
   int _snapshotWriteRevision = 0;
+
+  /// Metadata of the pending recording (`recordedAt`, `title`,
+  /// `participantNames`, `detailsPrompted`, `payloadBytes`, `payloadNonce`). The
+  /// WAV itself is stored separately; see [loadAudioDraftPayload].
   Map<String, dynamic>? audioDraft;
+  // Bytes not yet written to their own encrypted record (a fresh recording or a
+  // draft restored from an older vault that kept the payload in the core).
+  List<int>? _pendingDraftPayload;
+  // Decoded bytes kept while a draft exists (a recording was already held in
+  // memory before); avoids re-decrypting the stored payload for each use.
+  List<int>? _draftPayloadCache;
   Future<void> Function()? stopRecording;
   DateTime? lastSyncedAt;
   bool _unlocking = false;
@@ -164,6 +184,11 @@ class LifenizerAppState extends ChangeNotifier {
   int _chunkCount = 0;
   List<String?> _chunkNonces = <String?>[];
   List<int> _chunkConversationCounts = <int>[];
+  List<int> _chunkMessageCounts = <int>[];
+  int _savedCursor = 0;
+  // Nonces of chunk files written (or about to be) by saves whose final core
+  // never landed; the core lists them as pendingChunkNonces.
+  final Map<int, List<String>> _unconfirmedChunkNonces = {};
   final Map<String, int> _dirtyConversations = <String, int>{};
   int _dirtyRevision = 0;
   int _indexedConversationCount = -1;

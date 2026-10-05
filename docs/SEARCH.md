@@ -153,9 +153,13 @@ record at `vault:<key>` holds `{vaultSalt, format: 2, cipherText, nonce,
 chunkCount, chunkNonces}`; its plaintext contains the session, sync cursor,
 people, relations, saved searches, the pending outbox, the audio draft and a
 `conversationBuckets` summary (per-chunk conversation and message counts), but no
-conversation messages. Conversations live in chunk records
-`vault:<key>:chunk:<n>` = `{cipherText, nonce}` whose plaintext is
-`{conversations: [...]}`. A conversation belongs to chunk
+conversation messages. Conversations live in chunks whose plaintext is `{conversations: [...]}`. On
+native platforms each chunk is a file,
+`<application support>/lifenizer-vaults/<FNV-1a(key) hex>/chunk-<n>.bin`: the
+magic `LCK1`, one nonce-length byte, the ASCII nonce, then the ASCII cipherText to
+end of file. The core records `chunkStorage: files`. The browser (and the unit
+tests' default) keep the same `{cipherText, nonce}` records as
+`vault:<key>:chunk:<n>` entries in the vault database (`chunkStorage: sembast`). A conversation belongs to chunk
 `FNV-1a(id) % chunkCount` (a deterministic hash; Dart's `hashCode` is not stable
 across runs). `chunkCount` is chosen at the first v2 write (1 below 200
 conversations, otherwise conversations/250 clamped to 4..128) and kept, except
@@ -163,22 +167,62 @@ that a vault that has grown fourfold past its layout is re-bucketed with one ful
 rewrite.
 
 Saves track which conversations changed (`_markConversationChanged`) and
-encrypt/write only the core plus the affected chunks, in one database
-transaction with the chunks first. An audio-draft save, a session renewal or an
+encrypt/write only the core plus the affected chunks. Saving existing chunks is
+two-phase so a crash never forces a re-download: (1) a core with the current
+`chunkNonces`, the previous cursor and counts, the new outbox and a
+`pendingChunkNonces` map of the nonces about to be written; (2) the chunk files; (3)
+the final core with updated `chunkNonces`. On load a chunk is valid if its nonce
+equals `chunkNonces[n]` or a pending nonce; a missing file or a nonce matching
+neither takes the damaged-vault path. A chunk file can therefore be newer than the
+core's cursor; that is safe because sync re-applies the same entities, which
+replace conversations by id. Pending nonces are cleared by the next successful
+save (a load that finds them forces one). The first save, a re-bucketing and a
+storage migration use only the single final core write: the previous layout stays
+valid until it lands, except that a crash during a re-bucketing still means a
+re-download. Chunk files are written
+first, each atomically: a temporary `chunk-<n>.bin.tmp` in the same directory is
+written and flushed (fsync) and then renamed over the old file, so a reader sees
+the previous or the new chunk, never a partial one. Any I/O error (disk full)
+is thrown immediately and the temporary file is removed, so the outbox and cursor
+do not advance on a failed save; this replaces the database compaction guard for
+chunks. The small core record is then written to the database, which keeps its
+explicit compaction (now cheap because the database holds no chunk ciphertext).
+The directory name is a 32-bit hash; a collision between two vaults would be
+caught by the nonce binding below and treated as a damaged vault. Chunk
+decryption reads the file inside the worker isolate, so the main isolate never
+handles the ciphertext. An audio-draft save, a session renewal or an
 outbox change rewrites only the core. Vaults written by older builds (no
-`format`) are read as before and converted by the first save.
+`format`) are read as before and converted by the first save. Chunks stored as
+database records (`chunkStorage` absent or `sembast`) also load, and the first
+save rewrites them as files, writes the core and only then deletes the old
+records. Damaged-vault recovery deletes the chunk directory as well as any chunk
+records; there is no separate "remove vault" feature, and locking only saves.
 
 Loading reads the core, then decrypts all chunks on up to
 `min(processors, 6)` background isolates (decryption and `jsonDecode` run in the
 worker), while the UI isolate builds models from finished chunks in yielding
 batches. The browser keeps a single sequential lane. A missing chunk, a chunk
-whose nonce differs from `chunkNonces`, an undecryptable chunk or a conversation
+(or chunk file) whose nonce differs from `chunkNonces`, an undecryptable chunk or a conversation
 count that disagrees with the core makes unlock fail with a message that the
 local vault is incomplete and must be re-downloaded online. The core was
 authenticated, so the unsent outbox and microphone draft are first rewritten
 into a minimal core (cursor 0, marked incomplete) and the chunk records are
 deleted; the next online unlock downloads everything again and uploads the
 preserved outbox. Offline unlock of such a vault keeps reporting the error.
+
+**Audio draft.** A pending microphone recording (up to tens of MB) is not part of
+the core. The core's `audioDraft` holds only metadata (`recordedAt`, `title`,
+`participantNames`, `detailsPrompted`, `payloadBytes`, `payloadNonce`); the WAV is
+encrypted into its own record (`audio-draft.bin` in the vault directory, or a
+database record in the browser layout), written atomically like a chunk and bound
+to the core by `payloadNonce`. `saveAudioDraft` writes the payload first, then the
+core; `discardAudioDraft` deletes the payload after the core is written; editing
+the draft's details writes only the core. `loadAudioDraftPayload()` returns the
+bytes (kept in memory while the draft exists, else decrypted on demand in a
+background isolate). Older vaults that stored the payload inside the core load it
+and move it to its own record on the first save. Damaged-vault recovery removes
+only numbered chunks, so the draft payload and metadata survive it. The payload is
+still serialized as base64 inside its encrypted JSON envelope.
 
 **Early unlock.** When a cached vault exists (and this is not a registration),
 `login` opens the UI as soon as the vault is decrypted and the server vault ID
@@ -222,10 +266,21 @@ measurements.
 | Full save: database write | 1.6-1.7 s | 2.9-4.1 s (benchmark file also still holds the old blob) |
 | Partial save (one dirty chunk + core) | 7.3-8.3 s encrypt + 1.6 s write | about 2.0-2.1 s in total |
 
-The partial save is dominated by the explicit database compaction described
-above, which still rewrites the whole encrypted file; encrypting one chunk and the
-core is a small part of it. Before this change every save, including an audio
-draft, re-encrypted everything.
+With chunks stored in the database (browser layout) a partial save is dominated
+by the explicit compaction, which rewrites the whole encrypted file. Chunk files
+remove that cost on native platforms (one run, same machine; `--startup` prints
+all of these):
+
+| Operation | Chunks in the database | Chunk files |
+| --- | ---: | ---: |
+| Full save: write | 2.9-4.1 s | 0.34 s |
+| Parallel load + decrypt (43 chunks) | 1.4-2.5 s | 1.3 s (files read inside the workers) |
+| Partial save (one chunk + core, including encryption) | 2.0-2.1 s | 0.12 s |
+| Core-only save (audio draft, session) | not measured separately | 2 ms (core database file only) |
+
+Before this change every save, including an audio draft, re-encrypted
+everything. File timings come from the page cache of a warm benchmark run; the
+fsync-before-rename step is included.
 
 On a cached unlock the UI no longer waits for the remote sync or the search build,
 so the visible wait is key derivation, chunk decryption and model restoration

@@ -2,13 +2,19 @@ part of '../app_state.dart';
 
 extension VaultSync on LifenizerAppState {
   Future<void> initialize() async {
-    _localStore ??= await LocalVaultStore.open();
+    if (_localStore == null) {
+      _localStore = await LocalVaultStore.open();
+      _chunkStore ??= await openVaultChunkStore(_localStore!);
+    }
     final settings = await _localStore!.read('settings');
     if (settings == null) return;
     apiBaseUrl = settings['apiBaseUrl'] as String? ?? apiBaseUrl;
     rememberedEmail = settings['email'] as String? ?? '';
     deviceId = settings['deviceId'] as String? ?? deviceId;
   }
+
+  VaultChunkStore get _chunks =>
+      _chunkStore ??= SembastVaultChunkStore(_localStore!);
 
   Future<void> login({
     required String baseUrl,
@@ -257,6 +263,8 @@ extension VaultSync on LifenizerAppState {
     importCapabilities.clear();
     quotaStatus = null;
     audioDraft = null;
+    _pendingDraftPayload = null;
+    _draftPayloadCache = null;
     _pendingSync.clear();
     syncCursor = 0;
     syncError = null;
@@ -269,9 +277,13 @@ extension VaultSync on LifenizerAppState {
     _indexedRelationCount = -1;
     _indexedParticipantCount = -1;
     _markSearchIndexDirty();
+    _chunkMigrationFrom = null;
     _chunkCount = 0;
     _chunkNonces = <String?>[];
     _chunkConversationCounts = <int>[];
+    _chunkMessageCounts = <int>[];
+    _savedCursor = 0;
+    _unconfirmedChunkNonces.clear();
     _dirtyConversations.clear();
     _lastSearchQuery = null;
     _lastSearchAt = null;
@@ -563,10 +575,11 @@ extension VaultSync on LifenizerAppState {
     AuthSession auth,
     int chunkCount,
     List<int> conversationCounts,
-    List<int> messageCounts,
-  ) => {
+    List<int> messageCounts, {
+    int? cursor,
+  }) => {
     'session': auth.toJson(),
-    'cursor': syncCursor,
+    'cursor': cursor ?? syncCursor,
     // Capture immutable records now; their JSON conversion runs in the worker.
     'participants': participants.toList(),
     'relations': relations.toList(),
@@ -618,19 +631,45 @@ extension VaultSync on LifenizerAppState {
       for (final nonce in local['chunkNonces'] as List? ?? const [])
         nonce as String?,
     ];
-    final records = <Map<String, dynamic>>[];
-    var intact = nonces.length == count;
-    for (var n = 0; intact && n < count; n++) {
-      final record = await _localStore!.read('$key:chunk:$n');
-      if (record == null || record['nonce'] != nonces[n]) {
-        intact = false;
-      } else {
-        records.add(record);
-      }
+    // Vaults written before chunk files existed keep their chunks in Sembast;
+    // they load from there and the next save moves them to the current store.
+    final storage = local['chunkStorage'] as String? ?? 'sembast';
+    final VaultChunkStore? source = storage == _chunks.kind
+        ? _chunks
+        : storage == 'sembast'
+        ? SembastVaultChunkStore(_localStore!)
+        : null;
+    if (source == null || nonces.length != count) {
+      await _quarantineIncompleteVault(core, local, key, count);
     }
-    if (!intact) await _quarantineIncompleteVault(core, local, key, count);
+    // A save that crashed between writing chunk files and its final core leaves
+    // pendingChunkNonces: such a file may carry either nonce.
+    final pending = <int, List<String>>{};
+    for (final entry
+        in (local['pendingChunkNonces'] as Map? ?? const {}).entries) {
+      final value = entry.value;
+      pending[int.parse(entry.key as String)] = value is List
+          ? [for (final item in value) item as String]
+          : [value as String];
+    }
     try {
-      final repaired = await _restoreSnapshot(core, chunkRecords: records);
+      final repaired = await _restoreSnapshot(
+        core,
+        chunks: (source, key, nonces, pending),
+      );
+      for (final n in pending.keys) {
+        // Remember which nonce the file really carries.
+        final actual = n < count ? await source.chunkNonce(key, n) : null;
+        if (actual == null) throw const _IncompleteChunks();
+        nonces[n] = actual;
+      }
+      _savedCursor = syncCursor;
+      _chunkMessageCounts = [
+        for (final value
+            in (core['conversationBuckets'] as Map?)?['messages'] as List? ??
+                const [])
+          value as int,
+      ];
       _chunkCount = count;
       _chunkNonces = nonces;
       _chunkConversationCounts = [
@@ -640,7 +679,12 @@ extension VaultSync on LifenizerAppState {
                 const [])
           value as int,
       ];
-      return (needsSave: repaired, resyncRequired: false);
+      final migrating = source.kind != _chunks.kind;
+      if (migrating) _chunkMigrationFrom = count;
+      return (
+        needsSave: repaired || migrating || pending.isNotEmpty,
+        resyncRequired: false,
+      );
     } on _IncompleteChunks {
       await _quarantineIncompleteVault(core, local, key, count);
     }
@@ -680,9 +724,10 @@ extension VaultSync on LifenizerAppState {
         'chunkCount': 0,
         'chunkNonces': const <String>[],
       });
-      await _localStore!.deleteMany([
-        for (var n = 0; n < count; n++) '$key:chunk:$n',
-      ]);
+      await _chunks.deleteAll(key);
+      await SembastVaultChunkStore(
+        _localStore!,
+      ).deleteChunks(key, [for (var n = 0; n < count; n++) n]);
     } catch (exception) {
       throw StateError(
         '$_incompleteVaultMessage (Recovery could not be saved: $exception)',
@@ -693,18 +738,26 @@ extension VaultSync on LifenizerAppState {
 
   Future<bool> _restoreSnapshot(
     Map<String, dynamic> json, {
-    List<Map<String, dynamic>>? chunkRecords,
+    (VaultChunkStore, String, List<String?>, Map<int, List<String>>)? chunks,
   }) async {
     audioDraft = json['audioDraft'] == null
         ? null
         : Map<String, dynamic>.from(json['audioDraft']);
+    var legacyDraft = false;
+    final legacyPayload = audioDraft?.remove('payload');
+    if (legacyPayload is String) {
+      // Older vaults kept the WAV inside the core; the next save moves it.
+      _pendingDraftPayload = _draftPayloadCache = base64Decode(legacyPayload);
+      audioDraft!['payloadBytes'] = _pendingDraftPayload!.length;
+      legacyDraft = true;
+    }
     session = AuthSession.fromJson(Map<String, dynamic>.from(json['session']));
     syncCursor = json['cursor'] as int;
     participants.addAll(
       json.parseObjectList('participants', Participant.fromJson),
     );
     _invalidateParticipantLookup();
-    if (chunkRecords == null) {
+    if (chunks == null) {
       final rawConversations = json['conversations'] as List? ?? const [];
       final progress = _RestoreProgress(
         messages: rawConversations.fold<int>(
@@ -718,14 +771,14 @@ extension VaultSync on LifenizerAppState {
       await _restoreConversationList(rawConversations, progress);
       _reportRestore(progress, force: true);
     } else {
-      await _restoreConversationChunks(json, chunkRecords);
+      await _restoreConversationChunks(json, chunks);
     }
     relations.addAll(json.parseObjectList('relations', RelationEdge.fromJson));
     savedSearches.addAll(
       json.parseObjectList('savedSearches', SavedSearch.fromJson),
     );
     _pendingSync.addAll(json.parseObjectList('pending', SyncEnvelope.fromJson));
-    var repaired = false;
+    var repaired = legacyDraft;
     _people;
     if (_hasParticipantRedirects) {
       for (var i = 0; i < conversations.length; i++) {
@@ -799,8 +852,10 @@ extension VaultSync on LifenizerAppState {
   /// from finished chunks in yielding batches.
   Future<void> _restoreConversationChunks(
     Map<String, dynamic> core,
-    List<Map<String, dynamic>> records,
+    (VaultChunkStore, String, List<String?>, Map<int, List<String>>) chunks,
   ) async {
+    final (source, key, nonces, pending) = chunks;
+    final chunkTotal = nonces.length;
     final buckets = core['conversationBuckets'] as Map?;
     int sum(String field) => ((buckets?[field] as List?) ?? const []).fold<int>(
       0,
@@ -814,7 +869,7 @@ extension VaultSync on LifenizerAppState {
     _setSyncProgress(
       SyncStage.decryptingLocal,
       completed: 0,
-      total: records.length,
+      total: chunkTotal,
       detail: 'Decrypting your cached vault',
     );
     var decrypted = 0;
@@ -824,13 +879,15 @@ extension VaultSync on LifenizerAppState {
     Future<void> lane() async {
       while (!failed) {
         final n = next++;
-        if (n >= records.length) return;
+        if (n >= chunkTotal) return;
         final Map<String, dynamic> decoded;
         try {
-          decoded = await _crypto.decryptJson(
-            cipherText: records[n]['cipherText'] as String,
-            nonce: records[n]['nonce'] as String,
-            background: true,
+          decoded = await source.decryptChunk(
+            _crypto,
+            key,
+            n,
+            nonces[n] ?? '',
+            alternateNonces: pending[n] ?? const [],
           );
         } catch (_) {
           failed = true;
@@ -840,7 +897,7 @@ extension VaultSync on LifenizerAppState {
         _setSyncProgress(
           SyncStage.decryptingLocal,
           completed: decrypted,
-          total: records.length,
+          total: chunkTotal,
           force: false,
         );
         final raw = decoded['conversations'] as List? ?? const [];
@@ -853,7 +910,7 @@ extension VaultSync on LifenizerAppState {
     Object? failure;
     try {
       await Future.wait([
-        for (var i = 0; i < math.min(vaultWorkerCount(), records.length); i++)
+        for (var i = 0; i < math.min(vaultWorkerCount(), chunkTotal); i++)
           lane(),
       ]);
     } catch (exception) {
@@ -866,7 +923,10 @@ extension VaultSync on LifenizerAppState {
     }
     if (failure != null) throw failure;
     _reportRestore(progress, force: true);
-    if (buckets != null && conversations.length != expectedConversations) {
+    // Chunks newer than the core (pending nonces) legitimately differ.
+    if (buckets != null &&
+        pending.isEmpty &&
+        conversations.length != expectedConversations) {
       throw const _IncompleteChunks();
     }
   }
@@ -913,10 +973,14 @@ extension VaultSync on LifenizerAppState {
     await operation;
   }
 
+  static const _audioDraftBlob = 'audio-draft';
+
   Future<void> saveAudioDraft(List<int> bytes, DateTime recordedAt) async {
+    _pendingDraftPayload = bytes;
+    _draftPayloadCache = bytes;
     audioDraft = {
-      'payload': base64Encode(bytes),
       'recordedAt': recordedAt.toUtc().toIso8601String(),
+      'payloadBytes': bytes.length,
     };
     await _persistLocal();
     _notifyChanged();
@@ -924,12 +988,48 @@ extension VaultSync on LifenizerAppState {
 
   Future<void> discardAudioDraft() async {
     audioDraft = null;
+    _pendingDraftPayload = null;
+    _draftPayloadCache = null;
     await _persistLocal();
+    // Remove the payload only after the core no longer refers to it.
+    final key = _localVaultKey;
+    if (key != null && _localStore != null) {
+      final operation = _storageTail.then(
+        (_) => _chunks.deleteBlob(key, _audioDraftBlob),
+      );
+      _storageTail = operation.catchError((Object _) {});
+      await operation;
+    }
     _notifyChanged();
   }
 
+  /// The pending recording's WAV bytes, read and decrypted on demand (the core
+  /// record holds only its metadata). Null when there is no draft or its stored
+  /// payload does not match the core.
+  Future<List<int>?> loadAudioDraftPayload() async {
+    final draft = audioDraft;
+    if (draft == null) return null;
+    final cached = _draftPayloadCache;
+    if (cached != null) return cached;
+    final key = _localVaultKey;
+    if (key == null) return null;
+    await _storageTail;
+    final nonce = draft['payloadNonce'] as String?;
+    final record = await _chunks.readBlob(key, _audioDraftBlob);
+    if (nonce == null || record == null || record['nonce'] != nonce) {
+      return null;
+    }
+    final plain = await _crypto.decryptJson(
+      cipherText: record['cipherText'] as String,
+      nonce: nonce,
+      background: true,
+    );
+    return _draftPayloadCache = base64Decode(plain['payload'] as String);
+  }
+
   /// Stores the title/people chosen for the pending recording with the draft so
-  /// they survive navigation, restarts and lock/unlock.
+  /// they survive navigation, restarts and lock/unlock. Only the core is
+  /// rewritten, never the audio.
   Future<void> updateAudioDraftDetails({
     String? title,
     List<String>? participantNames,
@@ -956,9 +1056,15 @@ extension VaultSync on LifenizerAppState {
   }
 
   /// Encrypts and writes the core record plus only the chunks that contain a
-  /// conversation changed since the last successful save. Chunks and core go in
-  /// one transaction (chunks first), so a crash cannot leave a core pointing at
-  /// chunks that were not written.
+  /// conversation changed since the last successful save.
+  ///
+  /// Saving existing chunks is two-phase so that a crash at any point still
+  /// loads without a re-download: (1) write a core that keeps the current
+  /// `chunkNonces` and the previous cursor and chunk counts, and lists the new
+  /// nonces as `pendingChunkNonces`; (2) write the chunk files; (3) write the
+  /// final core. A chunk is valid when its nonce equals `chunkNonces[n]` or a
+  /// pending one. A chunk newer than the core's cursor is safe: sync re-applies
+  /// the same entities idempotently (they replace conversations by id).
   Future<void> _writeVault(String key) async {
     final auth = session;
     if (_localStore == null ||
@@ -967,14 +1073,33 @@ extension VaultSync on LifenizerAppState {
         !_crypto.isUnlocked) {
       return;
     }
+    final payload = _pendingDraftPayload;
+    if (payload != null && audioDraft != null) {
+      // The audio goes into its own encrypted record before any core refers to
+      // it, so core-only saves never re-encrypt it.
+      final sealed = await _crypto.encryptJson({
+        'payload': base64Encode(payload),
+      }, background: true);
+      await _chunks.writeBlob(key, _audioDraftBlob, {
+        'cipherText': sealed.cipherText,
+        'nonce': sealed.nonce,
+      });
+      if (identical(_pendingDraftPayload, payload) && audioDraft != null) {
+        audioDraft = {...audioDraft!, 'payloadNonce': sealed.nonce};
+        _pendingDraftPayload = null;
+      }
+    }
     final captured = _dirtyRevision;
     var chunkCount = _chunkCount;
     var rewriteAll = false;
     final desired = vaultChunkCountFor(conversations.length);
     // Chosen at the first v2 write; regrown (full rewrite) only if the vault
     // outgrew its layout fourfold.
+    final migrateFrom = _chunkMigrationFrom;
     if (chunkCount == 0 || desired >= chunkCount * 4) {
       chunkCount = desired;
+      rewriteAll = true;
+    } else if (migrateFrom != null) {
       rewriteAll = true;
     }
     final conversationCounts = List<int>.filled(chunkCount, 0);
@@ -1005,13 +1130,37 @@ extension VaultSync on LifenizerAppState {
       conversationCounts,
       messageCounts,
     );
+    final twoPhase =
+        !rewriteAll &&
+        dirty.isNotEmpty &&
+        _chunkNonces.length == chunkCount &&
+        _chunkConversationCounts.length == chunkCount &&
+        _chunkMessageCounts.length == chunkCount;
+    // The phase-1 core describes the chunks still on disk: old cursor/counts.
+    final phaseOneSnapshot = twoPhase
+        ? _coreSnapshot(
+            auth,
+            chunkCount,
+            _chunkConversationCounts,
+            _chunkMessageCounts,
+            cursor: _savedCursor,
+          )
+        : null;
     final order = dirty.toList()..sort();
     final payloads = <int, EncryptedPayload>{};
     EncryptedPayload? corePayload;
+    EncryptedPayload? phaseOnePayload;
     final tasks = <Future<void> Function()>[
       () async {
         corePayload = await _crypto.encryptJson(coreSnapshot, background: true);
       },
+      if (phaseOneSnapshot != null)
+        () async {
+          phaseOnePayload = await _crypto.encryptJson(
+            phaseOneSnapshot,
+            background: true,
+          );
+        },
       for (final n in order)
         () async {
           payloads[n] = await _crypto.encryptJson({
@@ -1036,24 +1185,63 @@ extension VaultSync on LifenizerAppState {
             (n < _chunkNonces.length ? _chunkNonces[n] : null),
     ];
     final core = corePayload!;
-    await _localStore!.writeMany({
-      for (final n in order)
-        '$key:chunk:$n': {
-          'cipherText': payloads[n]!.cipherText,
-          'nonce': payloads[n]!.nonce,
-        },
-      key: {
-        'vaultSalt': auth.vaultSalt,
-        'format': 2,
-        'cipherText': core.cipherText,
-        'nonce': core.nonce,
-        'chunkCount': chunkCount,
-        'chunkNonces': nonces,
-      },
-    });
+    Map<String, dynamic> coreRecord(
+      EncryptedPayload payload,
+      List<String?> chunkNonces, [
+      Map<String, Object>? pending,
+    ]) => {
+      'vaultSalt': auth.vaultSalt,
+      'format': 2,
+      'chunkStorage': _chunks.kind,
+      'cipherText': payload.cipherText,
+      'nonce': payload.nonce,
+      'chunkCount': chunkCount,
+      'chunkNonces': chunkNonces,
+      if (pending != null && pending.isNotEmpty) 'pendingChunkNonces': pending,
+    };
+    if (twoPhase) {
+      for (final n in order) {
+        (_unconfirmedChunkNonces[n] ??= []).add(payloads[n]!.nonce);
+      }
+      await _localStore!.write(
+        key,
+        coreRecord(phaseOnePayload!, _chunkNonces, {
+          for (final entry in _unconfirmedChunkNonces.entries)
+            '${entry.key}': entry.value.length == 1
+                ? entry.value.single
+                : entry.value,
+        }),
+      );
+    }
+    // Chunk files (atomic per file, errors thrown), then the final core, which
+    // keeps its explicit database compaction.
+    if (order.isNotEmpty) {
+      await _chunks.writeChunks(key, {
+        for (final n in order)
+          n: {
+            'cipherText': payloads[n]!.cipherText,
+            'nonce': payloads[n]!.nonce,
+          },
+      });
+    }
+    await _localStore!.write(key, coreRecord(core, nonces));
+    _unconfirmedChunkNonces.clear();
+    if (migrateFrom != null) {
+      // The chunks now live in the new store and the core points at them.
+      try {
+        await SembastVaultChunkStore(
+          _localStore!,
+        ).deleteChunks(key, [for (var n = 0; n < migrateFrom; n++) n]);
+      } catch (_) {
+        // Orphaned old records are harmless; the migration itself succeeded.
+      }
+      _chunkMigrationFrom = null;
+    }
     _chunkCount = chunkCount;
     _chunkNonces = nonces;
     _chunkConversationCounts = conversationCounts;
+    _chunkMessageCounts = messageCounts;
+    _savedCursor = coreSnapshot['cursor'] as int;
     _dirtyConversations.removeWhere((_, revision) => revision <= captured);
     _snapshotWriteRevision++;
   }

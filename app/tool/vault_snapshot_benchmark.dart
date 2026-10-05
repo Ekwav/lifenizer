@@ -6,6 +6,7 @@ import 'package:app/crypto_service.dart';
 import 'package:app/models.dart';
 import 'package:app/services/conversation_search_index.dart';
 import 'package:app/services/search_index_worker_io.dart';
+import 'package:app/services/vault_chunk_file_store.dart';
 import 'package:app/services/vault_chunks.dart';
 import 'package:app/services/vault_database_worker.dart';
 import 'package:app/services/vault_worker_io.dart';
@@ -261,6 +262,109 @@ Future<void> main(List<String> arguments) async {
         });
       }),
     );
+  }
+  if (arguments.contains('--startup')) {
+    // Format v2 with chunk files: ciphertext outside the database, small core.
+    final background = arguments.contains('--background');
+    final chunkCount = vaultChunkCountFor(conversations.length);
+    final groups = List.generate(chunkCount, (_) => <Conversation>[]);
+    for (final conversation in conversations) {
+      groups[vaultChunkFor(conversation.id, chunkCount)].add(conversation);
+    }
+    final files = FileVaultChunkStore('${directory.path}/chunks');
+    final coreDb = '${directory.path}/core.db';
+    final coreWorker = background
+        ? await openVaultDatabaseWorker(coreDb)
+        : null;
+    final coreDirect = background
+        ? null
+        : await databaseFactoryIo.openDatabase(coreDb);
+    final coreStore = stringMapStoreFactory.store('vaults');
+    Future<void> writeCore(Map<String, dynamic> value) async {
+      if (coreWorker != null) {
+        await coreWorker('write', 'core', value);
+      } else {
+        await coreStore.record('core').put(coreDirect!, value);
+      }
+    }
+
+    final lanes = background ? vaultWorkerCount() : 1;
+    Future<void> inLanes(int count, Future<void> Function(int) task) async {
+      var next = 0;
+      Future<void> lane() async {
+        while (next < count) {
+          await task(next++);
+        }
+      }
+
+      await Future.wait([for (var i = 0; i < lanes; i++) lane()]);
+    }
+
+    final payloads = <EncryptedPayload?>[for (final _ in groups) null];
+    await inLanes(groups.length, (n) async {
+      payloads[n] = await crypto.encryptJson({
+        'conversations': groups[n],
+      }, background: background);
+    });
+    final core = await crypto.encryptJson({
+      'cursor': 1,
+    }, background: background);
+    metrics.add(
+      await measured('v2-files-full-save-write', () async {
+        await files.writeChunks('bench', {
+          for (var n = 0; n < groups.length; n++)
+            n: {
+              'cipherText': payloads[n]!.cipherText,
+              'nonce': payloads[n]!.nonce,
+            },
+        });
+        await writeCore({'cipherText': core.cipherText, 'nonce': core.nonce});
+      }),
+    );
+    var loaded = 0;
+    metrics.add(
+      await measured('v2-files-parallel-load-and-decrypt', () async {
+        await inLanes(groups.length, (n) async {
+          final decoded = await files.decryptChunk(
+            crypto,
+            'bench',
+            n,
+            payloads[n]!.nonce,
+            background: background,
+          );
+          loaded += (decoded['conversations'] as List).length;
+        });
+      }),
+    );
+    if (loaded != conversations.length) throw StateError('lost data');
+    metrics.add(
+      await measured('v2-files-partial-save-one-dirty-chunk', () async {
+        final n = vaultChunkFor('thread-1', chunkCount);
+        final chunk = await crypto.encryptJson({
+          'conversations': groups[n],
+        }, background: background);
+        final next = await crypto.encryptJson({
+          'cursor': 2,
+        }, background: background);
+        await files.writeChunks('bench', {
+          n: {'cipherText': chunk.cipherText, 'nonce': chunk.nonce},
+        });
+        await writeCore({'cipherText': next.cipherText, 'nonce': next.nonce});
+      }),
+    );
+    metrics.add(
+      await measured('v2-files-core-only-save', () async {
+        final next = await crypto.encryptJson({
+          'cursor': 3,
+        }, background: background);
+        await writeCore({'cipherText': next.cipherText, 'nonce': next.nonce});
+      }),
+    );
+    if (coreWorker != null) {
+      await coreWorker('close', null, null);
+    } else {
+      await coreDirect!.close();
+    }
   }
   stdout.writeln(
     jsonEncode({
