@@ -928,6 +928,25 @@ extension VaultSync on LifenizerAppState {
     _notifyChanged();
   }
 
+  /// Stores the title/people chosen for the pending recording with the draft so
+  /// they survive navigation, restarts and lock/unlock.
+  Future<void> updateAudioDraftDetails({
+    String? title,
+    List<String>? participantNames,
+    bool? detailsPrompted,
+  }) async {
+    final draft = audioDraft;
+    if (draft == null) return;
+    audioDraft = {
+      ...draft,
+      'title': ?title,
+      'participantNames': ?participantNames,
+      'detailsPrompted': ?detailsPrompted,
+    };
+    await _persistLocal();
+    _notifyChanged();
+  }
+
   Future<void> _persistLocal() async {
     final key = _localVaultKey;
     if (_localStore == null || key == null || session == null) return;

@@ -87,3 +87,9 @@ stores a random filename and ciphertext, with quota accounting based on encrypte
 Old plaintext image uploads remain readable and must be re-uploaded for encryption.
 Manual captures and shared plain text/URLs can stay entirely on-device until encrypted sync.
 Provider normalization and audio transcription remain explicit plaintext compute operations.
+
+## Recording storage and details
+
+A finished microphone recording is kept only as an encrypted draft (`audioDraft`: base64 WAV payload plus `recordedAt`) inside the core record of the local vault (the app support directory on native, the browser's IndexedDB on web). It is not a normal audio file, and it leaves the device only when the user sends it to Whisper for transcription; the transcript is then encrypted and synced. The Capture panel states this storage location permanently.
+
+Right after "Stop and save" (or when Capture opens with a restored draft whose `detailsPrompted` is false, for example after stopping from the Android notification) a bottom sheet asks for a title and people. The details live in the draft (`title`, `participantNames`, `detailsPrompted`, written by `updateAudioDraftDetails`), so they survive navigation, restarts and lock/unlock and are the single source for `importAudioBytes`. Suggestions come from `RecordingSuggestionService` (pure Dart): people are ranked from the last eight weeks by weekday and time-of-day proximity to the recording (same slot last week scores highest, with recency decay), titles from similar earlier audio recordings, and both fields autocomplete case- and diacritic-insensitively over display names, aliases and past titles. Names that match no existing participant are created by the import.

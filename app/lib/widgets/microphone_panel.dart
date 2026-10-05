@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import 'recording_details_sheet.dart';
 
 class MicrophonePanel extends StatefulWidget {
   const MicrophonePanel({required this.state, super.key});
@@ -14,8 +15,6 @@ class MicrophonePanel extends StatefulWidget {
 }
 
 class _MicrophonePanelState extends State<MicrophonePanel> {
-  final _title = TextEditingController();
-  final _people = TextEditingController();
   bool _working = false;
   bool _disposing = false;
 
@@ -36,21 +35,45 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
     if (!widget.state.recording.supportsBackground) {
       unawaited(widget.state.recording.stop());
     }
-    _title.dispose();
-    _people.dispose();
     super.dispose();
+  }
+
+  /// Opens the details sheet once per draft (right after saving, or when a
+  /// draft saved in the background is first seen).
+  void _maybePrompt() {
+    if (!mounted || _disposing || recordingDetailsSheetOpen) return;
+    final draft = widget.state.audioDraft;
+    final recording = widget.state.recording;
+    if (draft == null ||
+        draft['detailsPrompted'] == true ||
+        recording.recording ||
+        recording.working ||
+        _working) {
+      return;
+    }
+    unawaited(_editDetails());
+  }
+
+  Future<void> _editDetails() async {
+    if (widget.state.audioDraft == null || recordingDetailsSheetOpen) return;
+    final result = await showRecordingDetailsSheet(context, widget.state);
+    if (result == RecordingDetailsResult.transcribe &&
+        widget.state.audioDraft != null) {
+      await _transcribe();
+    }
   }
 
   Future<void> _transcribe() async {
     final draft = widget.state.audioDraft!;
+    final title = (draft['title'] as String? ?? '').trim();
     setState(() => _working = true);
     try {
       await widget.state.importAudioBytes(
         bytes: base64Decode(draft['payload'] as String),
         fileName: 'recording.wav',
         mimeType: 'audio/wav',
-        title: _title.text.isEmpty ? 'Recorded conversation' : _title.text,
-        participantNames: _people.text,
+        title: title.isEmpty ? 'Recorded conversation' : title,
+        participantNames: draftPeople(draft).join(', '),
         recordedAt: DateTime.parse(draft['recordedAt'] as String),
       );
       if (widget.state.error == null) await widget.state.discardAudioDraft();
@@ -66,6 +89,9 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
     final seconds = recording.startedAt == null
         ? 0
         : DateTime.now().difference(recording.startedAt!).inSeconds;
+    if (draft != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybePrompt());
+    }
     final disabled = _working || recording.working || widget.state.busy;
     return Card(
       child: Padding(
@@ -80,20 +106,11 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
             const SizedBox(height: 8),
             Text(
               recording.supportsBackground
-                  ? 'Recording continues when you leave this page or lock the screen. Stop here or from the notification, then send to Whisper. Recordings are saved encrypted on this device.'
+                  ? 'Recording continues when you leave this page or lock the screen. Stop here or from the notification, then send to Whisper.'
                   : 'Record here, then send to your Whisper server to transcribe. The transcript is encrypted before sync.',
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _title,
-              decoration: const InputDecoration(labelText: 'Title (optional)'),
-            ),
-            TextField(
-              controller: _people,
-              decoration: const InputDecoration(
-                labelText: 'People (optional, comma separated)',
-              ),
-            ),
+            const SizedBox(height: 8),
+            const RecordingStorageNote(),
             const SizedBox(height: 12),
             if (recording.recording) ...[
               Text(
@@ -107,6 +124,10 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
             ] else if (draft != null) ...[
               const Text(
                 'Recording saved encrypted on this device. Ready to transcribe.',
+              ),
+              _DraftDetails(
+                draft: draft,
+                onEdit: disabled ? null : _editDetails,
               ),
               FilledButton.icon(
                 onPressed: disabled ? null : _transcribe,
@@ -132,6 +153,43 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DraftDetails extends StatelessWidget {
+  const _DraftDetails({required this.draft, required this.onEdit});
+  final Map<String, dynamic> draft;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = (draft['title'] as String? ?? '').trim();
+    final people = draftPeople(draft);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title.isEmpty ? 'Title: Recorded conversation' : 'Title: $title',
+          key: const ValueKey('draft-title'),
+        ),
+        if (people.isNotEmpty)
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final name in people)
+                Chip(label: Text(name), visualDensity: VisualDensity.compact),
+            ],
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Edit details'),
+          ),
+        ),
+      ],
     );
   }
 }
