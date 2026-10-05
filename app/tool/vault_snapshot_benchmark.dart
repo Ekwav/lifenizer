@@ -6,7 +6,9 @@ import 'package:app/crypto_service.dart';
 import 'package:app/models.dart';
 import 'package:app/services/conversation_search_index.dart';
 import 'package:app/services/search_index_worker_io.dart';
+import 'package:app/services/vault_chunks.dart';
 import 'package:app/services/vault_database_worker.dart';
+import 'package:app/services/vault_worker_io.dart';
 import 'package:sembast/sembast_io.dart';
 
 Future<void> main(List<String> arguments) async {
@@ -142,6 +144,121 @@ Future<void> main(List<String> arguments) async {
             relationTextByConversation: const {},
           );
         }
+      }),
+    );
+  }
+  if (arguments.contains('--startup')) {
+    // Format v2: core record plus one encrypted chunk per bucket.
+    final stores = stringMapStoreFactory.store('vaults');
+    Future<Map<String, dynamic>?> read(String key) async {
+      final value = worker != null
+          ? await worker('read', key, null) as Map<String, dynamic>?
+          : await stores.record(key).get(db!);
+      return value == null ? null : Map<String, dynamic>.from(value);
+    }
+
+    Future<void> writeMany(Map<String, Map<String, dynamic>> values) async {
+      if (worker != null) {
+        await worker('writeMany', null, Map<String, dynamic>.of(values));
+      } else {
+        await db!.transaction((transaction) async {
+          for (final entry in values.entries) {
+            await stores.record(entry.key).put(transaction, entry.value);
+          }
+        });
+      }
+    }
+
+    final background = arguments.contains('--background');
+    final chunkCount = vaultChunkCountFor(conversations.length);
+    final groups = List.generate(chunkCount, (_) => <Conversation>[]);
+    for (final conversation in conversations) {
+      groups[vaultChunkFor(conversation.id, chunkCount)].add(conversation);
+    }
+    final lanes = background ? vaultWorkerCount() : 1;
+    Future<void> inLanes(int count, Future<void> Function(int) task) async {
+      var next = 0;
+      Future<void> lane() async {
+        while (next < count) {
+          await task(next++);
+        }
+      }
+
+      await Future.wait([for (var i = 0; i < lanes; i++) lane()]);
+    }
+
+    final chunkPayloads = <EncryptedPayload?>[for (final _ in groups) null];
+    metrics.add(
+      await measured('v2-full-save-encrypt-chunks-parallel', () async {
+        await inLanes(groups.length, (n) async {
+          chunkPayloads[n] = await crypto.encryptJson({
+            'conversations': groups[n],
+          }, background: background);
+        });
+      }),
+    );
+    final corePayload = await crypto.encryptJson({
+      'cursor': 1,
+      'participants': const [],
+    }, background: background);
+    metrics.add(
+      await measured('v2-full-save-database-write', () async {
+        await writeMany({
+          for (var n = 0; n < groups.length; n++)
+            'chunk:$n': {
+              'cipherText': chunkPayloads[n]!.cipherText,
+              'nonce': chunkPayloads[n]!.nonce,
+            },
+          'core': {
+            'cipherText': corePayload.cipherText,
+            'nonce': corePayload.nonce,
+          },
+        });
+      }),
+    );
+    final decodedChunks = List<Map<String, dynamic>?>.filled(
+      groups.length,
+      null,
+    );
+    metrics.add(
+      await measured('v2-load-core-and-decrypt-chunks-parallel', () async {
+        await read('core');
+        await inLanes(groups.length, (n) async {
+          final record = (await read('chunk:$n'))!;
+          decodedChunks[n] = await crypto.decryptJson(
+            cipherText: record['cipherText'] as String,
+            nonce: record['nonce'] as String,
+            background: background,
+          );
+        });
+      }),
+    );
+    metrics.add(
+      await measured('v2-restore-conversation-models', () async {
+        var restored = 0;
+        for (final chunk in decodedChunks) {
+          for (final item in chunk!['conversations'] as List) {
+            Conversation.fromJson(Map<String, dynamic>.from(item as Map));
+            restored++;
+          }
+        }
+        if (restored != conversations.length) throw StateError('lost data');
+      }),
+    );
+    metrics.add(
+      await measured('v2-partial-save-one-dirty-chunk', () async {
+        final n = vaultChunkFor('thread-1', chunkCount);
+        final chunk = await crypto.encryptJson({
+          'conversations': groups[n],
+        }, background: background);
+        final core = await crypto.encryptJson({
+          'cursor': 2,
+          'participants': const [],
+        }, background: background);
+        await writeMany({
+          'chunk:$n': {'cipherText': chunk.cipherText, 'nonce': chunk.nonce},
+          'core': {'cipherText': core.cipherText, 'nonce': core.nonce},
+        });
       }),
     );
   }

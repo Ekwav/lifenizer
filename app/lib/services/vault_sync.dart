@@ -84,14 +84,11 @@ extension VaultSync on LifenizerAppState {
         );
         _clearVault();
         var repaired = false;
+        var resyncRequired = false;
         if (local != null) {
-          _setSyncProgress(SyncStage.decryptingLocal);
-          final snapshot = await _crypto.decryptJson(
-            cipherText: local['cipherText'] as String,
-            nonce: local['nonce'] as String,
-            background: true,
-          );
-          repaired = await _restoreSnapshot(snapshot);
+          final restored = await _restoreLocalVault(local, offline: offline);
+          repaired = restored.needsSave;
+          resyncRequired = restored.resyncRequired;
           if (auth == null) await _restoreSessionForSnapshot(local);
         }
         session = auth ?? session;
@@ -109,41 +106,60 @@ extension VaultSync on LifenizerAppState {
         );
         rememberedEmail = normalizedEmail;
         final savedBeforeSync = _snapshotWriteRevision;
-        if (!offline) {
-          // Validate every remote ciphertext before exposing the unlocked UI.
-          await _syncNow();
-          if (register) {
-            await _pushEntity('vault-check', current.vaultId, {
-              'id': current.vaultId,
-              'version': 1,
-            });
+        Future<void> finishUnlock() async {
+          if (!offline) {
+            await _syncNow();
+            if (register) {
+              await _pushEntity('vault-check', current.vaultId, {
+                'id': current.vaultId,
+                'version': 1,
+              });
+            }
+            try {
+              importCapabilities
+                ..clear()
+                ..addAll(await anonymous.importCapabilities());
+            } catch (_) {
+              // Cached conversations and sync remain usable without discovery.
+            }
           }
-          try {
-            importCapabilities
-              ..clear()
-              ..addAll(await anonymous.importCapabilities());
-          } catch (_) {
-            // Cached conversations and sync remain usable without discovery.
+          _setSyncProgress(SyncStage.saving);
+          if (_snapshotWriteRevision == savedBeforeSync) {
+            if (local == null || repaired) {
+              await _persistLocal();
+            } else if (auth != null) {
+              await _persistSessionForSnapshot(local);
+            }
           }
+          await _localStore!.write('settings', {
+            'apiBaseUrl': apiBaseUrl,
+            'email': rememberedEmail,
+            'deviceId': deviceId,
+          });
+          await _prepareSearchIndex();
+          _setSyncProgress(SyncStage.complete);
+          status = offline
+              ? 'Local vault unlocked · changes will sync when connected'
+              : 'Vault unlocked';
         }
-        _setSyncProgress(SyncStage.saving);
-        if (_snapshotWriteRevision == savedBeforeSync) {
-          if (local == null || repaired) {
-            await _persistLocal();
-          } else if (auth != null) {
-            await _persistSessionForSnapshot(local);
-          }
+
+        if (local != null && !register && !resyncRequired) {
+          // The cached vault is authenticated by its own AES-GCM tags, so the
+          // UI opens now. Remote ciphertext is validated by the sync below,
+          // which runs as the ordinary background sync: lock() waits for it and
+          // a failure surfaces as syncError instead of failing the unlock.
+          _unlocking = false;
+          status = offline
+              ? 'Local vault unlocked · changes will sync when connected'
+              : 'Vault unlocked · syncing in background';
+          _runUnlockInBackground(finishUnlock);
+          _notifyChanged();
+        } else {
+          // First unlock on this device (nothing cached), registration, or a
+          // local vault that must be downloaded again: validate every remote
+          // ciphertext before exposing the unlocked UI.
+          await finishUnlock();
         }
-        await _localStore!.write('settings', {
-          'apiBaseUrl': apiBaseUrl,
-          'email': rememberedEmail,
-          'deviceId': deviceId,
-        });
-        await _prepareSearchIndex();
-        _setSyncProgress(SyncStage.complete);
-        status = offline
-            ? 'Local vault unlocked · changes will sync when connected'
-            : 'Vault unlocked';
       } catch (_) {
         _crypto.lock();
         _api = null;
@@ -153,7 +169,39 @@ extension VaultSync on LifenizerAppState {
       } finally {
         _unlocking = false;
       }
-    });
+    }, prepareIndex: false);
+  }
+
+  /// Runs the remainder of an early unlock through [_syncInFlight] so that
+  /// lock() waits for it, and reports failures as a paused sync.
+  void _runUnlockInBackground(Future<void> Function() body) {
+    final done = Completer<void>();
+    _syncInFlight = done.future;
+    unawaited(() async {
+      try {
+        await body();
+      } catch (exception) {
+        if (_crypto.isUnlocked) {
+          syncError = 'Sync paused: $exception';
+          status = 'Vault unlocked · sync interrupted';
+          _setSyncProgress(SyncStage.failed);
+        }
+      } finally {
+        if (identical(_syncInFlight, done.future)) _syncInFlight = null;
+        done.complete();
+        _notifyChanged();
+      }
+    }());
+  }
+
+  /// Resolves when any background unlock/sync work has finished.
+  Future<void> waitForBackgroundSync() async {
+    while (_syncInFlight != null) {
+      try {
+        await _syncInFlight;
+      } catch (_) {}
+    }
+    await _storageTail;
   }
 
   Future<void> updatePairedSession(AuthSession auth) async {
@@ -214,8 +262,17 @@ extension VaultSync on LifenizerAppState {
     syncError = null;
     _clearSyncProgress();
     lastSyncedAt = null;
+    _searchGeneration++;
     _searchIndex = null;
+    _searchDirtyIds.clear();
+    _indexedConversationCount = -1;
+    _indexedRelationCount = -1;
+    _indexedParticipantCount = -1;
     _markSearchIndexDirty();
+    _chunkCount = 0;
+    _chunkNonces = <String?>[];
+    _chunkConversationCounts = <int>[];
+    _dirtyConversations.clear();
     _lastSearchQuery = null;
     _lastSearchAt = null;
     _lastSearchTopConversationIds = const [];
@@ -500,19 +557,144 @@ extension VaultSync on LifenizerAppState {
     }
   }
 
-  Map<String, dynamic> _snapshot() => {
-    'session': session!.toJson(),
+  /// Plaintext of the core record: everything except conversation contents.
+  /// `conversationBuckets` lets a loader verify every chunk and size progress.
+  Map<String, dynamic> _coreSnapshot(
+    AuthSession auth,
+    int chunkCount,
+    List<int> conversationCounts,
+    List<int> messageCounts,
+  ) => {
+    'session': auth.toJson(),
     'cursor': syncCursor,
     // Capture immutable records now; their JSON conversion runs in the worker.
     'participants': participants.toList(),
-    'conversations': conversations.toList(),
     'relations': relations.toList(),
     'savedSearches': savedSearches.toList(),
     'pending': _pendingSync.toList(),
     if (audioDraft != null) 'audioDraft': audioDraft,
+    'conversationBuckets': {
+      'count': chunkCount,
+      'conversations': conversationCounts,
+      'messages': messageCounts,
+    },
   };
 
-  Future<bool> _restoreSnapshot(Map<String, dynamic> json) async {
+  static const _incompleteVaultMessage =
+      'The local vault on this device is incomplete (a stored part is missing '
+      'or damaged). Unsent changes were kept. Unlock online so the vault can be '
+      're-downloaded.';
+
+  /// Reads the local vault record: legacy v1 (one blob) or v2 (core + chunks).
+  Future<({bool needsSave, bool resyncRequired})> _restoreLocalVault(
+    Map<String, dynamic> local, {
+    required bool offline,
+  }) async {
+    _setSyncProgress(SyncStage.decryptingLocal);
+    final core = await _crypto.decryptJson(
+      cipherText: local['cipherText'] as String,
+      nonce: local['nonce'] as String,
+      background: true,
+    );
+    final format = local['format'];
+    if (format == null) {
+      // Legacy single blob: restore as before; the first save converts it.
+      await _restoreSnapshot(core);
+      return (needsSave: true, resyncRequired: false);
+    }
+    if (format != 2) {
+      throw StateError(
+        'This local vault was written by a newer version of the app.',
+      );
+    }
+    if (local['incomplete'] == true) {
+      if (offline) throw StateError(_incompleteVaultMessage);
+      await _restoreSnapshot(core);
+      return (needsSave: true, resyncRequired: true);
+    }
+    final key = _localVaultKey!;
+    final count = local['chunkCount'] as int? ?? 0;
+    final nonces = [
+      for (final nonce in local['chunkNonces'] as List? ?? const [])
+        nonce as String?,
+    ];
+    final records = <Map<String, dynamic>>[];
+    var intact = nonces.length == count;
+    for (var n = 0; intact && n < count; n++) {
+      final record = await _localStore!.read('$key:chunk:$n');
+      if (record == null || record['nonce'] != nonces[n]) {
+        intact = false;
+      } else {
+        records.add(record);
+      }
+    }
+    if (!intact) await _quarantineIncompleteVault(core, local, key, count);
+    try {
+      final repaired = await _restoreSnapshot(core, chunkRecords: records);
+      _chunkCount = count;
+      _chunkNonces = nonces;
+      _chunkConversationCounts = [
+        for (final value
+            in (core['conversationBuckets'] as Map?)?['conversations']
+                    as List? ??
+                const [])
+          value as int,
+      ];
+      return (needsSave: repaired, resyncRequired: false);
+    } on _IncompleteChunks {
+      await _quarantineIncompleteVault(core, local, key, count);
+    }
+  }
+
+  /// A part of the chunked vault is missing or damaged. The core decrypted, so
+  /// the unsent outbox and microphone draft are rewritten into a minimal core
+  /// (cursor 0) and the chunk records are dropped; an online unlock then
+  /// downloads everything again. Always throws.
+  Future<Never> _quarantineIncompleteVault(
+    Map<String, dynamic> core,
+    Map<String, dynamic> local,
+    String key,
+    int count,
+  ) async {
+    try {
+      final payload = await _crypto.encryptJson({
+        'session': core['session'],
+        'cursor': 0,
+        'participants': const [],
+        'relations': const [],
+        'savedSearches': const [],
+        'pending': core['pending'] ?? const [],
+        if (core['audioDraft'] != null) 'audioDraft': core['audioDraft'],
+        'conversationBuckets': {
+          'count': 0,
+          'conversations': const [],
+          'messages': const [],
+        },
+      }, background: true);
+      await _localStore!.write(key, {
+        'vaultSalt': local['vaultSalt'],
+        'format': 2,
+        'incomplete': true,
+        'cipherText': payload.cipherText,
+        'nonce': payload.nonce,
+        'chunkCount': 0,
+        'chunkNonces': const <String>[],
+      });
+      await _localStore!.deleteMany([
+        for (var n = 0; n < count; n++) '$key:chunk:$n',
+      ]);
+    } catch (exception) {
+      throw StateError(
+        '$_incompleteVaultMessage (Recovery could not be saved: $exception)',
+      );
+    }
+    throw StateError(_incompleteVaultMessage);
+  }
+
+  Future<bool> _restoreSnapshot(
+    Map<String, dynamic> json, {
+    List<Map<String, dynamic>>? chunkRecords,
+  }) async {
     audioDraft = json['audioDraft'] == null
         ? null
         : Map<String, dynamic>.from(json['audioDraft']);
@@ -522,46 +704,22 @@ extension VaultSync on LifenizerAppState {
       json.parseObjectList('participants', Participant.fromJson),
     );
     _invalidateParticipantLookup();
-    final rawConversations = json['conversations'] as List? ?? const [];
-    final totalMessages = rawConversations.fold<int>(
-      0,
-      (count, raw) =>
-          count + (((raw as Map)['segments'] as List?)?.length ?? 0),
-    );
-    var messages = 0;
-    void report({bool force = false}) => _setSyncProgress(
-      SyncStage.restoring,
-      completed: totalMessages == 0 ? conversations.length : messages,
-      total: totalMessages == 0 ? rawConversations.length : totalMessages,
-      detail: totalMessages == 0 ? 'Restoring local conversations' : null,
-      force: force,
-    );
-    report(force: true);
-    for (final raw in rawConversations) {
-      final item = Map<String, dynamic>.from(raw as Map);
-      final conversation = Conversation.fromJson({
-        ...item,
-        'segments': const [],
-      });
-      for (final segment in item['segments'] as List? ?? const []) {
-        conversation.segments.add(
-          ConversationSegment.fromJson(
-            Map<String, dynamic>.from(segment as Map),
-          ),
-        );
-        messages++;
-        if (messages % 250 == 0) {
-          report();
-          await Future<void>.delayed(Duration.zero);
-        }
-      }
-      conversations.add(conversation);
-      if (conversations.length % 50 == 0) {
-        report();
-        await Future<void>.delayed(Duration.zero);
-      }
+    if (chunkRecords == null) {
+      final rawConversations = json['conversations'] as List? ?? const [];
+      final progress = _RestoreProgress(
+        messages: rawConversations.fold<int>(
+          0,
+          (count, raw) =>
+              count + (((raw as Map)['segments'] as List?)?.length ?? 0),
+        ),
+        conversations: rawConversations.length,
+      );
+      _reportRestore(progress, force: true);
+      await _restoreConversationList(rawConversations, progress);
+      _reportRestore(progress, force: true);
+    } else {
+      await _restoreConversationChunks(json, chunkRecords);
     }
-    report(force: true);
     relations.addAll(json.parseObjectList('relations', RelationEdge.fromJson));
     savedSearches.addAll(
       json.parseObjectList('savedSearches', SavedSearch.fromJson),
@@ -574,6 +732,7 @@ extension VaultSync on LifenizerAppState {
         final canonical = _canonicalConversation(conversations[i]);
         if (!identical(canonical, conversations[i])) {
           conversations[i] = canonical;
+          _markConversationChanged(canonical.id);
           repaired = true;
         }
         if (i % 50 == 0) {
@@ -590,6 +749,126 @@ extension VaultSync on LifenizerAppState {
     }
     _markSearchIndexDirty();
     return repaired;
+  }
+
+  void _reportRestore(_RestoreProgress progress, {bool force = false}) =>
+      _setSyncProgress(
+        SyncStage.restoring,
+        completed: progress.messages == 0
+            ? conversations.length
+            : progress.restoredMessages,
+        total: progress.messages == 0
+            ? progress.conversations
+            : progress.messages,
+        detail: progress.messages == 0 ? 'Restoring local conversations' : null,
+        force: force,
+      );
+
+  Future<void> _restoreConversationList(
+    List rawConversations,
+    _RestoreProgress progress,
+  ) async {
+    for (final raw in rawConversations) {
+      final item = Map<String, dynamic>.from(raw as Map);
+      final conversation = Conversation.fromJson({
+        ...item,
+        'segments': const [],
+      });
+      for (final segment in item['segments'] as List? ?? const []) {
+        conversation.segments.add(
+          ConversationSegment.fromJson(
+            Map<String, dynamic>.from(segment as Map),
+          ),
+        );
+        progress.restoredMessages++;
+        if (progress.restoredMessages % 250 == 0) {
+          _reportRestore(progress);
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+      conversations.add(conversation);
+      if (conversations.length % 50 == 0) {
+        _reportRestore(progress);
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+  }
+
+  /// Decrypts every chunk on up to [vaultWorkerCount] background isolates
+  /// (decrypt + jsonDecode run in the worker) while this isolate builds models
+  /// from finished chunks in yielding batches.
+  Future<void> _restoreConversationChunks(
+    Map<String, dynamic> core,
+    List<Map<String, dynamic>> records,
+  ) async {
+    final buckets = core['conversationBuckets'] as Map?;
+    int sum(String field) => ((buckets?[field] as List?) ?? const []).fold<int>(
+      0,
+      (total, value) => total + (value as int),
+    );
+    final expectedConversations = sum('conversations');
+    final progress = _RestoreProgress(
+      messages: sum('messages'),
+      conversations: expectedConversations,
+    );
+    _setSyncProgress(
+      SyncStage.decryptingLocal,
+      completed: 0,
+      total: records.length,
+      detail: 'Decrypting your cached vault',
+    );
+    var decrypted = 0;
+    var next = 0;
+    var failed = false;
+    var parsed = Future<void>.value();
+    Future<void> lane() async {
+      while (!failed) {
+        final n = next++;
+        if (n >= records.length) return;
+        final Map<String, dynamic> decoded;
+        try {
+          decoded = await _crypto.decryptJson(
+            cipherText: records[n]['cipherText'] as String,
+            nonce: records[n]['nonce'] as String,
+            background: true,
+          );
+        } catch (_) {
+          failed = true;
+          throw const _IncompleteChunks();
+        }
+        decrypted++;
+        _setSyncProgress(
+          SyncStage.decryptingLocal,
+          completed: decrypted,
+          total: records.length,
+          force: false,
+        );
+        final raw = decoded['conversations'] as List? ?? const [];
+        parsed = parsed.then((_) {
+          return _restoreConversationList(raw, progress);
+        });
+      }
+    }
+
+    Object? failure;
+    try {
+      await Future.wait([
+        for (var i = 0; i < math.min(vaultWorkerCount(), records.length); i++)
+          lane(),
+      ]);
+    } catch (exception) {
+      failure = exception;
+    }
+    try {
+      await parsed;
+    } catch (exception) {
+      failure ??= exception;
+    }
+    if (failure != null) throw failure;
+    _reportRestore(progress, force: true);
+    if (buckets != null && conversations.length != expectedConversations) {
+      throw const _IncompleteChunks();
+    }
   }
 
   Future<void> _restoreSessionForSnapshot(Map<String, dynamic> snapshot) async {
@@ -651,19 +930,123 @@ extension VaultSync on LifenizerAppState {
 
   Future<void> _persistLocal() async {
     final key = _localVaultKey;
-    final auth = session;
-    if (_localStore == null || key == null || auth == null) return;
-    final snapshot = _snapshot();
-    final operation = _storageTail.then((_) async {
-      final payload = await _crypto.encryptJson(snapshot, background: true);
-      await _localStore!.write(key, {
-        'vaultSalt': auth.vaultSalt,
-        'cipherText': payload.cipherText,
-        'nonce': payload.nonce,
-      });
-      _snapshotWriteRevision++;
-    });
+    if (_localStore == null || key == null || session == null) return;
+    final operation = _storageTail.then((_) => _writeVault(key));
     _storageTail = operation.catchError((Object _) {});
     await operation;
   }
+
+  /// Encrypts and writes the core record plus only the chunks that contain a
+  /// conversation changed since the last successful save. Chunks and core go in
+  /// one transaction (chunks first), so a crash cannot leave a core pointing at
+  /// chunks that were not written.
+  Future<void> _writeVault(String key) async {
+    final auth = session;
+    if (_localStore == null ||
+        auth == null ||
+        _localVaultKey != key ||
+        !_crypto.isUnlocked) {
+      return;
+    }
+    final captured = _dirtyRevision;
+    var chunkCount = _chunkCount;
+    var rewriteAll = false;
+    final desired = vaultChunkCountFor(conversations.length);
+    // Chosen at the first v2 write; regrown (full rewrite) only if the vault
+    // outgrew its layout fourfold.
+    if (chunkCount == 0 || desired >= chunkCount * 4) {
+      chunkCount = desired;
+      rewriteAll = true;
+    }
+    final conversationCounts = List<int>.filled(chunkCount, 0);
+    final messageCounts = List<int>.filled(chunkCount, 0);
+    for (final conversation in conversations) {
+      final n = vaultChunkFor(conversation.id, chunkCount);
+      conversationCounts[n]++;
+      messageCounts[n] += conversation.segments.length;
+    }
+    final dirty = rewriteAll
+        ? {for (var n = 0; n < chunkCount; n++) n}
+        : {
+            for (final id in _dirtyConversations.keys)
+              vaultChunkFor(id, chunkCount),
+            // Safety net for code that changed the list without marking it.
+            for (var n = 0; n < chunkCount; n++)
+              if (n >= _chunkConversationCounts.length ||
+                  _chunkConversationCounts[n] != conversationCounts[n])
+                n,
+          };
+    final groups = {for (final n in dirty) n: <Conversation>[]};
+    for (final conversation in conversations) {
+      groups[vaultChunkFor(conversation.id, chunkCount)]?.add(conversation);
+    }
+    final coreSnapshot = _coreSnapshot(
+      auth,
+      chunkCount,
+      conversationCounts,
+      messageCounts,
+    );
+    final order = dirty.toList()..sort();
+    final payloads = <int, EncryptedPayload>{};
+    EncryptedPayload? corePayload;
+    final tasks = <Future<void> Function()>[
+      () async {
+        corePayload = await _crypto.encryptJson(coreSnapshot, background: true);
+      },
+      for (final n in order)
+        () async {
+          payloads[n] = await _crypto.encryptJson({
+            'conversations': groups[n],
+          }, background: true);
+        },
+    ];
+    var nextTask = 0;
+    Future<void> lane() async {
+      while (nextTask < tasks.length) {
+        await tasks[nextTask++]();
+      }
+    }
+
+    await Future.wait([
+      for (var i = 0; i < math.min(vaultWorkerCount(), tasks.length); i++)
+        lane(),
+    ]);
+    final nonces = [
+      for (var n = 0; n < chunkCount; n++)
+        payloads[n]?.nonce ??
+            (n < _chunkNonces.length ? _chunkNonces[n] : null),
+    ];
+    final core = corePayload!;
+    await _localStore!.writeMany({
+      for (final n in order)
+        '$key:chunk:$n': {
+          'cipherText': payloads[n]!.cipherText,
+          'nonce': payloads[n]!.nonce,
+        },
+      key: {
+        'vaultSalt': auth.vaultSalt,
+        'format': 2,
+        'cipherText': core.cipherText,
+        'nonce': core.nonce,
+        'chunkCount': chunkCount,
+        'chunkNonces': nonces,
+      },
+    });
+    _chunkCount = chunkCount;
+    _chunkNonces = nonces;
+    _chunkConversationCounts = conversationCounts;
+    _dirtyConversations.removeWhere((_, revision) => revision <= captured);
+    _snapshotWriteRevision++;
+  }
+}
+
+class _IncompleteChunks implements Exception {
+  const _IncompleteChunks();
+}
+
+class _RestoreProgress {
+  _RestoreProgress({required this.messages, required this.conversations});
+  final int messages;
+  final int conversations;
+  int restoredMessages = 0;
 }

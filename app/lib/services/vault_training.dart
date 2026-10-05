@@ -163,7 +163,7 @@ extension VaultTraining on LifenizerAppState {
         },
       });
       conversations[conversations.indexOf(current)] = updated;
-      _markSearchIndexDirty();
+      _markConversationChanged(updated.id);
       await _pushEntity('conversation', updated.id, updated.toJson());
       submitted = true;
       status =

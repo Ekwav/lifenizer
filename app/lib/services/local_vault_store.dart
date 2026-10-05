@@ -31,6 +31,36 @@ class LocalVaultStore {
     }
   }
 
+  /// Writes several records (chunks first, core last). The file-backed store
+  /// does it in one transaction and one compaction, so a chunked save is atomic
+  /// and does not rewrite the database file once per record.
+  Future<void> writeMany(Map<String, Map<String, dynamic>> values) async {
+    if (values.isEmpty) return;
+    if (_request != null) {
+      await _request('writeMany', null, Map<String, dynamic>.of(values));
+    } else {
+      // Chunks are listed before the core record, so an interrupted write
+      // leaves the previous core pointing at a nonce mismatch (detected on
+      // load) rather than a core that describes chunks that do not exist.
+      for (final entry in values.entries) {
+        await write(entry.key, entry.value);
+      }
+    }
+  }
+
+  /// Removes records (missing keys are ignored).
+  Future<void> deleteMany(Iterable<String> keys) async {
+    final list = keys.toList();
+    if (list.isEmpty) return;
+    if (_request != null) {
+      await _request('deleteMany', null, {'keys': list});
+    } else {
+      for (final key in list) {
+        await _records.record(key).delete(_database!);
+      }
+    }
+  }
+
   Future<void> close() async {
     if (_request != null) {
       await _request('close', null, null);

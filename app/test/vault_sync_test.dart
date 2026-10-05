@@ -76,13 +76,17 @@ void main() {
     LifenizerAppState state, {
     bool offline = false,
     String phrase = 'private vault phrase',
-  }) => state.login(
-    baseUrl: 'https://vault.example.test',
-    email: 'alice@example.test',
-    password: 'account password',
-    passphrase: phrase,
-    offline: offline,
-  );
+  }) async {
+    await state.login(
+      baseUrl: 'https://vault.example.test',
+      email: 'alice@example.test',
+      password: 'account password',
+      passphrase: phrase,
+      offline: offline,
+    );
+    // Cached unlocks open the UI first and finish syncing in the background.
+    await state.waitForBackgroundSync();
+  }
 
   test(
     'idle cached login keeps ciphertext unchanged and renews the offline session with an encrypted sidecar',
@@ -288,9 +292,18 @@ void main() {
         cipherText: persisted['cipherText'] as String,
         nonce: persisted['nonce'] as String,
       );
-      expect((saved['conversations'] as List).single['participantIds'], [
+      // The first save converts the legacy single blob into format v2.
+      expect(persisted['format'], 2);
+      expect(saved.containsKey('conversations'), isFalse);
+      final chunk = (await disk.read('$key:chunk:0'))!;
+      final savedChunk = await crypto.decryptJson(
+        cipherText: chunk['cipherText'] as String,
+        nonce: chunk['nonce'] as String,
+      );
+      expect((savedChunk['conversations'] as List).single['participantIds'], [
         'person',
       ]);
+      expect(persisted['chunkNonces'], [chunk['nonce']]);
     },
   );
 

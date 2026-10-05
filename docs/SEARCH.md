@@ -6,7 +6,8 @@ identifiers, and relation evidence. Merging people keeps their earlier names and
 identifiers searchable across the linked conversations.
 The server receives encrypted sync envelopes; searching never sends the query or
 plaintext search index to the server. Locking clears the in-memory vault and its
-index. Unlocking rebuilds the index from the restored encrypted snapshot.
+index. Unlocking rebuilds the index from the restored encrypted vault (see
+"Local vault format v2" and "Incremental search index" below).
 
 All ordinary query terms must match. Matching accepts exact words, prefixes,
 fragments of at least two characters, and spelling errors for words of at least
@@ -125,6 +126,93 @@ the roughly ten-minute bulk refresh remain; the change reduces blocking work,
 not the amount of data processed. Final counts were unchanged with no pending
 sync writes or reported errors.
 
+## Local vault format v2, early unlock and incremental search
+
+**Chunked storage.** The local vault is no longer one encrypted blob. A core
+record at `vault:<key>` holds `{vaultSalt, format: 2, cipherText, nonce,
+chunkCount, chunkNonces}`; its plaintext contains the session, sync cursor,
+people, relations, saved searches, the pending outbox, the audio draft and a
+`conversationBuckets` summary (per-chunk conversation and message counts), but no
+conversation messages. Conversations live in chunk records
+`vault:<key>:chunk:<n>` = `{cipherText, nonce}` whose plaintext is
+`{conversations: [...]}`. A conversation belongs to chunk
+`FNV-1a(id) % chunkCount` (a deterministic hash; Dart's `hashCode` is not stable
+across runs). `chunkCount` is chosen at the first v2 write (1 below 200
+conversations, otherwise conversations/250 clamped to 4..128) and kept, except
+that a vault that has grown fourfold past its layout is re-bucketed with one full
+rewrite.
+
+Saves track which conversations changed (`_markConversationChanged`) and
+encrypt/write only the core plus the affected chunks, in one database
+transaction with the chunks first. An audio-draft save, a session renewal or an
+outbox change rewrites only the core. Vaults written by older builds (no
+`format`) are read as before and converted by the first save.
+
+Loading reads the core, then decrypts all chunks on up to
+`min(processors, 6)` background isolates (decryption and `jsonDecode` run in the
+worker), while the UI isolate builds models from finished chunks in yielding
+batches. The browser keeps a single sequential lane. A missing chunk, a chunk
+whose nonce differs from `chunkNonces`, an undecryptable chunk or a conversation
+count that disagrees with the core makes unlock fail with a message that the
+local vault is incomplete and must be re-downloaded online. The core was
+authenticated, so the unsent outbox and microphone draft are first rewritten
+into a minimal core (cursor 0, marked incomplete) and the chunk records are
+deleted; the next online unlock downloads everything again and uploads the
+preserved outbox. Offline unlock of such a vault keeps reporting the error.
+
+**Early unlock.** When a cached vault exists (and this is not a registration),
+`login` opens the UI as soon as the vault is decrypted and the server vault ID
+matches, with the status "Vault unlocked · syncing in background". The remote
+sync, capability refresh, session/settings saving and search preparation then run
+as the normal background sync (`_syncInFlight`), so `lock()` still waits for it,
+progress still appears through `syncProgress`, and a failure sets `syncError` and
+the failed stage instead of failing the unlock. The cached vault is authenticated
+by its own AES-GCM tags; remote ciphertext is validated by that sync. The first
+unlock on a device (nothing cached) and registration keep the blocking behaviour.
+
+**Incremental search index.** Edits mark conversation IDs dirty. Participant and
+relation changes, a missing index, or more than max(300, 5% of the corpus) dirty
+conversations set a full-rebuild flag. Otherwise `ConversationSearchIndex.upsert`
+and `remove` update the live index on the UI isolate in yielding batches (no
+isolate copy): the document, its postings, IDF and average length are refreshed;
+only the changed document's vector norm is recomputed and other documents keep
+slightly stale norms until the next full build. After a background full build the
+index documents are re-pointed at the live conversation objects, and edits made
+during the build stay dirty and are applied incrementally, so one new recording or
+synced conversation does not trigger another full rebuild. `search()` never builds
+a whole index on the UI isolate for vaults above 1,000 conversations: it uses the
+existing (possibly slightly stale) index, or, while none exists yet, a linear scan
+(title, participant names and message text must contain every query word, newest
+first, capped at 500) and `searchIndexPreparing` lets the page say that the index
+is still being prepared. The linear scan folds accents in titles and names but
+matches message text as typed.
+
+Same machine and synthetic archive (10,524 conversations, 126,288 messages,
+70 MB; Dart JIT, 12 cores, `--startup --background --background-store`; ranges
+are three runs, noisy because the machine was not idle). These are not phone
+measurements.
+
+| Operation | Single blob (before) | Chunked v2 |
+| --- | ---: | ---: |
+| Derive vault key | 0.9-1.3 s | unchanged |
+| Decrypt cached vault (+ jsonDecode) | 6.3-7.2 s | 1.4-2.5 s (43 chunks, 6 isolates, includes reading chunk records) |
+| Restore conversation models | 0.5-0.6 s | 0.4-0.6 s |
+| Prepare search (full build) | 3.3-5.4 s | unchanged for a full build; one new conversation is an incremental update |
+| Full save: encrypt | 7.3-8.3 s | 1.7-3.2 s |
+| Full save: database write | 1.6-1.7 s | 2.9-4.1 s (benchmark file also still holds the old blob) |
+| Partial save (one dirty chunk + core) | 7.3-8.3 s encrypt + 1.6 s write | about 2.0-2.1 s in total |
+
+The partial save is dominated by the explicit database compaction described
+above, which still rewrites the whole encrypted file; encrypting one chunk and the
+core is a small part of it. Before this change every save, including an audio
+draft, re-encrypted everything.
+
+On a cached unlock the UI no longer waits for the remote sync or the search build,
+so the visible wait is key derivation, chunk decryption and model restoration
+(roughly 3-4 s here, versus about 10 s of local work plus the remote sync and
+search build before). That total is derived from the table above, not separately measured end to
+end, and the first unlock on a device is unchanged.
+
 ```sh
 cd app
 dart run tool/vault_snapshot_benchmark.dart 126281
@@ -132,6 +220,7 @@ dart run tool/vault_snapshot_benchmark.dart 126281 --background --background-sto
 dart run tool/vault_snapshot_benchmark.dart 126281 --startup --background --background-store
 ```
 
-`--startup` also measures key derivation, model restoration and search preparation.
+`--startup` also measures key derivation, model restoration and search preparation,
+plus the v2 chunked save, parallel load and one-chunk partial save.
 Its model-restoration measurement intentionally uses the ordinary synchronous
 model parser; the app yields during restoration to keep progress visible.

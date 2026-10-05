@@ -111,6 +111,14 @@ class _SearchPageState extends State<SearchPage> {
           children: [
             if (widget.state.syncProgress?.stage == SyncStage.indexing)
               SyncProgressIndicator(progress: widget.state.syncProgress),
+            if (widget.state.searchIndexPreparing)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Search index still preparing · showing quick matches',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
             // Search input field
             SearchInputField(
               viewModel: _viewModel,

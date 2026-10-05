@@ -32,7 +32,7 @@ class IndexedConversation {
     required this.length,
   });
 
-  final Conversation conversation;
+  Conversation conversation;
   final String haystack;
   final Set<String> titleTokens;
   final Set<String> personTokens;
@@ -54,8 +54,8 @@ class ConversationSearchIndex {
 
   final Map<String, IndexedConversation> documents;
   final Map<String, Set<String>> invertedIndex;
-  final Map<String, double> idf;
-  final double averageLength;
+  Map<String, double> idf;
+  double averageLength;
   static final _digits = RegExp(r'^\d+$');
   static final _word = RegExp(r'[\p{L}\p{N}\p{M}]+', unicode: true);
 
@@ -85,32 +85,11 @@ class ConversationSearchIndex {
     final docs = <String, IndexedConversation>{};
     final inverted = <String, Set<String>>{};
     for (final conversation in conversations) {
-      final participantText = {
-        ...conversation.participantIds,
-        ...conversation.segments
-            .map((segment) => segment.participantId)
-            .whereType<String>(),
-      }.map((id) => participantById[id] ?? id).join(' ');
-      final tokens = tokenize(
-        '${conversation.searchableText} $participantText '
-        '${relationTextByConversation[conversation.id] ?? ''}',
-      );
-      final frequency = <String, int>{};
-      for (final token in tokens) {
-        frequency.update(token, (count) => count + 1, ifAbsent: () => 1);
-      }
-      for (final token in frequency.keys) {
-        inverted.putIfAbsent(token, () => <String>{}).add(conversation.id);
-      }
-      docs[conversation.id] = IndexedConversation(
-        conversation: conversation,
-        haystack: tokens.join(' '),
-        titleTokens: tokenize(conversation.title).toSet(),
-        personTokens: tokenize(participantText).toSet(),
-        tagSet: conversation.tags.map((tag) => tag.toLowerCase()).toSet(),
-        termFrequency: frequency,
-        vectorNorm: 0,
-        length: tokens.length,
+      docs[conversation.id] = _analyze(
+        conversation,
+        participantById,
+        relationTextByConversation,
+        inverted,
       );
       report(docs.length);
     }
@@ -152,6 +131,139 @@ class ConversationSearchIndex {
       idf,
       docs.isEmpty ? 1 : math.max(1.0, totalLength / docs.length),
     );
+  }
+
+  static IndexedConversation _analyze(
+    Conversation conversation,
+    Map<String, String> participantById,
+    Map<String, String> relationTextByConversation,
+    Map<String, Set<String>> inverted,
+  ) {
+    final participantText = {
+      ...conversation.participantIds,
+      ...conversation.segments
+          .map((segment) => segment.participantId)
+          .whereType<String>(),
+    }.map((id) => participantById[id] ?? id).join(' ');
+    final tokens = tokenize(
+      '${conversation.searchableText} $participantText '
+      '${relationTextByConversation[conversation.id] ?? ''}',
+    );
+    final frequency = <String, int>{};
+    for (final token in tokens) {
+      frequency.update(token, (count) => count + 1, ifAbsent: () => 1);
+    }
+    for (final token in frequency.keys) {
+      inverted.putIfAbsent(token, () => <String>{}).add(conversation.id);
+    }
+    return IndexedConversation(
+      conversation: conversation,
+      haystack: tokens.join(' '),
+      titleTokens: tokenize(conversation.title).toSet(),
+      personTokens: tokenize(participantText).toSet(),
+      tagSet: conversation.tags.map((tag) => tag.toLowerCase()).toSet(),
+      termFrequency: frequency,
+      vectorNorm: 0,
+      length: tokens.length,
+    );
+  }
+
+  static double _norm(IndexedConversation doc, Map<String, double> idf) {
+    final sum = doc.termFrequency.entries.fold(0.0, (sum, term) {
+      final weight = (1 + math.log(term.value)) * (idf[term.key] ?? 0);
+      return sum + weight * weight;
+    });
+    return math.sqrt(sum);
+  }
+
+  static Map<String, double> _idf(
+    Map<String, Set<String>> inverted,
+    int documentCount,
+  ) => {
+    for (final entry in inverted.entries)
+      entry.key: math.log(
+        1 +
+            (documentCount - entry.value.length + 0.5) /
+                (entry.value.length + 0.5),
+      ),
+  };
+
+  /// Insert or replace one conversation without rebuilding the corpus. IDF and
+  /// the average length are recomputed (O(vocabulary)) and only this document's
+  /// vector norm is refreshed; other norms stay slightly stale until the next
+  /// full build, which affects only the vector-similarity tie-breaking.
+  /// Pass `refresh: false` when applying a batch and call [refreshStatistics].
+  void upsert(
+    Conversation conversation, {
+    required Map<String, String> participantById,
+    required Map<String, String> relationTextByConversation,
+    bool refresh = true,
+  }) {
+    _detach(conversation.id);
+    final document = _analyze(
+      conversation,
+      participantById,
+      relationTextByConversation,
+      invertedIndex,
+    );
+    documents[conversation.id] = document;
+    _pendingNorms.add(conversation.id);
+    if (refresh) refreshStatistics();
+  }
+
+  void remove(String id, {bool refresh = true}) {
+    _detach(id);
+    documents.remove(id);
+    _pendingNorms.remove(id);
+    if (refresh) refreshStatistics();
+  }
+
+  final Set<String> _pendingNorms = <String>{};
+
+  void _detach(String id) {
+    final previous = documents[id];
+    if (previous == null) return;
+    for (final token in previous.termFrequency.keys) {
+      final ids = invertedIndex[token];
+      if (ids == null) continue;
+      ids.remove(id);
+      if (ids.isEmpty) invertedIndex.remove(token);
+    }
+  }
+
+  void refreshStatistics() {
+    idf = _idf(invertedIndex, documents.length);
+    var totalLength = 0;
+    for (final doc in documents.values) {
+      totalLength += doc.length;
+    }
+    averageLength = documents.isEmpty
+        ? 1
+        : math.max(1.0, totalLength / documents.length);
+    for (final id in _pendingNorms) {
+      final doc = documents[id];
+      if (doc == null) continue;
+      documents[id] = IndexedConversation(
+        conversation: doc.conversation,
+        haystack: doc.haystack,
+        titleTokens: doc.titleTokens,
+        personTokens: doc.personTokens,
+        tagSet: doc.tagSet,
+        termFrequency: doc.termFrequency,
+        vectorNorm: _norm(doc, idf),
+        length: doc.length,
+      );
+    }
+    _pendingNorms.clear();
+  }
+
+  /// Point every indexed document at the live conversation instance (a full
+  /// build in an isolate returns copies).
+  void rebind(Map<String, Conversation> current) {
+    for (final entry in documents.entries) {
+      final live = current[entry.key];
+      if (live != null) entry.value.conversation = live;
+    }
   }
 
   Map<String, Map<String, double>> expandTokens(List<String> tokens) {
@@ -247,7 +359,16 @@ class ConversationSearchIndex {
 
   /// Preserve non-Latin words and fold common Latin accents for name lookup.
   static List<String> tokenize(String text) {
-    final normalized = text
+    final normalized = fold(text);
+    return _word
+        .allMatches(normalized)
+        .map((match) => match.group(0)!)
+        .toList(growable: false);
+  }
+
+  /// Lowercases and folds accents the way [tokenize] does.
+  static String fold(String text) {
+    return text
         .toLowerCase()
         .replaceAll('ß', 'ss')
         .replaceAll('ä', 'ae')
@@ -261,9 +382,5 @@ class ConversationSearchIndex {
         .replaceAll('ç', 'c')
         .replaceAll('ñ', 'n')
         .replaceAll(RegExp(r'\p{M}', unicode: true), '');
-    return _word
-        .allMatches(normalized)
-        .map((match) => match.group(0)!)
-        .toList(growable: false);
   }
 }

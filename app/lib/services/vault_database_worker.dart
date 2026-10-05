@@ -95,6 +95,22 @@ Future<void> _serveVaultDatabase((String, SendPort) setup) async {
             // Sembast swallows lazy append failures. Explicit compaction awaits
             // a complete file replacement and propagates filesystem failures.
             await database.compact();
+          case 'writeMany':
+            await database.transaction((transaction) async {
+              for (final entry in (request[3] as Map).entries) {
+                await records
+                    .record(entry.key as String)
+                    .put(transaction, Map<String, dynamic>.from(entry.value));
+              }
+            });
+            await database.compact();
+          case 'deleteMany':
+            await database.transaction((transaction) async {
+              for (final key in (request[3] as Map)['keys'] as List) {
+                await records.record(key as String).delete(transaction);
+              }
+            });
+            await database.compact();
           case 'close':
             await database.close();
           default:

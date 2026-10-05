@@ -556,11 +556,11 @@ extension VaultImports on LifenizerAppState {
       } else {
         conversations[previousIndex] = conversation;
       }
+      _markConversationChanged(conversation.id);
       if (receipt != null) receipts.add(receipt);
       changed++;
       await _pushEntity('conversation', conversation.id, conversation.toJson());
     }
-    if (changed > 0) _markSearchIndexDirty();
     return changed;
   });
 }

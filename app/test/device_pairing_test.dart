@@ -316,7 +316,12 @@ void main() {
         isTrue,
         reason: first.error ?? first.pairing.error,
       );
-      expect(first.status, contains('Local vault unlocked'));
+      // The cached vault opens immediately; the failing pull is reported as a
+      // paused background sync instead of failing the unlock.
+      await first.waitForBackgroundSync();
+      expect(first.isAuthenticated, isTrue);
+      expect(first.syncError, isNotNull);
+      expect(first.status, contains('Vault unlocked'));
     },
   );
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -29,6 +30,10 @@ import 'services/audio_cache_io.dart'
     if (dart.library.js_interop) 'services/audio_cache_web.dart'
     as audio_cache;
 import 'services/wav_audio.dart';
+import 'services/vault_chunks.dart';
+import 'services/vault_worker_io.dart'
+    if (dart.library.js_interop) 'services/vault_worker_web.dart'
+    show vaultWorkerCount;
 
 import 'services/conversation_search_index.dart';
 import 'services/search_index_worker_io.dart'
@@ -136,11 +141,31 @@ class LifenizerAppState extends ChangeNotifier {
   final List<ImportCapability> importCapabilities = [];
 
   ConversationSearchIndex? _searchIndex;
-  bool _searchIndexDirty = true;
-  int _searchIndexRevision = 0;
+  // Conversations whose index entry is stale, plus a flag for changes (people,
+  // relations, a missing index) that only a full rebuild can reflect.
+  final Set<String> _searchDirtyIds = <String>{};
+  bool _searchFullRebuildNeeded = true;
+  int _searchGeneration = 0;
+  Future<void>? _searchBuild;
+  bool _searchBuildScheduled = false;
+  int fullSearchBuilds = 0;
+  int incrementalSearchUpdates = 0;
+
+  // Chunked local vault (format v2) bookkeeping. A conversation lives in chunk
+  // stableHash(id) % _chunkCount; only chunks containing a conversation that
+  // changed since the last successful save are re-encrypted and rewritten.
+  int _chunkCount = 0;
+  List<String?> _chunkNonces = <String?>[];
+  List<int> _chunkConversationCounts = <int>[];
+  final Map<String, int> _dirtyConversations = <String, int>{};
+  int _dirtyRevision = 0;
   int _indexedConversationCount = -1;
   int _indexedRelationCount = -1;
   int _indexedParticipantCount = -1;
+
+  /// True while no search index exists yet (for example during the first
+  /// background build after unlocking) and results come from a plain scan.
+  bool get searchIndexPreparing => _searchIndex == null && isAuthenticated;
 
   String? _lastSearchQuery;
   DateTime? _lastSearchAt;
@@ -347,7 +372,16 @@ class LifenizerAppState extends ChangeNotifier {
     _ensureSearchIndex();
     final index = _searchIndex;
     if (index == null) {
-      return const [];
+      return _linearSearch(
+        query,
+        source: source,
+        participantId: participantId,
+        tag: tag,
+        favoritesOnly: favoritesOnly,
+        from: from,
+        to: to,
+        maxResults: maxResults,
+      );
     }
 
     // Build search criteria and scorer
@@ -430,6 +464,106 @@ class LifenizerAppState extends ChangeNotifier {
       now,
     );
     return results;
+  }
+
+  static const int _linearSearchLimit = 500;
+
+  /// Index-free search used until the first index exists: every query word has
+  /// to appear in the title, a participant name or a message; newest first.
+  List<Conversation> _linearSearch(
+    String query, {
+    String? source,
+    String? participantId,
+    String? tag,
+    bool favoritesOnly = false,
+    DateTime? from,
+    DateTime? to,
+    int? maxResults,
+  }) {
+    if (conversations.isEmpty) return const [];
+    final criteria = SearchCriteria(
+      query: query,
+      source: source,
+      participantId: participantId == null
+          ? null
+          : resolveParticipantId(participantId),
+      tag: tag,
+      favoritesOnly: favoritesOnly,
+      from: from,
+      to: to,
+    );
+    final now = DateTime.now().toUtc();
+    final lexical = TemporalIntent.lexicalQuery(criteria.normalized);
+    final words = <List<String>>[
+      for (final word in lexical.split(RegExp(r'\s+')))
+        if (word.isNotEmpty)
+          {word, ...ConversationSearchIndex.tokenize(word)}.toList(),
+    ];
+    final sourceFilter = criteria.normalizedSource;
+    final participantFilter = criteria.normalizedParticipantId;
+    final tagFilter = criteria.normalizedTag;
+    final fromFilter = criteria.normalizedFrom;
+    final toFilter = criteria.normalizedTo;
+    final limit = maxResults != null && maxResults > 0
+        ? maxResults
+        : _linearSearchLimit;
+    final matches = <Conversation>[];
+    for (final conversation in conversations) {
+      if (sourceFilter != null && conversation.source != sourceFilter) {
+        continue;
+      }
+      if (participantFilter != null &&
+          !conversation.participantIds
+              .map(resolveParticipantId)
+              .contains(participantFilter)) {
+        continue;
+      }
+      if (tagFilter != null &&
+          !conversation.tags.any((item) => item.toLowerCase() == tagFilter)) {
+        continue;
+      }
+      if (criteria.favoritesOnly && !conversation.isFavorite) continue;
+      if (fromFilter != null || toFilter != null) {
+        final a = conversation.startedAt.toUtc();
+        final b = conversation.endedAt.toUtc();
+        final start = a.isBefore(b) ? a : b;
+        final end = a.isAfter(b) ? a : b;
+        if (fromFilter != null && end.isBefore(fromFilter)) continue;
+        if (toFilter != null && start.isAfter(toFilter)) continue;
+      }
+      if (words.isNotEmpty && !_linearMatches(conversation, words)) continue;
+      matches.add(conversation);
+    }
+    matches.sort((left, right) {
+      final byDate = right.startedAt.compareTo(left.startedAt);
+      return byDate != 0 ? byDate : left.id.compareTo(right.id);
+    });
+    final results = matches.length > limit
+        ? matches.sublist(0, limit)
+        : matches;
+    _updateSearchContext(criteria.normalized, results, now);
+    return results;
+  }
+
+  bool _linearMatches(Conversation conversation, List<List<String>> words) {
+    final header = StringBuffer(conversation.title);
+    for (final id in conversation.participantIds) {
+      header
+        ..write(' ')
+        ..write(participantById(id)?.searchableText ?? id);
+    }
+    final remaining = [...words];
+    // Titles and names are short enough to fold accents; message text is
+    // matched as typed (lower-cased) to keep the scan cheap on huge vaults.
+    final head = ConversationSearchIndex.fold(header.toString());
+    remaining.removeWhere((forms) => forms.any(head.contains));
+    if (remaining.isEmpty) return true;
+    for (final segment in conversation.segments) {
+      final text = segment.text.toLowerCase();
+      remaining.removeWhere((forms) => forms.any(text.contains));
+      if (remaining.isEmpty) return true;
+    }
+    return false;
   }
 
   /// Page-friendly view of [search]. Returns the slice of results for the
@@ -1084,6 +1218,7 @@ class LifenizerAppState extends ChangeNotifier {
       final canonical = _canonicalConversation(conversations[i]);
       if (!identical(canonical, conversations[i])) {
         conversations[i] = canonical;
+        _markConversationChanged(canonical.id);
         changed.add(canonical);
       }
     }
@@ -1207,7 +1342,7 @@ class LifenizerAppState extends ChangeNotifier {
         segments: [ConversationSegment(id: _uuid.v4(), text: text.trim())],
       );
       conversations.add(conversation);
-      _markSearchIndexDirty();
+      _markConversationChanged(conversation.id);
       await _pushEntity('conversation', conversation.id, conversation.toJson());
       status = 'Conversation encrypted and synced';
     });
@@ -1238,7 +1373,7 @@ class LifenizerAppState extends ChangeNotifier {
         ],
       );
       conversations.add(conversation);
-      _markSearchIndexDirty();
+      _markConversationChanged(conversation.id);
       await _pushEntity('conversation', conversation.id, conversation.toJson());
       status = 'Artifact metadata encrypted and synced';
     });
@@ -1276,7 +1411,7 @@ class LifenizerAppState extends ChangeNotifier {
         ],
       );
       conversations.add(conversation);
-      _markSearchIndexDirty();
+      _markConversationChanged(conversation.id);
       await _pushEntity('conversation', conversation.id, conversation.toJson());
       status = 'Recording session encrypted and synced';
     });
@@ -1405,7 +1540,7 @@ class LifenizerAppState extends ChangeNotifier {
         }
         conversations.removeWhere((item) => item.id == conversation.id);
         conversations.add(conversation);
-        _markSearchIndexDirty();
+        _markConversationChanged(conversation.id);
         break;
       case 'relation':
         final relation = RelationEdge.fromJson(json);
@@ -1476,9 +1611,16 @@ class LifenizerAppState extends ChangeNotifier {
         .replaceAll(RegExp(r'^-|-$'), '');
   }
 
+  /// A change only a full rebuild can reflect (people, relations).
   void _markSearchIndexDirty() {
-    _searchIndexDirty = true;
-    _searchIndexRevision++;
+    _searchFullRebuildNeeded = true;
+  }
+
+  /// Record that [id] was inserted, replaced or removed: its encrypted chunk
+  /// must be rewritten and its search entry refreshed.
+  void _markConversationChanged(String id) {
+    _dirtyConversations[id] = ++_dirtyRevision;
+    _searchDirtyIds.add(id);
   }
 
   String? _cleanFilter(String? value) {
@@ -1509,14 +1651,37 @@ class LifenizerAppState extends ChangeNotifier {
   }
 
   bool get _needsSearchIndex =>
-      _searchIndexDirty ||
       _searchIndex == null ||
+      _searchFullRebuildNeeded ||
+      _searchDirtyIds.isNotEmpty ||
       _indexedConversationCount != conversations.length ||
       _indexedRelationCount != relations.length ||
       _indexedParticipantCount != participants.length;
 
+  /// Above this size the UI isolate never builds a whole index itself.
+  @visibleForTesting
+  static int synchronousIndexLimit = 1000;
+  static const int _incrementalDirtyLimit = 300;
+
+  /// Incremental updates are possible when the index exists and only
+  /// conversation contents changed, and not so many that a rebuild is cheaper.
+  bool get _canUpdateSearchIndexIncrementally {
+    final index = _searchIndex;
+    if (index == null ||
+        _searchFullRebuildNeeded ||
+        _indexedRelationCount != relations.length ||
+        _indexedParticipantCount != participants.length) {
+      return false;
+    }
+    final limit = math.max(
+      _incrementalDirtyLimit,
+      (conversations.length * 0.05).ceil(),
+    );
+    return _searchDirtyIds.length <= limit;
+  }
+
   (List<Conversation>, Map<String, String>, Map<String, String>)
-  _searchIndexInputs() {
+  _searchIndexInputs({bool includeConversations = true}) {
     final participantSearchText = <String, String>{
       for (final participant in participants)
         participant.id:
@@ -1545,7 +1710,7 @@ class LifenizerAppState extends ChangeNotifier {
     }
 
     return (
-      conversations.toList(),
+      includeConversations ? conversations.toList() : const <Conversation>[],
       participantSearchText,
       relationTextByConversation.map(
         (key, value) => MapEntry(key, value.toString().toLowerCase()),
@@ -1553,50 +1718,213 @@ class LifenizerAppState extends ChangeNotifier {
     );
   }
 
-  void _installSearchIndex(ConversationSearchIndex index) {
+  void _installSearchIndex(
+    ConversationSearchIndex index, {
+    required int conversationCount,
+    required int relationCount,
+    required int participantCount,
+  }) {
     _searchIndex = index;
-    _searchIndexDirty = false;
+    _indexedConversationCount = conversationCount;
+    _indexedRelationCount = relationCount;
+    _indexedParticipantCount = participantCount;
+  }
+
+  /// Applies pending conversation changes to the existing index on this
+  /// isolate, yielding between batches when [yielding]. Returns false when the
+  /// index turned out to be inconsistent and needs a full rebuild.
+  Future<bool> _applyIncrementalSearchUpdates({
+    required bool yielding,
+    required int generation,
+  }) async {
+    final index = _searchIndex!;
+    final inputs = _searchIndexInputs(includeConversations: false);
+    var rounds = 0;
+    while (_searchDirtyIds.isNotEmpty && rounds++ < 5) {
+      if (generation != _searchGeneration) return true;
+      final ids = _searchDirtyIds.toList();
+      final byId = {
+        for (final conversation in conversations) conversation.id: conversation,
+      };
+      var done = 0;
+      for (final id in ids) {
+        _searchDirtyIds.remove(id);
+        final conversation = byId[id];
+        if (conversation == null) {
+          index.remove(id, refresh: false);
+        } else {
+          index.upsert(
+            conversation,
+            participantById: inputs.$2,
+            relationTextByConversation: inputs.$3,
+            refresh: false,
+          );
+        }
+        done++;
+        if (yielding && done % 25 == 0) {
+          if (ids.length > 50) {
+            _setSyncProgress(
+              SyncStage.indexing,
+              completed: done,
+              total: ids.length,
+              detail: 'Updating search',
+              force: false,
+            );
+          }
+          await Future<void>.delayed(Duration.zero);
+          if (generation != _searchGeneration) return true;
+        }
+      }
+      index.refreshStatistics();
+    }
+    incrementalSearchUpdates++;
     _indexedConversationCount = conversations.length;
-    _indexedRelationCount = relations.length;
-    _indexedParticipantCount = participants.length;
+    return index.documents.length == conversations.length &&
+        _searchDirtyIds.isEmpty;
   }
 
   void _ensureSearchIndex() {
     // Progress rebuilds keep the previous results while an import changes the
     // vault. The final index is prepared off the UI isolate before busy clears.
-    if (busy || _syncInFlight != null || !_needsSearchIndex) return;
-    _installSearchIndex(_buildConversationSearchIndex(_searchIndexInputs()));
+    if (!_needsSearchIndex) return;
+    if ((busy || _syncInFlight != null) &&
+        (_searchIndex != null ||
+            conversations.length > synchronousIndexLimit)) {
+      return;
+    }
+    if (conversations.length <= synchronousIndexLimit) {
+      final index = _searchIndex;
+      if (index != null && _canUpdateSearchIndexIncrementally) {
+        final inputs = _searchIndexInputs(includeConversations: false);
+        final byId = {
+          for (final conversation in conversations)
+            conversation.id: conversation,
+        };
+        for (final id in _searchDirtyIds.toList()) {
+          final conversation = byId[id];
+          if (conversation == null) {
+            index.remove(id, refresh: false);
+          } else {
+            index.upsert(
+              conversation,
+              participantById: inputs.$2,
+              relationTextByConversation: inputs.$3,
+              refresh: false,
+            );
+          }
+        }
+        _searchDirtyIds.clear();
+        index.refreshStatistics();
+        incrementalSearchUpdates++;
+        _indexedConversationCount = conversations.length;
+        if (index.documents.length == conversations.length) return;
+      }
+      final inputs = _searchIndexInputs();
+      _searchDirtyIds.clear();
+      _searchFullRebuildNeeded = false;
+      fullSearchBuilds++;
+      _installSearchIndex(
+        _buildConversationSearchIndex(inputs),
+        conversationCount: inputs.$1.length,
+        relationCount: relations.length,
+        participantCount: participants.length,
+      );
+      return;
+    }
+    // Large vaults never block the UI isolate: keep using the previous index
+    // (or the linear fallback) and let the background preparation catch up.
+    if (_searchBuild == null && !_searchBuildScheduled && isAuthenticated) {
+      _searchBuildScheduled = true;
+      Timer(Duration.zero, () {
+        _searchBuildScheduled = false;
+        if (_disposed || !isAuthenticated || busy || _syncInFlight != null) {
+          return;
+        }
+        _prepareSearchIndex().catchError((_) {});
+      });
+    }
   }
 
   Future<void> _prepareSearchIndex({bool complete = true}) async {
-    if (!_needsSearchIndex || !_crypto.isUnlocked) return;
-    final revision = _searchIndexRevision;
-    _setSyncProgress(SyncStage.indexing, total: conversations.length);
-    ConversationSearchIndex index;
-    try {
-      index = await prepareSearchIndex(_searchIndexInputs(), (progress) {
-        if (revision != _searchIndexRevision || !_crypto.isUnlocked) return;
-        _setSyncProgress(
-          SyncStage.indexing,
-          completed: progress.completed,
-          total: progress.total,
-          detail: progress.finalizing ? 'Finalizing search' : null,
-          force: progress.completed == 0,
-        );
-      });
-    } catch (_) {
-      if (revision == _searchIndexRevision && _crypto.isUnlocked) {
-        _setSyncProgress(SyncStage.failed);
-      }
-      rethrow;
+    if (!_crypto.isUnlocked) return;
+    final running = _searchBuild;
+    if (running != null) {
+      await running;
+      return;
     }
-    if (revision == _searchIndexRevision && _crypto.isUnlocked) {
-      _installSearchIndex(index);
-      if (complete) _setSyncProgress(SyncStage.complete);
+    final operation = _prepareSearchIndexNow(complete: complete);
+    _searchBuild = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_searchBuild, operation)) _searchBuild = null;
     }
   }
 
-  Future<void> _run(Future<void> Function() action) async {
+  Future<void> _prepareSearchIndexNow({required bool complete}) async {
+    var worked = false;
+    for (var pass = 0; pass < 3 && _needsSearchIndex; pass++) {
+      if (!_crypto.isUnlocked) return;
+      final generation = _searchGeneration;
+      if (_searchIndex != null && _canUpdateSearchIndexIncrementally) {
+        // No isolate copy: update the live index in yielding batches.
+        worked = true;
+        final consistent = await _applyIncrementalSearchUpdates(
+          yielding: true,
+          generation: generation,
+        );
+        if (generation != _searchGeneration) return;
+        if (consistent) continue;
+        _searchFullRebuildNeeded = true;
+      }
+      worked = true;
+      final inputs = _searchIndexInputs();
+      final relationCount = relations.length;
+      final participantCount = participants.length;
+      // The build covers the state captured here; later edits mark themselves.
+      _searchDirtyIds.clear();
+      _searchFullRebuildNeeded = false;
+      _setSyncProgress(SyncStage.indexing, total: inputs.$1.length);
+      ConversationSearchIndex index;
+      try {
+        fullSearchBuilds++;
+        index = await prepareSearchIndex(inputs, (progress) {
+          if (generation != _searchGeneration || !_crypto.isUnlocked) return;
+          _setSyncProgress(
+            SyncStage.indexing,
+            completed: progress.completed,
+            total: progress.total,
+            detail: progress.finalizing ? 'Finalizing search' : null,
+            force: progress.completed == 0,
+          );
+        });
+      } catch (_) {
+        _searchFullRebuildNeeded = true;
+        if (generation == _searchGeneration && _crypto.isUnlocked) {
+          _setSyncProgress(SyncStage.failed);
+        }
+        rethrow;
+      }
+      if (generation != _searchGeneration || !_crypto.isUnlocked) return;
+      index.rebind({
+        for (final conversation in conversations) conversation.id: conversation,
+      });
+      _installSearchIndex(
+        index,
+        conversationCount: inputs.$1.length,
+        relationCount: relationCount,
+        participantCount: participantCount,
+      );
+    }
+    if (worked && _crypto.isUnlocked && complete) {
+      _setSyncProgress(SyncStage.complete);
+    }
+  }
+
+  Future<void> _run(
+    Future<void> Function() action, {
+    bool prepareIndex = true,
+  }) async {
     if (busy) return;
     busy = true;
     error = null;
@@ -1607,7 +1935,7 @@ class LifenizerAppState extends ChangeNotifier {
       error = exception.toString();
     } finally {
       try {
-        await _prepareSearchIndex();
+        if (prepareIndex) await _prepareSearchIndex();
       } catch (exception) {
         error ??= 'Could not prepare search: $exception';
       }
