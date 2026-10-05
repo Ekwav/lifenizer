@@ -69,7 +69,7 @@ Notes:
 - `paperless`
 - `discord` (API mode when `metadata.channelId` is set)
 - `audio` (whisper-trained transcription mode when using a base64 payload)
-- `youtube-transcript` (remote fetch mode when `metadata.videoId` is supplied)
+- `youtube-transcript` (remote fetch mode when `metadata.videoId` is supplied; built-in YouTube caption fetcher or configured `Imports:YouTube:BaseUrl`)
 
 ## Metadata Keys by Source
 

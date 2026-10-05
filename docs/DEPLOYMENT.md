@@ -316,7 +316,14 @@ native Linux/Android clients do not use browser CORS.
 
 Provider hosts are configuration-only: `Imports__Imap__Host` (plus Port/UseTls),
 `Imports__Paperless__BaseUrl`, `Imports__Discord__BaseUrl`, and `Imports__YouTube__BaseUrl`.
-HTTP redirects are disabled. The API can reach only the destinations its operator configures.
+HTTP redirects are disabled. The API can reach only the destinations its operator configures
+(plus youtube.com when the built-in caption fetcher is enabled, see below).
+
+`Imports__YouTube__BuiltInCaptions` (default `true`) lets `youtube-transcript` fetch public captions
+directly from YouTube when `Imports__YouTube__BaseUrl` is not set; a configured BaseUrl always takes
+precedence. This is best effort and may break when YouTube changes its page. Privacy: YouTube sees
+the server IP and the video id, not the user. Set it to `false` to forbid outbound calls to YouTube.
+TikTok has no equivalent. Details: [IMPORTERS.md](IMPORTERS.md).
 A desktop-hosted API cannot resolve the cluster-only Whisper hostname; set
 `Whisper__BaseUrl` to an accessible private endpoint (for a temporary authorized test,
 `http://127.0.0.1:19000` through port-forwarding).

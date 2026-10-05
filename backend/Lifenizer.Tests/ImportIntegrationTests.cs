@@ -516,6 +516,8 @@ public sealed class ImportIntegrationTests
             ?? throw new InvalidOperationException("Import response was empty.");
     }
 
+    internal static Task<HttpClient> AuthenticatedClientForTestsAsync(LifenizerApiFactory factory, string email) => AuthenticatedClientAsync(factory, email);
+
     private static async Task<HttpClient> AuthenticatedClientAsync(LifenizerApiFactory factory, string email)
     {
         var client = factory.CreateClient();

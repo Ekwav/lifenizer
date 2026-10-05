@@ -34,20 +34,25 @@ public static class ImportEndpoints
         new("bookmarks", "Browser bookmarks", true, false, "Parses bookmark exports from JSON or Netscape HTML formats.", ["application/json", "text/html", "text/plain", "application/zip"]),
         new("lifenizer-backup", "Lifenizer backup", true, false, "Parses portable Lifenizer backup JSON bundles into normalized conversations.", ["application/json", "application/zip", "text/plain"]),
         new("browser-history", "Browser history", true, false, "Parses CSV/JSON browser history exports.", ["text/csv", "application/json", "application/zip"]),
-        new("youtube-transcript", "YouTube transcript", true, false, "Fetches transcript JSON/XML/text from a configured transcript URL or parses supplied text.", ["text/plain", "application/json", "application/xml"])
+        new("youtube-transcript", "YouTube transcript", true, false, "Fetches transcript JSON/XML/text from a configured transcript service, or (built-in fetcher) public YouTube captions by metadata.videoId, or parses supplied text.", ["text/plain", "application/json", "application/xml"])
     ];
+
+    private static string RemoteModeStatus(IConfiguration configuration)
+        => !string.IsNullOrWhiteSpace(configuration["Imports:YouTube:BaseUrl"]) ? " Remote mode: available (configured transcript service)."
+            : YouTubeCaptionFetcher.IsBuiltInEnabled(configuration) ? " Remote mode: available (built-in YouTube captions, best effort)."
+            : " Remote mode: unavailable (set Imports:YouTube:BaseUrl or enable Imports:YouTube:BuiltInCaptions).";
 
     public static IEndpointRouteBuilder MapImportEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/imports").WithTags("Imports");
 
-        group.MapGet("/capabilities", () => Results.Ok(Capabilities)).AllowAnonymous();
+        group.MapGet("/capabilities", (IConfiguration configuration) => Results.Ok(Capabilities.Select(c => c.Source == "youtube-transcript" ? c with { Status = c.Status + RemoteModeStatus(configuration) } : c))).AllowAnonymous();
 
         group.MapGet("/paperless/settings", (IConfiguration configuration) => Results.Ok(new { configured = !string.IsNullOrWhiteSpace(configuration["Imports:Paperless:BaseUrl"]), baseUrl = configuration["Imports:Paperless:BaseUrl"] })).RequireAuthorization();
 
         group.MapGet("/email/settings", (PlainImapImportClient imap) => Results.Ok(imap.Settings())).RequireAuthorization();
 
-        group.MapPost("/{source}", async ([FromRoute] string source, [FromBody] ImportRequest request, ImportOrchestrator orchestrator, CancellationToken cancellationToken) =>
+        group.MapPost("/{source}", async ([FromRoute] string source, [FromBody] ImportRequest request, ImportOrchestrator orchestrator, HttpContext httpContext, CancellationToken cancellationToken) =>
         {
             var capability = Capabilities.FirstOrDefault(c => string.Equals(c.Source, source, StringComparison.OrdinalIgnoreCase));
             if (capability is null)
@@ -59,6 +64,11 @@ public static class ImportEndpoints
             {
                 var result = await orchestrator.ImportAsync(capability.Source, request, cancellationToken);
                 return Results.Ok(result);
+            }
+            catch (YouTubeCaptionException exception)
+            {
+                if (exception.RetryAfter is { } retry) httpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retry.TotalSeconds)).ToString();
+                return Results.Json(new { error = exception.Code, message = exception.Message }, statusCode: exception.StatusCode);
             }
             catch (InvalidOperationException exception)
             {

@@ -1,0 +1,1 @@
+{"wireMagic":"pb3","events":[{"tStartMs":0,"dDurationMs":1500},{"tStartMs":500,"dDurationMs":2000,"segs":[{"utf8":"Tom &amp; Jerry"},{"utf8":" &#39;quoted&#39;"}]},{"tStartMs":2500,"dDurationMs":1000,"segs":[{"utf8":"\n"}]},{"tStartMs":3000,"dDurationMs":2500,"segs":[{"utf8":"second\nline"}]}]}

@@ -35,6 +35,8 @@ public static class ServiceExtensions
         services.AddHttpContextAccessor();
         services.AddMemoryCache();
         services.AddHttpClient("imports").ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddHttpClient(YouTubeCaptionFetcher.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         services.AddHttpClient(TabTrainingClient.HttpClientName, client => client.Timeout = TimeSpan.FromMinutes(2))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
@@ -108,6 +110,7 @@ public static class ServiceExtensions
         services.AddScoped<PlainImapImportClient>();
         services.AddScoped<WhisperTranscriptionClient>();
         services.AddScoped<TabTrainingClient>();
+        services.AddSingleton<YouTubeCaptionFetcher>(provider => new YouTubeCaptionFetcher(provider.GetRequiredService<IHttpClientFactory>()));
         services.AddScoped<ProviderHttpImportClient>();
         services.AddScoped<ImportOrchestrator>();
 

@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Lifenizer.Api.Security;
 using Lifenizer.Api.Services.Parsers;
 using Lifenizer.Api.Services.Utilities;
 using Lifenizer.Core;
@@ -10,7 +11,9 @@ public sealed class ProviderHttpImportClient(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
     WhisperTranscriptionClient whisperTranscriptionClient,
-    ParserRegistry parserRegistry)
+    ParserRegistry parserRegistry,
+    YouTubeCaptionFetcher youTubeCaptionFetcher,
+    IHttpContextAccessor httpContextAccessor)
 {
     public async Task<NormalizedImportResponse> ImportPaperlessAsync(ImportRequest request, CancellationToken cancellationToken)
     {
@@ -104,6 +107,17 @@ public sealed class ProviderHttpImportClient(
     public async Task<NormalizedImportResponse> ImportYouTubeTranscriptAsync(ImportRequest request, CancellationToken cancellationToken)
     {
         var transcriptText = request.Text;
+        if (string.IsNullOrWhiteSpace(transcriptText)
+            && string.IsNullOrWhiteSpace(configuration["Imports:YouTube:BaseUrl"])
+            && YouTubeCaptionFetcher.IsBuiltInEnabled(configuration))
+        {
+            // No external transcript service configured: use the built-in caption fetcher.
+            if (ImportTextParsers.Metadata(request, "baseUrl") is not null || ImportTextParsers.Metadata(request, "transcriptUrl") is not null)
+                throw new InvalidOperationException("YouTube endpoint is configuration-only; set Imports:YouTube:BaseUrl on the server.");
+            var userId = httpContextAccessor.HttpContext?.User is { Identity.IsAuthenticated: true } principal ? principal.GetUserId() : Guid.Empty;
+            return await youTubeCaptionFetcher.FetchAsync(userId, request, ImportTextParsers.Metadata(request, "videoId"), cancellationToken);
+        }
+
         if (string.IsNullOrWhiteSpace(transcriptText))
         {
             var baseUrl = ProviderBaseUrl(request, "Imports:YouTube:BaseUrl", "YouTube");
