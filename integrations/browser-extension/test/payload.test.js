@@ -49,21 +49,22 @@ test('same video on another day is new for YouTube; tiktok day-precision dedupes
 });
 
 test('merge dedupes and marks unsent; deliver chunks and maps errors', async () => {
-  const a = yt('aaaaaaaaaaa', '2026-10-05T12:00:00.000Z');
+  const owned = v => ({ ...v, account: { id: 'account-1' }, accountSelection: 'account-1' });
+  const a = owned(yt('aaaaaaaaaaa', '2026-10-05T12:00:00.000Z'));
   let { store, added } = S.merge([], [a, a]);
   assert.strictEqual(added.length, 1);
   assert.strictEqual(S.merge(store, [a]).added.length, 0);
 
   const calls = [];
   const ok = async (url, o) => { calls.push([url, o]); return { status: 200, ok: true, json: async () => ({ accepted: 1, imported: 1 }) }; };
-  const settings = S.withDefaults({ token: 'tok' });
+  const settings = S.withDefaults({ token: 'tok', youtubeAccount: 'account-1' });
   const r = await S.deliver(store, settings, ok);
   assert.deepStrictEqual([r.sent, r.imported, r.error], [1, 1, undefined]);
   assert.strictEqual(calls[0][0], 'http://127.0.0.1:47615/v1/watch-history');
   assert.strictEqual(calls[0][1].headers.Authorization, 'Bearer tok');
   assert.strictEqual(store[0].sent, true);
 
-  const more = S.merge(store, [yt('bbbbbbbbbbb', '2026-10-05T12:00:00.000Z')]).store;
+  const more = S.merge(store, [owned(yt('bbbbbbbbbbb', '2026-10-05T12:00:00.000Z'))]).store;
   const locked = await S.deliver(more, settings, async () => ({ status: 503, ok: false }));
   assert.strictEqual(locked.error, 'locked');
   assert.strictEqual(more[1].sent, false);

@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:app/models.dart';
 import 'package:app/services/browser_extension_receiver_service.dart';
 import 'package:app/services/browser_history_types.dart';
@@ -39,10 +42,11 @@ void main() {
   late BrowserExtensionReceiverService service;
   late List<ViewingImportBatch> sent;
   late List<int> hooked;
+  late List<NormalizedImportResult> messages;
   late HttpClient client;
   late String token;
 
-  Future<void> create() async {
+  Future<void> create({bool realMessages = false}) async {
     state = _Vault()
       ..session = AuthSession(
         authToken: 't',
@@ -51,6 +55,15 @@ void main() {
         vaultSalt: 's',
       );
     addTearDown(state.dispose);
+    if (realMessages) {
+      await state.debugAuthenticateForTesting(
+        LifenizerApiClient(
+          baseUrl: 'http://127.0.0.1:5075',
+          authToken: 't',
+          client: MockClient((_) async => http.Response('{"cursor":1}', 200)),
+        ),
+      );
+    }
     store = _Store();
     service = BrowserExtensionReceiverService(
       state,
@@ -61,6 +74,12 @@ void main() {
         sent.add(batch);
         return batch.entries;
       },
+      messageImporter: realMessages
+          ? null
+          : (batch) async {
+              messages.add(batch);
+              return batch.conversations.length;
+            },
       onImported: (n) async => hooked.add(n),
     );
     addTearDown(service.dispose);
@@ -72,6 +91,7 @@ void main() {
 
   setUp(() {
     sent = [];
+    messages = [];
     hooked = [];
     client = HttpClient();
   });
@@ -186,11 +206,7 @@ void main() {
     test('foreign Origin gets 403, extension origins are echoed', () async {
       await create();
       for (final origin in ['https://evil.com', 'null', 'http://localhost']) {
-        final r = await call(
-          'GET',
-          '/v1/ping',
-          headers: {'origin': origin},
-        );
+        final r = await call('GET', '/v1/ping', headers: {'origin': origin});
         expect(r.$1, 403, reason: origin);
       }
       for (final origin in ['chrome-extension://abc', 'moz-extension://abc']) {
@@ -255,29 +271,32 @@ void main() {
       expect((await call('GET', '/v1/ping')).$1, 200);
     });
 
-    test('disabling stops listening; regenerating invalidates the token', () async {
-      await create();
-      final old = token;
-      final port = service.port;
-      await service.regenerateToken();
-      expect(service.token, isNot(old));
-      expect((await call('GET', '/v1/ping', bearer: old)).$1, 401);
-      expect((await call('GET', '/v1/ping', bearer: service.token)).$1, 200);
-      expect(
-        store.saved.values.single['token'],
-        service.token,
-        reason: 'persisted',
-      );
+    test(
+      'disabling stops listening; regenerating invalidates the token',
+      () async {
+        await create();
+        final old = token;
+        final port = service.port;
+        await service.regenerateToken();
+        expect(service.token, isNot(old));
+        expect((await call('GET', '/v1/ping', bearer: old)).$1, 401);
+        expect((await call('GET', '/v1/ping', bearer: service.token)).$1, 200);
+        expect(
+          store.saved.values.single['token'],
+          service.token,
+          reason: 'persisted',
+        );
 
-      await service.setEnabled(false);
-      expect(service.listening, isFalse);
-      final socket = Socket.connect(
-        InternetAddress.loopbackIPv4,
-        port,
-        timeout: const Duration(seconds: 1),
-      );
-      await expectLater(socket, throwsA(isA<SocketException>()));
-    });
+        await service.setEnabled(false);
+        expect(service.listening, isFalse);
+        final socket = Socket.connect(
+          InternetAddress.loopbackIPv4,
+          port,
+          timeout: const Duration(seconds: 1),
+        );
+        await expectLater(socket, throwsA(isA<SocketException>()));
+      },
+    );
 
     test('a busy port shows a clear error and stays disabled', () async {
       final blocker = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
@@ -378,6 +397,159 @@ void main() {
     });
   });
 
+  group('browser messages', () {
+    Map<String, dynamic> message({
+      String platform = 'discord',
+      String id = '1',
+      String text = 'Hello',
+    }) => {
+      'platform': platform,
+      'threadId': '123',
+      'threadTitle': 'Friends',
+      'id': id,
+      'text': text,
+      'createdAt': '2026-10-01T10:00:00Z',
+      'authorId': '456',
+      'authorName': 'Alice',
+    };
+    Map<String, dynamic> batch(List<Object?> items) => {
+      'source': 'lifenizer-extension',
+      'version': 1,
+      'messages': items,
+    };
+
+    test('uses bearer, origin, JSON and unlocked vault gates', () async {
+      await create();
+      expect((await call('GET', '/v1/messages')).$1, 405);
+      expect(
+        (await call('POST', '/v1/messages', auth: false, body: batch([]))).$1,
+        401,
+      );
+      expect(
+        (await call(
+          'POST',
+          '/v1/messages',
+          body: batch([]),
+          headers: {'origin': 'https://evil.com'},
+        )).$1,
+        403,
+      );
+      expect(
+        (await call(
+          'POST',
+          '/v1/messages',
+          rawBody: '{}',
+          contentType: 'text/plain',
+        )).$1,
+        415,
+      );
+      state.unlocked = false;
+      expect(
+        (await call('POST', '/v1/messages', body: batch([message()]))).$1,
+        503,
+      );
+      expect(messages, isEmpty);
+    });
+
+    test(
+      'validates whole bounded batch before accepting any message',
+      () async {
+        await create();
+        for (final invalid in [
+          batch([
+            message(),
+            {...message(), 'platform': 'telegram'},
+          ]),
+          batch([
+            message(),
+            {...message(), 'createdAt': 'yesterday'},
+          ]),
+          batch([
+            {...message(), 'text': ''},
+          ]),
+          batch([
+            {...message(), 'authorId': 123},
+          ]),
+          batch([
+            {...message(), 'text': 'a' * 65537},
+          ]),
+          batch([
+            {...message(), 'sourceUrl': 'javascript:alert(1)'},
+          ]),
+          batch(List.generate(501, (_) => message())),
+          {...batch([]), 'source': 'other'},
+          {...batch([]), 'version': 2},
+        ]) {
+          expect((await call('POST', '/v1/messages', body: invalid)).$1, 400);
+        }
+        expect(messages, isEmpty);
+      },
+    );
+
+    test(
+      'normalizes both platforms with stable thread, author and message IDs',
+      () async {
+        await create();
+        final result = await call(
+          'POST',
+          '/v1/messages',
+          body: batch([message(), message(platform: 'whatsapp', id: '2')]),
+        );
+        expect(result.$2, {'ok': true, 'imported': 2});
+        final normalized = messages.single;
+        expect(normalized.plaintextCompute, false);
+        expect(normalized.conversations.map((c) => c.sourceThreadId), [
+          'discord:123',
+          'whatsapp:123',
+        ]);
+        expect(
+          normalized.conversations.first.segments.single.sourceMessageId,
+          '1',
+        );
+        expect(
+          normalized.conversations.first.segments.single.participantIdentifier,
+          'discord:456',
+        );
+        expect(normalized.participants.map((p) => p.identifiers.single), [
+          'discord:456',
+          'whatsapp:456',
+        ]);
+      },
+    );
+
+    test(
+      'real ingestion skips duplicates and merges new or edited messages without losing old messages',
+      () async {
+        await create(realMessages: true);
+        Future<Map<String, dynamic>?> send(List<Object?> items) async =>
+            (await call('POST', '/v1/messages', body: batch(items))).$2;
+        expect(await send([message()]), {'ok': true, 'imported': 1});
+        expect(state.error, isNull);
+        final id = state.conversations.single.id;
+        final segmentId = state.conversations.single.segments.single.id;
+        expect(await send([message()]), {'ok': true, 'imported': 0});
+        expect(await send([message(id: '2', text: 'New reply')]), {
+          'ok': true,
+          'imported': 1,
+        });
+        expect(await send([message(text: 'Edited hello')]), {
+          'ok': true,
+          'imported': 1,
+        });
+        expect(state.conversations, hasLength(1));
+        final conversation = state.conversations.single;
+        expect(conversation.id, id);
+        expect(conversation.segments, hasLength(2));
+        expect(conversation.segments.first.id, segmentId);
+        expect(conversation.segments.map((s) => s.text), [
+          'Edited hello',
+          'New reply',
+        ]);
+        expect(conversation.participantIds, hasLength(1));
+      },
+    );
+  });
+
   group('day precision', () {
     final noon = DateTime(2026, 10, 1, 12);
 
@@ -431,25 +603,25 @@ void main() {
       );
     });
 
-    test('an exact visit in the same request wins over the day visit', () async {
-      await create();
-      final exact = DateTime(2026, 10, 1, 9, 30, 1);
-      final r = await call(
-        'POST',
-        '/v1/watch-history',
-        body: payload([
-          visit(yt, time: noon.toUtc().toIso8601String(), precision: 'day'),
-          visit(yt, time: exact.toUtc().toIso8601String()),
-        ]),
-      );
-      expect(r.$2!['accepted'], 2);
-      final list = jsonDecode(sent.single.json) as List;
-      expect(list, hasLength(1));
-      expect(
-        DateTime.parse(list.single['time'] as String).toLocal().hour,
-        9,
-      );
-    });
+    test(
+      'an exact visit in the same request wins over the day visit',
+      () async {
+        await create();
+        final exact = DateTime(2026, 10, 1, 9, 30, 1);
+        final r = await call(
+          'POST',
+          '/v1/watch-history',
+          body: payload([
+            visit(yt, time: noon.toUtc().toIso8601String(), precision: 'day'),
+            visit(yt, time: exact.toUtc().toIso8601String()),
+          ]),
+        );
+        expect(r.$2!['accepted'], 2);
+        final list = jsonDecode(sent.single.json) as List;
+        expect(list, hasLength(1));
+        expect(DateTime.parse(list.single['time'] as String).toLocal().hour, 9);
+      },
+    );
 
     test('exact visits are never filtered', () async {
       await create();

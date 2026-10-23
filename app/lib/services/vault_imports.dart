@@ -252,6 +252,18 @@ extension VaultImports on LifenizerAppState {
     return saved;
   }
 
+  /// Imports locally observed browser messages through the encrypted vault pipeline.
+  Future<int?> importBrowserMessages(NormalizedImportResult result) async {
+    int? imported;
+    await _run(() async {
+      if (!isAuthenticated) {
+        throw StateError('Unlock the vault to import browser messages.');
+      }
+      imported = await _ingestNormalizedImport(result);
+    });
+    return error == null ? imported : null;
+  }
+
   Future<bool> importDiscordBotBatch(NormalizedImportResult result) async {
     var saved = false;
     await _run(() async {

@@ -1,7 +1,7 @@
 const ext = globalThis.browser || globalThis.chrome;
 const $ = (id) => document.getElementById(id);
-const get = (k) => new Promise((res) => { const r = ext.storage.local.get(k, res); if (r && r.then) r.then(res); });
-const send = (m) => new Promise((res) => { const r = ext.runtime.sendMessage(m, res); if (r && r.then) r.then(res, () => res(null)); });
+const get = k => ext.storage.local.get(k);
+const send = m => ext.runtime.sendMessage(m).catch(() => null);
 
 function line(parent, text, cls) {
   const d = document.createElement('div');
@@ -24,9 +24,18 @@ function renderPlatform(el, name, s) {
 }
 
 async function render() {
-  const { status = {} } = await get('status');
+  const { status = {}, settings = {} } = await get(['status', 'settings']);
   renderPlatform($('youtube'), 'YouTube', status.youtube);
   renderPlatform($('tiktok'), 'TikTok', status.tiktok);
+  for (const platform of ['whatsapp', 'discord']) {
+    const s = status[platform], el = $(platform);
+    el.replaceChildren();
+    line(el, platform === 'whatsapp' ? 'WhatsApp Web' : 'Discord Web');
+    line(el, !settings[`${platform}Enabled`] ? 'Disabled — enable in Settings' : s?.message || 'Enabled — open a logged-in conversation', s?.state === 'error' ? 'err' : 'muted');
+  }
+  const messages = $('messages');
+  messages.replaceChildren();
+  if (status.messages) line(messages, `${status.messages.sent || 0} messages delivered, ${status.messages.pending || 0} waiting. ${status.messages.message || ''}`, status.messages.state === 'error' ? 'err' : 'muted');
   $('sync').disabled = !!status.running;
   const d = status.delivery, el = $('delivery');
   el.replaceChildren();

@@ -8,6 +8,10 @@
     port: 47615,
     token: '',
     periodic: false,
+    youtubeAccount: '',
+    tiktokAccount: '',
+    whatsappEnabled: false,
+    discordEnabled: false,
     maxDays: 30,
     maxItems: 3000,
     maxSeconds: 90,
@@ -16,22 +20,30 @@
     tiktokUrl: 'https://www.tiktok.com/setting/watch-history',
   };
   const STORE_CAP = 20000;
+  const selection = value => { const s = typeof value === 'string' ? value.trim() : ''; return s.startsWith('@') ? s.toLowerCase() : s; };
+  function accountMatches(v, settings) {
+    const expected = selection(settings[`${v.platform}Account`]);
+    return !!expected && selection(v.accountSelection) === expected && !!v.account &&
+      [v.account.id, v.account.handle].includes(expected);
+  }
 
   function withDefaults(s) { return { ...DEFAULTS, ...(s || {}) }; }
 
   /** Adds fresh visits not yet stored. @returns {{store: object[], added: object[]}} */
   function merge(store, fresh) {
-    const keys = new Set(store.map(P.visitKey));
+    const ownerKey = v => JSON.stringify([selection(v.accountSelection), v.account?.id || '', v.account?.handle || '', P.visitKey(v)]);
+    const keys = new Set(store.map(ownerKey));
     const added = [];
     for (const v of fresh) {
-      const k = P.visitKey(v);
+      const k = ownerKey(v);
       if (keys.has(k)) continue;
       keys.add(k);
       added.push({ ...v, sent: false });
     }
     let next = store.concat(added);
     if (next.length > STORE_CAP) {
-      next = next.sort((a, b) => Date.parse(b.time) - Date.parse(a.time)).slice(0, STORE_CAP);
+      const pending = next.filter(v => !v.sent);
+      next = pending.concat(next.filter(v => v.sent).sort((a, b) => Date.parse(b.time) - Date.parse(a.time)).slice(0, Math.max(0, STORE_CAP - pending.length)));
     }
     return { store: next, added };
   }
@@ -43,7 +55,8 @@
   async function deliver(visits, settings, fetchImpl) {
     const base = `http://127.0.0.1:${settings.port}`;
     const headers = { Authorization: `Bearer ${settings.token}`, 'Content-Type': 'application/json' };
-    const pending = visits.filter((v) => !v.sent);
+    const pending = visits.filter((v) => !v.sent && accountMatches(v, settings));
+    const held = visits.filter(v => !v.sent && !accountMatches(v, settings)).length;
     let sent = 0, imported = 0;
     if (!settings.token) return { sent, imported, error: 'not-paired' };
     for (const part of P.chunk(pending, P.MAX_CHUNK)) {
@@ -68,7 +81,7 @@
       sent += part.length;
       imported += Number(body.imported) || 0;
     }
-    return { sent, imported };
+    return { sent, imported, ...(held ? { error: 'account-queue-held', held } : {}) };
   }
 
   async function ping(settings, fetchImpl) {
@@ -84,6 +97,12 @@
   }
 
   const MESSAGES = {
+    'account-queue-held': 'Unverified or differently configured account entries remain unsent. Recollect with the matching account.',
+    'account-unconfigured': 'Configure the expected account in Settings before collecting.',
+    'account-unverified': 'The signed-in account could not be verified.',
+    'account-mismatch': 'The signed-in account differs from Settings. Nothing was imported.',
+    'message-layout': 'Message layout unsupported or no open conversation. Open a supported chat; nothing is scraped from history.',
+    'message-queue-failed': 'Messages could not be saved to the extension outbox.',
     'not-logged-in': 'Not logged in (the history page asked for a sign-in)',
     layout: 'Page layout not recognized (the site may have changed)',
     'tab-timeout': 'The page did not finish loading',
@@ -96,7 +115,7 @@
   };
   const message = (code) => MESSAGES[code] || `Error: ${code}`;
 
-  const api = { DEFAULTS, STORE_CAP, withDefaults, merge, deliver, ping, message };
+  const api = { DEFAULTS, STORE_CAP, withDefaults, selection, accountMatches, merge, deliver, ping, message };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else (root.LF = root.LF || {}).sync = api;
 })(globalThis);

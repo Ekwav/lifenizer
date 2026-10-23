@@ -11,19 +11,33 @@
   const responses = [];
   let initial = null;
   let collecting = false;
+  let expectedAccount, collectionAccount, accountFailure;
+  let requestId = 0;
   window.addEventListener('message', (ev) => {
     if (ev.source !== window || !ev.data || ev.data.__lifenizer !== true) return;
     if (ev.data.kind === 'response') {
+      if (collecting) {
+        // Do not associate an in-flight response with an account that has not
+        // yet been verified for this collection.
+        if (!collectionAccount) return;
+        const check = LF.accounts.check(expectedAccount, ev.data.account);
+        if (check.error || !LF.accounts.same(collectionAccount, ev.data.account)) {
+          accountFailure = check.error ? check : { error: 'account-mismatch', account: ev.data.account };
+          return;
+        }
+      }
       responses.push(ev.data.json);
       // Outside a sync only the most recent responses are kept.
       if (!collecting && responses.length > 20) responses.shift();
     }
-    if (ev.data.kind === 'initial') initial = ev.data;
+    if (ev.data.kind === 'initial' && ev.data.requestId === requestId) initial = ev.data;
   });
 
   async function getInitial() {
+    initial = null;
+    requestId++;
     for (let i = 0; i < 20 && !initial; i++) {
-      window.postMessage({ __lifenizer: 'request-initial' }, '*');
+      window.postMessage({ __lifenizer: 'request-initial', requestId }, '*');
       await sleep(400);
     }
     return initial;
@@ -35,8 +49,7 @@
     window.dispatchEvent(new Event('scroll'));
   }
 
-  async function collectYouTube(opts) {
-    const init = await getInitial();
+  async function collectYouTube(opts, init) {
     if (!init) return { error: 'layout', detail: 'page data not available' };
     if (init.loggedIn === false) return { error: 'not-logged-in' };
     const lang = LF.youtube.pageLang(init.lang);
@@ -51,6 +64,7 @@
     let stalls = 0, stoppedBy = 'end';
     const cutoffMs = opts.cutoffMs;
     for (;;) {
+      if (accountFailure) return accountFailure;
       while (consumed < responses.length) absorb(responses[consumed++]);
       const { dated, undated } = LF.headers.assignDays(raw, lang, now, opts.maxDays + 5);
       const visits = dated.map((e) => LF.payload.makeVisit('youtube', {
@@ -104,6 +118,7 @@
       }
     };
     for (;;) {
+      if (accountFailure) return accountFailure;
       take();
       const visits = [...items.values()].map((it) => LF.payload.makeVisit('tiktok', {
         id: it.id, title: it.title, channel: it.channel,
@@ -128,9 +143,30 @@
 
   ext.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!msg || msg.type !== 'lifenizer-collect') return false;
+    if (collecting) { sendResponse({ error: 'busy' }); return false; }
+    const configured = LF.accounts.check(msg.opts && msg.opts.expectedAccount, null);
+    if (configured.error === 'account-unconfigured') { sendResponse(configured); return false; }
     collecting = true;
-    (isYouTube ? collectYouTube(msg.opts) : collectTikTok(msg.opts))
-      .finally(() => { collecting = false; })
+    expectedAccount = msg.opts.expectedAccount;
+    collectionAccount = null;
+    accountFailure = null;
+    responses.length = 0;
+    (async () => {
+      const init = await getInitial();
+      const checked = LF.accounts.check(expectedAccount, init && init.account);
+      if (checked.error) return checked;
+      collectionAccount = checked.account;
+      const result = await (isYouTube ? collectYouTube(msg.opts, init) : collectTikTok(msg.opts));
+      if (accountFailure) return accountFailure;
+      if (result.error) return result;
+      const latest = await getInitial();
+      const finalCheck = LF.accounts.check(expectedAccount, latest && latest.account);
+      if (accountFailure) return accountFailure;
+      if (finalCheck.error) return finalCheck;
+      if (!LF.accounts.same(collectionAccount, finalCheck.account)) return { error: 'account-mismatch', account: finalCheck.account };
+      return { ...result, account: collectionAccount };
+    })()
+      .finally(() => { collecting = false; responses.length = 0; })
       .then(sendResponse)
       .catch((e) => sendResponse({ error: 'layout', detail: String(e && e.message || e) }));
     return true;

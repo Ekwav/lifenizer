@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../app_state.dart';
+import '../models.dart';
 import 'browser_history_types.dart';
 import 'document_credentials.dart';
 
@@ -10,6 +11,7 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     LifenizerAppState state, {
     DocumentCredentialStore? store,
     ViewingBatchImporter? importer,
+    Future<int?> Function(NormalizedImportResult)? messageImporter,
     Future<void> Function(int imported)? onImported,
     DateTime Function()? now,
     int? defaultPort,

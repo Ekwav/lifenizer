@@ -16,7 +16,13 @@
 <label>Wall time limit per platform (seconds) <input id="maxSeconds" type="number" min="15" max="600"></label>
 <label><input id="foregroundTabs" type="checkbox"> Open history tabs in the foreground when syncing manually (background tabs usually stop loading older entries; the daily sync always runs in the background)</label>
 <label>YouTube history URL <input id="youtubeUrl" type="text"></label>
+<label>Expected YouTube account (channel ID or @handle) <input id="youtubeAccount" type="text" autocomplete="off"></label>
 <label>TikTok watch history URL <input id="tiktokUrl" type="text"></label>
+<label>Expected TikTok account (user ID or @handle) <input id="tiktokAccount" type="text" autocomplete="off"></label>
+<p class="muted">History imports require a matching signed-in account, checked before and after collection. Missing, unrecognized or different accounts block import. Use your YouTube channel ID (UC…) or @handle and your TikTok user ID or @handle. YouTube handle verification may require opening the account menu on the history page.</p>
+<label><input id="whatsappEnabled" type="checkbox"> Capture opened WhatsApp Web conversations</label>
+<label><input id="discordEnabled" type="checkbox"> Capture opened Discord conversations</label>
+<p class="muted">When enabled, captures newly rendered messages in conversations you open while signed in. It does not scrape older history, scroll conversations or send messages.</p>
 <p><button id="save">Save</button> <button id="test">Test connection</button> <button id="clear">Delete collected data</button> <span id="msg" class="muted"></span></p>
 <script src="options.js"></script>
 </body></html>

@@ -65,7 +65,8 @@ class _BrowserExtensionSectionState extends State<BrowserExtensionSection> {
         const SizedBox(height: 4),
         Text(
           'The Lifenizer browser extension can send your YouTube and TikTok '
-          'watch history to this app. The app listens on 127.0.0.1 only '
+          'watch history and new messages from WhatsApp Web and Discord Web to this app. '
+          'The app listens on 127.0.0.1 only '
           '(this computer) and requires the token below. See '
           'integrations/browser-extension/README.md for installation.',
           style: muted,
@@ -73,7 +74,9 @@ class _BrowserExtensionSectionState extends State<BrowserExtensionSection> {
         SwitchListTile(
           key: const Key('browser-extension-enabled'),
           contentPadding: EdgeInsets.zero,
-          title: const Text('Accept watch history from the browser extension'),
+          title: const Text(
+            'Accept history and messages from the browser extension',
+          ),
           value: _service.enabled,
           onChanged: widget.signedIn
               ? (value) => _guard(() => _service.setEnabled(value))

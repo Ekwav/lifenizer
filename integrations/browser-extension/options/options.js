@@ -1,9 +1,10 @@
 const ext = globalThis.browser || globalThis.chrome;
 const $ = (id) => document.getElementById(id);
-const get = (k) => new Promise((res) => { const r = ext.storage.local.get(k, res); if (r && r.then) r.then(res); });
+const get = (k) => ext.storage.local.get(k);
 const set = (o) => Promise.resolve(ext.storage.local.set(o));
-const send = (m) => new Promise((res) => { const r = ext.runtime.sendMessage(m, res); if (r && r.then) r.then(res, () => res(null)); });
+const send = (m) => ext.runtime.sendMessage(m).catch(() => null);
 const DEFAULTS = { port: 47615, token: '', periodic: false, maxDays: 30, maxItems: 3000, maxSeconds: 90, foregroundTabs: true,
+  youtubeAccount: '', tiktokAccount: '', whatsappEnabled: false, discordEnabled: false,
   youtubeUrl: 'https://www.youtube.com/feed/history', tiktokUrl: 'https://www.tiktok.com/setting/watch-history' };
 const FIELDS = Object.keys(DEFAULTS);
 
@@ -23,5 +24,5 @@ $('test').onclick = async () => {
   const r = await send({ type: 'lifenizer-ping' });
   say(!r ? 'No answer' : r.ok ? (r.unlocked ? 'Connected' : 'Connected, vault locked') : r.error === 'bad-token' ? 'Token rejected' : 'App not reachable');
 };
-$('clear').onclick = async () => { await set({ visits: [], status: {} }); say('Collected data deleted'); };
+$('clear').onclick = async () => { await set({ visits: [], messages: [], status: {} }); say('Collected data deleted'); };
 load();

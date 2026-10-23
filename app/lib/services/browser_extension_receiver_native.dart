@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
 import '../app_state.dart';
+import '../models.dart';
 import 'browser_history_types.dart';
 import 'document_credentials.dart';
 
@@ -14,17 +15,19 @@ const int defaultBrowserExtensionPort = 47615;
 const int maxBrowserExtensionBody = 8 * 1024 * 1024;
 
 /// Opt-in loopback HTTP receiver (desktop only) so the Lifenizer browser
-/// extension can push YouTube/TikTok watch history straight into the vault.
+/// extension can push watch history and WhatsApp/Discord messages into the vault.
 ///
 /// The server binds to 127.0.0.1 only, requires a random bearer token, rejects
 /// foreign Host and Origin headers (DNS rebinding, web pages) and never logs
 /// the token or visit contents. Imports run through the same Takeout-shaped
-/// batches as the browser-history watcher, one request at a time.
+/// batches as the browser-history watcher or normalized messages, one request
+/// at a time.
 class BrowserExtensionReceiverService extends ChangeNotifier {
   BrowserExtensionReceiverService(
     this.state, {
     DocumentCredentialStore? store,
     ViewingBatchImporter? importer,
+    Future<int?> Function(NormalizedImportResult)? messageImporter,
     Future<void> Function(int imported)? onImported,
     DateTime Function()? now,
     int? defaultPort,
@@ -35,6 +38,7 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
        _onImported = onImported,
        _supported = supportedOverride ?? _desktop {
     _importer = importer ?? _importBatch;
+    _messageImporter = messageImporter ?? state.importBrowserMessages;
   }
 
   static bool get _desktop =>
@@ -46,6 +50,7 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
   final bool _supported;
   final Future<void> Function(int imported)? _onImported;
   late final ViewingBatchImporter _importer;
+  late final Future<int?> Function(NormalizedImportResult) _messageImporter;
 
   bool _enabled = false;
   int _port;
@@ -148,7 +153,8 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
   /// Starts or stops the server so it matches [_enabled] and the port.
   Future<void> _apply() async {
     final wanted = _enabled && _token != null;
-    if (_server != null && (!wanted || (_port != 0 && _server!.port != _port))) {
+    if (_server != null &&
+        (!wanted || (_port != 0 && _server!.port != _port))) {
       await _stopServer();
     }
     if (wanted && _server == null) {
@@ -286,12 +292,9 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
       if (expected == null ||
           !auth.startsWith('Bearer ') ||
           !_constantTimeEquals(auth.substring(7), expected)) {
-        return await _respond(
-          request,
-          401,
-          {'error': 'unauthorized'},
-          origin: allowedOrigin,
-        );
+        return await _respond(request, 401, {
+          'error': 'unauthorized',
+        }, origin: allowedOrigin);
       }
 
       final path = request.uri.path;
@@ -306,26 +309,40 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
           'unlocked': state.isAuthenticated,
         }, origin: allowedOrigin);
       }
-      if (path == '/v1/watch-history') {
+      if (path == '/v1/watch-history' || path == '/v1/messages') {
         if (request.method != 'POST') {
           return await _respond(request, 405, {
             'error': 'method-not-allowed',
           }, origin: allowedOrigin);
         }
-        return await _watchHistory(request, allowedOrigin);
+        return await _watchHistory(
+          request,
+          allowedOrigin,
+          messages: path == '/v1/messages',
+        );
       }
-      await _respond(request, 404, {'error': 'not-found'}, origin: allowedOrigin);
+      await _respond(request, 404, {
+        'error': 'not-found',
+      }, origin: allowedOrigin);
     } catch (_) {
       try {
-        await _respond(request, 500, {'error': 'internal'}, origin: allowedOrigin);
+        await _respond(request, 500, {
+          'error': 'internal',
+        }, origin: allowedOrigin);
       } catch (_) {}
     }
   }
 
-  Future<void> _watchHistory(HttpRequest request, String? origin) async {
+  Future<void> _watchHistory(
+    HttpRequest request,
+    String? origin, {
+    bool messages = false,
+  }) async {
     if (!state.isAuthenticated) {
       return _respond(request, 503, {'error': 'locked'}, origin: origin);
     }
+    final identity = _identity;
+    final generation = _generation;
     final type = request.headers.contentType;
     if (type == null || type.mimeType != 'application/json') {
       return _respond(request, 415, {'error': 'json-only'}, origin: origin);
@@ -359,9 +376,15 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
       return _respond(request, 400, {'error': 'timeout'}, origin: origin);
     }
 
-    final List<_Pending> pending;
+    var pending = <_Pending>[];
+    NormalizedImportResult? messageBatch;
     try {
-      pending = _parse(utf8.decode(bytes.takeBytes()));
+      final text = utf8.decode(bytes.takeBytes());
+      if (messages) {
+        messageBatch = _parseMessages(text);
+      } else {
+        pending = _parse(text);
+      }
     } on FormatException catch (e) {
       return _respond(request, 400, {
         'error': 'bad-request',
@@ -376,24 +399,37 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     try {
       await previous;
       if (!state.isAuthenticated) {
-        return await _respond(request, 503, {'error': 'locked'}, origin: origin);
+        return await _respond(request, 503, {
+          'error': 'locked',
+        }, origin: origin);
+      }
+      if (_identity != identity || _generation != generation) {
+        return await _respond(request, 503, {
+          'error': 'vault-changed',
+        }, origin: origin);
       }
       if (state.busy) {
         return await _respond(request, 503, {'error': 'busy'}, origin: origin);
       }
-      final imported = await _import(pending);
+      final imported = messageBatch == null
+          ? await _import(pending)
+          : messageBatch.conversations.isEmpty
+          ? 0
+          : await _messageImporter(messageBatch);
       if (imported == null) {
         return await _respond(request, 503, {
           'error': 'import-failed',
         }, origin: origin);
       }
-      visitsAccepted += pending.length;
-      videosImported += imported;
+      if (!messages) {
+        visitsAccepted += pending.length;
+        videosImported += imported;
+      }
       lastSync = _now();
       await _save();
       _notify();
       await _respond(request, 200, {
-        'accepted': pending.length,
+        if (messages) 'ok': true else 'accepted': pending.length,
         'imported': imported,
       }, origin: origin);
       if (imported > 0 && _onImported != null) {
@@ -460,6 +496,104 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     return result;
   }
 
+  /// Validate the entire batch before any encrypted vault mutation.
+  static NormalizedImportResult _parseMessages(String text) {
+    final decoded = jsonDecode(text);
+    if (decoded is! Map ||
+        decoded['source'] != 'lifenizer-extension' ||
+        decoded['version'] != 1 ||
+        decoded['messages'] is! List ||
+        (decoded['messages'] as List).length > 500) {
+      throw const FormatException(
+        'Expected up to 500 extension messages, version 1.',
+      );
+    }
+    String? field(Map item, String key, int limit, {bool required = false}) {
+      final value = item[key];
+      if (value == null && !required) return null;
+      if (value is! String || value.trim().isEmpty || value.length > limit) {
+        throw FormatException('Invalid $key.');
+      }
+      return value;
+    }
+
+    final threads = <String, NormalizedConversation>{};
+    final people = <String, NormalizedParticipant>{};
+    for (final item in decoded['messages'] as List) {
+      if (item is! Map || !['whatsapp', 'discord'].contains(item['platform'])) {
+        throw const FormatException('Unsupported message platform.');
+      }
+      final platform = item['platform'] as String;
+      final threadId = field(item, 'threadId', 512, required: true)!;
+      final title = field(item, 'threadTitle', 1000, required: true)!;
+      final id = field(item, 'id', 512, required: true)!;
+      final content = field(item, 'text', 65536, required: true)!;
+      final date = field(item, 'createdAt', 64, required: true)!;
+      final createdAt = DateTime.tryParse(date);
+      if (createdAt == null) throw const FormatException('Invalid createdAt.');
+      final authorId = field(item, 'authorId', 512);
+      final authorName = field(item, 'authorName', 1000);
+      final sourceUrl = field(item, 'sourceUrl', 2048);
+      if (sourceUrl != null) {
+        final uri = Uri.tryParse(sourceUrl);
+        final hosts = platform == 'discord'
+            ? ['discord.com', 'www.discord.com']
+            : ['web.whatsapp.com'];
+        if (uri == null ||
+            uri.scheme != 'https' ||
+            !hosts.contains(uri.host) ||
+            uri.userInfo.isNotEmpty) {
+          throw const FormatException('Invalid sourceUrl.');
+        }
+      }
+      final identity = authorId == null ? null : '$platform:$authorId';
+      if (identity != null) {
+        people[identity] = NormalizedParticipant(
+          displayName: authorName ?? authorId!,
+          identifiers: [identity],
+        );
+      }
+      final key = '$platform:$threadId';
+      final thread = threads.putIfAbsent(
+        key,
+        () => NormalizedConversation(
+          source: platform,
+          sourceThreadId: key,
+          title: title,
+          sourceUrl: sourceUrl,
+          participantNames: [],
+          participantIdentifiers: [],
+          segments: [],
+        ),
+      );
+      if (identity != null &&
+          !thread.participantIdentifiers.contains(identity)) {
+        thread.participantIdentifiers.add(identity);
+      }
+      if (identity == null &&
+          authorName != null &&
+          !thread.participantNames.contains(authorName)) {
+        thread.participantNames.add(authorName);
+      }
+      thread.segments.add(
+        NormalizedSegment(
+          sourceMessageId: id,
+          text: content,
+          createdAt: createdAt.toUtc(),
+          participantIdentifier: identity,
+          participantName: identity == null ? authorName : null,
+        ),
+      );
+    }
+    return NormalizedImportResult(
+      source: 'browser-extension',
+      plaintextCompute: false,
+      message: 'Browser messages',
+      conversations: threads.values.toList(),
+      participants: people.values.toList(),
+    );
+  }
+
   static String _dayKey(DateTime time) {
     final local = time.toLocal();
     return '${local.year}-${local.month}-${local.day}';
@@ -501,6 +635,16 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
   }
 
   Future<int?> _import(List<_Pending> pending) async {
+    final dayThreads = pending
+        .where((p) => p.dayOnly)
+        .map((p) => '${p.visit.platform}:${p.visit.id}')
+        .toSet();
+    for (final conversation in List.of(state.conversations)) {
+      if (!conversation.isLoaded &&
+          dayThreads.contains(conversation.sourceThreadId)) {
+        await state.loadConversation(conversation.id);
+      }
+    }
     var imported = 0;
     for (final batch in buildViewingBatches(_dedupe(pending))) {
       final added = await _importer(batch);
