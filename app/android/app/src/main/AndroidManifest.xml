@@ -54,6 +54,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="lifenizer" android:host="search" />
                 <data android:scheme="lifenizer" android:host="capture" />
+                <data android:scheme="lifenizer" android:host="record" />
                 <data android:scheme="lifenizer" android:host="imports" />
                 <data android:scheme="lifenizer" android:host="connect" />
             </intent-filter>

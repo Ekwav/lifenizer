@@ -299,3 +299,26 @@ dart run tool/vault_snapshot_benchmark.dart 126281 --startup --background --back
 plus the v2 chunked save, parallel load and one-chunk partial save.
 Its model-restoration measurement intentionally uses the ordinary synchronous
 model parser; the app yields during restoration to keep progress visible.
+
+## Android quick access
+
+Touch and hold the Lifenizer launcher icon for **Find a conversation**, **Start
+recording**, **Capture a memory** and **Import conversations**. Compatible launchers
+also let you drag these shortcuts onto the home screen. The search shortcut opens
+and focuses the app's search field; **Capture a memory** opens capture controls
+without starting the microphone.
+
+**Start recording** opens Capture and starts once the app is foregrounded and the
+vault is unlocked, using the normal microphone/notification permission flow. A pending
+recording action stays in memory through unlock. An ongoing recording is not restarted;
+an existing draft must be saved or discarded first. If another vault operation is
+busy, the app shows recording controls and asks the user to retry. The recording
+notification reopens Capture; its Stop action saves the encrypted draft.
+
+Android `ACTION_SEARCH` queries, the selected-text **Search Lifenizer** action
+(`ACTION_PROCESS_TEXT`), and `lifenizer://search?q=...` route into the same private
+in-app search. There is no Android-wide conversation-results provider, AppSearch
+index, Assistant integration, home-screen widget or Quick Settings tile. Search and
+recording shortcuts still require vault unlock; protected conversation text is not
+published to a launcher search index. Cold start must initialize local app storage
+and device credentials before an unlocked search UI is available.

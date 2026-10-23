@@ -35,7 +35,7 @@ class VaultShell extends StatefulWidget {
   State<VaultShell> createState() => _VaultShellState();
 }
 
-class _VaultShellState extends State<VaultShell> {
+class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
   /// Currently selected page index, mapped to [AppPage] enum.
   static const _mobilePages = [
     AppPage.search,
@@ -46,6 +46,7 @@ class _VaultShellState extends State<VaultShell> {
   int _selectedPageIndex = 0;
   QuickAction? _searchAction;
   int _searchRevision = 0;
+  bool _recordRequested = false;
   (String?, bool)? _lastMessage;
   bool _messageDismissed = false;
   Timer? _messageTimer;
@@ -53,6 +54,7 @@ class _VaultShellState extends State<VaultShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     QuickActionService.instance.addListener(_receiveAction);
     _applyAction();
   }
@@ -60,6 +62,7 @@ class _VaultShellState extends State<VaultShell> {
   @override
   void dispose() {
     _messageTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     QuickActionService.instance.removeListener(_receiveAction);
     super.dispose();
   }
@@ -117,15 +120,52 @@ class _VaultShellState extends State<VaultShell> {
     final action = QuickActionService.instance.consume();
     if (action == null) return;
     final page = switch (action.action) {
-      'capture' => AppPage.capture,
+      'capture' || 'record' => AppPage.capture,
       'imports' => AppPage.imports,
       _ => AppPage.search,
     };
     _selectedPageIndex = page.index;
+    _recordRequested = action.action == 'record';
+    if (_recordRequested) _scheduleRecording();
     if (page == AppPage.search) {
       _searchAction = action;
       _searchRevision++;
     }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (lifecycle == AppLifecycleState.resumed && _recordRequested) {
+      _scheduleRecording();
+    }
+  }
+
+  void _scheduleRecording() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_recordRequested ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
+      _recordRequested = false;
+      if (!widget.state.isAuthenticated ||
+          _selectedPageIndex != AppPage.capture.index) {
+        return;
+      }
+      final recording = widget.state.recording;
+      if (recording.recording || recording.working) return;
+      if (widget.state.audioDraft != null) {
+        widget.state.reportError(
+          'Save or discard the pending recording before starting another.',
+        );
+      } else if (widget.state.busy) {
+        widget.state.reportError(
+          'Wait for the current operation, then tap Start microphone recording.',
+        );
+      } else {
+        unawaited(recording.start());
+      }
+    });
   }
 
   @override

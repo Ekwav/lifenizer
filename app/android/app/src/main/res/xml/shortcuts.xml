@@ -2,6 +2,9 @@
     <shortcut android:shortcutId="search" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_search">
         <intent android:action="android.intent.action.VIEW" android:targetPackage="com.lifenizer.app" android:targetClass="com.lifenizer.app.MainActivity" android:data="lifenizer://search" />
     </shortcut>
+    <shortcut android:shortcutId="record" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_record">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="com.lifenizer.app" android:targetClass="com.lifenizer.app.MainActivity" android:data="lifenizer://record" />
+    </shortcut>
     <shortcut android:shortcutId="capture" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_capture">
         <intent android:action="android.intent.action.VIEW" android:targetPackage="com.lifenizer.app" android:targetClass="com.lifenizer.app.MainActivity" android:data="lifenizer://capture" />
     </shortcut>

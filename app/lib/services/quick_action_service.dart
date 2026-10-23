@@ -25,7 +25,13 @@ class QuickAction {
     final action = uri.scheme == 'lifenizer'
         ? uri.host
         : uri.queryParameters['action'];
-    if (!const ['search', 'capture', 'imports', 'connect'].contains(action)) {
+    if (!const [
+      'search',
+      'capture',
+      'record',
+      'imports',
+      'connect',
+    ].contains(action)) {
       return null;
     }
     return QuickAction(
@@ -91,7 +97,13 @@ class QuickActionService extends ChangeNotifier {
   void _receive(Object? value) {
     if (value is! Map) return;
     final action = value['action'];
-    if (!const ['search', 'capture', 'imports', 'connect'].contains(action)) {
+    if (!const [
+      'search',
+      'capture',
+      'record',
+      'imports',
+      'connect',
+    ].contains(action)) {
       return;
     }
     request(
