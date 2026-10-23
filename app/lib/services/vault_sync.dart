@@ -714,7 +714,7 @@ extension VaultSync on LifenizerAppState {
               background: true,
             );
             cachedIndex = await decodeSearchSnapshot(snapshot);
-            currentCatalog = snapshot['cacheVersion'] == 2;
+            currentCatalog = snapshot['cacheVersion'] == 3;
             markStartup('searchCatalog');
             if (catalogInDatabase) {
               _searchDetailNonces = List<String>.from(

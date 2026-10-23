@@ -48,6 +48,8 @@ encodeSearchSnapshotParts(
     buckets[vaultChunkFor(entry.key, bucketCount)][entry.key] = {
       'haystack': entry.value.haystack,
       'termFrequency': entry.value.termFrequency,
+      'titleTokens': entry.value.titleTokens.toList(),
+      'personTokens': entry.value.personTokens.toList(),
     };
   }
   return (

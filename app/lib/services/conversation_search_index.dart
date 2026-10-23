@@ -36,8 +36,8 @@ class IndexedConversation {
 
   Conversation conversation;
   String haystack;
-  final Set<String> titleTokens;
-  final Set<String> personTokens;
+  Set<String> titleTokens;
+  Set<String> personTokens;
   final Set<String> tagSet;
   Map<String, int> termFrequency;
   bool detailsLoaded;
@@ -107,8 +107,8 @@ class ConversationSearchIndex {
               previewLength: includeDetails ? 500 : 180,
             ),
             includeDetails ? doc.haystack : '',
-            doc.titleTokens.toList(),
-            doc.personTokens.toList(),
+            includeDetails ? doc.titleTokens.toList() : const <String>[],
+            includeDetails ? doc.personTokens.toList() : const <String>[],
             doc.tagSet.toList(),
             [
               if (includeDetails)
@@ -198,6 +198,12 @@ class ConversationSearchIndex {
       final frequency = Map<String, int>.from(data['termFrequency'] as Map);
       document.haystack = haystack;
       document.termFrequency = frequency;
+      if (data['titleTokens'] case final List tokens) {
+        document.titleTokens = tokens.cast<String>().toSet();
+      }
+      if (data['personTokens'] case final List tokens) {
+        document.personTokens = tokens.cast<String>().toSet();
+      }
       document.detailsLoaded = true;
     }
   }

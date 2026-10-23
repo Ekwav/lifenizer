@@ -205,7 +205,7 @@ extension VaultSearchCache on LifenizerAppState {
     ]);
     final catalog = await _crypto.encryptJson({
       ...parts.catalog,
-      'cacheVersion': 2,
+      'cacheVersion': 3,
       'detailNonces': nonces,
       'postingNonces': postingNonces,
     }, background: true);

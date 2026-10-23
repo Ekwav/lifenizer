@@ -59,12 +59,16 @@ void main() {
         expect(document.detailsLoaded, isFalse);
         expect(document.haystack, isEmpty);
         expect(document.termFrequency, isEmpty);
+        expect(document.titleTokens, isEmpty);
+        expect(document.personTokens, isEmpty);
       }
       catalog.loadDetails({
         for (final entry in original.documents.entries)
           entry.key: {
             'haystack': entry.value.haystack,
             'termFrequency': entry.value.termFrequency,
+            'titleTokens': entry.value.titleTokens.toList(),
+            'personTokens': entry.value.personTokens.toList(),
           },
       });
       expect(identical(catalog.documents['one']!.conversation, live), isTrue);
@@ -82,6 +86,34 @@ void main() {
         expect(
           catalog.vectorScore(document, ['invoice']),
           original.vectorScore(original.documents[id]!, ['invoice']),
+        );
+      }
+    },
+  );
+
+  test(
+    'legacy scoring buckets retain title and person tokens from their catalog',
+    () {
+      final original = build([conversation('one', 'invoice amount')]);
+      final json = original.toJson(includeDetails: false);
+      final row = (json['documents'] as List).single as List;
+      final document = original.documents['one']!;
+      row[2] = document.titleTokens.toList();
+      row[3] = document.personTokens.toList();
+      final legacy = ConversationSearchIndex.fromJson(json);
+      legacy.loadDetails({
+        'one': {
+          'haystack': document.haystack,
+          'termFrequency': document.termFrequency,
+        },
+      });
+      final restored = legacy.documents['one']!;
+      expect(restored.titleTokens, document.titleTokens);
+      expect(restored.personTokens, document.personTokens);
+      for (final query in ['alice', 'archive']) {
+        expect(
+          legacy.lexicalScore(restored, query, [query]),
+          original.lexicalScore(document, query, [query]),
         );
       }
     },
@@ -255,6 +287,10 @@ void main() {
           original.invertedIndex.keys.toSet(),
         );
         expect(catalog.idf, original.idf);
+        for (final document in catalog.documents.values) {
+          expect(document.titleTokens, isEmpty);
+          expect(document.personTokens, isEmpty);
+        }
         for (var bucket = 0; bucket < 4; bucket++) {
           final postings = useNative
               ? await web.decodeSearchDetails(parts.postings[bucket])
@@ -284,6 +320,18 @@ void main() {
           expect(document.detailsLoaded, isTrue);
           expect(document.haystack, entry.value.haystack);
           expect(document.termFrequency, entry.value.termFrequency);
+          expect(document.titleTokens, entry.value.titleTokens);
+          expect(document.personTokens, entry.value.personTokens);
+          for (final query in ['alice', 'archive']) {
+            expect(
+              catalog.lookupCandidates([query]),
+              original.lookupCandidates([query]),
+            );
+            expect(
+              catalog.lexicalScore(document, query, [query]),
+              original.lexicalScore(entry.value, query, [query]),
+            );
+          }
           expect(
             catalog.lexicalScore(document, 'invoice', ['invoice']),
             original.lexicalScore(entry.value, 'invoice', ['invoice']),
