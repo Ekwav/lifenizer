@@ -2,5 +2,16 @@
   "name": "lifenizer-history-sync",
   "version": "0.1.0",
   "private": true,
-  "scripts": { "test": "node --test test/", "build": "node scripts/build.js", "lint": "npx web-ext lint --source-dir ." }
+  "scripts": {
+    "test": "node --test test/",
+    "build": "node scripts/build.js",
+    "lint": "npx web-ext lint --source-dir .",
+    "debug:mcp": "node debug/bridge.cjs"
+  },
+  "dependencies": {
+    "ws": "8.22.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
 }

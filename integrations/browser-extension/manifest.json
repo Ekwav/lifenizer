@@ -24,6 +24,7 @@
       "src/lib/payload.js",
       "src/lib/sync.js",
       "src/lib/messages.js",
+      "src/lib/debug.js",
       "src/background.js"
     ]
   },
@@ -51,7 +52,8 @@
         "src/lib/youtube.js",
         "src/lib/tiktok.js",
         "src/lib/payload.js",
-        "src/content/collector.js"
+        "src/content/collector.js",
+        "src/content/debug.js"
       ],
       "run_at": "document_idle"
     },
@@ -62,7 +64,8 @@
       ],
       "js": [
         "src/lib/messages.js",
-        "src/content/messages.js"
+        "src/content/messages.js",
+        "src/content/debug.js"
       ],
       "run_at": "document_idle"
     }
@@ -86,5 +89,8 @@
       }
     }
   },
-  "minimum_chrome_version": "111"
+  "minimum_chrome_version": "111",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:47616"
+  }
 }

@@ -2,7 +2,7 @@
 // Orchestrates: open history tab -> ask content script to collect -> merge
 // into local store -> deliver to the desktop app on 127.0.0.1.
 if (typeof importScripts === 'function') {
-  importScripts('lib/headers.js', 'lib/youtube.js', 'lib/tiktok.js', 'lib/payload.js', 'lib/sync.js', 'lib/messages.js');
+  importScripts('lib/headers.js', 'lib/youtube.js', 'lib/tiktok.js', 'lib/payload.js', 'lib/sync.js', 'lib/messages.js', 'lib/debug.js');
 }
 const ext = globalThis.browser || globalThis.chrome;
 const LF = globalThis.LF;

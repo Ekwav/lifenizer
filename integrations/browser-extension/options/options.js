@@ -5,6 +5,7 @@ const set = (o) => Promise.resolve(ext.storage.local.set(o));
 const send = (m) => ext.runtime.sendMessage(m).catch(() => null);
 const DEFAULTS = { port: 47615, token: '', periodic: false, maxDays: 30, maxItems: 3000, maxSeconds: 90, foregroundTabs: true,
   youtubeAccount: '', tiktokAccount: '', whatsappEnabled: false, discordEnabled: false,
+  debugEnabled: false, debugToken: '', debugAllowContent: false,
   youtubeUrl: 'https://www.youtube.com/feed/history', tiktokUrl: 'https://www.tiktok.com/setting/watch-history' };
 const FIELDS = Object.keys(DEFAULTS);
 
@@ -18,7 +19,11 @@ function read() {
   return s;
 }
 const say = (t) => { $('msg').textContent = t; };
-$('save').onclick = async () => { await set({ settings: read() }); say('Saved'); };
+$('save').onclick = async () => {
+  const settings = read();
+  if (settings.debugEnabled && (settings.debugToken.length < 32 || settings.debugToken.length > 256)) { say('Debug requires a separate 32–256 character secret'); return; }
+  await set({ settings }); say('Saved');
+};
 $('test').onclick = async () => {
   await set({ settings: read() });
   const r = await send({ type: 'lifenizer-ping' });

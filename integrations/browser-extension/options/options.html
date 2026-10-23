@@ -23,6 +23,12 @@
 <label><input id="whatsappEnabled" type="checkbox"> Capture opened WhatsApp Web conversations</label>
 <label><input id="discordEnabled" type="checkbox"> Capture opened Discord conversations</label>
 <p class="muted">When enabled, captures newly rendered messages in conversations you open while signed in. It does not scrape older history, scroll conversations or send messages.</p>
+<fieldset><legend>Developer MCP bridge (optional)</legend>
+<label><input id="debugEnabled" type="checkbox"> Enable local MCP debugging</label>
+<label>Separate debug secret (32–256 characters) <input id="debugToken" type="password" autocomplete="off"></label>
+<label><input id="debugAllowContent" type="checkbox"> Allow explicit samples of private visible messages/video titles</label>
+<p class="muted">Connects to the separately started bridge on 127.0.0.1:47616. Diagnostics expose supported tabs, adapter counts and account identity. Content samples require the separate tool and checkbox. Clearing the secret or disabling closes the connection. See the extension README for setup. Persistent background debugging requires Chrome 116+ or Firefox 140+.</p>
+</fieldset>
 <p><button id="save">Save</button> <button id="test">Test connection</button> <button id="clear">Delete collected data</button> <span id="msg" class="muted"></span></p>
 <script src="options.js"></script>
 </body></html>

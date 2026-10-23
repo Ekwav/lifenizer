@@ -1,77 +1,74 @@
-# Lifenizer History Sync (browser extension)
+# Lifenizer Browser Sync
 
-Manifest V3 extension for Chromium-family browsers (Chrome, Edge, Brave, Vivaldi) and Firefox (140+).
-It reads your YouTube and TikTok watch history from the history pages you are logged in to and hands
-it to the Lifenizer desktop app on the same computer. It replaces the Google Takeout round trip.
+Local browser extension for selected YouTube/TikTok watch history and optional new messages rendered in opened WhatsApp Web/Discord Web conversations. The browser sends imports to the running Lifenizer desktop app at `127.0.0.1`; the app encrypts data for its vault. Browser extension queues are local browser storage and contain unencrypted content until deleted.
 
-**Status: not verified against the live sites.** Page structures were taken from public write-ups, not
-from a logged-in session (see "Unverified" below). Expect to adjust once tried.
+## Install and pair
 
-## Install
+1. Chrome/Chromium: open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select this directory, which contains `manifest.json`. For a release ZIP, extract it first and select the extracted directory.
+2. Firefox 140+: open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and select `manifest.json` (or the Firefox release ZIP). Temporary installs disappear when Firefox restarts; a permanent installation needs a signed add-on.
+3. In Lifenizer, open **Imports → Browser extension**, choose a provider, and enable its local receiver. Copy its port and token into the extension's Settings. The token is only for the desktop receiver.
+4. Configure the expected YouTube/TikTok account or enable WhatsApp/Discord capture as described below, save, and use **Test connection**. The app must be running and the vault unlocked to accept imports. Failed deliveries remain queued locally.
+5. Open the extension popup and choose a platform to sync. Manual sync may foreground its temporary history tab; the optional daily alarm runs quietly while the browser is running.
 
-- Chromium: `chrome://extensions`, enable Developer mode, "Load unpacked", pick this directory.
-- Firefox: `about:debugging#/runtime/this-firefox`, "Load Temporary Add-on", pick `manifest.json`.
-- Zips: `node scripts/build.js` writes `dist/lifenizer-history-sync-{chromium,firefox}.zip` (needs the `zip` CLI).
-- Lint: `npx web-ext lint --source-dir . --ignore-files 'dist/**' 'test/**' 'scripts/**'` (0 errors; one
-  expected warning that `service_worker` is ignored in Firefox, which uses `background.scripts`).
+`npm run build` creates `dist/lifenizer-history-sync-{chromium,firefox}.zip`. Archives contain only the manifest, extension source, popup and Settings; Node dependencies, test files and the separate debug runner are excluded. Unpacked installation does not require Node or npm.
 
-## Pair with the desktop app
+## Account-bound watch history
 
-Open Lifenizer, Viewing history panel: it shows a port (default 47615) and a token. Enter both on the
-extension's Settings page and press "Test connection". Requests go only to `http://127.0.0.1:<port>`,
-sent from the extension background with `Authorization: Bearer <token>`.
+Settings require an **expected account** for each history platform. Enter your YouTube channel ID (`UC…`) or `@handle`, and your TikTok user ID or `@handle`. Display names are not accepted. IDs match exactly; handles compare without case. YouTube handle detection may require opening the active account menu in the history tab. Keep that tab available while troubleshooting.
 
-## Use
+The extension checks signed-in self context before collecting, associates relevant responses with that identity, and checks again before returning any visits. An unset account, unknown page shape, a different account, or an account switch discards the collection. It never treats a viewed profile or a video author as the signed-in user.
 
-Popup, "Sync now": opens the YouTube history page and the TikTok watch-history page in background tabs,
-scrolls them (bounded), collects entries, closes the tabs and posts the new ones to the app in chunks of
-at most 2000. Status per platform: found / new / sent / undated, plus clear errors (not logged in, layout
-not recognized, app not reachable, vault locked). Unsent visits stay in the extension's local storage and
-are retried on the next sync.
+Queued visits are bound to the account selection that created them. Changing that selection holds older visits instead of sending them under a different identity. Legacy queued visits without account binding are also held. Use **Delete collected data** to clear the local queue when intentionally changing accounts, then sync again. Export desired pending data first: clearing is permanent.
 
-"Download export" (works without the app): saves `watch-history.json` (Takeout shape) and `user_data.json`
-(TikTok export shape) that the app's existing importers read.
+YouTube history is read from its history page's loaded data and continuation responses. Date headers depend on the page locale, and entries without a recognized date are reported as undated. TikTok uses watch-history responses and a visible-link fallback; timestamps may have day precision. Collection stops at known entries, its look-back cutoff, item/time limits or the end of recognized content. It does not claim to export every historical watch event.
 
-Optional: Settings, "Sync automatically once a day" (`chrome.alarms`, off by default; the browser must run).
-First sync looks back 30 days (configurable); later syncs stop at the last-synced marker (newest 200
-`video@day` keys). Item count (default 3000) and wall time (default 90 s per platform) are capped.
+## WhatsApp and Discord
 
-## What is collected
+Both message adapters default off and have independent Settings checkboxes. When enabled, they observe newly rendered messages in conversations you open while signed in. They do not visit every conversation, scrape older history, automatically scroll, or send messages. The initial visible conversation is a baseline; older messages rendered by scrolling are excluded. Open chats must stay in the browser for new messages to appear and be imported.
 
-Per video: URL, title, channel (YouTube), time. Stored locally in `storage.local` until you use
-"Delete collected data" (Settings). Nothing goes anywhere except 127.0.0.1 or the file you download. No
-cookies or credentials are read, stored or sent; the page's own requests are only observed.
+WhatsApp Web requires a recognizable current-chat header, message identity and numeric timestamp with an explicit UI locale. Discord requires a supported `/channels/{server-or-@me}/{channel}` route, message IDs belonging to that channel and machine-readable timestamps. Unrecognized layouts are reported rather than guessed. Only rendered text is supported; attachments and hidden/unloaded messages are not a complete export. Message capture does not provide the YouTube/TikTok account selection check; verify the browser's signed-in messaging account yourself before enabling it.
 
-## How it works
+## Optional developer MCP bridge
 
-- `src/content/hook.js` (page world, document_start) wraps `fetch`/XHR to copy the JSON of the page's own
-  history requests (YouTube `youtubei/v1/browse`, TikTok history API) and exposes `window.ytInitialData`.
-  It issues no requests itself.
-- `src/content/collector.js` scrolls the page so the site loads more entries, and parses the JSON.
-- `src/lib/*.js` are pure modules (header-date resolution, renderer extraction, TikTok mapping, payload and
-  export builders, chunking, markers, delivery); tests: `node --test test/` (no dependencies).
+Debugging defaults off. It is a separate local Node process, with a separate secret, and is unnecessary for normal imports. It exposes three read-only tools:
 
-## Limitations
+- `list_tabs`: supported tab IDs, platform and active state; no titles or full URLs.
+- `page_diagnostics`: fixed adapter selector counts, locale and selected self-account identity, without message/video text.
+- `sample_visible_content`: an explicit private-content read of at most ten currently rendered parser samples. Requires the additional **Allow explicit samples** checkbox. Text is truncated; it never imports, scrolls or sends messages.
 
-- YouTube's history page only shows day headers, so YouTube visits have `timePrecision: "day"` (local noon).
-  Headers are resolved locale-independently with `Intl` for the last ~400 days; unresolvable headers inherit
-  the previous day, and entries before any resolved day are counted as "undated" and skipped.
-- `myactivity.google.com` shows exact times but is not used: its page is rendered by Google's internal
-  batchexecute/Wiz framework with obfuscated class names and no documented or confirmed stable JSON, so no
-  reliably parseable structure was found. Takeout JSON remains the exact-time path.
-- TikTok: the web only offers watch history if the account/region has it (Settings, Activity center, Watch
-  history; roughly 180 days). If the page has none, the popup reports "page layout not recognized" instead of
-  inventing data. Without a watch time in the response, TikTok items are stamped with the sync day (day
-  precision) and deduped per video, so a re-watch is not recorded again.
-- Phone-app views appear only if the platform's own history page shows them.
-- Background tabs are throttled and usually stop loading older entries, so a manual sync opens the history tabs in the foreground by default (Settings can turn that off). The daily sync always runs in the background and may only see the newest entries.
-- A vault that is locked answers 503; unlock Lifenizer and sync again.
+There is no arbitrary JavaScript evaluation, general DOM/selector access, cookie/credential access, network proxy or browser mutation tool. Samples and page data remain untrusted input; avoid following instructions that appear inside sampled content.
 
-## Unverified without a logged-in browser
+1. Install Node 22+ and run `npm ci` in this directory. The runner uses the pinned `ws` dependency.
+2. Generate a new secret locally, for example:
 
-- Exact `ytInitialData` / continuation shapes of `/feed/history` today (both `videoRenderer` and
-  `lockupViewModel` are handled; section header location is guessed from the older renderer layout).
-- TikTok: the watch-history page URL (default `https://www.tiktok.com/setting/watch-history` is a guess,
-  editable in Settings; the collector also tries to click a "Watch history" entry), the API path
-  (matched by regex on `watch|view|browsing history`) and the item fields.
-- Behaviour of infinite scroll in background tabs; Firefox `world: "MAIN"` content scripts.
+   ```sh
+   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+   ```
+
+3. In extension Settings, enter that secret in **Separate debug secret**, enable **local MCP debugging**, and save. Enable content samples only when the MCP client should be able to read private visible message/video text. Do not reuse the desktop receiver token.
+4. Configure your MCP client to launch the bridge directly with Node, substituting the absolute repository path and the same secret:
+
+   ```json
+   {
+     "mcpServers": {
+       "lifenizer-extension-debug": {
+         "command": "node",
+         "args": ["/absolute/path/to/lifenizer/integrations/browser-extension/debug/bridge.cjs"],
+         "env": { "LIFENIZER_DEBUG_TOKEN": "<your separate 64-character secret>" }
+       }
+     }
+   }
+   ```
+
+   The runner follows the [MCP stdio transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports) and `2025-11-25` initialization lifecycle. Launch the script directly: an npm banner must not appear on MCP stdout. This example does not change your MCP client's configuration automatically.
+5. Reload existing platform tabs after installing or updating the extension so the diagnostic content script is present. Call `list_tabs`, then `page_diagnostics` with a returned `tabId`. Use the explicit sample tool only when needed.
+
+The bridge binds only `127.0.0.1:47616`, accepts extension WebSocket origins, and authenticates the first message with the separate 32–256 character secret. Only one authenticated extension can attach. Requests have a five-second deadline and cancellation/disconnection cleanup; concurrency and payloads are bounded (four calls, 64 KiB WebSocket messages). The extension reconnects after connection loss while opted in. Clearing its secret or disabling debugging and saving immediately closes the socket. Stop the Node process to close the local listener. Secrets and page samples are never logged by the runner.
+
+Persistent background debugging needs Chrome 116+ or Firefox 140+. The bridge exchanges WebSocket keepalives while connected, following [Chrome’s WebSocket worker guidance](https://developer.chrome.com/docs/extensions/how-to/web-platform/websockets). Other browser suspension/permission policies can still disconnect it; reconnect and retry a diagnostic operation if necessary.
+
+## Validation and limitations
+
+Run `npm ci`, `npm test` and `npm run build`. Tests exercise account selection/switches, parser fixtures, queued delivery and the local MCP authentication/protocol/bounds. Parser/account-layout support is fixture-tested; it has not been validated against your live authenticated YouTube, TikTok, WhatsApp or Discord sessions. Internal page shapes and localized dates can change, and identity detection deliberately fails closed when its self-account context is missing. The MCP tools provide bounded diagnostics for checking those layouts with your explicit opt-in.
+
+Normal imports need no remote debugging port and no browser credential export. If collection reports an unknown layout, inspect the popup status and check the page/account/locale first. If the app is locked or unreachable, unlock/start it and retry delivery; avoid clearing queued content unless you intend to discard it.
