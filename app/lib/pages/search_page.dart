@@ -134,7 +134,7 @@ class _SearchPageState extends State<SearchPage> {
               focusNode: _searchFocus,
               onChanged: () => setState(() => _resultLimit = 50),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             // Filter controls and action buttons
             SearchFilters(
@@ -181,11 +181,11 @@ class _SearchPageState extends State<SearchPage> {
                 ],
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
             // Metrics display
             SearchMetricsBar(state: widget.state),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
             // Search results.
             //
