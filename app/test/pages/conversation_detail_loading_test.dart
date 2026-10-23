@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:app/app_state.dart';
 import 'package:app/models.dart';
 import 'package:app/pages/search/search_results_list.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,9 +40,14 @@ Conversation _conversation({bool loaded = false}) => Conversation(
       : [],
 );
 
-Future<void> _open(WidgetTester tester, _LoadingState state) async {
+Future<void> _open(
+  WidgetTester tester,
+  _LoadingState state, {
+  Brightness brightness = Brightness.light,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
+      theme: ThemeData(brightness: brightness, platform: TargetPlatform.linux),
       home: Scaffold(
         body: ConversationCard(state: state, conversation: _conversation()),
       ),
@@ -75,6 +81,65 @@ void main() {
     expect(find.text('Decrypted message'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  for (final brightness in Brightness.values) {
+    testWidgets('detail scrollbar stays in its gutter on hover ($brightness)', (
+      tester,
+    ) async {
+      final state = _LoadingState();
+      addTearDown(state.dispose);
+      await _open(tester, state, brightness: brightness);
+      state.requests.single.complete(
+        Conversation(
+          id: 'thread',
+          title: 'Archive thread',
+          source: 'signal',
+          participantIds: [],
+          segments: List.generate(
+            50,
+            (index) =>
+                ConversationSegment(id: '$index', text: 'Message $index'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final viewport = find.byType(CustomScrollView);
+      final scrollbar = find.ancestor(
+        of: find
+            .descendant(of: viewport, matching: find.byType(Scrollable))
+            .first,
+        matching: find.byType(Scrollbar),
+      );
+      expect(scrollbar, findsOneWidget);
+      expect(
+        tester.getRect(scrollbar).right - tester.getRect(viewport).right,
+        greaterThanOrEqualTo(16),
+      );
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer();
+      await mouse.moveTo(
+        tester.getRect(scrollbar).topRight + const Offset(-3, 40),
+      );
+      await tester.pumpAndSettle();
+      final painter = tester
+          .state<RawScrollbarState>(
+            find
+                .descendant(
+                  of: scrollbar,
+                  matching: find.byWidgetPredicate(
+                    (widget) => widget is RawScrollbar,
+                  ),
+                )
+                .first,
+          )
+          .scrollbarPainter;
+      expect(painter.thickness, 6);
+      expect(tester.widget<Scrollbar>(scrollbar).trackVisibility, isFalse);
+      expect(tester.takeException(), isNull);
+      await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 
   testWidgets('locking while a body loads hides its late result', (
     tester,

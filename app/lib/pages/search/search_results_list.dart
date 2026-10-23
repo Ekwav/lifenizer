@@ -453,183 +453,196 @@ class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
       maxChildSize: 1.0,
       expand: false,
       builder: (ctx, scrollController) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: CustomScrollView(
-            controller: scrollController,
-            slivers: [
-              SliverToBoxAdapter(
-                child: Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Text(
-                  conversation.title,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 12),
-                  child: Text(
-                    participants.isEmpty
-                        ? watchHistoryLine(conversation) ??
-                              '${conversation.source} • $participants'
-                        : '${conversation.source} • $participants',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: TranscriptAction(
-                    state: state,
-                    conversation: conversation,
-                  ),
-                ),
-              ),
-              if (conversation.source == 'audio')
+        return Scrollbar(
+          controller: scrollController,
+          thickness: 6,
+          trackVisibility: false,
+          radius: const Radius.circular(3),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: CustomScrollView(
+              controller: scrollController,
+              scrollBehavior: ScrollConfiguration.of(
+                ctx,
+              ).copyWith(scrollbars: false),
+              slivers: [
                 SliverToBoxAdapter(
-                  child: RecordingAudioPlayer(
-                    state: state,
-                    conversationId: conversation.id,
+                  child: Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
                   ),
                 ),
-              if (sourceUrl != null)
+                SliverToBoxAdapter(
+                  child: Text(
+                    conversation.title,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 12),
+                    child: Text(
+                      participants.isEmpty
+                          ? watchHistoryLine(conversation) ??
+                                '${conversation.source} • $participants'
+                          : '${conversation.source} • $participants',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
                 SliverToBoxAdapter(
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: () => _openLink(sourceUrl.toString()),
-                      icon: const Icon(Icons.open_in_new),
-                      label: Text(
-                        conversation.source == 'discord'
-                            ? 'Open Discord chat'
-                            : 'Open original',
+                    child: TranscriptAction(
+                      state: state,
+                      conversation: conversation,
+                    ),
+                  ),
+                ),
+                if (conversation.source == 'audio')
+                  SliverToBoxAdapter(
+                    child: RecordingAudioPlayer(
+                      state: state,
+                      conversationId: conversation.id,
+                    ),
+                  ),
+                if (sourceUrl != null)
+                  SliverToBoxAdapter(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => _openLink(sourceUrl.toString()),
+                        icon: const Icon(Icons.open_in_new),
+                        label: Text(
+                          conversation.source == 'discord'
+                              ? 'Open Discord chat'
+                              : 'Open original',
+                        ),
                       ),
                     ),
                   ),
-                ),
-              if (ownMessagesOnly)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      'This export contains only your sent messages; other people’s replies are absent.'
-                      '${directMessage ? ' Known recipients are shown above.' : ' Discord did not include this channel’s other members.'}'
-                      '${conversation.metadata.containsKey('unidentifiedRecipients') ? ' Some deleted recipients have no usable identity.' : ''}'
-                      '${sourceUrl == null ? ' The original channel link is unavailable in this export.' : ''}',
-                      style: Theme.of(context).textTheme.bodySmall,
+                if (ownMessagesOnly)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        'This export contains only your sent messages; other people’s replies are absent.'
+                        '${directMessage ? ' Known recipients are shown above.' : ' Discord did not include this channel’s other members.'}'
+                        '${conversation.metadata.containsKey('unidentifiedRecipients') ? ' Some deleted recipients have no usable identity.' : ''}'
+                        '${sourceUrl == null ? ' The original channel link is unavailable in this export.' : ''}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
                   ),
-                ),
-              if (conversation.tags.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        for (final tag in conversation.tags)
-                          Chip(
-                            label: Text(tag),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: ImageGallery(
-                    state: state,
-                    conversationId: conversation.id,
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Text(
-                  'Transcript',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-              ),
-              if (conversation.segments.isEmpty)
-                const SliverToBoxAdapter(child: Text('No transcript.'))
-              else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final segment = conversation.segments[index];
-                    final link = discordMessageUrl(conversation, segment);
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 12, bottom: 4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                if (conversation.tags.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
-                          Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 8,
-                            children: [
-                              Text(
-                                '${segment.createdAt.toCompactLocalString()}${segment.participantId == null ? '' : ' · ${state.participantName(segment.participantId!)}'}',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                              if (conversation.source == 'audio' &&
-                                  segment.text.trim().isNotEmpty)
-                                TextButton.icon(
-                                  onPressed: () => showTranscriptionCorrection(
-                                    context,
-                                    state,
-                                    conversation,
-                                    segment,
-                                  ),
-                                  icon: const Icon(Icons.edit_note, size: 16),
-                                  label: const Text('Correct for TAB'),
-                                ),
-                              if (link != null)
-                                TextButton.icon(
-                                  onPressed: () => _openLink(link),
-                                  icon: const Icon(Icons.open_in_new, size: 16),
-                                  label: const Text('Open message'),
-                                ),
-                            ],
-                          ),
-                          if (segment.text.isNotEmpty)
-                            SelectableText(
-                              _formatSegmentLine(segment),
-                              style: Theme.of(context).textTheme.bodyMedium,
+                          for (final tag in conversation.tags)
+                            Chip(
+                              label: Text(tag),
+                              visualDensity: VisualDensity.compact,
                             ),
-                          for (final attachment in segment.attachmentUrls)
-                            if (externalLinkUri(attachment) != null)
-                              TextButton.icon(
-                                onPressed: () => _openLink(attachment),
-                                icon: const Icon(Icons.attach_file, size: 16),
-                                label: Text(
-                                  Uri.parse(
-                                        attachment,
-                                      ).pathSegments.lastOrNull ??
-                                      'Attachment',
-                                ),
-                              ),
                         ],
                       ),
-                    );
-                  }, childCount: conversation.segments.length),
+                    ),
+                  ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: ImageGallery(
+                      state: state,
+                      conversationId: conversation.id,
+                    ),
+                  ),
                 ),
-            ],
+                SliverToBoxAdapter(
+                  child: Text(
+                    'Transcript',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                if (conversation.segments.isEmpty)
+                  const SliverToBoxAdapter(child: Text('No transcript.'))
+                else
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final segment = conversation.segments[index];
+                      final link = discordMessageUrl(conversation, segment);
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 12, bottom: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              children: [
+                                Text(
+                                  '${segment.createdAt.toCompactLocalString()}${segment.participantId == null ? '' : ' · ${state.participantName(segment.participantId!)}'}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                if (conversation.source == 'audio' &&
+                                    segment.text.trim().isNotEmpty)
+                                  TextButton.icon(
+                                    onPressed: () =>
+                                        showTranscriptionCorrection(
+                                          context,
+                                          state,
+                                          conversation,
+                                          segment,
+                                        ),
+                                    icon: const Icon(Icons.edit_note, size: 16),
+                                    label: const Text('Correct for TAB'),
+                                  ),
+                                if (link != null)
+                                  TextButton.icon(
+                                    onPressed: () => _openLink(link),
+                                    icon: const Icon(
+                                      Icons.open_in_new,
+                                      size: 16,
+                                    ),
+                                    label: const Text('Open message'),
+                                  ),
+                              ],
+                            ),
+                            if (segment.text.isNotEmpty)
+                              SelectableText(
+                                _formatSegmentLine(segment),
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            for (final attachment in segment.attachmentUrls)
+                              if (externalLinkUri(attachment) != null)
+                                TextButton.icon(
+                                  onPressed: () => _openLink(attachment),
+                                  icon: const Icon(Icons.attach_file, size: 16),
+                                  label: Text(
+                                    Uri.parse(
+                                          attachment,
+                                        ).pathSegments.lastOrNull ??
+                                        'Attachment',
+                                  ),
+                                ),
+                          ],
+                        ),
+                      );
+                    }, childCount: conversation.segments.length),
+                  ),
+              ],
+            ),
           ),
         );
       },
