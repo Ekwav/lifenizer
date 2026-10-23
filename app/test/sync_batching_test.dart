@@ -5,6 +5,7 @@ import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
 import 'package:app/crypto_service.dart';
 import 'package:app/services/local_vault_store.dart';
+import 'package:app/services/discord_bot_import_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -255,6 +256,122 @@ void main() {
       expect(fixture.server.pushes.last, fixture.server.pushes.first);
       expect(state.pendingSyncCount, 0);
       expect(state.syncError, isNull);
+    },
+  );
+
+  test('failed upload retry deadline survives lock and login', () async {
+    await state.ensureParticipants('Alice');
+    fixture.now = fixture.now.add(const Duration(seconds: 20));
+    fixture.server.failPush = true;
+    await state.syncQuietly();
+    expect(fixture.server.pushes, hasLength(1));
+    expect(state.pendingSyncCount, 1);
+    await state.lock();
+    fixture.server.failPush = false;
+    state = fixture.device();
+    await fixture.login(state);
+    expect(fixture.server.pushes, hasLength(1));
+    expect(state.pendingSyncCount, 1);
+    fixture.now = fixture.now.add(const Duration(seconds: 19));
+    await state.syncQuietly();
+    expect(fixture.server.pushes, hasLength(1));
+    fixture.now = fixture.now.add(const Duration(seconds: 1));
+    await state.syncQuietly();
+    expect(fixture.server.pushes, hasLength(2));
+    expect(state.pendingSyncCount, 0);
+  });
+
+  test(
+    'early pull preserves pending imported title and metadata while merging messages',
+    () async {
+      Future<void> importMessages(
+        String title,
+        int channelType,
+        List<String> ids,
+      ) async {
+        expect(
+          await state.importDiscordBotBatch(
+            normalizeDiscordBotMessages(
+              {
+                'id': '123',
+                'guild_id': '456',
+                'name': title,
+                'type': channelType,
+              },
+              [
+                for (final id in ids)
+                  {
+                    'id': id,
+                    'author': {'id': '8', 'username': 'Alice'},
+                    'content': 'Message $id',
+                    'timestamp': '2026-10-23T12:00:00Z',
+                  },
+              ],
+            ),
+          ),
+          isTrue,
+        );
+      }
+
+      await importMessages('Original channel', 0, ['101']);
+      await state.pullSync();
+      final original = fixture.server.envelopes.singleWhere(
+        (envelope) => envelope['entityType'] == 'conversation',
+      );
+      final remote = await fixture.decrypt(state, original);
+      await importMessages('Updated local channel', 1, ['102']);
+      final pushesBeforePull = fixture.server.pushes.length;
+      final crypto = VaultCrypto();
+      crypto.unlockDeviceKey(base64Decode(await state.exportDeviceVaultKey()));
+      try {
+        final sealed = await crypto.encryptJson({
+          ...remote,
+          'segments': [
+            ...(remote['segments'] as List),
+            {
+              ...Map<String, dynamic>.from(
+                (remote['segments'] as List).single as Map,
+              ),
+              'id': 'remote-message-103',
+              'sourceMessageId': '103',
+              'text': 'Message 103',
+            },
+          ],
+        });
+        fixture.server.envelopes.add({
+          ...original,
+          'id': 'remote-thread-update',
+          'cipherText': sealed.cipherText,
+          'nonce': sealed.nonce,
+          'serverSequence': fixture.server.envelopes.length + 1,
+        });
+      } finally {
+        crypto.lock();
+      }
+      await state.syncQuietly();
+      expect(fixture.server.pushes, hasLength(pushesBeforePull));
+      final merged = state.conversations.single;
+      expect(merged.title, 'Updated local channel');
+      expect(merged.metadata['channelType'], '1');
+      expect(
+        merged.segments.map((segment) => segment.sourceMessageId),
+        unorderedEquals(['101', '102', '103']),
+      );
+      final queued = (await fixture.pending(
+        state,
+      )).singleWhere((envelope) => envelope['entityType'] == 'conversation');
+      final payload = await fixture.decrypt(state, queued);
+      expect(payload['title'], 'Updated local channel');
+      expect(payload['metadata']['channelType'], '1');
+      expect(
+        (payload['segments'] as List).map(
+          (segment) => segment['sourceMessageId'],
+        ),
+        unorderedEquals(['101', '102', '103']),
+      );
+      fixture.now = fixture.now.add(const Duration(seconds: 20));
+      await state.syncQuietly();
+      expect(state.pendingSyncCount, 0);
     },
   );
 
