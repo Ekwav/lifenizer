@@ -308,17 +308,19 @@ also let you drag these shortcuts onto the home screen. The search shortcut open
 and focuses the app's search field; **Capture a memory** opens capture controls
 without starting the microphone.
 
-**Start recording** opens Capture and starts once the app is foregrounded and the
-vault is unlocked, using the normal microphone/notification permission flow. A pending
-recording action stays in memory through unlock. An ongoing recording is not restarted;
-an existing draft must be saved or discarded first. If another vault operation is
-busy, the app shows recording controls and asks the user to retry. The recording
-notification reopens Capture; its Stop action saves the encrypted draft.
+**Start recording** starts once the app is foregrounded and a library is selected,
+using the normal microphone/notification permission flow. It can start before vault
+unlock and opens Capture after unlock. An ongoing recording is not restarted.
+The native service keeps recording if the Activity is suspended or removed; its
+notification reopens Capture, and Stop saves an encrypted recovery file. Finished
+recordings enter the library and search when the app resumes unlocked. Existing
+drafts are preserved; transcription from the saved recording is an explicit action.
 
 Android `ACTION_SEARCH` queries, the selected-text **Search Lifenizer** action
 (`ACTION_PROCESS_TEXT`), and `lifenizer://search?q=...` route into the same private
 in-app search. There is no Android-wide conversation-results provider, AppSearch
-index, Assistant integration, home-screen widget or Quick Settings tile. Search and
-recording shortcuts still require vault unlock; protected conversation text is not
-published to a launcher search index. Cold start must initialize local app storage
-and device credentials before an unlocked search UI is available.
+index, Assistant integration, home-screen widget or Quick Settings tile. Search
+results require vault unlock; protected conversation text is not published
+to a launcher search index. The search field accepts a query while storage and unlock
+finish, retaining it when results become available. Android capture can start before
+unlock; it cannot read existing library contents until authentication succeeds.

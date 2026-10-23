@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:app/app_state.dart';
 import 'package:flutter/material.dart';
@@ -60,8 +59,9 @@ void main() {
               capturing = true;
               return status();
             case 'stop':
-              if (capturing)
+              if (capturing) {
                 pending.add({'id': 'capture-1', 'startedAt': 1000});
+              }
               capturing = false;
               return status();
             case 'pending':

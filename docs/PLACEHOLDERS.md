@@ -57,13 +57,19 @@ These are intentional boundaries after the provider import implementation pass.
 ## Recording
 
 - Microphone capture supports Android, Linux and secure-context browsers with permission.
-- Capture uses mono 16 kHz PCM, stops at 30 minutes, saves an encrypted local WAV draft,
-  and sends audio to Whisper only when the user chooses transcription.
+- Capture uses mono 16 kHz PCM and stops at 30 minutes. Audio is sent to Whisper
+  only when the user chooses transcription.
 - Android recording continues when leaving Capture, switching apps or locking the screen,
   using a foreground microphone service and a visible **Stop and save** notification.
-  Start recording while the app is open. Explicit vault locking stops and saves it;
-  desktop/browser recording also stops when leaving Capture or backgrounding.
-  Force-stopping the process can lose an unfinished recording held in memory.
+  Start recording while the app is open, including before a linked library finishes
+  unlocking. The native service owns capture independently of the Activity and writes
+  authenticated encrypted frames under an Android Keystore key. Process death stops
+  capture; completed frames are recoverable on the next launch. The app imports finished
+  captures into its encrypted library and search only when foregrounded, unlocked and
+  idle, then removes the recovery copy. Existing drafts are preserved. Explicit vault
+  locking stops capture; it is imported on the next unlocked resume. Desktop/browser
+  capture still saves a WAV draft and stops on backgrounding; unfinished audio remains
+  in memory there. Open a saved Android recording to play it or send it to Whisper.
 - No VAD or speaker diarization is promised. Transcript segment
   timestamps come from the configured Whisper service.
 - Live whisper-trained transcription and search/sync are covered by an opt-in browser test;

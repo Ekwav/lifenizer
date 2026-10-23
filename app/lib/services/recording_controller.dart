@@ -151,8 +151,9 @@ class RecordingController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _start() async {
     if (recording ||
         _disposed ||
-        (!supportsBackground && state.audioDraft != null))
+        (!supportsBackground && state.audioDraft != null)) {
       return;
+    }
     if (!_resumed) {
       error = 'Start recording while Lifenizer is open.';
       _changed();
@@ -165,13 +166,15 @@ class RecordingController extends ChangeNotifier with WidgetsBindingObserver {
     try {
       if (supportsBackground) {
         await _reconciling;
-        if (state.rememberedEmail.isEmpty)
+        if (state.rememberedEmail.isEmpty) {
           throw StateError('Choose a library before recording.');
+        }
         if (await _background.invokeMethod<bool>('permission') != true) {
           throw StateError('Microphone permission was denied.');
         }
-        if (_disposed || !_resumed)
+        if (_disposed || !_resumed) {
           throw StateError('Start recording while Lifenizer is open.');
+        }
         _nativeStatus(
           await _background.invokeMapMethod<Object?, Object?>('start', {
             'scope': _scope,

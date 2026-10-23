@@ -28,8 +28,12 @@ restoration and search preparation separately. Active stages show elapsed time;
 counted stages estimate remaining time from their measured rate. Native encrypted
 metadata/outbox and the compact search catalogue use SQLite, transactionally migrated
 from the preserved legacy Sembast `.db`; web storage remains Sembast. Startup restores
-the complete vocabulary/postings and conversation summaries, then reads encrypted
-scoring buckets only for search candidates and conversation-body buckets on opening.
+the vocabulary and conversation summaries, then reads encrypted postings for query
+terms, scoring buckets for search candidates and conversation-body buckets on opening.
+Catalog decryption, decompression and decoding share one worker. The search field
+accepts input during startup/unlock without exposing private results. Phase-only
+`Lifenizer unlock` log markers reset each attempt; subtract `vaultKey` from
+`searchReady` to measure local restoration separately from OS authentication.
 Missing or damaged disposable search caches rebuild from authenticated vault data.
 A cached unlock continues remote sync in the background. An unchanged sync refreshes
 the encrypted session record tied to that exact snapshot; invalid or stale session
