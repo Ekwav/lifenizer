@@ -71,8 +71,10 @@ class LifenizerAppState extends ChangeNotifier {
     ImapCredentialStore? imapStore,
     DocumentCredentialStore? documentStore,
     DiscordBotCredentialStore? discordStore,
+    DateTime Function()? syncClock,
   }) : _localStore = localStore,
-       _chunkStore = chunkStore {
+       _chunkStore = chunkStore,
+       _syncClock = syncClock ?? DateTime.now {
     recording = RecordingController(this);
     recordingRelay = RecordingRelayService(this);
     stopRecording = recording.stop;
@@ -143,6 +145,8 @@ class LifenizerAppState extends ChangeNotifier {
   String rememberedEmail = '';
   String? _localVaultKey;
   final List<SyncEnvelope> _pendingSync = [];
+  final DateTime Function() _syncClock;
+  DateTime? _lastSyncUploadAt;
   int _vaultBatchDepth = 0;
   Future<void>? _syncInFlight;
   Future<void> _storageTail = Future.value();
@@ -1137,8 +1141,11 @@ class LifenizerAppState extends ChangeNotifier {
 
   Conversation _mergeImportedConversation(
     Conversation previous,
-    Conversation incoming,
-  ) {
+    Conversation incoming, {
+    bool preferPrevious = false,
+  }) {
+    final preferred = preferPrevious ? previous : incoming;
+    final fallback = preferPrevious ? incoming : previous;
     String messageKey(ConversationSegment segment) =>
         segment.sourceMessageId == null
         ? 'local:${segment.id}'
@@ -1152,9 +1159,11 @@ class LifenizerAppState extends ChangeNotifier {
       messages[messageKey(segment)] = old == null
           ? segment
           : ConversationSegment.fromJson({
-              ...segment.toJson(),
+              ...(preferPrevious ? old : segment).toJson(),
               'id': old.id,
-              'participantId': segment.participantId ?? old.participantId,
+              'participantId': preferPrevious
+                  ? old.participantId ?? segment.participantId
+                  : segment.participantId ?? old.participantId,
               'attachmentUrls': {
                 ...old.attachmentUrls,
                 ...segment.attachmentUrls,
@@ -1180,10 +1189,10 @@ class LifenizerAppState extends ChangeNotifier {
     ]..sort();
     return _canonicalConversation(
       Conversation.fromJson({
-        ...incoming.toJson(),
+        ...preferred.toJson(),
         'id': previous.id,
-        'sourceUrl': incoming.sourceUrl ?? previous.sourceUrl,
-        'metadata': {...previous.metadata, ...incoming.metadata},
+        'sourceUrl': preferred.sourceUrl ?? fallback.sourceUrl,
+        'metadata': {...fallback.metadata, ...preferred.metadata},
         'participantIds': {
           ...previous.participantIds,
           ...incoming.participantIds,
@@ -1194,10 +1203,11 @@ class LifenizerAppState extends ChangeNotifier {
           ...incoming.artifactNames,
         }.toList()..sort(),
         'tags': {...previous.tags, ...incoming.tags}.toList()..sort(),
-        'isFavorite':
-            previous.segments.every(
-              (segment) => incomingMessageKeys.contains(messageKey(segment)),
-            )
+        'isFavorite': preferPrevious
+            ? previous.isFavorite
+            : previous.segments.every(
+                (segment) => incomingMessageKeys.contains(messageKey(segment)),
+              )
             ? incoming.isFavorite
             : previous.isFavorite || incoming.isFavorite,
         'startedAt': starts.first.toUtc().toIso8601String(),
@@ -1485,7 +1495,7 @@ class LifenizerAppState extends ChangeNotifier {
       conversations.add(conversation);
       _markConversationChanged(conversation.id);
       await _pushEntity('conversation', conversation.id, conversation.toJson());
-      status = 'Conversation encrypted and synced';
+      status = 'Conversation saved encrypted; queued for sync';
     });
   }
 
@@ -1516,7 +1526,7 @@ class LifenizerAppState extends ChangeNotifier {
       conversations.add(conversation);
       _markConversationChanged(conversation.id);
       await _pushEntity('conversation', conversation.id, conversation.toJson());
-      status = 'Artifact metadata encrypted and synced';
+      status = 'Artifact metadata saved encrypted; queued for sync';
     });
   }
 
@@ -1554,7 +1564,7 @@ class LifenizerAppState extends ChangeNotifier {
       conversations.add(conversation);
       _markConversationChanged(conversation.id);
       await _pushEntity('conversation', conversation.id, conversation.toJson());
-      status = 'Recording session encrypted and synced';
+      status = 'Recording session saved encrypted; queued for sync';
     });
   }
 
@@ -1578,7 +1588,7 @@ class LifenizerAppState extends ChangeNotifier {
       }
       status = extracted.isEmpty
           ? 'No relations detected'
-          : '${extracted.length} relation(s) encrypted and synced';
+          : '${extracted.length} relation(s) saved encrypted; queued for sync';
     });
   }
 
@@ -1613,8 +1623,9 @@ class LifenizerAppState extends ChangeNotifier {
 
   Future<void> _applyEntity(
     String entityType,
-    Map<String, dynamic> json,
-  ) async {
+    Map<String, dynamic> json, {
+    bool preserveLocalChanges = false,
+  }) async {
     switch (entityType) {
       case 'participant':
         final incoming = Participant.fromJson(json);
@@ -1682,7 +1693,13 @@ class LifenizerAppState extends ChangeNotifier {
             previous.sourceThreadId == incoming.sourceThreadId &&
             previous.source == incoming.source;
         final conversation = importedThread
-            ? _mergeImportedConversation(previous, incoming)
+            ? _mergeImportedConversation(
+                previous,
+                incoming,
+                // Merge new remote messages without erasing a queued edit
+                // when the repaired snapshot replaces its pending envelope.
+                preferPrevious: preserveLocalChanges,
+              )
             : incoming;
         if (importedThread &&
             !_sameImportedConversation(conversation, incoming)) {

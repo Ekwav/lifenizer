@@ -133,6 +133,9 @@ extension VaultSync on LifenizerAppState {
                 'id': current.vaultId,
                 'version': 1,
               });
+              // Registration must publish its key check before another device
+              // can connect; ordinary edits use the automatic batch window.
+              await _syncNow(forceUpload: true);
             }
             try {
               importCapabilities
@@ -295,6 +298,7 @@ extension VaultSync on LifenizerAppState {
     _pendingDraftPayload = null;
     _draftPayloadCache = null;
     _pendingSync.clear();
+    _lastSyncUploadAt = null;
     syncCursor = 0;
     syncError = null;
     _clearSyncProgress();
@@ -335,7 +339,7 @@ extension VaultSync on LifenizerAppState {
     _syncProgressTicker = null;
   }
 
-  Future<void> pullSync() => _run(_synchronize);
+  Future<void> pullSync() => _run(() => _synchronize(forceUpload: true));
 
   Future<void> syncQuietly() async {
     if (!isAuthenticated || busy) return;
@@ -347,9 +351,12 @@ extension VaultSync on LifenizerAppState {
     }
   }
 
-  Future<void> _synchronize() async {
-    if (_syncInFlight != null) return _syncInFlight;
-    final operation = _syncNow();
+  Future<void> _synchronize({bool forceUpload = false}) async {
+    if (_syncInFlight != null) {
+      await _syncInFlight;
+      if (!forceUpload || _pendingSync.isEmpty) return;
+    }
+    final operation = _syncNow(forceUpload: forceUpload);
     _syncInFlight = operation;
     try {
       await operation;
@@ -406,9 +413,9 @@ extension VaultSync on LifenizerAppState {
     _notifyChanged();
   }
 
-  Future<void> _syncNow() async {
+  Future<void> _syncNow({bool forceUpload = false}) async {
     try {
-      await _transferSync();
+      await _transferSync(forceUpload: forceUpload);
       _setSyncProgress(SyncStage.complete);
     } catch (_) {
       _setSyncProgress(SyncStage.failed);
@@ -416,17 +423,35 @@ extension VaultSync on LifenizerAppState {
     }
   }
 
-  Future<void> _transferSync() async {
+  Future<void> _transferSync({required bool forceUpload}) async {
     final api = _requireApi();
-    final uploadTotal = _pendingSync.length;
+    const window = Duration(seconds: 20);
+    final now = _syncClock().toUtc();
+    final due =
+        _pendingSync.isNotEmpty &&
+        now.difference(_pendingSync.first.clientCreatedAt) >= window &&
+        (_lastSyncUploadAt == null ||
+            now.difference(_lastSyncUploadAt!) >= window);
+    // Freeze this window. Edits arriving during network requests belong to the
+    // next batch, rather than generating a tail of small immediate uploads.
+    final uploadQueue = forceUpload || due
+        ? _pendingSync.toList()
+        : <SyncEnvelope>[];
+    final uploadTotal = uploadQueue.length;
+    if (uploadQueue.isNotEmpty) {
+      _lastSyncUploadAt = now;
+      // A failed request may already have reached storage. Keep the retry
+      // deadline across lock/restart as well as within this session.
+      await _persistLocal();
+    }
     var uploaded = 0;
     var downloaded = 0;
     var page = 0;
-    var acknowledgedChanges = _pendingSync.isNotEmpty;
-    while (_pendingSync.isNotEmpty) {
+    var acknowledgedChanges = false;
+    while (uploadQueue.isNotEmpty) {
       final batch = <SyncEnvelope>[];
       var bytes = 0;
-      for (final envelope in _pendingSync) {
+      for (final envelope in uploadQueue) {
         // Ciphertext is ASCII. Leave ample room for envelope JSON below
         // Kestrel's request limit when a large archive is imported offline.
         final size = envelope.cipherText.length + 1024;
@@ -449,6 +474,8 @@ extension VaultSync on LifenizerAppState {
       );
       await api.push(batch);
       uploaded += batch.length;
+      acknowledgedChanges = true;
+      uploadQueue.removeRange(0, batch.length);
       final acknowledged = batch.map((e) => e.id).toSet();
       _pendingSync.removeWhere((e) => acknowledged.contains(e.id));
     }
@@ -505,7 +532,11 @@ extension VaultSync on LifenizerAppState {
         if (pending && !importedThread) {
           continue;
         }
-        await _applyEntity(envelope.entityType, decoded[i]);
+        await _applyEntity(
+          envelope.entityType,
+          decoded[i],
+          preserveLocalChanges: pending,
+        );
         _setSyncProgress(
           SyncStage.applying,
           completed: i + 1,
@@ -537,7 +568,7 @@ extension VaultSync on LifenizerAppState {
     if (_needsSearchIndex) {
       await _prepareSearchIndex(complete: false);
     }
-    syncError = null;
+    if (_pendingSync.isEmpty || uploaded > 0) syncError = null;
     lastSyncedAt = DateTime.now();
     _notifyChanged();
   }
@@ -548,7 +579,19 @@ extension VaultSync on LifenizerAppState {
     Map<String, dynamic> json,
   ) async {
     final payload = await _crypto.encryptJson(json);
-    _pendingSync.add(
+    final previousIndex = _pendingSync.indexWhere(
+      (item) => item.entityType == entityType && item.entityId == entityId,
+    );
+    final queuedAt = previousIndex < 0
+        ? _syncClock().toUtc()
+        : _pendingSync[previousIndex].clientCreatedAt;
+    // Keep the original enqueue time so continuous edits cannot postpone sync.
+    // A fresh ID leaves any already captured/in-flight envelope immutable.
+    _pendingSync.removeWhere(
+      (item) => item.entityType == entityType && item.entityId == entityId,
+    );
+    _pendingSync.insert(
+      previousIndex < 0 ? _pendingSync.length : previousIndex,
       SyncEnvelope(
         id: _uuid.v4(),
         deviceId: deviceId,
@@ -559,7 +602,7 @@ extension VaultSync on LifenizerAppState {
         cipherText: payload.cipherText,
         nonce: payload.nonce,
         keyId: payload.keyId,
-        clientCreatedAt: DateTime.now().toUtc(),
+        clientCreatedAt: queuedAt,
       ),
     );
     if (_vaultBatchDepth > 0) {
@@ -570,7 +613,8 @@ extension VaultSync on LifenizerAppState {
       }
       return;
     }
-    await _flushVaultChanges();
+    // Save immediately; automatic sync collects at least 20 seconds of edits.
+    await _persistLocal();
   }
 
   /// Save related edits together before publishing them. If parsing fails,
@@ -589,19 +633,8 @@ extension VaultSync on LifenizerAppState {
     } finally {
       _vaultBatchDepth--;
       if (_vaultBatchDepth == 0 && _pendingSync.isNotEmpty) {
-        await _flushVaultChanges();
+        await _persistLocal();
       }
-    }
-  }
-
-  Future<void> _flushVaultChanges() async {
-    // Persist the outbox before making a network request. Retrying the same
-    // envelope ID is safe even when a response is lost after server acceptance.
-    await _persistLocal();
-    try {
-      await _synchronize();
-    } catch (exception) {
-      syncError = 'Saved locally; sync will retry: $exception';
     }
   }
 
@@ -621,6 +654,8 @@ extension VaultSync on LifenizerAppState {
     'relations': relations.toList(),
     'savedSearches': savedSearches.toList(),
     'pending': _pendingSync.toList(),
+    if (_lastSyncUploadAt != null)
+      'lastSyncUploadAt': _lastSyncUploadAt!.toIso8601String(),
     if (audioDraft != null) 'audioDraft': audioDraft,
     if (cursor == null &&
         _searchSnapshotNonce != null &&
@@ -909,6 +944,7 @@ extension VaultSync on LifenizerAppState {
       json.parseObjectList('savedSearches', SavedSearch.fromJson),
     );
     _pendingSync.addAll(json.parseObjectList('pending', SyncEnvelope.fromJson));
+    _lastSyncUploadAt = json.parseDateTime('lastSyncUploadAt');
     var repaired = legacyDraft;
     _people;
     if (_hasParticipantRedirects && cachedIndex == null) {
