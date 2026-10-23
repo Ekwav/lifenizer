@@ -21,11 +21,17 @@ class StorageQuotaBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final quota = state.quotaStatus;
     if (quota == null || !quota.isNearLimit) return const SizedBox.shrink();
+    final colors = Theme.of(context).colorScheme;
 
     return MaterialBanner(
       backgroundColor: quota.isOverLimit
-          ? Theme.of(context).colorScheme.errorContainer
-          : Colors.amber.shade100,
+          ? colors.errorContainer
+          : colors.tertiaryContainer,
+      contentTextStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        color: quota.isOverLimit
+            ? colors.onErrorContainer
+            : colors.onTertiaryContainer,
+      ),
       content: Text(
         quota.isOverLimit
             ? 'Storage full (${quota.usedFormatted} / ${quota.limitFormatted}). '
@@ -115,7 +121,10 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
               const SizedBox(height: 16),
             ],
             if (_error != null) ...[
-              Text(_error!, style: const TextStyle(color: Colors.red)),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
               const SizedBox(height: 8),
             ],
             _PlanCard(
@@ -299,9 +308,14 @@ class _ImageGalleryState extends State<ImageGallery> {
             ),
           ),
         if (items.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text('No images yet', style: TextStyle(color: Colors.grey)),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'No images yet',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           )
         else
           SizedBox(

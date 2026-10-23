@@ -54,6 +54,22 @@ class LifenizerApp extends StatefulWidget {
 class _LifenizerAppState extends State<LifenizerApp>
     with WidgetsBindingObserver {
   Timer? _syncTimer;
+  late final _lightTheme = _theme(Brightness.light);
+  late final _darkTheme = _theme(Brightness.dark);
+
+  ThemeData _theme(Brightness brightness) => ThemeData(
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: const Color(0xff0f766e),
+      brightness: brightness,
+    ),
+    useMaterial3: true,
+    cardTheme: const CardThemeData(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+      ),
+    ),
+  );
 
   LifenizerAppState get state => widget.state;
 
@@ -100,19 +116,9 @@ class _LifenizerAppState extends State<LifenizerApp>
           key: ValueKey(state.isAuthenticated),
           title: 'Lifenizer',
           debugShowCheckedModeBanner: false,
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xff0f766e),
-              brightness: Brightness.light,
-            ),
-            useMaterial3: true,
-            cardTheme: const CardThemeData(
-              margin: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(8)),
-              ),
-            ),
-          ),
+          themeMode: ThemeMode.system,
+          theme: _lightTheme,
+          darkTheme: _darkTheme,
           home: state.isAuthenticated
               ? VaultShell(state: state)
               : LoginPage(state: state),

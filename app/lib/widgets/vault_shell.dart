@@ -175,6 +175,10 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
         widget.state.error ?? widget.state.syncError ?? widget.state.status;
     final hasError =
         widget.state.error != null || widget.state.syncError != null;
+    final colors = Theme.of(context).colorScheme;
+    final messageForeground = hasError
+        ? colors.onErrorContainer
+        : colors.onSecondaryContainer;
     final currentMessage = (message, hasError);
     if (_lastMessage != currentMessage) {
       _messageTimer?.cancel();
@@ -306,13 +310,19 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   color: !hasError
-                      ? const Color(0xffecfeff)
-                      : const Color(0xffffebee),
+                      ? colors.secondaryContainer
+                      : colors.errorContainer,
                   child: Row(
                     children: [
-                      Expanded(child: Text(message)),
+                      Expanded(
+                        child: Text(
+                          message,
+                          style: TextStyle(color: messageForeground),
+                        ),
+                      ),
                       IconButton(
                         tooltip: 'Dismiss message',
+                        color: messageForeground,
                         icon: const Icon(Icons.close),
                         onPressed: _dismissMessage,
                       ),
