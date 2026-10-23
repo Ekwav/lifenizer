@@ -129,23 +129,22 @@ class DevicePairingService extends ChangeNotifier {
       }
       if (generation != _generation) return;
       _credentials = credentials;
-      if (credentials['vaultKey'] is String) {
-        loginStarted = true;
-        await state.login(
-          baseUrl: credentials['server'] as String,
-          email: credentials['email'] as String,
-          passphrase: credentials['vaultPassphrase'] as String,
-          deviceVaultKey: credentials['vaultKey'] as String,
-          deviceVaultSalt: credentials['vaultKeySalt'] as String?,
-          offline: true,
-        );
-        if (state.isAuthenticated) {
-          await state.waitForBackgroundSync();
-          if (generation != _generation) return;
-          state.resumePairedSync();
-          _startTimer();
-          return;
-        }
+      loginStarted = true;
+      await state.login(
+        baseUrl: credentials['server'] as String,
+        email: credentials['email'] as String,
+        passphrase: credentials['vaultPassphrase'] as String,
+        deviceVaultKey: credentials['vaultKey'] as String?,
+        deviceVaultSalt: credentials['vaultKeySalt'] as String?,
+        offline: true,
+      );
+      if (state.isAuthenticated) {
+        await state.waitForBackgroundSync();
+        if (generation != _generation) return;
+        await _rememberVaultKey();
+        state.resumePairedSync();
+        _startTimer();
+        return;
       }
       state.reportUnlockProgress('Refreshing device access');
       AuthSession? auth;

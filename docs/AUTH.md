@@ -17,8 +17,9 @@ lock never automatically unlocks again; use **Unlock this device** to retry. Dev
 password mode requires explicit password entry rather than a startup attempt.
 
 The protected credential payload may include the derived vault key and its salt as
-well as the paired passphrase. A valid cached key opens the authenticated local vault
-before remote access refresh; it never goes to the sync server or ordinary settings.
+well as the paired passphrase. Saved credentials open the authenticated local vault
+before remote access refresh, deriving its key only when a valid cached key is absent.
+The cached key never goes to the sync server or ordinary settings.
 Manual vault-passphrase login still derives and validates its key normally. Locking
 clears in-memory vault keys and pairing secrets. Cached conversations and pending
 changes stay encrypted and can unlock offline.

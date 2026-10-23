@@ -235,7 +235,7 @@ String _link({bool expired = false}) =>
 
 void main() {
   test(
-    'biometric unlock authenticates once and never rewrites credentials for the optional key cache',
+    'biometric unlock without a cached key opens before refresh with one prompt and no credential writes',
     () async {
       final keyring = _BiometricKeyring();
       final server = _Server()..firstStore = keyring;
@@ -248,7 +248,15 @@ void main() {
       keyring.protected = true;
       await state.pairing.restore(autoUnlock: false);
       final writes = keyring.writes;
-      await state.pairing.unlockSaved(authenticate: true);
+      server.refreshGate = Completer<void>();
+      addTearDown(() {
+        if (!server.refreshGate!.isCompleted) server.refreshGate!.complete();
+      });
+      await state.pairing
+          .unlockSaved(authenticate: true)
+          .timeout(const Duration(seconds: 10));
+      await server.refreshSeen.future.timeout(const Duration(seconds: 10));
+      expect(server.refreshGate!.isCompleted, false);
       expect(
         state.isAuthenticated,
         true,
@@ -257,6 +265,8 @@ void main() {
       expect(keyring.prompts, 1);
       expect(keyring.writes, writes);
       expect(keyring.value!.containsKey('vaultKey'), false);
+      server.refreshGate!.complete();
+      await state.waitForBackgroundSync();
       await state.pairing.refreshAccess();
       expect(keyring.prompts, 1);
       expect(keyring.writes, writes);
