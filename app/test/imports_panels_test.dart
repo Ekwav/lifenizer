@@ -18,6 +18,42 @@ Conversation _watched(String source, {Map<String, String>? metadata}) =>
     );
 
 void main() {
+  testWidgets(
+    'Paperless has its own searchable setup separate from documents',
+    (tester) async {
+      final state = LifenizerAppState();
+      addTearDown(state.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ImportsPage(state: state)),
+        ),
+      );
+      final search = find.byKey(const Key('imports-search'));
+      await tester.enterText(search, 'paperless');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('import-adapter-paperless')), findsOneWidget);
+      expect(find.byKey(const Key('import-adapter-documents')), findsNothing);
+      await tester.tap(find.byKey(const Key('import-adapter-paperless')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('paperless-import-panel')), findsOneWidget);
+      expect(find.textContaining('My Profile → API token'), findsOneWidget);
+      expect(find.text('Watch scan/PDF folder'), findsNothing);
+      await tester.tap(find.byTooltip('Close setup'));
+      await tester.pumpAndSettle();
+      await tester.enterText(search, 'documents');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('import-adapter-documents')));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Import a PDF with the file picker'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('paperless-import-panel')), findsNothing);
+      expect(find.text('Paperless API token'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   testWidgets('import catalogue opens only the selected setup panel', (
     tester,
   ) async {

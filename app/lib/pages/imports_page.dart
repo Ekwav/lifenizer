@@ -15,6 +15,7 @@ import '../services/source_links.dart';
 import '../widgets/browser_extension_section.dart';
 import '../widgets/imap_import_panel.dart';
 import '../widgets/document_import_panel.dart';
+import '../widgets/paperless_import_panel.dart';
 import '../widgets/camera_photos_panel.dart';
 import '../widgets/viewing_history_panel.dart';
 import '../widgets/discord_bot_import_panel.dart';
@@ -110,14 +111,18 @@ class _ImportsPageState extends State<ImportsPage> {
     ),
     (
       id: 'documents',
-      title: 'Documents & Paperless',
-      description:
-          'Import PDFs and scans, watch a folder, or connect Paperless.',
+      title: 'Documents & scans',
+      description: 'Import PDFs and scans, or watch a folder.',
       steps: [
         'Choose a PDF or scan using the file picker above.',
         'For automatic imports, select a folder below.',
-        'For Paperless, enter its address and access token below.',
       ],
+    ),
+    (
+      id: 'paperless',
+      title: 'Paperless',
+      description: 'Connect Paperless to import and search document text.',
+      steps: <String>[],
     ),
     (
       id: 'photos',
@@ -457,6 +462,7 @@ class _ImportsPageState extends State<ImportsPage> {
       ownUserId: _ownDiscordId,
     ),
     'documents' => DocumentImportPanel(state: widget.state),
+    'paperless' => PaperlessImportPanel(state: widget.state),
     'photos' => CameraPhotosPanel(state: widget.state),
     'history' => ViewingHistoryPanel(state: widget.state),
     'audio' => _AudioImportPanel(state: widget.state),
