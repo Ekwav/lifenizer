@@ -274,6 +274,7 @@ void main() {
         participantNames: '',
         text: 'on the server',
       );
+      await crashing.pullSync();
       server.offline = true;
       failChunkWrites = true;
       await crashing.addManualText(
@@ -322,6 +323,7 @@ void main() {
         participantNames: '',
         text: 'on the server',
       );
+      await crashing.pullSync();
       // Phase 1 is the first core write, the final core the second.
       flaky
         ..failKey = _key
@@ -468,6 +470,7 @@ void main() {
         participantNames: '',
         text: 'to be re-downloaded',
       );
+      await first.pullSync();
       await first.saveAudioDraft([4, 5, 6], DateTime.utc(2026, 1, 2));
       await first.lock();
       first.dispose();
@@ -491,6 +494,7 @@ void main() {
         participantNames: '',
         text: 'on the server',
       );
+      await first.pullSync();
       server.offline = true;
       await first.addManualText(
         title: 'Unsent note',
@@ -520,6 +524,7 @@ void main() {
 
       server.offline = false;
       final recovered = await unlocked(device());
+      await recovered.pullSync();
       expect(recovered.error, isNull, reason: recovered.error);
       expect(recovered.pendingSyncCount, 0);
       expect(recovered.conversations.map((c) => c.title).toSet(), {

@@ -25,6 +25,7 @@ void main() {
     () async {
       final db = await databaseFactoryMemory.openDatabase('lock-sync');
       final disk = LocalVaultStore(db);
+      var now = DateTime.utc(2026);
       var offline = false;
       var delay = false;
       final started = Completer<void>();
@@ -55,6 +56,7 @@ void main() {
       });
       final state = LifenizerAppState(
         localStore: disk,
+        syncClock: () => now,
         apiFactory: (url) => LifenizerApiClient(baseUrl: url, client: client),
       );
       Future<void> unlock({bool offline = false}) => state.login(
@@ -71,6 +73,7 @@ void main() {
         text: 'private saved topic',
       );
       expect(state.pendingSyncCount, 1);
+      now = now.add(const Duration(seconds: 20));
       delay = true;
       final sync = state.syncQuietly();
       await started.future;

@@ -144,8 +144,12 @@ void main() {
     await database.close();
   });
 
-  LifenizerAppState device({_TrackedChunks? chunks}) => LifenizerAppState(
+  LifenizerAppState device({
+    _TrackedChunks? chunks,
+    DateTime Function()? syncClock,
+  }) => LifenizerAppState(
     localStore: store,
+    syncClock: syncClock,
     chunkStore: chunks,
     apiFactory: (url) =>
         LifenizerApiClient(baseUrl: url, client: MockClient(server.handle)),
@@ -529,6 +533,7 @@ void main() {
           participantNames: '',
           text: 'already on the server',
         );
+        await state.pullSync();
         server.offline = true;
         await state.addManualText(
           title: 'Unsent note',
@@ -560,6 +565,7 @@ void main() {
         server.offline = false;
         final recovered = await unlocked(state: device());
         await recovered.waitForBackgroundSync();
+        await recovered.pullSync();
         expect(recovered.error, isNull, reason: recovered.error);
         expect(recovered.isAuthenticated, isTrue);
         expect(recovered.pendingSyncCount, 0);
@@ -625,7 +631,8 @@ void main() {
   test(
     'lock during the background unlock sync waits for it and preserves data',
     () async {
-      final first = await unlocked();
+      var now = DateTime.utc(2026);
+      final first = await unlocked(state: device(syncClock: () => now));
       await first.waitForBackgroundSync();
       server.offline = true;
       await first.addManualText(
@@ -638,8 +645,9 @@ void main() {
       first.dispose();
 
       server.offline = false;
+      now = now.add(const Duration(seconds: 20));
       server.pullGate = Completer<void>();
-      final state = device();
+      final state = device(syncClock: () => now);
       await unlocked(state: state);
       expect(state.isAuthenticated, isTrue);
       var locked = false;

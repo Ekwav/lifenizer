@@ -271,6 +271,7 @@ void main() {
         state.participants.where((p) => p.identifiers.contains('discord:2')),
         hasLength(1),
       );
+      await state.pullSync();
       expect(jsonEncode(server.envelopes), isNot(contains('Rendezvous')));
       await state.lock();
       expect(await state.importDiscordBotBatch(bot), isFalse);
@@ -348,6 +349,7 @@ void main() {
       expect(state.conversations.single.segments, hasLength(1));
       expect(state.search('violet'), hasLength(1));
       expect(state.search('orchid'), isEmpty);
+      await state.pullSync();
       expect(jsonEncode(server.envelopes), isNot(contains('Invoice violet')));
       state.busy = true;
       expect(await state.importDocumentFile(file.path), isFalse);
@@ -396,6 +398,7 @@ void main() {
       );
       expect(stored, isNot(contains(fingerprint)));
       expect(stored, isNot(contains('Atlas deadline')));
+      await state.pullSync();
       expect(jsonEncode(server.envelopes), isNot(contains(fingerprint)));
       await state.lock();
       state.dispose();

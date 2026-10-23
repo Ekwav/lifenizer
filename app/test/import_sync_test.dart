@@ -170,6 +170,7 @@ void main() {
       addTearDown(server.crypto.lock);
       final first = await device(server);
       await first.importSource(source: 'discord', text: 'a');
+      await first.pullSync();
       final second = await device(server);
       final conversation = first.conversations.single;
       await server.publish(

@@ -102,6 +102,7 @@ void main() {
         participantNames: '',
         text: 'Retain this content',
       );
+      await initial.pullSync();
       await initial.lock();
       final key =
           'vault:${jsonEncode(['https://vault.example.test', 'alice@example.test'])}';
@@ -327,6 +328,7 @@ void main() {
         participantNames: '',
         text: 'encrypted content',
       );
+      await source.pullSync();
       final stages = <SyncStage>[];
       target.addListener(() {
         if (target.syncProgress case final value?) {
@@ -417,11 +419,13 @@ void main() {
       participantNames: '',
       text: 'Remote conversation',
     );
+    await second.pullSync();
     await first.addManualText(
       title: 'Local',
       participantNames: '',
       text: 'Local conversation',
     );
+    await first.pullSync();
     expect(
       first.conversations.map((e) => e.title),
       containsAll(['Local', 'Remote']),
@@ -459,6 +463,7 @@ void main() {
         participantNames: '',
         text: 'Remote update',
       );
+      await other.pullSync();
       await state.syncQuietly();
       expect(await disk.read(key), isNot(before));
       final restored = device(server, disk);
@@ -518,6 +523,8 @@ void main() {
       }),
       throwsFormatException,
     );
+    expect(state.pendingSyncCount, 1);
+    await state.pullSync();
     expect(server.envelopes, hasLength(1));
     expect(state.pendingSyncCount, 0);
     await state.lock();
@@ -569,11 +576,11 @@ void main() {
       expect(state.pendingSyncCount, 1);
       server.offline = false;
       server.losePushResponse = true;
-      await state.syncQuietly();
+      await state.pullSync();
       expect(state.pendingSyncCount, 1);
       expect(server.envelopes, hasLength(1));
       server.losePushResponse = false;
-      await state.syncQuietly();
+      await state.pullSync();
       expect(state.pendingSyncCount, 0);
       expect(server.envelopes, hasLength(1));
     },
@@ -620,6 +627,7 @@ void main() {
         participantNames: '',
         text: 'archive',
       );
+      await state.pullSync();
       final source = server.envelopes.single;
       for (var i = 1; i < 501; i++) {
         server.envelopes.add({

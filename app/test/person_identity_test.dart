@@ -151,6 +151,7 @@ void main() {
         'Mara',
         identifiers: [' EMAIL:Mara@Example.TEST '],
       );
+      await state.pullSync();
       final oldParticipant = server.envelopes.firstWhere(
         (e) => e['entityId'] == discord.id,
       );
