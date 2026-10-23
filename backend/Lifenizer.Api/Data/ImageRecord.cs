@@ -2,8 +2,7 @@ namespace Lifenizer.Api.Data;
 
 /// <summary>
 /// Metadata for a user-uploaded image artifact.
-/// The binary content is stored on the local filesystem under
-/// <c>BlobPath</c> (relative to the configured blob root).
+/// The binary content is stored under <c>BlobPath</c> in the configured object store.
 /// </summary>
 public sealed class ImageRecord
 {

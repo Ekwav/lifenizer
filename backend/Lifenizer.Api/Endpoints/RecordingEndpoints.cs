@@ -10,8 +10,7 @@ namespace Lifenizer.Api.Endpoints;
 public static class RecordingEndpoints
 {
     public const long MaxEnvelopeBytes = 200_000_000;
-    private static string Root(IConfiguration config) => Path.Combine(config["Artifacts:StorePath"] ?? "/tmp/lifenizer-artifacts", "recordings");
-    private static string BlobPath(IConfiguration config, Guid vault, string name) => Path.Combine(Root(config), vault.ToString("N"), name);
+    public static string ObjectKey(Guid vault, string name) => $"recordings/{vault:N}/{name}";
     private static bool ValidId(string id) => !string.IsNullOrWhiteSpace(id) && id.Length <= 128;
 
     private static async Task<byte[]> ReadEnvelopeAsync(HttpRequest request, IConfiguration config, CancellationToken token)
@@ -107,7 +106,7 @@ public static class RecordingEndpoints
             finally { relay.Release(user.VaultId, requestId); relay.Transfers.Release(); }
         });
 
-        group.MapGet("/{conversationId}", async (string conversationId, HttpContext context, ClaimsPrincipalUser current, LifenizerDbContext db, RecordingRelay relay, IConfiguration config) =>
+        group.MapGet("/{conversationId}", async (string conversationId, HttpContext context, ClaimsPrincipalUser current, LifenizerDbContext db, RecordingRelay relay, ObjectStore store, IConfiguration config) =>
         {
             if (!ValidId(conversationId)) return Results.BadRequest();
             var token = context.RequestAborted;
@@ -115,8 +114,8 @@ public static class RecordingEndpoints
             if (user is null) return Results.Unauthorized();
             var record = await db.Recordings.FindAsync([user.VaultId, conversationId], token);
             context.Response.Headers.CacheControl = "no-store";
-            if (record is not null && File.Exists(BlobPath(config, user.VaultId, record.BlobName)))
-                return Results.File(BlobPath(config, user.VaultId, record.BlobName), "application/json");
+            if (record is not null && await store.OpenReadAsync(ObjectKey(user.VaultId, record.BlobName), token) is { } stored)
+                return Results.Stream(stored, "application/json");
             if (!relay.Downloads.Wait(0)) return Results.StatusCode(429);
             try
             {
@@ -133,13 +132,13 @@ public static class RecordingEndpoints
             finally { relay.Downloads.Release(); }
         });
 
-        group.MapPut("/{conversationId}", async (string conversationId, HttpRequest request, ClaimsPrincipalUser current, LifenizerDbContext db, RecordingRelay relay, PremiumService premium, IConfiguration config, CancellationToken token) =>
+        group.MapPut("/{conversationId}", async (string conversationId, HttpRequest request, ClaimsPrincipalUser current, LifenizerDbContext db, RecordingRelay relay, PremiumService premium, ObjectStore store, IConfiguration config, CancellationToken token) =>
         {
             if (!ValidId(conversationId)) return Results.BadRequest();
             var user = await db.Users.FindAsync([current.UserId], token);
             if (user is null) return Results.Unauthorized();
             if (!relay.Transfers.Wait(0)) return Results.StatusCode(429);
-            string? newPath = null;
+            string? newKey = null;
             var committed = false;
             try
             {
@@ -153,10 +152,10 @@ public static class RecordingEndpoints
                     .ExecuteUpdateAsync(setters => setters.SetProperty(account => account.StorageUsedBytes, account => account.StorageUsedBytes + delta), token);
                 if (reserved == 0) return Results.Json(new { error = "quota_exceeded" }, statusCode: 402);
                 var name = $"{Guid.NewGuid():N}.bin";
-                newPath = BlobPath(config, user.VaultId, name);
-                Directory.CreateDirectory(Path.GetDirectoryName(newPath)!);
-                await File.WriteAllBytesAsync(newPath, bytes, token);
-                var oldPath = record is null ? null : BlobPath(config, user.VaultId, record.BlobName);
+                newKey = ObjectKey(user.VaultId, name);
+                using var content = new MemoryStream(bytes, writable: false);
+                await store.PutAsync(newKey, content, "application/json", token);
+                var oldKey = record is null ? null : ObjectKey(user.VaultId, record.BlobName);
                 if (record is null)
                 {
                     record = new RecordingRecord { VaultId = user.VaultId, ConversationId = conversationId, UserId = owner };
@@ -167,18 +166,18 @@ public static class RecordingEndpoints
                 await db.SaveChangesAsync(token);
                 await transaction.CommitAsync(token);
                 committed = true;
-                if (oldPath is not null) File.Delete(oldPath);
+                if (oldKey is not null) await store.CleanupAsync(oldKey);
                 return Results.NoContent();
             }
             catch (BadHttpRequestException error) { return Results.StatusCode(error.StatusCode); }
             finally
             {
-                if (!committed && newPath is not null) File.Delete(newPath);
+                if (!committed && newKey is not null) await store.CleanupAsync(newKey);
                 relay.Transfers.Release();
             }
         });
 
-        group.MapDelete("/{conversationId}", async (string conversationId, ClaimsPrincipalUser current, LifenizerDbContext db, UserAccountService accounts, IConfiguration config, CancellationToken token) =>
+        group.MapDelete("/{conversationId}", async (string conversationId, ClaimsPrincipalUser current, LifenizerDbContext db, UserAccountService accounts, ObjectStore store, CancellationToken token) =>
         {
             if (!ValidId(conversationId)) return Results.BadRequest();
             var user = await db.Users.FindAsync([current.UserId], token);
@@ -186,11 +185,11 @@ public static class RecordingEndpoints
             await using var transaction = await db.Database.BeginTransactionAsync(token);
             var record = await db.Recordings.FindAsync([user.VaultId, conversationId], token);
             if (record is null) return Results.NotFound();
+            await store.DeleteAsync(ObjectKey(user.VaultId, record.BlobName), token);
             db.Recordings.Remove(record);
             await db.SaveChangesAsync(token);
             await accounts.AdjustStorageUsageAsync(record.UserId, -record.SizeBytes, token);
             await transaction.CommitAsync(token);
-            File.Delete(BlobPath(config, user.VaultId, record.BlobName));
             return Results.NoContent();
         });
         return app;

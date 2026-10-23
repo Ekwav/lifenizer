@@ -48,7 +48,7 @@ public static class ImageEndpoints
             ClaimsPrincipalUser currentUser,
             LifenizerDbContext db,
             PremiumService premium,
-            IConfiguration config,
+            ObjectStore store,
             CancellationToken cancellationToken) =>
         {
             if (!request.HasFormContentType)
@@ -87,50 +87,47 @@ public static class ImageEndpoints
                 }, statusCode: StatusCodes.Status402PaymentRequired);
             }
 
-            // Persist the file.
-            var blobRoot = config["Artifacts:StorePath"] ?? "/tmp/lifenizer-artifacts";
-            var userDir = Path.Combine(blobRoot, userId.ToString());
-            Directory.CreateDirectory(userDir);
-
             var id = Guid.NewGuid();
             var safeFileName = contentType.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase)
                 ? $"{id}.bin" : Path.GetFileName(file.FileName).Replace("..", string.Empty);
             if (string.IsNullOrWhiteSpace(safeFileName)) safeFileName = "image";
             var ext = Path.GetExtension(safeFileName).ToLowerInvariant();
             var blobName = $"{id}{ext}";
-            var blobPath = Path.Combine(userId.ToString(), blobName);
-            var fullPath = Path.Combine(blobRoot, blobPath);
-
-            await using (var stream = File.Create(fullPath))
+            var blobPath = $"{userId}/{blobName}";
+            var committed = false;
+            try
             {
-                await file.CopyToAsync(stream, cancellationToken);
+                await using var stream = file.OpenReadStream();
+                await store.PutAsync(blobPath, stream, contentType, cancellationToken);
+
+                var record = new ImageRecord
+                {
+                    Id = id,
+                    UserId = userId,
+                    FileName = safeFileName,
+                    ContentType = contentType,
+                    SizeBytes = file.Length,
+                    BlobPath = blobPath,
+                    ConversationId = form["conversationId"].FirstOrDefault(),
+                    UploadedAt = DateTimeOffset.UtcNow,
+                };
+
+                db.Images.Add(record);
+                await db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                committed = true;
+
+                return Results.Created($"/api/images/{id}", new
+                {
+                    id,
+                    fileName = record.FileName,
+                    contentType = record.ContentType,
+                    sizeBytes = record.SizeBytes,
+                    conversationId = record.ConversationId,
+                    uploadedAt = record.UploadedAt,
+                });
             }
-
-            var record = new ImageRecord
-            {
-                Id = id,
-                UserId = userId,
-                FileName = safeFileName,
-                ContentType = contentType,
-                SizeBytes = file.Length,
-                BlobPath = blobPath,
-                ConversationId = form["conversationId"].FirstOrDefault(),
-                UploadedAt = DateTimeOffset.UtcNow,
-            };
-
-            db.Images.Add(record);
-            await db.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-
-            return Results.Created($"/api/images/{id}", new
-            {
-                id,
-                fileName = record.FileName,
-                contentType = record.ContentType,
-                sizeBytes = record.SizeBytes,
-                conversationId = record.ConversationId,
-                uploadedAt = record.UploadedAt,
-            });
+            finally { if (!committed) await store.CleanupAsync(blobPath); }
         }).DisableAntiforgery();
 
         // -----------------------------------------------------------------------
@@ -140,7 +137,7 @@ public static class ImageEndpoints
             Guid id,
             ClaimsPrincipalUser currentUser,
             LifenizerDbContext db,
-            IConfiguration config,
+            ObjectStore store,
             CancellationToken cancellationToken) =>
         {
             var record = await db.Images.FirstOrDefaultAsync(
@@ -148,11 +145,8 @@ public static class ImageEndpoints
                 cancellationToken);
             if (record is null) return Results.NotFound();
 
-            var blobRoot = config["Artifacts:StorePath"] ?? "/tmp/lifenizer-artifacts";
-            var fullPath = Path.Combine(blobRoot, record.BlobPath);
-            if (!File.Exists(fullPath)) return Results.NotFound();
-
-            return Results.File(fullPath, record.ContentType, record.FileName);
+            var stream = await store.OpenReadAsync(record.BlobPath, cancellationToken);
+            return stream is null ? Results.NotFound() : Results.Stream(stream, record.ContentType, record.FileName);
         });
 
         // -----------------------------------------------------------------------
@@ -163,7 +157,7 @@ public static class ImageEndpoints
             ClaimsPrincipalUser currentUser,
             LifenizerDbContext db,
             UserAccountService accounts,
-            IConfiguration config,
+            ObjectStore store,
             CancellationToken cancellationToken) =>
         {
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
@@ -172,13 +166,11 @@ public static class ImageEndpoints
                 cancellationToken);
             if (record is null) return Results.NotFound();
 
-            var blobRoot = config["Artifacts:StorePath"] ?? "/tmp/lifenizer-artifacts";
-            var fullPath = Path.Combine(blobRoot, record.BlobPath);
+            await store.DeleteAsync(record.BlobPath, cancellationToken);
             db.Images.Remove(record);
             await db.SaveChangesAsync(cancellationToken);
             await accounts.AdjustStorageUsageAsync(currentUser.UserId, -record.SizeBytes, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            if (File.Exists(fullPath)) File.Delete(fullPath);
 
             return Results.NoContent();
         });

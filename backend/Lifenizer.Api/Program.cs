@@ -21,6 +21,8 @@ var app = builder.Build();
 
 // Validate critical configuration after building the app
 StartupConfigurationValidator.Validate(app.Configuration, app.Services.GetRequiredService<ILogger<Program>>(), app.Environment.IsDevelopment());
+// Reject incomplete storage settings before reporting a healthy deployment.
+app.Services.GetRequiredService<Lifenizer.Api.Services.ObjectStore>();
 
 if (app.Environment.IsDevelopment())
 {
