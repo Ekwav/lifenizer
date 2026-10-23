@@ -84,35 +84,65 @@ class MainActivity : FlutterActivity() {
             }
         }
         val recording = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.lifenizer/recording")
-        RecordingService.onStopRequested = { recording.invokeMethod("stop", null) }
+        RecordingService.onChanged = { recording.invokeMethod("changed", null) }
         recording.setMethodCallHandler { call, result ->
             when (call.method) {
-                "notificationPermission" -> {
-                    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                "permission" -> {
+                    val permissions = mutableListOf(Manifest.permission.RECORD_AUDIO)
+                    if (Build.VERSION.SDK_INT >= 33) permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+                    val missing = permissions.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+                    if (recordingPermission != null) result.error("recording", "A microphone permission request is already open.", null)
+                    else if (missing.isNotEmpty()) {
                         recordingPermission = result
-                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 9042)
+                        requestPermissions(missing.toTypedArray(), 9042)
                     } else if (!resumed) {
                         recordingPermission = result
                         recordingPermissionGranted = true
-                    } else result.success(null)
+                    } else result.success(true)
                 }
                 "start" -> {
                     if (!resumed) result.error("recording", "Start recording while Lifenizer is open.", null)
                     else try {
+                        check(checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { "Microphone permission is required." }
+                        val scope = PendingRecordings.scope(requireNotNull(call.argument<String>("scope")))
                         RecordingService.onStarted = { error ->
-                            if (error == null) result.success(null)
+                            if (error == null) result.success(RecordingService.status())
                             else result.error("recording", error.message, null)
                         }
-                        val service = Intent(this, RecordingService::class.java)
+                        val service = Intent(this, RecordingService::class.java).putExtra("scope", scope)
                         if (Build.VERSION.SDK_INT >= 26) startForegroundService(service) else startService(service)
                     } catch (error: Exception) {
                         RecordingService.onStarted = null
                         result.error("recording", error.message, null)
                     }
                 }
-                "stop" -> {
-                    stopService(Intent(this, RecordingService::class.java))
-                    result.success(null)
+                "status" -> result.success(RecordingService.status())
+                "stop", "pending", "read", "ack" -> {
+                    if (call.method != "stop" && RecordingService.activeId != null) {
+                        if (call.method == "pending") result.success(emptyList<Any>())
+                        else result.error("recording", "Finish recording before importing captures.", null)
+                        return@setMethodCallHandler
+                    }
+                    if (call.method == "stop") RecordingService.requestStop()
+                    PendingRecordings.worker.execute {
+                        try {
+                            val value = if (call.method == "stop") RecordingService.status() else {
+                                val scope = PendingRecordings.scope(requireNotNull(call.argument<String>("scope")))
+                                when (call.method) {
+                                    "pending" -> PendingRecordings.pending(this, scope)
+                                    "read" -> PendingRecordings.read(this, scope, requireNotNull(call.argument<String>("id")))
+                                    else -> {
+                                        val file = PendingRecordings.file(this, scope, requireNotNull(call.argument<String>("id")))
+                                        check(!file.exists() || file.delete()) { "Could not remove the imported capture." }
+                                        null
+                                    }
+                                }
+                            }
+                            runOnUiThread { result.success(value) }
+                        } catch (error: Exception) {
+                            runOnUiThread { result.error("recording", error.message, null) }
+                        }
+                    }
                 }
                 else -> result.notImplemented()
             }
@@ -205,7 +235,7 @@ class MainActivity : FlutterActivity() {
         resumed = true
         if (recordingPermissionGranted) {
             recordingPermissionGranted = false
-            recordingPermission?.success(null)
+            recordingPermission?.success(true)
             recordingPermission = null
         }
     }
@@ -223,13 +253,13 @@ class MainActivity : FlutterActivity() {
             result?.success(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
         }
         if (requestCode == 9042) {
-            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && !resumed) {
+            if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED } && !resumed) {
                 recordingPermissionGranted = true
             } else {
                 val result = recordingPermission
                 recordingPermission = null
-                if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) result?.success(null)
-                else result?.error("recording", "Allow notifications so the recording and Stop action remain visible.", null)
+                if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) result?.success(true)
+                else result?.error("recording", "Allow microphone and notifications to record with a visible Stop action.", null)
             }
         }
     }
@@ -249,8 +279,7 @@ class MainActivity : FlutterActivity() {
         recordingPermission = null
         RecordingService.onStarted?.invoke(IllegalStateException("Recording was interrupted."))
         RecordingService.onStarted = null
-        RecordingService.onStopRequested = null
-        stopService(Intent(this, RecordingService::class.java))
+        RecordingService.onChanged = null
         deviceProtection?.dispose()
         deviceProtection = null
         reader.shutdown()

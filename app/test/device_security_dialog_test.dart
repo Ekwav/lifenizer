@@ -4,6 +4,7 @@ import 'package:app/widgets/device_security_dialog.dart';
 import 'package:app/widgets/vault_shell.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _Keyring extends PairingCredentialStore {
@@ -20,6 +21,16 @@ class _Keyring extends PairingCredentialStore {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const recording = MethodChannel('com.lifenizer/recording');
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(recording, (_) async => {'recording': false});
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(recording, null);
+  });
   for (final mode in ['system', 'password']) {
     testWidgets('$mode lock explains only the current unprotected pairing', (
       tester,

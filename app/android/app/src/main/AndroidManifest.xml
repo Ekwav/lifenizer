@@ -18,6 +18,7 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher">
         <service android:name=".RecordingService" android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="microphone" />
         <activity
             android:name=".MainActivity"

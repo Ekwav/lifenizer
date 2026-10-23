@@ -1,179 +1,230 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:app/app_state.dart';
-import 'package:app/widgets/microphone_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-// The recorder's public interface is used to simulate native audio events.
-// ignore: depend_on_referenced_packages
-import 'package:record_platform_interface/record_platform_interface.dart';
-
-class _Recorder extends RecordPlatform {
-  final pcm = StreamController<Uint8List>.broadcast(sync: true);
-  final disposed = Completer<void>();
-  bool created = false;
-  int starts = 0;
-  int stops = 0;
-
-  @override
-  Future<void> create(String recorderId) async {
-    created = true;
-  }
-
-  @override
-  Future<bool> hasPermission(String recorderId, {bool request = true}) async =>
-      true;
-  @override
-  Stream<RecordState> onStateChanged(String recorderId) => const Stream.empty();
-  @override
-  Future<Stream<Uint8List>> startStream(
-    String recorderId,
-    RecordConfig config,
-  ) async {
-    starts++;
-    return pcm.stream;
-  }
-
-  @override
-  Future<String?> stop(String recorderId) async {
-    stops++;
-    return null;
-  }
-
-  @override
-  Future<void> dispose(String recorderId) async {
-    disposed.complete();
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
 
 class _State extends LifenizerAppState {
+  bool unlocked = false;
+  bool failImport = false;
+  final failedIds = <String>{};
+  final imported = <String>[];
   @override
-  bool get isAuthenticated => true;
+  bool get isAuthenticated => unlocked;
+  @override
+  Future<void> importPendingRecording(
+    List<int> bytes,
+    DateTime recordedAt,
+    String id,
+  ) async {
+    if (failImport || failedIds.contains(id)) throw StateError('disk full');
+    expect(bytes.sublist(44), [1, 2, 3, 4]);
+    imported.add(id);
+  }
+
+  void changed() => notifyListeners();
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  late _Recorder recorder;
   late _State state;
-  late RecordPlatform previous;
-  final nativeCalls = <String>[];
+  var capturing = false;
+  final pending = <Map<String, Object>>[];
+  final calls = <String>[];
   const channel = MethodChannel('com.lifenizer/recording');
+  Map<String, Object> status() => {'recording': capturing, 'startedAt': 1000};
+  Future<void> settle(WidgetTester tester) async {
+    await tester.runAsync(() async {
+      for (var i = 0; i < 12; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    });
+    await tester.pump();
+  }
 
   setUp(() {
-    previous = RecordPlatform.instance;
-    recorder = _Recorder();
-    RecordPlatform.instance = recorder;
-    state = _State();
-    nativeCalls.clear();
+    capturing = false;
+    pending.clear();
+    calls.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-          nativeCalls.add(call.method);
+          calls.add(call.method);
+          switch (call.method) {
+            case 'permission':
+              return true;
+            case 'status':
+              return status();
+            case 'start':
+              capturing = true;
+              return status();
+            case 'stop':
+              if (capturing)
+                pending.add({'id': 'capture-1', 'startedAt': 1000});
+              capturing = false;
+              return status();
+            case 'pending':
+              return pending.toList();
+            case 'read':
+              return Uint8List.fromList([1, 2, 3, 4]);
+            case 'ack':
+              pending.removeWhere(
+                (item) => item['id'] == (call.arguments as Map)['id'],
+              );
+              return null;
+          }
           return null;
         });
     WidgetsBinding.instance.handleAppLifecycleStateChanged(
       AppLifecycleState.resumed,
     );
+    state = _State()..rememberedEmail = 'owner@example.com';
   });
-
-  Future<void> close(WidgetTester tester) async {
-    await tester.runAsync(() async {
-      await state.recording.stop();
-      state.dispose();
-      if (recorder.created) await recorder.disposed.future;
-      await recorder.pcm.close();
-    });
-  }
-
   tearDown(() {
-    RecordPlatform.instance = previous;
+    state.dispose();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
   });
 
   testWidgets(
-    'Android recording survives leaving Capture and screen lock',
+    'record before unlock, finish in background, import only on unlocked resume',
     (tester) async {
-      try {
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(body: MicrophonePanel(state: state)),
-          ),
-        );
-        await tester.runAsync(state.recording.start);
-        recorder.pcm.add(Uint8List.fromList([1, 2, 3, 4]));
-        await tester.pump();
-        await tester.pumpWidget(const SizedBox());
-        WidgetsBinding.instance.handleAppLifecycleStateChanged(
-          AppLifecycleState.paused,
-        );
-        await tester.pump();
-        expect(state.recording.recording, isTrue);
-        expect(recorder.starts, 1);
-        expect(recorder.stops, 0);
-        await tester.runAsync(state.stopRecording!);
-        expect((await state.loadAudioDraftPayload())!.sublist(44), [
-          1,
-          2,
-          3,
-          4,
-        ]);
-        expect(nativeCalls, ['notificationPermission', 'start', 'stop']);
-      } finally {
-        await close(tester);
-      }
+      await settle(tester);
+      await tester.runAsync(state.recording.start);
+      expect(state.recording.recording, isTrue);
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.paused,
+      );
+      await tester.runAsync(state.recording.stop);
+      expect(state.imported, isEmpty);
+      expect(pending, hasLength(1));
+      state.unlocked = true;
+      state.changed();
+      await settle(tester);
+      expect(state.imported, isEmpty);
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      await settle(tester);
+      expect(state.imported, ['capture-1']);
+      expect(pending, isEmpty);
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 
   testWidgets(
-    'notification Stop saves captured PCM and stops the service',
+    'Activity detaches without stopping native recording',
     (tester) async {
-      try {
-        await tester.runAsync(state.recording.start);
-        recorder.pcm.add(Uint8List.fromList([5, 6]));
-        await tester.pump();
-        await tester.runAsync(() async {
-          final reply = Completer<void>();
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-              .handlePlatformMessage(
-                channel.name,
-                const StandardMethodCodec().encodeMethodCall(
-                  const MethodCall('stop'),
-                ),
-                (_) => reply.complete(),
-              );
-          await reply.future;
-        });
-        expect(state.recording.recording, isFalse);
-        expect((await state.loadAudioDraftPayload())!.sublist(44), [5, 6]);
-        expect(recorder.stops, 1);
-        expect(nativeCalls.last, 'stop');
-      } finally {
-        await close(tester);
-      }
+      await tester.runAsync(state.recording.start);
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.detached,
+      );
+      await settle(tester);
+      expect(capturing, isTrue);
+      expect(calls, isNot(contains('stop')));
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 
   testWidgets(
-    'background attempts never start the service or microphone',
+    'resume recovers notification stop and multiple captures after engine recreation',
     (tester) async {
-      try {
-        WidgetsBinding.instance.handleAppLifecycleStateChanged(
-          AppLifecycleState.paused,
-        );
-        await tester.runAsync(state.recording.start);
-        expect(state.recording.recording, isFalse);
-        expect(recorder.starts, 0);
-        expect(nativeCalls, isNot(contains('start')));
-        expect(state.recording.error, contains('while Lifenizer is open'));
-      } finally {
-        await close(tester);
-      }
+      await settle(tester);
+      pending.addAll([
+        {'id': 'one', 'startedAt': 1000},
+        {'id': 'two', 'startedAt': 2000},
+      ]);
+      state.unlocked = true;
+      state.changed();
+      await settle(tester);
+      expect(state.imported, ['one', 'two']);
+      expect(pending, isEmpty);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
+    'native completion event reconciles notification Stop while foreground',
+    (tester) async {
+      state.unlocked = true;
+      await settle(tester);
+      await tester.runAsync(state.recording.start);
+      capturing = false;
+      pending.add({'id': 'notification', 'startedAt': 1000});
+      await tester.runAsync(() async {
+        final reply = Completer<void>();
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .handlePlatformMessage(
+              channel.name,
+              const StandardMethodCodec().encodeMethodCall(
+                const MethodCall('changed'),
+              ),
+              (_) => reply.complete(),
+            );
+        await reply.future;
+      });
+      await settle(tester);
+      expect(state.recording.recording, isFalse);
+      expect(state.imported, ['notification']);
+      expect(pending, isEmpty);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
+    'busy unlock defers imports and failed vault saves retain native capture',
+    (tester) async {
+      await settle(tester);
+      pending.add({'id': 'one', 'startedAt': 1000});
+      state.unlocked = true;
+      state.busy = true;
+      state.changed();
+      await settle(tester);
+      expect(calls, isNot(contains('read')));
+      state.busy = false;
+      state.failImport = true;
+      state.changed();
+      await settle(tester);
+      expect(pending, hasLength(1));
+      expect(calls, isNot(contains('ack')));
+      state.failImport = false;
+      state.changed();
+      await settle(tester);
+      expect(pending, isEmpty);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
+    'a failed capture retains its source while later captures import',
+    (tester) async {
+      await settle(tester);
+      pending.addAll([
+        {'id': 'failed', 'startedAt': 1000},
+        {'id': 'valid', 'startedAt': 2000},
+      ]);
+      state.unlocked = true;
+      state.failedIds.add('failed');
+      state.changed();
+      await settle(tester);
+      expect(state.imported, ['valid']);
+      expect(pending.map((item) => item['id']), ['failed']);
+      expect(state.recording.error, contains('disk full'));
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
+    'background attempts do not request permission or start microphone',
+    (tester) async {
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.paused,
+      );
+      await tester.runAsync(state.recording.start);
+      expect(calls, isNot(contains('permission')));
+      expect(calls, isNot(contains('start')));
+      expect(state.recording.error, contains('while Lifenizer is open'));
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
