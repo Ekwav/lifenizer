@@ -3,27 +3,47 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'conversation_search_index.dart';
+import 'vault_chunks.dart';
 
-// Compress before encryption: repeated vocabulary and summary fields otherwise
-// dominate startup decryption. No plaintext index is ever written to disk.
+// Compress before encryption. No plaintext index is ever written to disk.
+Map<String, dynamic> _pack(Map<String, dynamic> value) => {
+  'gzip': base64Encode(gzip.encode(utf8.encode(jsonEncode(value)))),
+};
+
+Map<String, dynamic> _unpack(Map<String, dynamic> value) =>
+    jsonDecode(utf8.decode(gzip.decode(base64Decode(value['gzip'] as String))))
+        as Map<String, dynamic>;
+
 Future<Map<String, dynamic>> encodeSearchSnapshot(
   ConversationSearchIndex index,
-) => Isolate.run(
-  () => {
-    'gzip': base64Encode(gzip.encode(utf8.encode(jsonEncode(index.toJson())))),
-  },
-);
+) => Isolate.run(() => _pack(index.toJson()));
 
 Future<ConversationSearchIndex> decodeSearchSnapshot(
   Map<String, dynamic> snapshot,
-) => Isolate.run(
-  () => ConversationSearchIndex.fromJson(
-    jsonDecode(
-          utf8.decode(gzip.decode(base64Decode(snapshot['gzip'] as String))),
-        )
-        as Map<String, dynamic>,
-  ),
-);
+) => Isolate.run(() => ConversationSearchIndex.fromJson(_unpack(snapshot)));
+
+Future<({Map<String, dynamic> catalog, List<Map<String, dynamic>> details})>
+encodeSearchSnapshotParts(ConversationSearchIndex index, int bucketCount) =>
+    Isolate.run(() {
+      if (bucketCount < 1) {
+        throw ArgumentError.value(bucketCount, 'bucketCount');
+      }
+      final buckets = List.generate(bucketCount, (_) => <String, dynamic>{});
+      for (final entry in index.documents.entries) {
+        buckets[vaultChunkFor(entry.key, bucketCount)][entry.key] = {
+          'haystack': entry.value.haystack,
+          'termFrequency': entry.value.termFrequency,
+        };
+      }
+      return (
+        catalog: _pack(index.toJson(includeDetails: false)),
+        details: [for (final bucket in buckets) _pack(bucket)],
+      );
+    });
+
+Future<Map<String, dynamic>> decodeSearchDetails(
+  Map<String, dynamic> details,
+) => Isolate.run(() => _unpack(details));
 
 Future<ConversationSearchIndex> prepareSearchIndex(
   SearchIndexInputs inputs,

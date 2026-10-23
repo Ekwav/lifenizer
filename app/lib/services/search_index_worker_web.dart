@@ -1,25 +1,50 @@
 import 'conversation_search_index.dart';
+import 'vault_chunks.dart';
 import 'dart:convert';
 import 'package:archive/archive.dart';
 
+Map<String, dynamic> _pack(Map<String, dynamic> value) => {
+  'gzip': base64Encode(GZipEncoder().encode(utf8.encode(jsonEncode(value)))),
+};
+
+Map<String, dynamic> _unpack(Map<String, dynamic> value) =>
+    jsonDecode(
+          utf8.decode(
+            GZipDecoder().decodeBytes(base64Decode(value['gzip'] as String)),
+          ),
+        )
+        as Map<String, dynamic>;
+
 Future<Map<String, dynamic>> encodeSearchSnapshot(
   ConversationSearchIndex index,
-) async => {
-  'gzip': base64Encode(
-    GZipEncoder().encode(utf8.encode(jsonEncode(index.toJson()))),
-  ),
-};
+) async => _pack(index.toJson());
 
 Future<ConversationSearchIndex> decodeSearchSnapshot(
   Map<String, dynamic> snapshot,
-) async => ConversationSearchIndex.fromJson(
-  jsonDecode(
-        utf8.decode(
-          GZipDecoder().decodeBytes(base64Decode(snapshot['gzip'] as String)),
-        ),
-      )
-      as Map<String, dynamic>,
-);
+) async => ConversationSearchIndex.fromJson(_unpack(snapshot));
+
+Future<({Map<String, dynamic> catalog, List<Map<String, dynamic>> details})>
+encodeSearchSnapshotParts(
+  ConversationSearchIndex index,
+  int bucketCount,
+) async {
+  if (bucketCount < 1) throw ArgumentError.value(bucketCount, 'bucketCount');
+  final buckets = List.generate(bucketCount, (_) => <String, dynamic>{});
+  for (final entry in index.documents.entries) {
+    buckets[vaultChunkFor(entry.key, bucketCount)][entry.key] = {
+      'haystack': entry.value.haystack,
+      'termFrequency': entry.value.termFrequency,
+    };
+  }
+  return (
+    catalog: _pack(index.toJson(includeDetails: false)),
+    details: [for (final bucket in buckets) _pack(bucket)],
+  );
+}
+
+Future<Map<String, dynamic>> decodeSearchDetails(
+  Map<String, dynamic> details,
+) async => _unpack(details);
 
 Future<ConversationSearchIndex> prepareSearchIndex(
   SearchIndexInputs inputs,

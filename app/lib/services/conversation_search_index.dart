@@ -30,14 +30,16 @@ class IndexedConversation {
     required this.termFrequency,
     required this.vectorNorm,
     required this.length,
+    this.detailsLoaded = true,
   });
 
   Conversation conversation;
-  final String haystack;
+  String haystack;
   final Set<String> titleTokens;
   final Set<String> personTokens;
   final Set<String> tagSet;
-  final Map<String, int> termFrequency;
+  Map<String, int> termFrequency;
+  bool detailsLoaded;
   final double vectorNorm;
   final int length;
 }
@@ -62,16 +64,20 @@ class ConversationSearchIndex {
   /// Stores prepared search data and lightweight conversation summaries. Terms
   /// and posting document IDs are represented by positions to avoid repeating
   /// strings throughout the snapshot.
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson({bool includeDetails = true}) {
     if (_pendingNorms.isNotEmpty) {
       throw StateError('Refresh search statistics before saving the index');
     }
     final terms = invertedIndex.keys.toList();
-    final termIds = {for (var i = 0; i < terms.length; i++) terms[i]: i};
+    final termIds = {
+      if (includeDetails)
+        for (var i = 0; i < terms.length; i++) terms[i]: i,
+    };
     final ids = documents.keys.toList();
     final documentIds = {for (var i = 0; i < ids.length; i++) ids[i]: i};
     return {
       'version': 1,
+      if (!includeDetails) 'detailsLoaded': false,
       'terms': terms,
       'idf': [for (final term in terms) idf[term]],
       'postings': [
@@ -83,15 +89,16 @@ class ConversationSearchIndex {
         for (final doc in documents.values)
           [
             doc.conversation.toSummaryJson(),
-            doc.haystack,
+            includeDetails ? doc.haystack : '',
             doc.titleTokens.toList(),
             doc.personTokens.toList(),
             doc.tagSet.toList(),
             [
-              for (final entry in doc.termFrequency.entries) ...[
-                termIds[entry.key]!,
-                entry.value,
-              ],
+              if (includeDetails)
+                for (final entry in doc.termFrequency.entries) ...[
+                  termIds[entry.key]!,
+                  entry.value,
+                ],
             ],
             doc.vectorNorm,
             doc.length,
@@ -125,6 +132,7 @@ class ConversationSearchIndex {
         },
         vectorNorm: (row[6] as num).toDouble(),
         length: row[7] as int,
+        detailsLoaded: json['detailsLoaded'] as bool? ?? true,
       );
     }
     final ids = docs.keys.toList();
@@ -142,6 +150,21 @@ class ConversationSearchIndex {
       },
       (json['averageLength'] as num).toDouble(),
     );
+  }
+
+  /// Attach a decoded detail bucket without replacing live conversations or
+  /// overwriting a newer upsert that completed while the bucket was loading.
+  void loadDetails(Map<String, dynamic> details) {
+    for (final entry in details.entries) {
+      final document = documents[entry.key];
+      if (document == null || document.detailsLoaded) continue;
+      final data = entry.value as Map;
+      final haystack = data['haystack'] as String;
+      final frequency = Map<String, int>.from(data['termFrequency'] as Map);
+      document.haystack = haystack;
+      document.termFrequency = frequency;
+      document.detailsLoaded = true;
+    }
   }
 
   static ConversationSearchIndex build({
@@ -308,7 +331,10 @@ class ConversationSearchIndex {
   void _detach(String id) {
     final previous = documents[id];
     if (previous == null) return;
-    for (final token in previous.termFrequency.keys) {
+    for (final token
+        in previous.detailsLoaded
+            ? previous.termFrequency.keys
+            : invertedIndex.keys.toList()) {
       final ids = invertedIndex[token];
       if (ids == null) continue;
       ids.remove(id);
@@ -398,7 +424,15 @@ class ConversationSearchIndex {
     for (final matches in expanded.values) {
       var best = 0.0;
       for (final entry in matches.entries) {
-        final tf = document.termFrequency[entry.key] ?? 0;
+        final tf =
+            document.termFrequency[entry.key] ??
+            (!document.detailsLoaded &&
+                    invertedIndex[entry.key]?.contains(
+                          document.conversation.id,
+                        ) ==
+                        true
+                ? 1
+                : 0);
         if (tf == 0) continue;
         // BM25 saturation keeps repeated words in long exports from drowning
         // out a concise title or an actual participant match.
