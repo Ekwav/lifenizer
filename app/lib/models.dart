@@ -299,11 +299,16 @@ class Conversation {
     return _toJson(includeSegments: true);
   }
 
-  Map<String, dynamic> toSummaryJson() => {
-    ..._toJson(includeSegments: false),
-    'segmentCount': segmentCount,
-    'previewText': previewText,
-  };
+  Map<String, dynamic> toSummaryJson({int previewLength = 500}) {
+    final preview = previewText;
+    return {
+      ..._toJson(includeSegments: false),
+      'segmentCount': segmentCount,
+      'previewText': preview.length <= previewLength
+          ? preview
+          : preview.substring(0, previewLength),
+    };
+  }
 
   Map<String, dynamic> _toJson({required bool includeSegments}) => {
     if (sourceUrl != null) 'sourceUrl': sourceUrl,

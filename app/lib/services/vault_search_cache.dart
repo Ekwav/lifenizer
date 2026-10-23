@@ -15,7 +15,7 @@ extension VaultSearchCache on LifenizerAppState {
       try {
         await Future.wait([
           ..._searchCacheLoads.values,
-          if (_searchBuild != null) _searchBuild!,
+          ?_searchBuild,
         ]);
       } catch (_) {
         await _rebuildSearchCache(index, generation);
@@ -205,6 +205,7 @@ extension VaultSearchCache on LifenizerAppState {
     ]);
     final catalog = await _crypto.encryptJson({
       ...parts.catalog,
+      'cacheVersion': 2,
       'detailNonces': nonces,
       'postingNonces': postingNonces,
     }, background: true);

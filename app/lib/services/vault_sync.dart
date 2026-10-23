@@ -696,6 +696,7 @@ extension VaultSync on LifenizerAppState {
     try {
       ConversationSearchIndex? cachedIndex;
       var catalogInDatabase = false;
+      var currentCatalog = false;
       final cacheNonce = core['searchIndexNonce'] as String?;
       if (cacheNonce != null &&
           pending.isEmpty &&
@@ -713,6 +714,7 @@ extension VaultSync on LifenizerAppState {
               background: true,
             );
             cachedIndex = await decodeSearchSnapshot(snapshot);
+            currentCatalog = snapshot['cacheVersion'] == 2;
             markStartup('searchCatalog');
             if (catalogInDatabase) {
               _searchDetailNonces = List<String>.from(
@@ -791,7 +793,9 @@ extension VaultSync on LifenizerAppState {
         _unloadedChunks.addAll(Iterable.generate(count));
         _searchSnapshotNonce = cacheNonce;
         _savedSearchRevision =
-            catalogInDatabase && _searchPostingNonces.isNotEmpty
+            catalogInDatabase &&
+                currentCatalog &&
+                _searchPostingNonces.isNotEmpty
             ? _searchRevision
             : -1;
       }
@@ -802,6 +806,7 @@ extension VaultSync on LifenizerAppState {
             pending.isNotEmpty ||
             cachedIndex == null ||
             !catalogInDatabase ||
+            !currentCatalog ||
             _searchPostingNonces.isEmpty,
         resyncRequired: false,
       );

@@ -22,6 +22,17 @@ ConversationSearchIndex build(List<Conversation> conversations) =>
     );
 
 void main() {
+  test('compact previews stay short without truncating searchable content', () {
+    final text = '${'A longer conversation. ' * 100} zebralantern';
+    final original = build([conversation('one', text)]);
+    final catalog = ConversationSearchIndex.fromJson(
+      original.toJson(includeDetails: false),
+    );
+    expect(catalog.documents['one']!.conversation.previewText.length, 180);
+    expect(catalog.lookupCandidates(['zebralantern']), {'one'});
+    expect(original.documents['one']!.conversation.segments.single.text, text);
+  });
+
   test(
     'catalog retains candidates and hydrates scoring without replacing live data',
     () {

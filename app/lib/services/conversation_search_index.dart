@@ -103,7 +103,9 @@ class ConversationSearchIndex {
       'documents': [
         for (final doc in documents.values)
           [
-            doc.conversation.toSummaryJson(),
+            doc.conversation.toSummaryJson(
+              previewLength: includeDetails ? 500 : 180,
+            ),
             includeDetails ? doc.haystack : '',
             doc.titleTokens.toList(),
             doc.personTokens.toList(),
