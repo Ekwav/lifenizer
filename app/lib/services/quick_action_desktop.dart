@@ -148,6 +148,9 @@ class LifenizerRunner extends DBusObject {
             jsonEncode({
               'unlocked': state.isAuthenticated,
               'busy': state.busy,
+              'recording': state.recording.recording,
+              'startupMs': state.startupTimingsMs,
+              'searchDetailsLoading': state.searchDetailsLoading,
               'conversations': state.isAuthenticated
                   ? state.conversations.length
                   : 0,

@@ -120,6 +120,11 @@ class _SearchPageState extends State<SearchPage> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
+            if (widget.state.searchDetailsLoading)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: LinearProgressIndicator(),
+              ),
             // Search input field
             SearchInputField(
               viewModel: _viewModel,

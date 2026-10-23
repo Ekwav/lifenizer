@@ -57,6 +57,7 @@ part 'services/vault_imports.dart';
 part 'services/vault_email.dart';
 part 'services/vault_training.dart';
 part 'services/vault_recordings.dart';
+part 'services/vault_search_cache.dart';
 
 class LifenizerAppState extends ChangeNotifier {
   LifenizerAppState({
@@ -207,6 +208,8 @@ class LifenizerAppState extends ChangeNotifier {
   final List<ImportCapability> importCapabilities = [];
 
   ConversationSearchIndex? _searchIndex;
+  List<String> _searchDetailNonces = [];
+  final Map<int, Future<void>> _searchDetailLoads = {};
   // Conversations whose index entry is stale, plus a flag for changes (people,
   // relations, a missing index) that only a full rebuild can reflect.
   final Set<String> _searchDirtyIds = <String>{};
@@ -237,6 +240,8 @@ class LifenizerAppState extends ChangeNotifier {
   /// True while no search index exists yet (for example during the first
   /// background build after unlocking) and results come from a plain scan.
   bool get searchIndexPreparing => _searchIndex == null && isAuthenticated;
+
+  bool get searchDetailsLoading => _searchDetailLoads.isNotEmpty;
 
   String? _lastSearchQuery;
   DateTime? _lastSearchAt;
@@ -514,7 +519,10 @@ class LifenizerAppState extends ChangeNotifier {
     }.toList(growable: false);
 
     // Execute search using service
-    final searchService = SearchService(index);
+    final searchService = SearchService(
+      index,
+      onCandidates: queryTokens.isEmpty ? null : _requestSearchDetails,
+    );
     final ranked = searchService
         .rankConversations(
           criteria,

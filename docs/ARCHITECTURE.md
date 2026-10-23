@@ -71,29 +71,37 @@ Desktop only: `BrowserHistoryWatchService` keeps YouTube/TikTok viewing history 
 
 ## Local persistence and sync
 
-The local vault uses an AES-GCM-encrypted core plus conversation buckets. Sembast
-stores the core in the native application support directory or browser IndexedDB;
-native conversation buckets use separate atomic files where supported. The core
-contains participants, relations, pending ciphertext envelopes, the last successfully
-pulled cursor, an encrypted session token and optional microphone-draft metadata.
-Draft audio has its own encrypted record. Connection preferences, storage
-format/count/nonce metadata and the KDF salt sit outside encrypted entity payloads.
+The local vault uses an AES-GCM-encrypted core plus conversation buckets. Native
+metadata, encrypted core/outbox records and the compact search catalogue live in
+`lifenizer-vaults.sqlite`, accessed through a database worker. A transactional first
+migration reads the legacy Sembast `lifenizer-vaults.db` without modifying or deleting
+it; the completion marker commits with the migrated rows. Web storage remains Sembast
+in IndexedDB. Native conversation buckets use separate atomic files. Draft audio has
+its own encrypted record. Connection preferences, storage format/count/nonce metadata
+and the KDF salt sit outside encrypted entity payloads.
 
-A compressed, encrypted prepared search snapshot stores conversation summaries,
-previews and search postings. Cached unlock restores searchable results without
-decrypting conversation bodies. Opening a conversation decrypts its bucket on demand;
-concurrent requests share that load. Saves hydrate dirty buckets before rewriting
-them, preserving unloaded neighbors. Missing, stale or corrupt search snapshots fall
-back to authenticated bucket loading and index rebuilding; the cache is disposable.
-Core nonce references and two-phase bucket saves protect crash recovery. Remote sync
-continues in the background after a valid cached unlock.
+Cached startup decrypts a compact prepared search catalogue containing the full
+vocabulary/postings, scoring metadata and conversation summaries/previews. Detailed
+search text and term frequencies live in separate compressed, encrypted scoring
+buckets; searches read and decrypt only buckets containing query candidates.
+Conversation bodies remain unloaded until opened. Concurrent loads share work; saves
+hydrate dirty conversation buckets before rewriting them to preserve unloaded
+neighbors. Missing, stale or corrupt search caches fall back to authenticated data
+and rebuilding. Core nonce references and two-phase conversation-bucket saves protect
+crash recovery. Remote sync continues after a valid cached unlock.
 
-Manual unlock still derives and validates the vault key from the passphrase. Paired
-native devices may retain the derived key and its salt alongside their paired
-passphrase in the existing protected OS keyring, password-wrapped or biometric
-credential store. This enables local unlock before remote access refresh; it does not
-write keys to ordinary preferences or vault snapshots. Lock clears decrypted state,
-search indexes and decoded image/audio playback caches.
+Flutter renders the startup UI before storage initialization. After initialization,
+a linked device attempts OS-backed unlock once per app launch; cancellation does not
+retry automatically, and manually locking never reopens the vault. Device-password
+protection still requires its password. Manual vault unlock derives and validates the
+key from the passphrase. Paired native credentials may retain the derived vault key
+and salt in the existing OS keyring, password-wrapped or biometric credential store,
+allowing local unlock before remote access refresh. Ordinary unlock does not rewrite
+biometric credentials or trigger extra verification to cache a key. Explicit device
+security setup saves the derived key under the selected protection; legacy biometric
+credentials without it keep using PBKDF until intentionally refreshed. Keys never
+enter ordinary preferences or vault snapshots. Lock clears decrypted state, search
+indexes and decoded image/audio playback caches.
 
 The client persists outgoing envelopes before attempting a push. Retry IDs are idempotent.
 Push responses never advance the pull cursor; pulls drain 500-envelope pages and advance

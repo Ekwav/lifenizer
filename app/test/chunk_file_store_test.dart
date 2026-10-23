@@ -234,8 +234,10 @@ void main() {
       expect(await store.read('$_key:chunk:0'), isNull);
       expect(
         files().map((f) => f.path.split('/').last),
-        containsAll(['chunk-0.bin', 'search-index.bin']),
+        contains('chunk-0.bin'),
       );
+      expect(await store.read('$_key:search-index'), isNotNull);
+      expect(await store.read('$_key:search-detail:0'), isNotNull);
       await second.lock();
       second.dispose();
 
@@ -524,7 +526,12 @@ void main() {
         'Synced note',
         'Unsent note',
       });
-      expect(files().map((f) => f.path.split('/').last), containsAll(['chunk-0.bin', 'search-index.bin']));
+      expect(
+        files().map((f) => f.path.split('/').last),
+        contains('chunk-0.bin'),
+      );
+      expect(await store.read('$_key:search-index'), isNotNull);
+      expect(await store.read('$_key:search-detail:0'), isNotNull);
       await recovered.lock();
       recovered.dispose();
     });

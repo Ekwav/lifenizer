@@ -101,6 +101,7 @@ extension VaultSync on LifenizerAppState {
           );
         }
         _clearVault();
+        markStartup('vaultKey');
         var repaired = false;
         var resyncRequired = false;
         if (local != null) {
@@ -167,6 +168,7 @@ extension VaultSync on LifenizerAppState {
           // which runs as the ordinary background sync: lock() waits for it and
           // a failure surfaces as syncError instead of failing the unlock.
           _unlocking = false;
+          markStartup('searchReady');
           status = offline
               ? 'Local vault unlocked · changes will sync when connected'
               : 'Vault unlocked · syncing in background';
@@ -300,6 +302,8 @@ extension VaultSync on LifenizerAppState {
     _searchGeneration++;
     _searchIndex = null;
     _searchSnapshotNonce = null;
+    _searchDetailNonces = [];
+    _searchDetailLoads.clear();
     _savedSearchRevision = -1;
     _unloadedChunks.clear();
     _chunkLoads.clear();
@@ -690,23 +694,38 @@ extension VaultSync on LifenizerAppState {
     }
     try {
       ConversationSearchIndex? cachedIndex;
+      var catalogInDatabase = false;
       final cacheNonce = core['searchIndexNonce'] as String?;
       if (cacheNonce != null &&
           pending.isEmpty &&
           source.kind == _chunks.kind) {
         try {
-          final record = await source.readBlob(key, 'search-index');
+          var record = await _localStore!.read('$key:search-index');
+          catalogInDatabase = record != null && record['nonce'] == cacheNonce;
+          if (!catalogInDatabase) {
+            record = await source.readBlob(key, 'search-index');
+          }
           if (record != null && record['nonce'] == cacheNonce) {
-            cachedIndex = await decodeSearchSnapshot(
-              await _crypto.decryptJson(
-                cipherText: record['cipherText'] as String,
-                nonce: cacheNonce,
-                background: true,
-              ),
+            final snapshot = await _crypto.decryptJson(
+              cipherText: record['cipherText'] as String,
+              nonce: cacheNonce,
+              background: true,
             );
+            cachedIndex = await decodeSearchSnapshot(snapshot);
+            markStartup('searchCatalog');
+            if (catalogInDatabase) {
+              _searchDetailNonces = List<String>.from(
+                snapshot['detailNonces'] as List,
+              );
+              if (_searchDetailNonces.isEmpty) {
+                throw const FormatException('Missing search detail buckets');
+              }
+            }
           }
         } catch (_) {
           // A disposable cache must never make the encrypted vault unreadable.
+          cachedIndex = null;
+          _searchDetailNonces = [];
         }
       }
       if (cachedIndex != null) {
@@ -717,7 +736,10 @@ extension VaultSync on LifenizerAppState {
         for (final id in cachedIndex.documents.keys) {
           actualCounts[vaultChunkFor(id, count)]++;
         }
-        if (!listEquals(counts, actualCounts)) cachedIndex = null;
+        if (!listEquals(counts, actualCounts)) {
+          cachedIndex = null;
+          _searchDetailNonces = [];
+        }
       }
       if (cachedIndex != null) {
         // Check file headers without decrypting their contents. Body integrity
@@ -759,11 +781,15 @@ extension VaultSync on LifenizerAppState {
       if (cachedIndex != null) {
         _unloadedChunks.addAll(Iterable.generate(count));
         _searchSnapshotNonce = cacheNonce;
-        _savedSearchRevision = _searchRevision;
+        _savedSearchRevision = catalogInDatabase ? _searchRevision : -1;
       }
       return (
         needsSave:
-            repaired || migrating || pending.isNotEmpty || cachedIndex == null,
+            repaired ||
+            migrating ||
+            pending.isNotEmpty ||
+            cachedIndex == null ||
+            !catalogInDatabase,
         resyncRequired: false,
       );
     } on _IncompleteChunks {
@@ -1307,15 +1333,7 @@ extension VaultSync on LifenizerAppState {
     if (_searchSnapshotNonce == null ||
         _savedSearchRevision != _searchRevision) {
       try {
-        final revision = _searchRevision;
-        final snapshot = await encodeSearchSnapshot(_searchIndex!);
-        final sealed = await _crypto.encryptJson(snapshot, background: true);
-        await _chunks.writeBlob(key, 'search-index', {
-          'cipherText': sealed.cipherText,
-          'nonce': sealed.nonce,
-        });
-        _searchSnapshotNonce = sealed.nonce;
-        _savedSearchRevision = revision;
+        await _writeSearchCache(key);
       } catch (_) {
         // A cache failure must not prevent saving the outbox and original data.
         _searchSnapshotNonce = null;

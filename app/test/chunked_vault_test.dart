@@ -69,6 +69,15 @@ class _Server {
 class _RecordingStore extends LocalVaultStore {
   _RecordingStore(super.database);
   final written = <String>[];
+  final readKeys = <String>[];
+  Completer<void>? detailReads;
+  @override
+  Future<Map<String, dynamic>?> read(String key) async {
+    readKeys.add(key);
+    if (key.contains(':search-detail:')) await detailReads?.future;
+    return super.read(key);
+  }
+
   @override
   Future<void> write(String key, Map<String, dynamic> value) async {
     written.add(key);
@@ -171,6 +180,55 @@ void main() {
   });
 
   test(
+    'catalog matches full text before reading any scoring buckets',
+    () async {
+      final original = await unlocked();
+      original.conversations.addAll(List.generate(512, _conversation));
+      original.conversations[7].segments.add(
+        ConversationSegment(id: 'unique', text: 'zebralantern'),
+      );
+      await original.lock();
+      original.dispose();
+      store.readKeys.clear();
+      store.detailReads = Completer<void>();
+      final chunks = _TrackedChunks(store);
+      final restored = await unlocked(
+        state: device(chunks: chunks),
+        offline: true,
+      );
+      await restored.waitForBackgroundSync();
+      expect(
+        store.readKeys.where((key) => key.contains(':search-detail:')),
+        isEmpty,
+      );
+      expect(chunks.decrypted, isEmpty);
+      expect(restored.search('zebralantern').map((c) => c.id), ['thread-7']);
+      expect(restored.searchDetailsLoading, isTrue);
+      final settled = Completer<void>();
+      restored.addListener(() {
+        if (!restored.searchDetailsLoading && !settled.isCompleted) {
+          settled.complete();
+        }
+      });
+      store.detailReads!.complete();
+      await settled.future;
+      expect(
+        store.readKeys.where((key) => key.contains(':search-detail:')),
+        hasLength(1),
+      );
+      expect(
+        chunks.decrypted,
+        isEmpty,
+        reason: 'ranking reads only its prepared bucket',
+      );
+      expect(restored.search('zebralantern').single.id, 'thread-7');
+      await restored.lock();
+      restored.dispose();
+    },
+    timeout: timeout,
+  );
+
+  test(
     'legacy v1 blob loads and the first save converts it to v2 chunks',
     () async {
       final crypto = VaultCrypto();
@@ -256,6 +314,8 @@ void main() {
         _key,
         '$_key:chunk:$bucket',
         '$_key:search-index',
+        for (var n = 0; n < (state.conversations.length / 64).ceil(); n++)
+          '$_key:search-detail:$n',
       });
       core = (await store.read(_key))!;
       final after = List<String>.from(core['chunkNonces'] as List);

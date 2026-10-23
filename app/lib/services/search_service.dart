@@ -27,9 +27,10 @@ class _ScoredItem {
 /// a ranked list of conversations matching the search criteria.
 class SearchService {
   /// Creates a [SearchService] for the given conversation search index.
-  SearchService(this._searchIndex);
+  SearchService(this._searchIndex, {this.onCandidates});
 
   final ConversationSearchIndex _searchIndex;
+  final void Function(Set<String>)? onCandidates;
 
   /// Ranks conversations according to search criteria and scorer.
   ///
@@ -61,6 +62,7 @@ class SearchService {
       effectiveTokens,
       expansions: expansions,
     );
+    onCandidates?.call(candidateIds);
     lookupStopwatch.stop();
 
     profile?.candidateLookupTime = lookupStopwatch.elapsed;
