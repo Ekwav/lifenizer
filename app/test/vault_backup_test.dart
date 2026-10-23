@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:app/api_client.dart';
 import 'package:app/crypto_service.dart';
+import 'package:app/image_service.dart';
 import 'package:app/services/audio_cache_io.dart' as audio_cache;
 import 'package:app/app_state.dart';
 import 'package:app/models.dart';
@@ -17,6 +18,7 @@ import 'package:sembast/sembast_memory.dart';
 class _Target implements BackupTarget {
   final files = <String, List<int>>{};
   String? current;
+  bool aborted = false;
   @override
   String get label => 'memory';
   @override
@@ -30,7 +32,11 @@ class _Target implements BackupTarget {
   @override
   Future<void> closePart() async => current = null;
   @override
-  Future<void> abort() async => files.clear();
+  Future<void> abort() async {
+    aborted = true;
+    files.clear();
+  }
+
   List<BackupPart> get parts => files.entries
       .map(
         (entry) => BackupPart(
@@ -42,7 +48,13 @@ class _Target implements BackupTarget {
 }
 
 class _Server {
+  _Server({this.imagePrefix = 'image'});
+  final String imagePrefix;
   bool offline = false;
+  bool failImages = false;
+  final images = <ImageItem>[];
+  final imageBytes = <String, List<int>>{};
+  int uploads = 0;
   final requests = <http.Request>[];
   Future<http.Response> handle(http.Request request) async {
     requests.add(request);
@@ -60,7 +72,44 @@ class _Server {
       body = {'cursor': 0, 'envelopes': []};
     } else if (path == '/api/sync/push') {
       body = {'cursor': 0};
-    } else if (path == '/api/imports/capabilities' || path == '/api/images') {
+    } else if (path == '/api/images') {
+      if (failImages) return http.Response('media unavailable', 403);
+      if (request.method == 'POST') {
+        final encrypted = utf8.encode(
+          request.body.substring(
+            request.body.indexOf('{'),
+            request.body.lastIndexOf('}') + 1,
+          ),
+        );
+        final conversationId = RegExp(
+          'name="conversationId"\\r\\n\\r\\n([^\\r]+)',
+        ).firstMatch(request.body)?.group(1);
+        final item = ImageItem(
+          id: '$imagePrefix-${uploads++}',
+          fileName: RegExp(
+            'filename="([^"]+)"',
+          ).firstMatch(request.body)!.group(1)!,
+          contentType: 'application/octet-stream',
+          sizeBytes: encrypted.length,
+          uploadedAt: DateTime.utc(2026),
+          conversationId: conversationId,
+        );
+        images.add(item);
+        imageBytes[item.id] = encrypted;
+        body = item.toJson();
+      } else {
+        body = images.map((image) => image.toJson()).toList();
+      }
+    } else if (path.startsWith('/api/images/')) {
+      return http.Response.bytes(imageBytes[path.split('/').last]!, 200);
+    } else if (path == '/api/premium/status') {
+      body = {
+        'plan': 'free',
+        'usedBytes': 0,
+        'limitBytes': 10000000,
+        'usedPercent': 0,
+      };
+    } else if (path == '/api/imports/capabilities') {
       body = [];
     } else {
       return http.Response('not found', 404);
@@ -406,6 +455,101 @@ void main() {
         expect(stored, isNot(contains(base64Encode(payload))));
         expect(stored, isNot(contains('Pending private voice')));
       }
+    },
+  );
+
+  test(
+    'full backup reencrypts uploaded photos for another vault and retries do not upload duplicates',
+    () async {
+      final sourceServer = _Server(imagePrefix: 'source-image');
+      final source = await device(sourceServer, 'photo-source');
+      await source.addManualText(
+        title: 'Photo owner',
+        participantNames: '',
+        text: 'Associated conversation',
+      );
+      final conversationId = source.conversations.single.id;
+      final photo = CapturedImage(
+        bytes: Uint8List.fromList([137, 80, 78, 71, 13, 10, 26, 10, 42]),
+        fileName: 'private-photo.png',
+        contentType: 'image/png',
+      );
+      final uploaded = await source.uploadCapturedImage(
+        photo,
+        conversationId: conversationId,
+      );
+      final target = _Target();
+      await source.makeBackup(target: target, password: 'backup-password');
+      final destinationServer = _Server(imagePrefix: 'target-image');
+      final destination = await device(destinationServer, 'photo-target');
+      expect(
+        await destination.restoreBackup(
+          parts: target.parts,
+          password: 'backup-password',
+        ),
+        1,
+      );
+      expect(destinationServer.uploads, 1);
+      final restored = destinationServer.images.single;
+      expect(restored.id, isNot(uploaded.id));
+      expect(restored.fileName, 'backup-${uploaded.id}.bin');
+      expect(restored.contentType, 'application/octet-stream');
+      expect(restored.conversationId, conversationId);
+      final downloaded = await destination.decryptedImage(restored);
+      expect(downloaded.bytes, photo.bytes);
+      expect(downloaded.fileName, photo.fileName);
+      expect(downloaded.contentType, photo.contentType);
+      final transport = utf8.decode(destinationServer.imageBytes[restored.id]!);
+      expect(transport, isNot(contains(photo.fileName)));
+      expect(transport, isNot(contains(base64Encode(photo.bytes))));
+      // The source vault key cannot decrypt the destination's newly encrypted upload.
+      final sourceCrypto = VaultCrypto();
+      await sourceCrypto.unlock(
+        email: 'photo-source@example.test',
+        passphrase: 'photo-source-private-vault-phrase',
+        vaultSalt: 'test-salt',
+      );
+      await expectLater(
+        ImageService.decryptImage(
+          Uint8List.fromList(destinationServer.imageBytes[restored.id]!),
+          sourceCrypto,
+        ),
+        throwsA(anything),
+      );
+      sourceCrypto.lock();
+      expect(
+        await destination.restoreBackup(
+          parts: target.parts,
+          password: 'backup-password',
+        ),
+        0,
+      );
+      expect(destinationServer.uploads, 1);
+      expect(destinationServer.images, hasLength(1));
+    },
+  );
+
+  test(
+    'failed image listing aborts a full backup and releases busy state',
+    () async {
+      final server = _Server();
+      final state = await device(server, 'media-failure');
+      await state.addManualText(
+        title: 'Preserve',
+        participantNames: '',
+        text: 'Existing data',
+      );
+      final before = snapshot(state);
+      server.failImages = true;
+      final target = _Target();
+      await expectLater(
+        state.makeBackup(target: target, password: 'backup-password'),
+        throwsA(anything),
+      );
+      expect(target.aborted, isTrue);
+      expect(target.files, isEmpty);
+      expect(state.busy, isFalse);
+      expect(snapshot(state), before);
     },
   );
 }
