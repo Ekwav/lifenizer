@@ -160,6 +160,30 @@ namespace Lifenizer.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Lifenizer.Api.Data.RecordingRecord", b =>
+                {
+                    b.Property<Guid>("VaultId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConversationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BlobName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("VaultId", "ConversationId");
+
+                    b.ToTable("Recordings");
+                });
+
             modelBuilder.Entity("Lifenizer.Api.Data.SyncEnvelopeRecord", b =>
                 {
                     b.Property<long>("Sequence")

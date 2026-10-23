@@ -34,6 +34,7 @@ public static class ServiceExtensions
         services.AddOpenApi();
         services.AddHttpContextAccessor();
         services.AddMemoryCache();
+        services.AddSingleton<RecordingRelay>();
         services.AddHttpClient("imports").ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddHttpClient(YouTubeCaptionFetcher.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });

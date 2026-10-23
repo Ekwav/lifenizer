@@ -30,6 +30,7 @@ public sealed class DatabaseUpgradeTests
                 await db.Database.ExecuteSqlRawAsync("DROP TABLE PairingStates");
                 await db.Database.ExecuteSqlRawAsync("DROP TABLE PairingRequests");
                 await db.Database.ExecuteSqlRawAsync("DROP TABLE PairedDevices");
+                await db.Database.ExecuteSqlRawAsync("DROP TABLE Recordings");
                 if (schema == "legacy")
                 {
                     await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users DROP COLUMN StorageUsedBytes");
@@ -45,6 +46,7 @@ public sealed class DatabaseUpgradeTests
             Assert.That(await db.PairingStates.CountAsync(), Is.Zero);
             Assert.That(await db.PairingRequests.CountAsync(), Is.Zero);
             Assert.That(await db.PairedDevices.CountAsync(), Is.Zero);
+            Assert.That(await db.Recordings.CountAsync(), Is.Zero);
             if (schema != "new")
             {
                 var account = await db.Users.SingleAsync();

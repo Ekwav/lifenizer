@@ -13,7 +13,7 @@ public sealed class UserAccount
     public string? DisplayName { get; set; }
     public SubscriptionPlan Plan { get; set; } = SubscriptionPlan.Free;
     /// <summary>
-    /// Running total of image artifact bytes stored for this user. Sync envelopes are not counted.
+    /// Running total of image and encrypted recording artifact bytes stored for this user. Sync envelopes are not counted.
     /// Incremented on upload / push, decremented on delete.
     /// </summary>
     public long StorageUsedBytes { get; set; }

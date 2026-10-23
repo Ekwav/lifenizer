@@ -108,6 +108,7 @@ app.MapImportEndpoints();
 app.MapTrainingEndpoints();
 app.MapUsageEndpoints();
 app.MapImageEndpoints();
+app.MapRecordingEndpoints();
 app.MapPremiumEndpoints();
 
 app.Run();
