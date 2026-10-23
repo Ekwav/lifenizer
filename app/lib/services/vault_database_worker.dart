@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:isolate';
 
 import 'package:sembast/sembast_io.dart';
+import 'package:sqlite3/sqlite3.dart' as sql;
 
 typedef VaultDatabaseRequest =
     Future<Object?> Function(
@@ -11,8 +14,13 @@ typedef VaultDatabaseRequest =
     );
 
 /// One isolate owns the database for its lifetime. Only ciphertext and connection
-/// settings cross this boundary; the existing Sembast file format is unchanged.
-Future<VaultDatabaseRequest> openVaultDatabaseWorker(String path) async {
+/// settings cross this boundary. Sembast remains available for existing callers;
+/// native startup uses SQLite and migrates the legacy file once, read-only.
+Future<VaultDatabaseRequest> openVaultDatabaseWorker(
+  String path, {
+  bool useSqlite = false,
+  String? legacyPath,
+}) async {
   final responses = ReceivePort();
   final ready = Completer<SendPort>();
   // Opening may fail before Isolate.spawn's future completes.
@@ -48,7 +56,7 @@ Future<VaultDatabaseRequest> openVaultDatabaseWorker(String path) async {
   try {
     await Isolate.spawn(
       _serveVaultDatabase,
-      (path, responses.sendPort),
+      (path, responses.sendPort, useSqlite, legacyPath),
       onError: responses.sendPort,
       onExit: responses.sendPort,
     );
@@ -72,8 +80,14 @@ Future<VaultDatabaseRequest> openVaultDatabaseWorker(String path) async {
   };
 }
 
-Future<void> _serveVaultDatabase((String, SendPort) setup) async {
-  final (path, responses) = setup;
+Future<void> _serveVaultDatabase(
+  (String, SendPort, bool, String?) setup,
+) async {
+  final (path, responses, useSqlite, legacyPath) = setup;
+  if (useSqlite) {
+    await _serveSqliteDatabase(path, legacyPath, responses);
+    return;
+  }
   final database = await databaseFactoryIo.openDatabase(path);
   final records = stringMapStoreFactory.store('vaults');
   final commands = ReceivePort();
@@ -125,5 +139,108 @@ Future<void> _serveVaultDatabase((String, SendPort) setup) async {
   } finally {
     commands.close();
     await database.close();
+  }
+}
+
+void _sqliteTransaction(sql.Database database, void Function() operation) {
+  database.execute('BEGIN IMMEDIATE');
+  try {
+    operation();
+    database.execute('COMMIT');
+  } catch (_) {
+    database.execute('ROLLBACK');
+    rethrow;
+  }
+}
+
+Future<void> _serveSqliteDatabase(
+  String path,
+  String? legacyPath,
+  SendPort responses,
+) async {
+  final database = sql.sqlite3.open(path);
+  final commands = ReceivePort();
+  try {
+    database.execute(
+      'CREATE TABLE IF NOT EXISTS vaults '
+      '(key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+    );
+    if (database.select('PRAGMA user_version').single.values.single == 0) {
+      final previous = legacyPath != null && await File(legacyPath).exists()
+          ? await databaseFactoryIo.openDatabase(
+              legacyPath,
+              mode: DatabaseMode.readOnly,
+            )
+          : null;
+      try {
+        final records = previous == null
+            ? null
+            : await stringMapStoreFactory.store('vaults').find(previous);
+        _sqliteTransaction(database, () {
+          for (final record in records ?? []) {
+            database.execute('INSERT INTO vaults (key, value) VALUES (?, ?)', [
+              record.key,
+              jsonEncode(record.value),
+            ]);
+          }
+          // The marker commits with every migrated row. A failure leaves the
+          // legacy file authoritative and allows another migration attempt.
+          database.execute('PRAGMA user_version = 1');
+        });
+      } finally {
+        await previous?.close();
+      }
+    }
+    responses.send(commands.sendPort);
+    await for (final message in commands) {
+      final request = message as List;
+      final id = request[0] as int;
+      final operation = request[1] as String;
+      try {
+        Object? value;
+        switch (operation) {
+          case 'read':
+            final rows = database.select(
+              'SELECT value FROM vaults WHERE key = ?',
+              [request[2] as String],
+            );
+            value = rows.isEmpty
+                ? null
+                : jsonDecode(rows.single['value'] as String);
+          case 'write':
+          case 'writeMany':
+            final values = operation == 'write'
+                ? {request[2] as String: request[3]}
+                : request[3] as Map;
+            _sqliteTransaction(database, () {
+              for (final entry in values.entries) {
+                database.execute(
+                  'INSERT OR REPLACE INTO vaults (key, value) VALUES (?, ?)',
+                  [entry.key as String, jsonEncode(entry.value)],
+                );
+              }
+            });
+          case 'deleteMany':
+            _sqliteTransaction(database, () {
+              for (final key in (request[3] as Map)['keys'] as List) {
+                database.execute('DELETE FROM vaults WHERE key = ?', [
+                  key as String,
+                ]);
+              }
+            });
+          case 'close':
+            database.close();
+          default:
+            throw ArgumentError('Unknown local vault operation.');
+        }
+        responses.send([id, true, value]);
+      } catch (error) {
+        responses.send([id, false, error.toString()]);
+      }
+      if (operation == 'close') break;
+    }
+  } finally {
+    commands.close();
+    database.close();
   }
 }

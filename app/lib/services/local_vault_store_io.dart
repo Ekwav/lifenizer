@@ -6,6 +6,10 @@ Future<LocalVaultStore> openVaultStore() async {
   final directory = await getApplicationSupportDirectory();
   await directory.create(recursive: true);
   return LocalVaultStore.remote(
-    await openVaultDatabaseWorker('${directory.path}/lifenizer-vaults.db'),
+    await openVaultDatabaseWorker(
+      '${directory.path}/lifenizer-vaults.sqlite',
+      useSqlite: true,
+      legacyPath: '${directory.path}/lifenizer-vaults.db',
+    ),
   );
 }
