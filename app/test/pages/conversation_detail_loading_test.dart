@@ -122,17 +122,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       final painter = tester
-          .state<RawScrollbarState>(
-            find
-                .descendant(
-                  of: scrollbar,
-                  matching: find.byWidgetPredicate(
-                    (widget) => widget is RawScrollbar,
-                  ),
-                )
-                .first,
+          .widgetList<CustomPaint>(
+            find.descendant(of: scrollbar, matching: find.byType(CustomPaint)),
           )
-          .scrollbarPainter;
+          .map((widget) => widget.foregroundPainter)
+          .whereType<ScrollbarPainter>()
+          .first;
       expect(painter.thickness, 6);
       expect(tester.widget<Scrollbar>(scrollbar).trackVisibility, isFalse);
       expect(tester.takeException(), isNull);
