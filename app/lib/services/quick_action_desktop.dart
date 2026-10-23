@@ -224,7 +224,7 @@ class LifenizerRunner extends DBusObject {
       if (prefix.hasMatch(input)) {
         final query = input.replaceFirst(prefix, '').trim();
         if (state.isAuthenticated) {
-          final results = state.search(query, maxResults: 8);
+          final results = await state.searchAsync(query, maxResults: 8);
           for (var i = 0; i < results.length; i++) {
             final conversation = results[i];
             matches.add(

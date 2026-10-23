@@ -83,7 +83,7 @@ void main() {
       expect(state.search('private'), isEmpty);
       await unlock(offline: true);
       expect(state.pendingSyncCount, 1);
-      expect(state.search('private').single.title, 'Unsent note');
+      expect((await state.searchAsync('private')).single.title, 'Unsent note');
       await state.lock();
       await db.close();
       client.close();

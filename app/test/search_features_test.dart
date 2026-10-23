@@ -167,9 +167,15 @@ void main() {
         offline: true,
       );
       expect(state.error, isNull);
-      expect(state.search('versicherung jorg').map((c) => c.id), original);
-      expect(state.search('urlaub').map((c) => c.id), ['holiday']);
-      expect(state.search('muell versicher').map((c) => c.id), original);
+      expect(
+        (await state.searchAsync('versicherung jorg')).map((c) => c.id),
+        original,
+      );
+      expect((await state.searchAsync('urlaub')).map((c) => c.id), ['holiday']);
+      expect(
+        (await state.searchAsync('muell versicher')).map((c) => c.id),
+        original,
+      );
       await state.lock();
       await database.close();
       client.close();

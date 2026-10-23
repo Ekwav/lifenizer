@@ -22,13 +22,27 @@ Future<ConversationSearchIndex> decodeSearchSnapshot(
   Map<String, dynamic> snapshot,
 ) => Isolate.run(() => ConversationSearchIndex.fromJson(_unpack(snapshot)));
 
-Future<({Map<String, dynamic> catalog, List<Map<String, dynamic>> details})>
+Future<
+  ({
+    Map<String, dynamic> catalog,
+    List<Map<String, dynamic>> details,
+    List<Map<String, dynamic>> postings,
+  })
+>
 encodeSearchSnapshotParts(ConversationSearchIndex index, int bucketCount) =>
     Isolate.run(() {
       if (bucketCount < 1) {
         throw ArgumentError.value(bucketCount, 'bucketCount');
       }
+      if (!index.postingsLoaded) {
+        throw StateError('Load search postings before saving index parts');
+      }
       final buckets = List.generate(bucketCount, (_) => <String, dynamic>{});
+      final postings = List.generate(bucketCount, (_) => <String, dynamic>{});
+      for (final entry in index.invertedIndex.entries) {
+        postings[vaultChunkFor(entry.key, bucketCount)][entry.key] = entry.value
+            .toList();
+      }
       for (final entry in index.documents.entries) {
         buckets[vaultChunkFor(entry.key, bucketCount)][entry.key] = {
           'haystack': entry.value.haystack,
@@ -36,8 +50,11 @@ encodeSearchSnapshotParts(ConversationSearchIndex index, int bucketCount) =>
         };
       }
       return (
-        catalog: _pack(index.toJson(includeDetails: false)),
+        catalog: _pack(
+          index.toJson(includeDetails: false, includePostings: false),
+        ),
         details: [for (final bucket in buckets) _pack(bucket)],
+        postings: [for (final bucket in postings) _pack(bucket)],
       );
     });
 

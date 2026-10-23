@@ -562,7 +562,10 @@ void main() {
       state = device(server, disk);
       await login(state, offline: true);
       expect(state.isAuthenticated, isTrue);
-      expect(state.search('pineapple').single.title, 'Secret meeting');
+      expect(
+        (await state.searchAsync('pineapple')).single.title,
+        'Secret meeting',
+      );
       expect(state.pendingSyncCount, 1);
       server.offline = false;
       server.losePushResponse = true;
@@ -594,7 +597,7 @@ void main() {
       expect(state.isAuthenticated, isFalse);
       expect(state.conversations, isEmpty);
       await login(state, offline: true);
-      expect(state.search('preserve').single.title, 'Original');
+      expect((await state.searchAsync('preserve')).single.title, 'Original');
       expect(
         server.requests
             .where((r) => r.url.path.startsWith('/api/auth/'))

@@ -303,7 +303,8 @@ extension VaultSync on LifenizerAppState {
     _searchIndex = null;
     _searchSnapshotNonce = null;
     _searchDetailNonces = [];
-    _searchDetailLoads.clear();
+    _searchPostingNonces = [];
+    _searchCacheLoads.clear();
     _savedSearchRevision = -1;
     _unloadedChunks.clear();
     _chunkLoads.clear();
@@ -717,8 +718,14 @@ extension VaultSync on LifenizerAppState {
               _searchDetailNonces = List<String>.from(
                 snapshot['detailNonces'] as List,
               );
+              _searchPostingNonces = List<String>.from(
+                snapshot['postingNonces'] as List? ?? const [],
+              );
               if (_searchDetailNonces.isEmpty) {
                 throw const FormatException('Missing search detail buckets');
+              }
+              if (!cachedIndex.postingsLoaded && _searchPostingNonces.isEmpty) {
+                throw const FormatException('Missing search posting buckets');
               }
             }
           }
@@ -726,6 +733,7 @@ extension VaultSync on LifenizerAppState {
           // A disposable cache must never make the encrypted vault unreadable.
           cachedIndex = null;
           _searchDetailNonces = [];
+          _searchPostingNonces = [];
         }
       }
       if (cachedIndex != null) {
@@ -739,6 +747,7 @@ extension VaultSync on LifenizerAppState {
         if (!listEquals(counts, actualCounts)) {
           cachedIndex = null;
           _searchDetailNonces = [];
+          _searchPostingNonces = [];
         }
       }
       if (cachedIndex != null) {
@@ -781,7 +790,10 @@ extension VaultSync on LifenizerAppState {
       if (cachedIndex != null) {
         _unloadedChunks.addAll(Iterable.generate(count));
         _searchSnapshotNonce = cacheNonce;
-        _savedSearchRevision = catalogInDatabase ? _searchRevision : -1;
+        _savedSearchRevision =
+            catalogInDatabase && _searchPostingNonces.isNotEmpty
+            ? _searchRevision
+            : -1;
       }
       return (
         needsSave:
@@ -789,7 +801,8 @@ extension VaultSync on LifenizerAppState {
             migrating ||
             pending.isNotEmpty ||
             cachedIndex == null ||
-            !catalogInDatabase,
+            !catalogInDatabase ||
+            _searchPostingNonces.isEmpty,
         resyncRequired: false,
       );
     } on _IncompleteChunks {

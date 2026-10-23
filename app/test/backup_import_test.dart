@@ -275,7 +275,10 @@ void main() {
       await state.lock();
       expect(await state.importDiscordBotBatch(bot), isFalse);
       await login(offline: true);
-      expect(state.search('carol rendezvous').single.id, conversationId);
+      expect(
+        (await state.searchAsync('carol rendezvous')).single.id,
+        conversationId,
+      );
     },
   );
 

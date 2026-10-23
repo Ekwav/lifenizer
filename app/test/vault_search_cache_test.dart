@@ -6,6 +6,7 @@ import 'package:app/app_state.dart';
 import 'package:app/models.dart';
 import 'package:app/services/local_vault_store.dart';
 import 'package:app/services/sync_progress.dart';
+import 'package:app/services/vault_chunks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -14,11 +15,18 @@ import 'package:sembast/sembast_memory.dart';
 class _Store extends LocalVaultStore {
   _Store(super.database);
   final detailReads = <String>[];
+  final postingReads = <String>[];
+  final postingWrites = <String>{};
+  Completer<void>? postingGate;
+  bool corruptPostings = false;
+  Completer<void>? bodyGate;
+  Completer<void>? bodyReadStarted;
   Completer<void>? gate;
   bool corruptDetails = false;
   bool failCoreWrites = false;
   @override
   Future<void> write(String key, Map<String, dynamic> value) async {
+    if (key.contains(':search-posting:')) postingWrites.add(key);
     if (failCoreWrites && value['format'] == 2) {
       throw StateError('Injected core write failure');
     }
@@ -27,6 +35,18 @@ class _Store extends LocalVaultStore {
 
   @override
   Future<Map<String, dynamic>?> read(String key) async {
+    if (key.contains(':chunk:') && bodyGate != null) {
+      if (bodyReadStarted?.isCompleted == false) bodyReadStarted!.complete();
+      await bodyGate!.future;
+    }
+    if (key.contains(':search-posting:')) {
+      postingReads.add(key);
+      final result = await super.read(key);
+      await postingGate?.future;
+      return corruptPostings && result != null
+          ? {...result, 'cipherText': 'invalid encrypted postings'}
+          : result;
+    }
     if (!key.contains(':search-detail:')) return super.read(key);
     detailReads.add(key);
     final result = await super.read(key);
@@ -41,6 +61,7 @@ void main() {
   var sequence = 0;
   late Database database;
   late _Store store;
+  late int postingBucketCount;
   Future<http.Response> handle(http.Request request) async {
     final path = request.url.path;
     final body = path.startsWith('/api/auth/')
@@ -95,6 +116,12 @@ void main() {
     }
   }
 
+  Future<void> primePostings(LifenizerAppState state) async {
+    expect(state.search('zebralantern'), isEmpty);
+    await until(state, () => !state.searchDetailsLoading);
+    expect(store.detailReads, isEmpty);
+  }
+
   setUp(() async {
     database = await databaseFactoryMemory.openDatabase(
       'search-cache-regression-${sequence++}',
@@ -123,6 +150,8 @@ void main() {
     await original.lock();
     original.dispose();
     store.detailReads.clear();
+    store.postingReads.clear();
+    postingBucketCount = store.postingWrites.length;
   });
   tearDown(() => database.close());
 
@@ -131,6 +160,14 @@ void main() {
     () async {
       final restored = await open();
       store.gate = Completer<void>();
+      await primePostings(restored);
+      expect(store.postingReads, hasLength(1));
+      expect(
+        store.postingReads.single,
+        endsWith(
+          ':search-posting:${vaultChunkFor('zebralantern', postingBucketCount)}',
+        ),
+      );
       expect(restored.search('zebralantern').single.id, 'thread-7');
       expect(restored.search('zebralantern').single.id, 'thread-7');
       expect(store.detailReads, hasLength(1));
@@ -150,6 +187,7 @@ void main() {
     'corrupt details rebuild from original encrypted conversations',
     () async {
       final restored = await open();
+      await primePostings(restored);
       store.corruptDetails = true;
       final rebuilt = until(
         restored,
@@ -186,6 +224,7 @@ void main() {
       );
       expect(restored.error, isNull);
       expect(store.detailReads.toSet(), hasLength(4));
+      expect(store.postingReads.toSet(), hasLength(postingBucketCount));
       expect(
         restored.conversations.any((conversation) => !conversation.isLoaded),
         isTrue,
@@ -194,8 +233,10 @@ void main() {
       restored.dispose();
       final reopened = await open();
       expect(reopened.conversations, hasLength(257));
-      expect(reopened.search('zebralantern').single.id, 'thread-7');
-      await until(reopened, () => !reopened.searchDetailsLoading);
+      expect(
+        (await reopened.searchAsync('zebralantern', maxResults: 1)).single.id,
+        'thread-7',
+      );
       expect(reopened.search('zebralantern').single.id, 'thread-7');
       await reopened.lock();
       reopened.dispose();
@@ -221,4 +262,122 @@ void main() {
     await reopened.lock();
     reopened.dispose();
   });
+
+  test(
+    'cold posting queries share one bucket read and lock never waits',
+    () async {
+      final restored = await open();
+      expect(store.postingReads, isEmpty);
+      expect(store.detailReads, isEmpty);
+      store.postingGate = Completer<void>();
+      expect(restored.search('zebralantern'), isEmpty);
+      expect(restored.search('zebralantern'), isEmpty);
+      expect(store.postingReads, hasLength(1));
+      expect(
+        store.postingReads.single,
+        endsWith(
+          ':search-posting:${vaultChunkFor('zebralantern', postingBucketCount)}',
+        ),
+      );
+      expect(store.detailReads, isEmpty);
+      expect(restored.searchDetailsLoading, isTrue);
+      await restored.lock().timeout(const Duration(seconds: 10));
+      expect(restored.isAuthenticated, isFalse);
+      expect(restored.searchDetailsLoading, isFalse);
+      store.postingGate!.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(restored.fullSearchBuilds, 0);
+      expect(restored.syncError, isNull);
+      restored.dispose();
+    },
+  );
+
+  test(
+    'async cold search waits for postings and scoring without loading bodies',
+    () async {
+      final restored = await open();
+      final results = await Future.wait([
+        restored.searchAsync('zebralantern', maxResults: 1),
+        restored.searchAsync('zebralantern', maxResults: 1),
+      ]);
+      expect(results.map((matches) => matches.single.id), [
+        'thread-7',
+        'thread-7',
+      ]);
+      expect(store.postingReads, hasLength(1));
+      expect(store.detailReads, hasLength(1));
+      expect(
+        restored.conversations.every((conversation) => !conversation.isLoaded),
+        isTrue,
+      );
+      await restored.lock();
+      restored.dispose();
+    },
+  );
+
+  test(
+    'corrupt postings rebuild from original encrypted conversations',
+    () async {
+      final restored = await open();
+      store.corruptPostings = true;
+      final rebuilt = until(
+        restored,
+        () =>
+            restored.fullSearchBuilds > 0 &&
+            restored.syncProgress?.stage == SyncStage.complete,
+      );
+      expect(restored.search('zebralantern'), isEmpty);
+      final asyncMatches = restored.searchAsync('zebralantern');
+      await rebuilt;
+      expect((await asyncMatches).map((conversation) => conversation.id), [
+        'thread-7',
+      ]);
+      expect(restored.search('zebralantern').single.id, 'thread-7');
+      expect(
+        restored.conversations.every((conversation) => conversation.isLoaded),
+        isTrue,
+      );
+      expect(restored.error, isNull);
+      store.corruptPostings = false;
+      await restored.lock();
+      restored.dispose();
+    },
+  );
+
+  test(
+    'new async search waits for an already running corrupt-cache rebuild',
+    () async {
+      final restored = await open();
+      store.corruptPostings = true;
+      store.bodyGate = Completer<void>();
+      store.bodyReadStarted = Completer<void>();
+      expect(restored.search('zebralantern'), isEmpty);
+      await store.bodyReadStarted!.future.timeout(const Duration(seconds: 10));
+      expect(restored.searchDetailsLoading, isFalse);
+      var returned = false;
+      final lookup = restored.searchAsync('zebralantern').then((matches) {
+        returned = true;
+        return matches;
+      });
+      await Future<void>.delayed(Duration.zero);
+      final premature = returned;
+      store.bodyGate!.complete();
+      final matches = await lookup;
+      await until(
+        restored,
+        () =>
+            restored.fullSearchBuilds > 0 &&
+            restored.syncProgress?.stage == SyncStage.complete,
+      );
+      expect(
+        premature,
+        isFalse,
+        reason: 'one-shot callers must await the active recovery build',
+      );
+      expect(matches.map((conversation) => conversation.id), ['thread-7']);
+      store.corruptPostings = false;
+      await restored.lock();
+      restored.dispose();
+    },
+  );
 }

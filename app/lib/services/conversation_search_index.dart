@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' as math;
 
 import '../models.dart';
@@ -56,6 +57,10 @@ class ConversationSearchIndex {
 
   final Map<String, IndexedConversation> documents;
   final Map<String, Set<String>> invertedIndex;
+  final Set<String> _unloadedPostingTerms = {};
+  Set<String> get unloadedPostingTerms =>
+      UnmodifiableSetView(_unloadedPostingTerms);
+  bool get postingsLoaded => _unloadedPostingTerms.isEmpty;
   Map<String, double> idf;
   double averageLength;
   static final _digits = RegExp(r'^\d+$');
@@ -64,7 +69,13 @@ class ConversationSearchIndex {
   /// Stores prepared search data and lightweight conversation summaries. Terms
   /// and posting document IDs are represented by positions to avoid repeating
   /// strings throughout the snapshot.
-  Map<String, dynamic> toJson({bool includeDetails = true}) {
+  Map<String, dynamic> toJson({
+    bool includeDetails = true,
+    bool includePostings = true,
+  }) {
+    if (includePostings && !postingsLoaded) {
+      throw StateError('Load search postings before saving the full index');
+    }
     if (_pendingNorms.isNotEmpty) {
       throw StateError('Refresh search statistics before saving the index');
     }
@@ -74,16 +85,20 @@ class ConversationSearchIndex {
         for (var i = 0; i < terms.length; i++) terms[i]: i,
     };
     final ids = documents.keys.toList();
-    final documentIds = {for (var i = 0; i < ids.length; i++) ids[i]: i};
+    final documentIds = {
+      if (includePostings)
+        for (var i = 0; i < ids.length; i++) ids[i]: i,
+    };
     return {
       'version': 1,
       if (!includeDetails) 'detailsLoaded': false,
       'terms': terms,
       'idf': [for (final term in terms) idf[term]],
-      'postings': [
-        for (final term in terms)
-          [for (final id in invertedIndex[term]!) documentIds[id]!],
-      ],
+      if (includePostings)
+        'postings': [
+          for (final term in terms)
+            [for (final id in invertedIndex[term]!) documentIds[id]!],
+        ],
       'averageLength': averageLength,
       'documents': [
         for (final doc in documents.values)
@@ -136,13 +151,15 @@ class ConversationSearchIndex {
       );
     }
     final ids = docs.keys.toList();
-    final postings = json['postings'] as List;
+    final postings = json['postings'] as List?;
     final weights = json['idf'] as List;
-    return ConversationSearchIndex._(
+    final index = ConversationSearchIndex._(
       docs,
       {
         for (var i = 0; i < terms.length; i++)
-          terms[i]: {for (final id in postings[i] as List) ids[id as int]},
+          terms[i]: postings == null
+              ? const <String>{}
+              : {for (final id in postings[i] as List) ids[id as int]},
       },
       {
         for (var i = 0; i < terms.length; i++)
@@ -150,6 +167,22 @@ class ConversationSearchIndex {
       },
       (json['averageLength'] as num).toDouble(),
     );
+    if (postings == null) index._unloadedPostingTerms.addAll(terms);
+    return index;
+  }
+
+  /// Load a term bucket once; later bucket reads cannot replace current postings.
+  /// All postings must be loaded before editing documents or refreshing scores.
+  void loadPostings(Map<String, dynamic> postings) {
+    for (final entry in postings.entries) {
+      if (!_unloadedPostingTerms.contains(entry.key)) continue;
+      final ids = (entry.value as List)
+          .cast<String>()
+          .where(documents.containsKey)
+          .toSet();
+      invertedIndex[entry.key] = ids;
+      _unloadedPostingTerms.remove(entry.key);
+    }
   }
 
   /// Attach a decoded detail bucket without replacing live conversations or
@@ -329,6 +362,9 @@ class ConversationSearchIndex {
   final Set<String> _pendingNorms = <String>{};
 
   void _detach(String id) {
+    if (!postingsLoaded) {
+      throw StateError('Load search postings before editing the index');
+    }
     final previous = documents[id];
     if (previous == null) return;
     for (final token
@@ -343,6 +379,9 @@ class ConversationSearchIndex {
   }
 
   void refreshStatistics() {
+    if (!postingsLoaded) {
+      throw StateError('Load search postings before refreshing statistics');
+    }
     idf = _idf(invertedIndex, documents.length);
     var totalLength = 0;
     for (final doc in documents.values) {

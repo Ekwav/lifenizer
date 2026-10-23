@@ -106,7 +106,121 @@ void main() {
     expect(catalog.lookupCandidates(['replacement']), {'one'});
   });
 
+  test(
+    'compact catalog keeps vocabulary and IDF while posting buckets load on demand',
+    () {
+      final original = build([
+        conversation('one', 'invoice invoice amount 12345'),
+        conversation('two', 'Berlin train ticket'),
+      ]);
+      final json = original.toJson(
+        includeDetails: false,
+        includePostings: false,
+      );
+      expect(json.containsKey('postings'), false);
+      final catalog = ConversationSearchIndex.fromJson(
+        jsonDecode(jsonEncode(json)) as Map<String, dynamic>,
+      );
+      expect(catalog.postingsLoaded, false);
+      expect(catalog.unloadedPostingTerms, original.invertedIndex.keys.toSet());
+      expect(catalog.idf, original.idf);
+      expect(catalog.averageLength, original.averageLength);
+      expect(
+        catalog.expandTokens(['invoice', 'berl', '12345']),
+        original.expandTokens(['invoice', 'berl', '12345']),
+      );
+      expect(catalog.lookupCandidates([]), {'one', 'two'});
+      expect(catalog.invertedIndex.values.every((ids) => ids.isEmpty), true);
+      catalog.loadPostings({
+        'invoice': ['one', 'missing'],
+        'not-in-vocabulary': ['two'],
+      });
+      expect(catalog.lookupCandidates(['invoice']), {'one'});
+      expect(catalog.unloadedPostingTerms, isNot(contains('invoice')));
+      expect(catalog.postingsLoaded, false);
+      expect(
+        () => catalog.upsert(
+          conversation('one', 'replacement'),
+          participantById: {},
+          relationTextByConversation: {},
+        ),
+        throwsStateError,
+      );
+      expect(() => catalog.remove('two'), throwsStateError);
+      expect(catalog.refreshStatistics, throwsStateError);
+      expect(catalog.toJson, throwsStateError);
+      expect(catalog.documents.keys, unorderedEquals(['one', 'two']));
+      catalog.loadPostings({
+        for (final entry in original.invertedIndex.entries)
+          entry.key: entry.value.toList(),
+      });
+      expect(catalog.postingsLoaded, true);
+      expect(catalog.unloadedPostingTerms, isEmpty);
+      expect(catalog.invertedIndex, original.invertedIndex);
+      for (final query in ['invoice', 'ticket', '12345']) {
+        expect(
+          catalog.lookupCandidates([query]),
+          original.lookupCandidates([query]),
+        );
+      }
+      catalog.upsert(
+        conversation('one', 'replacement statement'),
+        participantById: {},
+        relationTextByConversation: {},
+      );
+      catalog.remove('two');
+      catalog.loadPostings({
+        for (final entry in original.invertedIndex.entries)
+          entry.key: entry.value.toList(),
+      });
+      expect(catalog.lookupCandidates(['invoice']), isEmpty);
+      expect(catalog.lookupCandidates(['ticket']), isEmpty);
+      expect(catalog.lookupCandidates(['replacement']), {'one'});
+    },
+  );
+
+  test('empty and legacy full catalogs remain fully loaded', () {
+    final empty = ConversationSearchIndex.fromJson(
+      build([]).toJson(includeDetails: false, includePostings: false),
+    );
+    expect(empty.postingsLoaded, true);
+    expect(empty.unloadedPostingTerms, isEmpty);
+    expect(empty.lookupCandidates(['anything']), isEmpty);
+    final original = build([conversation('one', 'invoice')]);
+    final legacy = ConversationSearchIndex.fromJson(original.toJson());
+    expect(legacy.postingsLoaded, true);
+    expect(legacy.unloadedPostingTerms, isEmpty);
+    expect(legacy.toJson(), original.toJson());
+  });
+
   for (final useNative in [true, false]) {
+    test(
+      'parts codec handles empty corpora and refuses unloaded posting writes ${useNative ? 'native' : 'web'}',
+      () async {
+        final parts = useNative
+            ? await native.encodeSearchSnapshotParts(build([]), 3)
+            : await web.encodeSearchSnapshotParts(build([]), 3);
+        final empty = useNative
+            ? await web.decodeSearchSnapshot(parts.catalog)
+            : await native.decodeSearchSnapshot(parts.catalog);
+        expect(empty.postingsLoaded, true);
+        expect(parts.postings, hasLength(3));
+        for (final bucket in parts.postings) {
+          expect(await native.decodeSearchDetails(bucket), isEmpty);
+        }
+        final partial = ConversationSearchIndex.fromJson(
+          build([
+            conversation('one', 'invoice'),
+          ]).toJson(includeDetails: false, includePostings: false),
+        );
+        await expectLater(
+          useNative
+              ? native.encodeSearchSnapshotParts(partial, 3)
+              : web.encodeSearchSnapshotParts(partial, 3),
+          throwsStateError,
+        );
+      },
+    );
     test(
       'parts partition details and cross-decode ${useNative ? 'native to web' : 'web to native'}',
       () async {
@@ -124,11 +238,21 @@ void main() {
           catalog.documents.values.every((document) => !document.detailsLoaded),
           isTrue,
         );
+        expect(catalog.postingsLoaded, false);
         expect(
-          catalog.lookupCandidates(['invoice']),
-          original.lookupCandidates(['invoice']),
+          catalog.unloadedPostingTerms,
+          original.invertedIndex.keys.toSet(),
         );
+        expect(catalog.idf, original.idf);
         for (var bucket = 0; bucket < 4; bucket++) {
+          final postings = useNative
+              ? await web.decodeSearchDetails(parts.postings[bucket])
+              : await native.decodeSearchDetails(parts.postings[bucket]);
+          expect(postings.keys.toSet(), {
+            for (final term in original.invertedIndex.keys)
+              if (vaultChunkFor(term, 4) == bucket) term,
+          });
+          catalog.loadPostings(postings);
           final details = useNative
               ? await web.decodeSearchDetails(parts.details[bucket])
               : await native.decodeSearchDetails(parts.details[bucket]);
@@ -138,6 +262,12 @@ void main() {
           });
           catalog.loadDetails(details);
         }
+        expect(catalog.postingsLoaded, true);
+        expect(catalog.invertedIndex, original.invertedIndex);
+        expect(
+          catalog.lookupCandidates(['invoice']),
+          original.lookupCandidates(['invoice']),
+        );
         for (final entry in original.documents.entries) {
           final document = catalog.documents[entry.key]!;
           expect(document.detailsLoaded, isTrue);

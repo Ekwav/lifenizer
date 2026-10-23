@@ -180,7 +180,7 @@ void main() {
   });
 
   test(
-    'catalog matches full text before reading any scoring buckets',
+    'startup skips postings and scoring; queries load only matching buckets',
     () async {
       final original = await unlocked();
       original.conversations.addAll(List.generate(512, _conversation));
@@ -202,6 +202,18 @@ void main() {
         isEmpty,
       );
       expect(chunks.decrypted, isEmpty);
+      expect(
+        store.readKeys.where((key) => key.contains(':search-posting:')),
+        isEmpty,
+      );
+      expect(restored.search('zebralantern'), isEmpty);
+      final postingsReady = Completer<void>();
+      restored.addListener(() {
+        if (!restored.searchDetailsLoading && !postingsReady.isCompleted) {
+          postingsReady.complete();
+        }
+      });
+      await postingsReady.future;
       expect(restored.search('zebralantern').map((c) => c.id), ['thread-7']);
       expect(restored.searchDetailsLoading, isTrue);
       final settled = Completer<void>();
@@ -214,6 +226,10 @@ void main() {
       await settled.future;
       expect(
         store.readKeys.where((key) => key.contains(':search-detail:')),
+        hasLength(1),
+      );
+      expect(
+        store.readKeys.where((key) => key.contains(':search-posting:')),
         hasLength(1),
       );
       expect(
@@ -316,6 +332,8 @@ void main() {
         '$_key:search-index',
         for (var n = 0; n < (state.conversations.length / 64).ceil(); n++)
           '$_key:search-detail:$n',
+        for (var n = 0; n < (state.conversations.length / 64).ceil(); n++)
+          '$_key:search-posting:$n',
       });
       core = (await store.read(_key))!;
       final after = List<String>.from(core['chunkNonces'] as List);
@@ -365,7 +383,7 @@ void main() {
       expect(restored.searchIndexPreparing, isFalse);
       expect(restored.fullSearchBuilds, 0);
       expect(restored.conversations.every((c) => !c.isLoaded), isTrue);
-      expect(restored.search('topic42').first.id, 'thread-42');
+      expect((await restored.searchAsync('topic42')).first.id, 'thread-42');
       expect(
         chunks.decrypted,
         isEmpty,
@@ -676,9 +694,11 @@ void main() {
       final state = device();
       await unlocked(state: state);
       expect(state.searchIndexPreparing, isFalse);
-      final linear = state.search('tomatoes basil');
+      final linear = await state.searchAsync('tomatoes basil');
       expect(linear.map((c) => c.title), ['Garden plans']);
-      expect(state.search('GARDEN').map((c) => c.title), ['Garden plans']);
+      expect((await state.searchAsync('GARDEN')).map((c) => c.title), [
+        'Garden plans',
+      ]);
       expect(state.search('nothing here'), isEmpty);
       expect(state.fullSearchBuilds, 0);
 

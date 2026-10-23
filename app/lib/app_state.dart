@@ -209,7 +209,8 @@ class LifenizerAppState extends ChangeNotifier {
 
   ConversationSearchIndex? _searchIndex;
   List<String> _searchDetailNonces = [];
-  final Map<int, Future<void>> _searchDetailLoads = {};
+  List<String> _searchPostingNonces = [];
+  final Map<(bool, int), Future<void>> _searchCacheLoads = {};
   // Conversations whose index entry is stale, plus a flag for changes (people,
   // relations, a missing index) that only a full rebuild can reflect.
   final Set<String> _searchDirtyIds = <String>{};
@@ -241,7 +242,7 @@ class LifenizerAppState extends ChangeNotifier {
   /// background build after unlocking) and results come from a plain scan.
   bool get searchIndexPreparing => _searchIndex == null && isAuthenticated;
 
-  bool get searchDetailsLoading => _searchDetailLoads.isNotEmpty;
+  bool get searchDetailsLoading => _searchCacheLoads.isNotEmpty;
 
   String? _lastSearchQuery;
   DateTime? _lastSearchAt;
@@ -521,6 +522,7 @@ class LifenizerAppState extends ChangeNotifier {
     // Execute search using service
     final searchService = SearchService(
       index,
+      onTerms: queryTokens.isEmpty ? null : _requestSearchPostings,
       onCandidates: queryTokens.isEmpty ? null : _requestSearchDetails,
     );
     final ranked = searchService
@@ -1941,7 +1943,8 @@ class LifenizerAppState extends ChangeNotifier {
             conversations.length > synchronousIndexLimit)) {
       return;
     }
-    if (conversations.length <= synchronousIndexLimit &&
+    if ((_searchIndex?.postingsLoaded ?? true) &&
+        conversations.length <= synchronousIndexLimit &&
         _unloadedChunks.isEmpty) {
       final index = _searchIndex;
       if (index != null && _canUpdateSearchIndexIncrementally) {
@@ -2017,6 +2020,17 @@ class LifenizerAppState extends ChangeNotifier {
     for (var pass = 0; pass < 3 && _needsSearchIndex; pass++) {
       if (!_crypto.isUnlocked) return;
       final generation = _searchGeneration;
+      if (_searchIndex != null && _canUpdateSearchIndexIncrementally) {
+        try {
+          await _loadSearchBuckets(
+            _searchIndex!.unloadedPostingTerms,
+            postings: true,
+          );
+        } catch (_) {
+          _searchFullRebuildNeeded = true;
+        }
+        if (generation != _searchGeneration || !_crypto.isUnlocked) return;
+      }
       if (_searchIndex != null && _canUpdateSearchIndexIncrementally) {
         // No isolate copy: update the live index in yielding batches.
         worked = true;

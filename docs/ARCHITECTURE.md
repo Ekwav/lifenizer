@@ -81,9 +81,10 @@ its own encrypted record. Connection preferences, storage format/count/nonce met
 and the KDF salt sit outside encrypted entity payloads.
 
 Cached startup decrypts a compact prepared search catalogue containing the full
-vocabulary/postings, scoring metadata and conversation summaries/previews. Detailed
-search text and term frequencies live in separate compressed, encrypted scoring
-buckets; searches read and decrypt only buckets containing query candidates.
+vocabulary, scoring metadata and conversation summaries/previews. Word-to-conversation
+postings and detailed scoring text/frequencies live in separate compressed, encrypted
+buckets. Searches load postings for matching query terms, then scoring buckets for
+the matching conversations; neither set is read during cached startup.
 Conversation bodies remain unloaded until opened. Concurrent loads share work; saves
 hydrate dirty conversation buckets before rewriting them to preserve unloaded
 neighbors. Missing, stale or corrupt search caches fall back to authenticated data

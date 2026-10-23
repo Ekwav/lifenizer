@@ -34,7 +34,9 @@ class SearchResultsList extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: Center(
           child: Text(
-            state.conversations.isEmpty
+            state.searchDetailsLoading
+                ? 'Searching…'
+                : state.conversations.isEmpty
                 ? 'No conversations yet. Capture or import something to get started.'
                 : 'No matches. Try a different query or clear the filters.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
