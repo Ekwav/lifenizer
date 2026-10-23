@@ -133,7 +133,13 @@ class _DesktopTarget implements BackupTarget {
   Future<void> closePart() async {
     final output = _output;
     _output = null;
-    await output?.close();
+    if (output != null) {
+      try {
+        await output.flush();
+      } finally {
+        await output.close();
+      }
+    }
   }
 
   @override

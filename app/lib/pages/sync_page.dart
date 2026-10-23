@@ -8,6 +8,8 @@ import '../image_widgets.dart';
 import '../widgets/sync_progress_indicator.dart';
 import 'page_frame.dart';
 import '../widgets/device_security_dialog.dart';
+import '../widgets/backup_dialog.dart';
+import '../services/backup_files.dart';
 
 class SyncPage extends StatelessWidget {
   const SyncPage({required this.state, super.key});
@@ -152,6 +154,37 @@ class SyncPage extends StatelessWidget {
             icon: const Icon(Icons.sync),
             label: const Text('Sync now'),
           ),
+          const SizedBox(height: 24),
+          Text('Backups', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const Text(
+            'Save an encrypted backup in files of up to 5 GB each. Keep all '
+            'parts together and store the backup password somewhere safe.',
+          ),
+          if (!backupFilesSupported)
+            const Text(
+              'Use the Android or desktop app to make or restore backups.',
+            )
+          else
+            Wrap(
+              spacing: 12,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: state.busy
+                      ? null
+                      : () => showBackupDialog(context, state),
+                  icon: const Icon(Icons.save_alt),
+                  label: const Text('Make backup'),
+                ),
+                TextButton.icon(
+                  onPressed: state.busy
+                      ? null
+                      : () => showBackupDialog(context, state, restore: true),
+                  icon: const Icon(Icons.restore),
+                  label: const Text('Restore backup'),
+                ),
+              ],
+            ),
         ],
       ),
     );

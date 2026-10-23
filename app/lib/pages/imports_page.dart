@@ -635,6 +635,11 @@ class _ImportsPageState extends State<ImportsPage> {
     bool useSource = false,
   }) async {
     if (!widget.state.isAuthenticated || widget.state.busy) return;
+    if (file.name.toLowerCase().endsWith('.lfb')) {
+      throw const FormatException(
+        'Open Sync → Restore backup and select all .lfb parts together.',
+      );
+    }
     if (!useSource &&
         _desktop &&
         file.path != null &&

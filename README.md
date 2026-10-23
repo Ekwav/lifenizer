@@ -71,7 +71,17 @@ Use KRunner `life Alice holiday` to find conversations, or Ctrl+K inside the app
 Android builds provide launcher Search/Capture/Imports shortcuts, selected-text search,
 `ACTION_SEARCH`, and share targets. See [integration setup](docs/INTEGRATIONS.md).
 
-Drag backups onto **Imports**, or choose a file there. Discord data packages are
+Use **Sync → Make backup** on Android or desktop to save password-encrypted
+`.lfb` files, each at most 5 GB (5,000,000,000 bytes). Keep every part and the
+separate backup password. **Sync → Restore backup** checks all selected parts
+before adding missing library items; existing IDs and local recordings are kept.
+Recordings and uploaded photos are included by default and must be reachable;
+uncheck media for an offline library-only backup. Pending recordings restore as
+saved recordings. Restored photos use online storage; restored audio stays local
+until online sync is enabled. Account credentials and device pairing are excluded.
+The files are streamed on Android and desktop; web and iOS backups are not supported.
+
+Drag legacy JSON backups onto **Imports**, or choose a file there. Discord data packages are
 read locally, including large ZIPs; enable **Watch this Discord export for changes**
 to import replacements automatically while the desktop app is open and unlocked.
 This does not fetch messages from Discord. See [supported imports](docs/IMPORTERS.md).
