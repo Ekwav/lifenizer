@@ -28,9 +28,11 @@ class RecordingService : Service() {
         fun requestStop() { running = false }
     }
     private var wakeLock: PowerManager.WakeLock? = null
+    private var latestStartId = 0
     private val main = Handler(Looper.getMainLooper())
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        latestStartId = startId
         if (intent?.action == STOP) {
             requestStop()
             if (activeId == null) stopSelf(startId)
@@ -124,9 +126,9 @@ class RecordingService : Service() {
             activeId = null
             main.post {
                 onChanged?.invoke()
-                // Notification Stop is a newer service invocation. Stop the
-                // idle service, unless another capture has already started.
-                if (activeId == null) stopSelf()
+                // Include notification Stop, while protecting any newer start
+                // queued by Android but not yet delivered to onStartCommand.
+                if (activeId == null) stopSelf(latestStartId)
             }
         }
     }
