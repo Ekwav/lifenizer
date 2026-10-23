@@ -24,7 +24,7 @@ Self-hosted `/api/auth/register` and `/api/auth/login` use a salted server-side 
 
 The backend stores `SyncEnvelopeRecord` rows as ciphertext. It scopes records by authenticated user and vault, but it does not decrypt payloads.
 
-Clients derive a vault key from user passphrase plus backend-provided vault salt, encrypt normalized entities, then push envelopes through `/api/sync/push`. Other devices pull envelopes from `/api/sync/pull`, decrypt locally, and rebuild the local search index.
+Clients derive a vault key from user passphrase plus backend-provided vault salt, encrypt normalized entities, then push envelopes through `/api/sync/push`. Other devices pull envelopes from `/api/sync/pull`, decrypt locally, and update the local search index.
 
 ## Compute Compromise
 
@@ -71,11 +71,29 @@ Desktop only: `BrowserHistoryWatchService` keeps YouTube/TikTok viewing history 
 
 ## Local persistence and sync
 
-Sembast stores an AES-GCM-encrypted snapshot in the native application support directory
-or browser IndexedDB. The snapshot includes entities, pending ciphertext envelopes,
-last successfully pulled cursor, encrypted session token and an optional microphone draft.
-Only connection preferences and the KDF salt sit outside encryption. Passwords and vault
-keys are never persisted. Lock clears decrypted state, search indexes and decoded image caches.
+The local vault uses an AES-GCM-encrypted core plus conversation buckets. Sembast
+stores the core in the native application support directory or browser IndexedDB;
+native conversation buckets use separate atomic files where supported. The core
+contains participants, relations, pending ciphertext envelopes, the last successfully
+pulled cursor, an encrypted session token and optional microphone-draft metadata.
+Draft audio has its own encrypted record. Connection preferences, storage
+format/count/nonce metadata and the KDF salt sit outside encrypted entity payloads.
+
+A compressed, encrypted prepared search snapshot stores conversation summaries,
+previews and search postings. Cached unlock restores searchable results without
+decrypting conversation bodies. Opening a conversation decrypts its bucket on demand;
+concurrent requests share that load. Saves hydrate dirty buckets before rewriting
+them, preserving unloaded neighbors. Missing, stale or corrupt search snapshots fall
+back to authenticated bucket loading and index rebuilding; the cache is disposable.
+Core nonce references and two-phase bucket saves protect crash recovery. Remote sync
+continues in the background after a valid cached unlock.
+
+Manual unlock still derives and validates the vault key from the passphrase. Paired
+native devices may retain the derived key and its salt alongside their paired
+passphrase in the existing protected OS keyring, password-wrapped or biometric
+credential store. This enables local unlock before remote access refresh; it does not
+write keys to ordinary preferences or vault snapshots. Lock clears decrypted state,
+search indexes and decoded image/audio playback caches.
 
 The client persists outgoing envelopes before attempting a push. Retry IDs are idempotent.
 Push responses never advance the pull cursor; pulls drain 500-envelope pages and advance
@@ -92,8 +110,53 @@ Provider normalization and audio transcription remain explicit plaintext compute
 
 ## Recording storage and details
 
-A finished microphone recording is kept only as an encrypted draft (`audioDraft`: base64 WAV payload plus `recordedAt`) inside the core record of the local vault (the app support directory on native, the browser's IndexedDB on web). It is not a normal audio file, and it leaves the device only when the user sends it to Whisper for transcription; the transcript is then encrypted and synced. The Capture panel states this storage location permanently.
+A stopped microphone recording is an encrypted local draft: the core stores its
+metadata and a separate encrypted record stores the WAV payload. The user can play
+and seek the draft, transcribe it, or **Save recording to library** without
+transcription. Library audio conversations retain encrypted original bytes separately
+from conversation/search data: native files live under the application-support
+`audio/` directory; web originals use the `lifenizer-audio` IndexedDB database. New
+transcribed imports retain their originals too.
+
+Playback loads local audio first. If absent, authenticated `/api/recordings` endpoints
+serve an explicitly stored encrypted copy or request a live encrypted transfer from
+another open, unlocked device holding the original. The main device can therefore
+supply playback without persistent online audio storage. The backend routes opaque
+ciphertext within the authenticated vault; the receiving device decrypts and caches
+it locally. Live relay is temporary and stops when the supplying device locks or
+changes vault. **Store encrypted recording online** explicitly enables persistent
+server storage with quota accounting; disabling it removes the server copy while
+preserving local originals. Transcription remains a separate plaintext compute lane.
+
+Stored recording envelopes are limited to 200 MB and count toward vault quota. Live
+relay waits up to 20 seconds for an unlocked provider and currently requires both
+devices to reach the same backend instance. Playback decodes in memory without
+plaintext temporary files; WAV, MP3, Ogg and FLAC are supported by the bundled decoder.
 
 Right after "Stop and save" (or when Capture opens with a restored draft whose `detailsPrompted` is false, for example after stopping from the Android notification) a bottom sheet asks for a title and people. The details live in the draft (`title`, `participantNames`, `detailsPrompted`, written by `updateAudioDraftDetails`), so they survive navigation, restarts and lock/unlock and are the single source for `importAudioBytes`. Suggestions come from `RecordingSuggestionService` (pure Dart): people are ranked from the last eight weeks by weekday and time-of-day proximity to the recording (same slot last week scores highest, with recency decay), titles from similar earlier audio recordings, and both fields autocomplete case- and diacritic-insensitively over display names, aliases and past titles. Names that match no existing participant are created by the import.
 
-Desktop only, opt-in: `BrowserExtensionReceiverService` (`app/lib/services/browser_extension_receiver_*.dart`, stub on web/mobile) runs a loopback `dart:io` HttpServer (127.0.0.1, default port 47615, disabled by default) so the browser extension (`integrations/browser-extension/`) can push watch history. Auth is a persisted random 32-byte bearer token (constant-time compare, regenerable); requests with a Host other than `127.0.0.1:<port>`/`localhost:<port>` or an Origin other than `chrome-extension://`/`moz-extension://` get 403, bodies are capped at 8 MB while streaming. `GET /v1/ping` and `POST /v1/watch-history` (503 `locked` without an unlocked vault, 400 on malformed input, otherwise `{"accepted","imported"}`). Visits are classified with the same `classifyVisit`/`buildViewingBatches` path as the history watcher and imported one request at a time. `timePrecision:"day"` visits (local-noon placeholders) are dropped when the video already has a watch on that local day in the vault or in the same request; re-sending the same day visit is idempotent because the watch second (`<platform>:<id>@<unix seconds>`) is identical. Known gap: an exact visit that arrives later (history watcher) next to an earlier day-precision placeholder is stored as a second watch.
+## Import setup and browser extension
+
+Imports starts with an automatic file picker/drop target and a searchable adapter
+catalogue. Numbered setup instructions and existing configuration panels open only
+for the selected adapter. Local Discord packages remain available without provider
+credentials. YouTube, TikTok, WhatsApp Web and Discord Web each have a separate
+extension setup entry with installation, pairing and provider-specific instructions.
+
+Desktop only, opt-in: `BrowserExtensionReceiverService` listens on loopback
+(127.0.0.1, default port 47615) for the extension in `integrations/browser-extension/`.
+A regenerable random bearer token, Host/extension-Origin checks and an 8 MB streaming
+body limit protect `GET /v1/ping`, `POST /v1/watch-history` and `POST /v1/messages`.
+A locked vault rejects imports. Watch-history batches reuse the local browser-history
+classification path. Message batches normalize stable platform thread/message IDs
+and merge through the usual encrypted import path.
+
+YouTube/TikTok collection requires configured account IDs or handles verified against
+signed-in self-account context. Account-bound pending history is held after account
+changes; legacy unverified records stay unsent. Separately opted-in WhatsApp/Discord
+observers use visible DOM only and baseline existing messages on attachment/navigation.
+They collect newly rendered messages in open conversations, without history scrolling,
+cookie/token access or send actions. The extension validates runtime senders and keeps
+a deduplicated local outbox until delivery succeeds. Unsupported layouts fail visibly;
+logged-in live-site validation remains outstanding. See [IMPORTERS.md](IMPORTERS.md)
+and the [extension guide](../integrations/browser-extension/README.md).

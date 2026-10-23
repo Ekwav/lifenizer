@@ -4,6 +4,12 @@ This page describes all currently supported import sources in Lifenizer Next, in
 
 For Telegram, WhatsApp and Lifenizer exports, use **Imports → Choose backup or export** or share the file to Lifenizer on Android. See [the share and file-picker guide](#android-share-target-and-file-picker) below.
 
+The Imports page starts with automatic file selection and drag/drop. Use **Find an
+importer** to search available sources; selecting an adapter opens its setup steps
+and configuration instead of mounting every form at once. **Browser extension** lists
+YouTube, TikTok, WhatsApp Web and Discord Web separately, with installation and pairing
+instructions for each. File-based exports remain separate from extension capture.
+
 ## Endpoints
 
 - `GET /api/imports/capabilities`
@@ -75,7 +81,7 @@ Notes:
 
 ### email (IMAP)
 
-Use **Imports → Connect email** in the app. See the [email setup guide](EMAIL.md)
+Use **Imports → Email (IMAP)** in the app. See the [email setup guide](EMAIL.md)
 for credentials, automatic checks and TLS configuration.
 
 Required:
@@ -248,7 +254,7 @@ drag and drop, Android share target, folder watch):
   `.html`, then the TikTok files; shallowest path wins) instead of the first text
   entry; only that entry is uploaded.
 
-**Imports → Viewing history** explains the exports (Google Takeout → "YouTube and
+**Imports → Browser & watch history files** explains the exports (Google Takeout → "YouTube and
 YouTube Music" → History → JSON; TikTok → Settings → Download your data → JSON),
 offers a file picker and summarises videos imported / already present / entries
 without a video link. Watched videos are category **Consumed** (see SEARCH.md).
@@ -272,7 +278,7 @@ TikTok": there is no video download or speech/OCR pipeline.
 Neither the YouTube Data API (watch history was removed in 2016) nor TikTok offers a
 watch-history API, so OAuth is not possible. After an initial Takeout / TikTok export, the
 desktop app can instead read the **local browser history database**:
-**Imports → Viewing history → Keep updated from browser history**.
+**Imports → Browser & watch history files → Keep updated from browser history**.
 
 - **Platforms**: Linux, macOS, Windows. Android, iOS and web show a note: they cannot read
   browser history, and videos watched in the YouTube or TikTok phone apps cannot be read at all
@@ -402,7 +408,7 @@ message mentions or thread titles. Known DM/group recipients use exported IDs.
 
 Enable **Watch this Discord export for changes** to import again when you
 replace the chosen ZIP with a newer export, while the desktop app is open and
-unlocked. Stop watching from Imports. The watched path is stored in the OS
+unlocked. Stop watching from **Imports → Discord data package**. The watched path is stored in the OS
 keyring, scoped to the account; message content stays in the encrypted vault.
 This watches a local export and does not fetch new messages from Discord.
 
@@ -411,10 +417,13 @@ Continuous Discord access requires a separately authorized integration.
 [restricted scopes](https://docs.discord.com/developers/topics/oauth2);
 personal-token [self-bot automation is prohibited](https://support.discord.com/hc/en-us/articles/115002192352-Automated-User-Accounts-Self-Bots).
 A bot can ingest channels it is permitted to access, with the required gateway
-intents and permissions. **Imports → Discord bot: history & live messages**
+intents and permissions. **Imports → Discord bot**
 connects an authorized bot on a native client, reads channel history, and indexes
 live messages and their real authors. See [Discord bot setup](DISCORD.md) for
 server/channel selection, counterpart identities, credentials and limitations.
+
+For visible new messages in open chats, **Imports → Browser extension → Discord Web**
+offers a separate opt-in DOM observer; it does not fetch channel history or use a bot token.
 
 ### discord API mode
 
@@ -450,6 +459,27 @@ Optional request metadata:
   values more than 1 day in the future, are rejected with a 400 naming `metadata.recordedAt`.
   Applies to both the base64 audio payload path and the direct-`text` transcript path.
 
+### audio playback and saved originals
+
+**Capture** offers play/pause and seeking for a stopped draft. **Save recording to
+library** retains the original as an audio conversation without requiring
+transcription. New transcribed audio imports also keep their original file bytes.
+Open an audio conversation to play or seek the original. Native originals are
+encrypted in the app's private application-support `audio/` directory; web originals
+are encrypted in the `lifenizer-audio` IndexedDB database, outside the search snapshot.
+
+Playback uses the local copy first. Another device can request an encrypted live
+transfer while the main device holding the original is running and unlocked in the
+same vault. This relay does not persist the recording online. If that device is
+unavailable and no online copy exists, playback reports unavailable audio.
+
+The per-recording **Store encrypted recording online** switch explicitly uploads
+ciphertext so other devices can play when the main device is offline. Online storage
+counts toward the account quota. Turning it off deletes the server copy and retains
+local originals. Conversation metadata and transcripts sync normally; original audio
+is not uploaded persistently by default. Transcription still sends plaintext audio
+to the configured Whisper service.
+
 ### correcting transcription for TAB
 
 Open an audio conversation and choose **Correct for TAB** beside a transcript sentence.
@@ -461,8 +491,9 @@ immediately retrain the model. A successful submission updates the encrypted tra
 and its search index, retaining the provider contribution reference.
 
 New audio imports retain the original recording in a separate encrypted device-local
-cache, outside the search snapshot. This cache does not sync. For older imports or
-another device, use **Attach original WAV** (16 kHz mono PCM, up to 64 MiB). Segment
+cache, outside the search snapshot. Persistent online storage is opt-in; playback can also retrieve an original from
+an unlocked live device. For older imports or when no original is available, use
+**Attach original WAV** (16 kHz mono PCM, up to 64 MiB). Segment
 end timestamps from Whisper are preserved; missing ends use the next segment's start,
 or the recording's end. Unusable sentence boundaries require re-transcription before
 contributing. Each contribution is limited to two minutes.
@@ -634,8 +665,9 @@ The app detects these readable exports from their contents:
 - Lifenizer JSON with `conversations` and `segments`. Snapshots that also include
   a top-level participant list resolve participant IDs to names.
 
-For a ZIP with an ambiguous name, or another supported format, enter its source
-in the form and use **Choose file for this source**. Unknown JSON and CSV require
+For a ZIP with an ambiguous name, or another supported format, search for its
+adapter and use **Choose file for this source**. **Other source / pasted export**
+also accepts an explicit source adapter name. Unknown JSON and CSV require
 an explicit source; they are not silently stored as chat text. The import result
 shows the detected source, added conversation count, and duplicate count.
 
@@ -669,18 +701,44 @@ original Lifenizer vault instead.
 }
 ```
 
-## Browser extension (YouTube and TikTok watch history)
+## Browser extension: watch history and new web messages
 
-`integrations/browser-extension/` is a Manifest V3 extension (Chromium and Firefox) that collects watch
-history from the logged-in YouTube and TikTok history pages and delivers it to the desktop app over loopback
-instead of Google Takeout. Its fallback "Download export" writes the Takeout `watch-history.json` and TikTok
-`user_data.json` shapes the existing parsers read. See its README for install and limitations.
+`integrations/browser-extension/` is a Manifest V3 extension for Chromium and Firefox.
+Open **Imports → Browser extension**, select YouTube, TikTok, WhatsApp Web or Discord
+Web, and follow its installation and pairing steps. The desktop receiver is disabled
+by default. Enable it, enter its port/token in extension Settings and test the connection.
+Keep the desktop app open and unlocked. See the [extension guide](../integrations/browser-extension/README.md)
+for browser installation and supported layouts; live logged-in browser validation
+remains outstanding.
 
-Loopback contract (desktop app side), port default 47615, header `Authorization: Bearer <token>`, requests come
-from the extension origin:
+YouTube and TikTok sync requires an expected account ID or `@handle` in extension
+Settings. Collection verifies signed-in self-account context and fails closed when it
+is unavailable or differs. Queued visits are account-bound; changing account settings
+holds prior pending data, and legacy unverified visits remain unsent with a warning.
+The fallback **Download export** writes Takeout `watch-history.json` and TikTok
+`user_data.json` for the existing file importers.
 
-- `GET http://127.0.0.1:<port>/v1/ping` returns 200 `{"app":"lifenizer","unlocked":true|false}`, 401 on a bad token.
-- `POST http://127.0.0.1:<port>/v1/watch-history`, `Content-Type: application/json`:
+WhatsApp Web and Discord Web capture are separate opt-ins. A visible-DOM observer
+baselines the existing conversation on attachment/navigation and captures newly
+rendered incoming/outgoing messages with stable provider IDs, timestamps, visible
+author information and source links where available. It does not scrape old history,
+auto-scroll, read cookies/authentication tokens or send messages. Unsupported layouts
+report an error instead of claiming a successful import. WhatsApp requires supported
+numeric timestamps and a declared UI locale; its own-account phone identity is not
+reliably exposed in chat DOM, so use separate browser profiles when switching accounts.
+
+Unacknowledged messages remain in the extension's deduplicated local outbox when the
+app is offline or locked. New captures, browser startup, settings changes or **Sync
+now** retry delivery. Disabling a provider stops its queued message delivery. Extension
+storage contains collected plaintext; **Delete collected data** clears the outboxes.
+
+Loopback requests use default port 47615, `Authorization: Bearer <token>` and an
+extension origin. Runtime sender/type/frame validation prevents ordinary pages from
+instructing background requests. The receiver checks Host/Origin, caps streamed bodies
+at 8 MB, and rejects locked-vault imports.
+
+- `GET http://127.0.0.1:<port>/v1/ping` returns `{"app":"lifenizer","unlocked":true|false}`.
+- `POST /v1/watch-history`, at most 2000 visits per request:
 
 ```json
 {"source":"lifenizer-extension","version":1,"visits":[
@@ -688,9 +746,22 @@ from the extension origin:
 ]}
 ```
 
-  `timePrecision` is `exact` or `day` (YouTube history only has day headers; `time` is then local noon).
-  At most 2000 visits per request. Responses: 200 `{"accepted":N,"imported":M}`, 401 bad token,
-  503 `{"error":"locked"}` while the vault is locked, 413 above 8 MB.
+`timePrecision` is `exact` or `day`; YouTube day headers use local noon. Successful
+responses are `{"accepted":N,"imported":M}`.
+
+- `POST /v1/messages`, receiver limit 500 messages; the extension delivers batches of 25:
+
+```json
+{"source":"lifenizer-extension","version":1,"messages":[
+  {"platform":"discord","threadId":"123","threadTitle":"Friends","id":"456","text":"Hello","createdAt":"2026-10-23T12:00:00Z","authorName":"Alice","sourceUrl":"https://discord.com/channels/@me/123/456"}
+]}
+```
+
+`platform` is `whatsapp` or `discord`; `authorId`, `authorName` and `sourceUrl` are
+optional. Raw provider thread/message IDs preserve stable import identities. A
+successful message response is `{"ok":true,"imported":N}`, where `N` counts changed
+conversations. Both import routes return 401 for a bad token, 503 while locked or
+busy, and 413 for oversized bodies. Failed batches remain unsent.
 
 ## Security Notes
 
