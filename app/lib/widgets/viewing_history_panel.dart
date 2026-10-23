@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../services/export_file_reader.dart';
 import '../services/transcript_enrichment.dart';
+import 'browser_extension_section.dart';
 import 'browser_history_section.dart';
 
 /// Imports panel for YouTube / TikTok watch history and transcript enrichment.
@@ -187,6 +188,10 @@ class _ViewingHistoryPanelState extends State<ViewingHistoryPanel> {
                 Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
               BrowserHistorySection(
                 service: widget.state.browserHistory,
+                signedIn: widget.state.isAuthenticated,
+              ),
+              BrowserExtensionSection(
+                service: widget.state.browserExtension,
                 signedIn: widget.state.isAuthenticated,
               ),
             ],

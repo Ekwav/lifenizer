@@ -21,6 +21,7 @@ Future<void> main([List<String> arguments = const []]) async {
   appState.documentImport.start();
   appState.cameraRoll.start();
   appState.browserHistory.start();
+  appState.browserExtension.start();
   installE2eBridge(appState);
   unawaited(ShareIntentService.instance.start(appState));
   await QuickActionService.instance.start(appState, arguments: arguments);

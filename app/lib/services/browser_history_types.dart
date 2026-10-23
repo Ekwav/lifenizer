@@ -30,6 +30,7 @@ class VideoVisit {
     required this.title,
     required this.time,
     this.music = false,
+    this.channel,
   });
   final String platform; // 'youtube' | 'tiktok'
   final String id;
@@ -37,6 +38,9 @@ class VideoVisit {
   final String title;
   final DateTime time;
   final bool music;
+
+  /// Channel name when the source knows it (browser extension), YouTube only.
+  final String? channel;
 }
 
 /// Microseconds between 1601-01-01 (Chromium/Windows epoch) and 1970-01-01.
@@ -183,6 +187,10 @@ List<ViewingImportBatch> buildViewingBatches(
                   'title': v.title,
                   'titleUrl': v.url,
                   'time': _isoSeconds(v.time),
+                  if (v.channel != null && v.channel!.isNotEmpty)
+                    'subtitles': [
+                      {'name': v.channel},
+                    ],
                 },
             ]
           : {

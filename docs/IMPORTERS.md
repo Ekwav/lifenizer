@@ -669,6 +669,29 @@ original Lifenizer vault instead.
 }
 ```
 
+## Browser extension (YouTube and TikTok watch history)
+
+`integrations/browser-extension/` is a Manifest V3 extension (Chromium and Firefox) that collects watch
+history from the logged-in YouTube and TikTok history pages and delivers it to the desktop app over loopback
+instead of Google Takeout. Its fallback "Download export" writes the Takeout `watch-history.json` and TikTok
+`user_data.json` shapes the existing parsers read. See its README for install and limitations.
+
+Loopback contract (desktop app side), port default 47615, header `Authorization: Bearer <token>`, requests come
+from the extension origin:
+
+- `GET http://127.0.0.1:<port>/v1/ping` returns 200 `{"app":"lifenizer","unlocked":true|false}`, 401 on a bad token.
+- `POST http://127.0.0.1:<port>/v1/watch-history`, `Content-Type: application/json`:
+
+```json
+{"source":"lifenizer-extension","version":1,"visits":[
+  {"url":"https://www.youtube.com/watch?v=ID","title":"...","channel":"optional","time":"2026-10-05T10:42:00.000Z","timePrecision":"exact"}
+]}
+```
+
+  `timePrecision` is `exact` or `day` (YouTube history only has day headers; `time` is then local noon).
+  At most 2000 visits per request. Responses: 200 `{"accepted":N,"imported":M}`, 401 bad token,
+  503 `{"error":"locked"}` while the vault is locked, 413 above 8 MB.
+
 ## Security Notes
 
 - Request-scoped provider credentials are not persisted by the backend.

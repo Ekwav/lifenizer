@@ -435,6 +435,17 @@ class BrowserHistoryWatchService extends ChangeNotifier
     }
   }
 
+  /// Runs the optional automatic transcript fetch for videos imported by
+  /// another source (the browser extension receiver), sharing the daily limit.
+  Future<void> afterExternalImport(int newVideos) async {
+    if (!_autoTranscripts || _identity == null || newVideos <= 0) return;
+    try {
+      await _autoFetch(newVideos);
+    } catch (_) {}
+    await _trySave();
+    _notify();
+  }
+
   Future<void> _autoFetch(int newVideos) async {
     final today = _today();
     if (_day != today) {

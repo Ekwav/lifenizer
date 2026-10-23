@@ -45,4 +45,5 @@ class BrowserHistoryWatchService extends ChangeNotifier {
   Future<void> setAutoTranscripts(bool value) async {}
   Future<void> setTranscriptsPerDay(int value) async {}
   Future<void> check() async {}
+  Future<void> afterExternalImport(int newVideos) async {}
 }

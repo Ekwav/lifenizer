@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "Lifenizer History Sync",
+  "version": "0.1.0",
+  "description": "Collects your YouTube and TikTok watch history from the logged-in history pages and hands it to the Lifenizer desktop app on this computer.",
+  "permissions": ["storage", "alarms", "tabs"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://www.tiktok.com/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "scripts": [
+      "src/lib/headers.js",
+      "src/lib/youtube.js",
+      "src/lib/tiktok.js",
+      "src/lib/payload.js",
+      "src/lib/sync.js",
+      "src/background.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*", "https://www.tiktok.com/*"],
+      "js": ["src/content/hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://www.youtube.com/*", "https://www.tiktok.com/*"],
+      "js": [
+        "src/lib/headers.js",
+        "src/lib/youtube.js",
+        "src/lib/tiktok.js",
+        "src/lib/payload.js",
+        "src/content/collector.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": { "default_popup": "popup/popup.html", "default_title": "Lifenizer History Sync" },
+  "options_ui": { "page": "options/options.html", "open_in_tab": true },
+  "browser_specific_settings": {
+    "gecko": { "id": "history-sync@lifenizer.app", "strict_min_version": "140.0", "data_collection_permissions": { "required": ["browsingActivity"] } }
+  },
+  "minimum_chrome_version": "111"
+}
