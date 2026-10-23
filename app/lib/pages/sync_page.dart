@@ -38,8 +38,14 @@ class SyncPage extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             paired
-                ? 'Devices connected with your link share this encrypted vault. Changes sync automatically while the app is open.'
-                : 'Use the same API URL, account and vault passphrase on your computer and phone. Changes sync automatically while the app is open.',
+                ? 'Devices connected with your link share this encrypted vault.'
+                : 'Use the same API URL, account and vault passphrase on your computer and phone.',
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Changes save on this device immediately and upload in batches '
+            'after at least 20 seconds while the app is open. Sync now sends '
+            'waiting changes immediately.',
           ),
           if (paired) ...[
             const SizedBox(height: 12),

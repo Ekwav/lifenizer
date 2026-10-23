@@ -340,7 +340,7 @@ extension VaultImports on LifenizerAppState {
           );
         }
       }
-      status = '${normalized.message} Encrypted and synced.';
+      status = '${normalized.message} Saved encrypted; queued for sync.';
     });
   }
 

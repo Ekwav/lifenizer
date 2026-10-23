@@ -96,7 +96,14 @@ aliases and conversation references sync encrypted; future imports reuse the per
 Encrypted local snapshots and an encrypted retry queue survive app restarts. Paired
 devices unlock from their OS keyring, including offline. Manual accounts provide
 **Unlock this device offline** after an initial online unlock.
-Sync runs on resume and every 30 seconds while active. Capture typed text offline;
+Sync checks on resume and every 30 seconds while active. Edits save to the
+encrypted local outbox immediately; automatic uploads collect at least 20 seconds
+of changes (normally 20–50 seconds until the next check). Repeated edits to the
+same item coalesce, and edits made during an upload wait for the next batch.
+**Sync now** sends waiting changes immediately. Sync envelopes currently use
+SQLite on the server; there is no R2/S3 object-storage adapter. Photos and explicitly
+enabled online recordings use separate file uploads, outside the change batches.
+Capture typed text offline;
 recordings are saved encrypted locally until you explicitly send them to Whisper.
 Provider imports, transcription and relation extraction require the configured server;
 local Discord ZIP imports can be saved offline and synced later.
