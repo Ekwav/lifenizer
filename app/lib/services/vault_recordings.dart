@@ -133,6 +133,79 @@ extension VaultRecordings on LifenizerAppState {
     return encrypted;
   }
 
+  /// Acknowledges a service capture only after both audio and metadata persist.
+  Future<void> _importPendingRecording(
+    List<int> bytes,
+    DateTime recordedAt,
+    String captureId,
+  ) async {
+    if (busy) throw StateError('Wait for the current vault operation.');
+    if (bytes.isEmpty || captureId.isEmpty) {
+      throw StateError('The recording is empty.');
+    }
+    final api = _requireApi();
+    final identity = recordingIdentity;
+    _checkRecordingSession(api, identity);
+    if (_localVaultKey == null) throw StateError('No local vault is open.');
+    await _run(() async {
+      final id = _uuid.v5(
+        Namespace.url.value,
+        'lifenizer:capture:${session!.vaultId}:$captureId',
+      );
+      await _cacheCorrectionAudio(id, bytes);
+      _checkRecordingSession(api, identity);
+      final existing = conversations.where((c) => c.id == id).firstOrNull;
+      final conversation = existing == null
+          ? Conversation(
+              id: id,
+              title: 'Voice recording',
+              source: 'audio',
+              participantIds: [],
+              segments: [],
+              artifactNames: ['recording.wav'],
+              startedAt: recordedAt,
+              endedAt: recordedAt,
+            )
+          : await loadConversation(id);
+      _checkRecordingSession(api, identity);
+      if (existing == null) conversations.add(conversation);
+      _markConversationChanged(id);
+      // Also persist on retry: a previous write may have failed after updating
+      // memory, or completed before Android acknowledged the capture.
+      await _pushEntity('conversation', id, conversation.toJson());
+      _checkRecordingSession(api, identity);
+      status = 'Recording saved encrypted and added to search.';
+    });
+    if (error != null) throw StateError(error!);
+  }
+
+  /// Transcription is explicit because it sends audio to the configured server.
+  Future<void> _transcribeRecording(String id) async {
+    if (busy) throw StateError('Wait for the current vault operation.');
+    final api = _requireApi();
+    final identity = recordingIdentity;
+    _checkRecordingSession(api, identity);
+    final conversation = await loadConversation(id);
+    if (conversation.source != 'audio' || conversation.segments.isNotEmpty) {
+      throw StateError('Choose a recording without a transcript.');
+    }
+    final audio = await loadRecordingAudio(id);
+    _checkRecordingSession(api, identity);
+    if (busy) throw StateError('Wait for the current vault operation.');
+    await importAudioBytes(
+      bytes: audio.bytes,
+      fileName: audio.fileName,
+      mimeType: audio.contentType,
+      title: conversation.title,
+      participantNames: conversation.participantIds
+          .map(participantName)
+          .join(','),
+      recordedAt: conversation.startedAt,
+      recordingId: id,
+    );
+    if (error != null) throw StateError(error!);
+  }
+
   /// Keeps a pending microphone recording without requiring transcription.
   Future<bool> retainAudioDraft() async {
     var retained = false;

@@ -294,6 +294,7 @@ extension VaultImports on LifenizerAppState {
     String? participantNames,
     String? language,
     DateTime? recordedAt,
+    String? recordingId,
   }) async {
     if (bytes.isEmpty) return;
     status = 'Transcribing audio… this can take a few minutes.';
@@ -301,6 +302,7 @@ extension VaultImports on LifenizerAppState {
     _notifyChanged();
     await _run(() async {
       final api = _requireApi();
+      final identity = recordingIdentity;
       final metadata = <String, String>{
         if (language != null && language.trim().isNotEmpty)
           'language': language.trim(),
@@ -325,10 +327,11 @@ extension VaultImports on LifenizerAppState {
         ),
         timeout: const Duration(minutes: 10),
       );
+      if (recordingId != null) _checkRecordingSession(api, identity);
       final previousIds = conversations
           .map((conversation) => conversation.id)
           .toSet();
-      await _ingestNormalizedImport(normalized);
+      await _ingestNormalizedImport(normalized, recordingId: recordingId);
       for (final conversation in conversations) {
         if (conversation.source == 'audio' &&
             !previousIds.contains(conversation.id)) {
@@ -520,7 +523,14 @@ extension VaultImports on LifenizerAppState {
   Future<int> _ingestNormalizedImport(
     NormalizedImportResult result, {
     String? fingerprint,
+    String? recordingId,
   }) => batchVaultChanges(() async {
+    if (recordingId != null &&
+        (result.conversations.length != 1 ||
+            result.conversations.single.source != 'audio' ||
+            !_knownRecording(recordingId))) {
+      throw StateError('The transcript does not match this recording.');
+    }
     var changed = 0;
     final receipts = conversations
         .map((c) => c.importFingerprint)
@@ -564,7 +574,11 @@ extension VaultImports on LifenizerAppState {
       final threadKey = normalized.sourceThreadId == null
           ? null
           : '${normalized.source}\u0000${normalized.sourceThreadId}';
-      final previousIndex = threadKey == null ? null : threads[threadKey];
+      final previousIndex = recordingId != null
+          ? conversations.indexWhere((c) => c.id == recordingId)
+          : threadKey == null
+          ? null
+          : threads[threadKey];
       final previous = previousIndex == null
           ? null
           : await loadConversation(conversations[previousIndex].id);

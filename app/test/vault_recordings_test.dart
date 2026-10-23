@@ -107,6 +107,30 @@ void main() {
           if (path == '/api/imports/capabilities') {
             return http.Response('[]', 200);
           }
+          if (path == '/api/imports/audio') {
+            final input = jsonDecode(request.body) as Map<String, dynamic>;
+            return http.Response(
+              jsonEncode({
+                'source': 'audio',
+                'message': 'Transcribed recording',
+                'participants': [],
+                'conversations': [
+                  {
+                    'source': 'audio',
+                    'title': input['title'],
+                    'participantNames': [],
+                    'segments': [
+                      {
+                        'text': 'Remember the telescope tomorrow',
+                        'createdAt': input['metadata']['recordedAt'],
+                      },
+                    ],
+                  },
+                ],
+              }),
+              200,
+            );
+          }
           if (path == '/api/sync/push') {
             return http.Response('{"cursor":0}', 200);
           }
@@ -209,6 +233,70 @@ void main() {
       expect(state.conversations.single.metadata['recordingSync'], 'false');
       await state.setRecordingOnlineSync(recording.id, false);
       expect(state.conversations.single.metadata['recordingSync'], 'false');
+    },
+  );
+
+  test(
+    'service capture persists once across unlock and preserves a draft',
+    () async {
+      final state = await device();
+      final recordedAt = DateTime.utc(2026, 10, 20);
+      await state.saveAudioDraft([9, 8, 7], recordedAt);
+      await state.importPendingRecording([1, 2, 3], recordedAt, 'native-1');
+      final id = state.conversations.single.id;
+      expect(state.search('Voice recording').single.id, id);
+      expect(await state.loadAudioDraftPayload(), [9, 8, 7]);
+      expect(online, isEmpty);
+      expect(requests.where((r) => r.contains('/api/imports/audio')), isEmpty);
+      await state.lock();
+      expect(state.isAuthenticated, false);
+      await expectLater(
+        state.importPendingRecording([1, 2, 3], recordedAt, 'native-2'),
+        throwsStateError,
+      );
+      await state.login(
+        baseUrl: _base,
+        email: _email,
+        passphrase: _phrase,
+        offline: true,
+      );
+      await state.waitForBackgroundSync();
+      expect(state.error, isNull);
+      expect(state.conversations.single.id, id);
+      expect((await state.loadRecordingAudio(id)).bytes, [1, 2, 3]);
+      await state.importPendingRecording([1, 2, 3], recordedAt, 'native-1');
+      expect(state.conversations.single.id, id);
+      expect(state.conversations.single.startedAt, recordedAt);
+      expect(await state.loadAudioDraftPayload(), [9, 8, 7]);
+      state.busy = true;
+      await expectLater(
+        state.importPendingRecording([1], recordedAt, 'native-2'),
+        throwsStateError,
+      );
+      state.busy = false;
+    },
+  );
+
+  test(
+    'saved capture gains a searchable transcript without duplicating audio',
+    () async {
+      final state = await device();
+      final recordedAt = DateTime.utc(2026, 10, 20);
+      await state.importPendingRecording([1, 2, 3], recordedAt, 'native-1');
+      final id = state.conversations.single.id;
+      await state.transcribeRecording(id);
+      expect(state.conversations.single.id, id);
+      expect(state.conversations.single.startedAt, recordedAt);
+      expect(state.search('telescope').single.id, id);
+      expect((await state.loadRecordingAudio(id)).bytes, [1, 2, 3]);
+      // A recovery acknowledgement retry must preserve the new transcript.
+      await state.importPendingRecording([1, 2, 3], recordedAt, 'native-1');
+      expect(state.search('telescope').single.id, id);
+      expect(
+        requests.where((r) => r.contains('/api/imports/audio')),
+        hasLength(1),
+      );
+      await expectLater(state.transcribeRecording(id), throwsStateError);
     },
   );
 

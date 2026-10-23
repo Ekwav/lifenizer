@@ -143,6 +143,7 @@ class LifenizerAppState extends ChangeNotifier {
   // next save rewrites them there, then removes the old records.
   int? _chunkMigrationFrom;
   String rememberedEmail = '';
+  String pendingSearchQuery = '';
   String? _localVaultKey;
   final List<SyncEnvelope> _pendingSync = [];
   final DateTime Function() _syncClock;
@@ -1547,6 +1548,16 @@ class LifenizerAppState extends ChangeNotifier {
       status = 'Artifact metadata saved encrypted; queued for sync';
     });
   }
+
+  /// Imports a service capture only after unlock; completion permits deletion
+  /// of the Android recovery copy.
+  Future<void> importPendingRecording(
+    List<int> bytes,
+    DateTime recordedAt,
+    String captureId,
+  ) => _importPendingRecording(bytes, recordedAt, captureId);
+
+  Future<void> transcribeRecording(String id) => _transcribeRecording(id);
 
   Future<void> addRecordingConversation({
     required String title,
