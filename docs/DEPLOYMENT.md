@@ -53,8 +53,9 @@ To restore, stop the API and move its current `data`, `.env`, and `compose.yaml`
 into a separate private recovery directory. Extract the selected archive back into
 `~/dev/lifenizer-next`, then run `docker compose up -d` there with the archived image
 available. Keep its existing `whisper` directory in place. Copying a live SQLite file without its WAL is not a
-valid backup. App exports are separate: use the app's import/share flow to import
-conversation backups, rather than extracting them into the server data directory.
+valid backup. App exports are separate: use **Sync → Make backup** and
+**Sync → Restore backup** for encrypted `.lfb` parts. Legacy conversation JSON
+backups use **Imports**. Do not extract app exports into the server data directory.
 
 ## Private transcription relay
 
