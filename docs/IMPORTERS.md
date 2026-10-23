@@ -343,13 +343,34 @@ store, like the document folder watch.
 
 ### paperless
 
+Open **Imports → Paperless**. An API token is an account access key that lets
+Lifenizer read your Paperless documents without asking for your Paperless password.
+
+1. Select **Open Paperless** and sign in to the account whose documents you want
+   to import.
+2. Open the account menu in the top-right corner, then **My Profile**.
+3. Copy the **API token**. If there is no token yet, use the circular-arrow button
+   to create one. Reuse an existing token: regenerating it replaces the token used
+   by other integrations too.
+4. Return to Lifenizer, paste the token and select **Connect & import**. Leave
+   **Remember on this device** enabled to check for updates every five minutes
+   while the vault is unlocked.
+
+The link opens your configured Paperless installation, including any deployment
+subpath. My Profile is a dialog rather than a separate page, so follow the menu
+steps after opening Paperless. If a connection attempt fails, the token stays in
+the field so you can correct it and retry. After a successful connection, setup
+is replaced by update and disconnect controls.
+
+If no Paperless address is configured, the setup panel explains what the
+Lifenizer server administrator needs to set and provides a retry button.
+
 Set server configuration `Imports:Paperless:BaseUrl` to the trusted Paperless
 installation. Compose maps `LIFENIZER_PAPERLESS_URL` to that setting; no guessed
 server URL is used. Request endpoint overrides and HTTP redirects are rejected.
 `GET /api/imports/paperless/settings` requires authentication and returns
-`{configured,baseUrl}` without credentials. In Imports, connect Paperless using
-its API token after checking this configured endpoint. The backend uses that
-token only for the current request; optional remembered credentials remain in
+`{configured,baseUrl}` without credentials. The backend uses the API token only
+for the current request; optional remembered credentials remain in
 the device OS credential store.
 
 Required:
