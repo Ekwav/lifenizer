@@ -267,7 +267,10 @@ extension VaultRecordings on LifenizerAppState {
     return retained;
   }
 
-  /// Online persistence is opt-in; the relay never enables it.
+  /// A device-local request waiting for confirmed online storage or removal.
+  bool? pendingRecordingOnlineSync(String id) => _pendingRecordingSync[id];
+
+  /// Online persistence is opt-in; intent survives offline requests and restart.
   Future<void> setRecordingOnlineSync(String id, bool enabled) async {
     if (busy) throw StateError('Wait for the current vault operation.');
     final api = _requireApi();
@@ -277,26 +280,62 @@ extension VaultRecordings on LifenizerAppState {
       throw StateError('Recording not found in this vault.');
     }
     await _run(() async {
-      if (enabled) {
-        final audio = await loadRecordingAudio(id);
-        _checkRecordingSession(api, identity);
-        final encrypted = await _sealRecording(id, audio);
-        _checkRecordingSession(api, identity);
-        await api.putRecording(id, encrypted);
-      } else {
-        await api.deleteRecording(id);
+      // Background sync may already be running when the switch is pressed.
+      try {
+        await _syncInFlight;
+      } catch (_) {
+        // Keep the new request even if the preceding sync was offline.
       }
       _checkRecordingSession(api, identity);
-      final current = await loadConversation(id);
-      _checkRecordingSession(api, identity);
-      final updated = Conversation.fromJson({
-        ...current.toJson(),
-        'metadata': {...current.metadata, 'recordingSync': '$enabled'},
-      });
-      conversations[conversations.indexOf(current)] = updated;
-      _markConversationChanged(id);
-      await _pushEntity('conversation', id, updated.toJson());
+      _pendingRecordingSync[id] = enabled;
+      await _persistLocal();
+      _notifyChanged();
+      await _syncRecording(id, enabled);
     });
     if (error != null) throw StateError(error!);
+  }
+
+  Future<bool> _retryRecordingSync() async {
+    final pending = _pendingRecordingSync.entries.toList();
+    Object? failure;
+    for (final entry in pending) {
+      try {
+        await _syncRecording(entry.key, entry.value);
+      } catch (exception) {
+        failure ??= exception;
+      }
+    }
+    if (failure != null) throw failure;
+    if (pending.isNotEmpty) syncError = null;
+    return pending.isNotEmpty;
+  }
+
+  Future<void> _syncRecording(String id, bool enabled) async {
+    final api = _requireApi();
+    final identity = recordingIdentity;
+    _checkRecordingSession(api, identity);
+    if (enabled) {
+      final audio = await loadRecordingAudio(id);
+      _checkRecordingSession(api, identity);
+      final encrypted = await _sealRecording(id, audio);
+      _checkRecordingSession(api, identity);
+      await api.putRecording(id, encrypted);
+    } else {
+      await api.deleteRecording(id);
+    }
+    _checkRecordingSession(api, identity);
+    final current = await loadConversation(id);
+    _checkRecordingSession(api, identity);
+    final updated = Conversation.fromJson({
+      ...current.toJson(),
+      'metadata': {...current.metadata, 'recordingSync': '$enabled'},
+    });
+    conversations[conversations.indexOf(current)] = updated;
+    _markConversationChanged(id);
+    await _pushEntity('conversation', id, updated.toJson());
+    _checkRecordingSession(api, identity);
+    _pendingRecordingSync.remove(id);
+    await _persistLocal();
+    _notifyChanged();
   }
 }

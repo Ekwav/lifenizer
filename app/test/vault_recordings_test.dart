@@ -64,6 +64,7 @@ void main() {
   Future<void>? fetchGate;
   Completer<void>? fetching;
   var databases = 0;
+  var failRecordingWrites = false;
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('lifenizer-recordings-');
@@ -75,6 +76,7 @@ void main() {
     requests = [];
     fetchGate = null;
     fetching = null;
+    failRecordingWrites = false;
   });
   tearDown(() async {
     crypto.lock();
@@ -140,6 +142,9 @@ void main() {
           if (path.startsWith('/api/recordings/')) {
             expect(request.headers['authorization'], 'Bearer token');
             final id = path.split('/').last;
+            if (failRecordingWrites && request.method != 'GET') {
+              return http.Response('offline', 503);
+            }
             if (request.method == 'PUT') {
               online[id] = jsonDecode(request.body) as Map<String, dynamic>;
               expect(online[id]!.keys.toSet(), {
@@ -233,6 +238,78 @@ void main() {
       expect(state.conversations.single.metadata['recordingSync'], 'false');
       await state.setRecordingOnlineSync(recording.id, false);
       expect(state.conversations.single.metadata['recordingSync'], 'false');
+    },
+  );
+
+  test(
+    'online storage intent survives failed requests and unlock, then retries',
+    () async {
+      final state = await device();
+      await state.importPendingRecording(
+        [1, 2, 3],
+        DateTime.utc(2026),
+        'retry',
+      );
+      final id = state.conversations.single.id;
+      failRecordingWrites = true;
+      await expectLater(
+        state.setRecordingOnlineSync(id, true),
+        throwsStateError,
+      );
+      expect(state.pendingRecordingOnlineSync(id), true);
+      expect(state.conversations.single.metadata['recordingSync'], isNull);
+      expect(online, isEmpty);
+      await state.lock();
+      await state.login(
+        baseUrl: _base,
+        email: _email,
+        passphrase: _phrase,
+        offline: true,
+      );
+      await state.waitForBackgroundSync();
+      expect(state.pendingRecordingOnlineSync(id), true);
+      expect(state.conversations.single.metadata['recordingSync'], isNull);
+      failRecordingWrites = false;
+      final pushesBefore = requests
+          .where((r) => r == 'POST /api/sync/push')
+          .length;
+      await state.pullSync();
+      expect(state.error, isNull);
+      // Explicit sync publishes both the capture and confirmed storage state.
+      expect(
+        requests.where((r) => r == 'POST /api/sync/push').length,
+        pushesBefore + 2,
+      );
+      expect(state.pendingRecordingOnlineSync(id), isNull);
+      expect(state.conversations.single.metadata['recordingSync'], 'true');
+      expect(online, contains(id));
+      failRecordingWrites = true;
+      await expectLater(
+        state.setRecordingOnlineSync(id, false),
+        throwsStateError,
+      );
+      expect(state.pendingRecordingOnlineSync(id), false);
+      expect(state.conversations.single.metadata['recordingSync'], 'true');
+      expect((await state.loadRecordingAudio(id)).bytes, [1, 2, 3]);
+      await state.syncQuietly();
+      expect(state.pendingRecordingOnlineSync(id), false);
+      expect(state.syncError, contains('Sync paused'));
+      failRecordingWrites = false;
+      await state.syncQuietly();
+      expect(state.pendingRecordingOnlineSync(id), isNull);
+      expect(state.conversations.single.metadata['recordingSync'], 'false');
+      expect(state.syncError, isNull);
+      expect(online, isEmpty);
+      expect((await state.loadRecordingAudio(id)).bytes, [1, 2, 3]);
+      await state.lock();
+      await state.login(
+        baseUrl: _base,
+        email: _email,
+        passphrase: _phrase,
+        offline: true,
+      );
+      await state.waitForBackgroundSync();
+      expect(state.pendingRecordingOnlineSync(id), isNull);
     },
   );
 

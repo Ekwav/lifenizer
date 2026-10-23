@@ -303,6 +303,7 @@ extension VaultSync on LifenizerAppState {
     _pendingDraftPayload = null;
     _draftPayloadCache = null;
     _pendingSync.clear();
+    _pendingRecordingSync.clear();
     _lastSyncUploadAt = null;
     syncCursor = 0;
     syncError = null;
@@ -421,6 +422,10 @@ extension VaultSync on LifenizerAppState {
   Future<void> _syncNow({bool forceUpload = false}) async {
     try {
       await _transferSync(forceUpload: forceUpload);
+      final recordingChanged = await _retryRecordingSync();
+      if (forceUpload && recordingChanged) {
+        await _transferSync(forceUpload: true);
+      }
       _setSyncProgress(SyncStage.complete);
     } catch (_) {
       _setSyncProgress(SyncStage.failed);
@@ -659,6 +664,8 @@ extension VaultSync on LifenizerAppState {
     'relations': relations.toList(),
     'savedSearches': savedSearches.toList(),
     'pending': _pendingSync.toList(),
+    if (_pendingRecordingSync.isNotEmpty)
+      'pendingRecordingSync': Map<String, bool>.of(_pendingRecordingSync),
     if (_lastSyncUploadAt != null)
       'lastSyncUploadAt': _lastSyncUploadAt!.toIso8601String(),
     if (audioDraft != null) 'audioDraft': audioDraft,
@@ -879,6 +886,8 @@ extension VaultSync on LifenizerAppState {
         'savedSearches': const [],
         'pending': core['pending'] ?? const [],
         if (core['audioDraft'] != null) 'audioDraft': core['audioDraft'],
+        if (core['pendingRecordingSync'] != null)
+          'pendingRecordingSync': core['pendingRecordingSync'],
         'conversationBuckets': {
           'count': 0,
           'conversations': const [],
@@ -955,6 +964,9 @@ extension VaultSync on LifenizerAppState {
     );
     _pendingSync.addAll(json.parseObjectList('pending', SyncEnvelope.fromJson));
     _lastSyncUploadAt = json.parseDateTime('lastSyncUploadAt');
+    _pendingRecordingSync.addAll(
+      Map<String, bool>.from(json['pendingRecordingSync'] as Map? ?? const {}),
+    );
     var repaired = legacyDraft;
     _people;
     if (_hasParticipantRedirects && cachedIndex == null) {

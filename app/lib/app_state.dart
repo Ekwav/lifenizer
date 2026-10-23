@@ -146,6 +146,7 @@ class LifenizerAppState extends ChangeNotifier {
   String pendingSearchQuery = '';
   String? _localVaultKey;
   final List<SyncEnvelope> _pendingSync = [];
+  final Map<String, bool> _pendingRecordingSync = {};
   final DateTime Function() _syncClock;
   DateTime? _lastSyncUploadAt;
   int _vaultBatchDepth = 0;

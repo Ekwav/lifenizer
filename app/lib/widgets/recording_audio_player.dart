@@ -81,8 +81,11 @@ class _RecordingAudioPlayerState extends State<RecordingAudioPlayer> {
     } catch (_) {
       if (mounted) {
         setState(
-          () =>
-              _error = 'Could not change online recording storage. Try again.',
+          () => _error =
+              widget.state.pendingRecordingOnlineSync(widget.conversationId!) ==
+                  null
+              ? 'Could not change online recording storage. Try again.'
+              : null,
         );
       }
     } finally {
@@ -117,6 +120,9 @@ class _RecordingAudioPlayerState extends State<RecordingAudioPlayer> {
       final conversation = widget.state.conversations
           .where((c) => c.id == widget.conversationId)
           .firstOrNull;
+      final pendingSync = widget.conversationId == null
+          ? null
+          : widget.state.pendingRecordingOnlineSync(widget.conversationId!);
       final total = _playback.duration.inMilliseconds.toDouble();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,10 +185,16 @@ class _RecordingAudioPlayerState extends State<RecordingAudioPlayer> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Store encrypted recording online'),
-              subtitle: const Text(
-                'Play on other devices even when this device is offline. Otherwise, keep this app open and unlocked to share playback.',
+              subtitle: Text(
+                pendingSync == true
+                    ? 'Waiting to upload encrypted audio. Sync retries automatically while unlocked.'
+                    : pendingSync == false
+                    ? 'Waiting to remove online audio. Sync retries automatically while unlocked.'
+                    : 'Play on other devices even when this device is offline. Otherwise, keep this app open and unlocked to share playback.',
               ),
-              value: conversation.metadata['recordingSync'] == 'true',
+              value:
+                  pendingSync ??
+                  conversation.metadata['recordingSync'] == 'true',
               onChanged:
                   _syncing || widget.state.busy || !widget.state.isAuthenticated
                   ? null
