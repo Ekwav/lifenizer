@@ -12,15 +12,31 @@ class SearchMetricsBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _Metric(label: 'Conversations', value: '${state.conversations.length}'),
-        _Metric(label: 'Participants', value: '${state.participants.length}'),
-        _Metric(label: 'Relations', value: '${state.relations.length}'),
-        _Metric(label: 'Saved', value: '${state.savedSearches.length}'),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth < 480
+            ? 1
+            : constraints.maxWidth < 768
+            ? 2
+            : 4;
+        final width = (constraints.maxWidth - 12 * (columns - 1)) / columns;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _Metric(
+              label: 'Conversations',
+              value: '${state.conversations.length}',
+            ),
+            _Metric(
+              label: 'Participants',
+              value: '${state.participants.length}',
+            ),
+            _Metric(label: 'Relations', value: '${state.relations.length}'),
+            _Metric(label: 'Saved', value: '${state.savedSearches.length}'),
+          ].map((metric) => SizedBox(width: width, child: metric)).toList(),
+        );
+      },
     );
   }
 }
@@ -37,7 +53,6 @@ class _Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 180,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
