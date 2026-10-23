@@ -219,13 +219,18 @@ class Conversation {
     required this.source,
     required this.participantIds,
     required this.segments,
+    this.isLoaded = true,
+    int? segmentCount,
+    String? previewText,
     this.artifactNames = const [],
     this.tags = const [],
     this.isFavorite = false,
     this.importFingerprint,
     DateTime? startedAt,
     DateTime? endedAt,
-  }) : startedAt = startedAt ?? DateTime.now().toUtc(),
+  }) : _segmentCount = segmentCount ?? segments.length,
+       _previewText = previewText ?? '',
+       startedAt = startedAt ?? DateTime.now().toUtc(),
        endedAt = endedAt ?? DateTime.now().toUtc();
 
   final String? sourceUrl;
@@ -237,6 +242,30 @@ class Conversation {
   final String source;
   final List<String> participantIds;
   final List<ConversationSegment> segments;
+  final bool isLoaded;
+  final int _segmentCount;
+  final String _previewText;
+
+  int get segmentCount => isLoaded ? segments.length : _segmentCount;
+
+  String get previewText {
+    if (!isLoaded) return _previewText;
+    final text = StringBuffer();
+    for (final segment in segments) {
+      if (segment.text.isEmpty) continue;
+      if (text.isNotEmpty) text.write(' ');
+      final remaining = 500 - text.length;
+      if (remaining <= 0) break;
+      text.write(
+        segment.text.length > remaining
+            ? segment.text.substring(0, remaining)
+            : segment.text,
+      );
+      if (text.length >= 500) break;
+    }
+    return text.toString();
+  }
+
   final List<String> artifactNames;
   final List<String> tags;
   final bool isFavorite;
@@ -247,16 +276,36 @@ class Conversation {
   final DateTime endedAt;
 
   /// Combined searchable text from title, source, artifacts, tags, and all segment texts.
-  String get searchableText => [
-    title,
-    source,
-    ...artifactNames,
-    ...tags,
-    ...segments.map((segment) => segment.text),
-  ].join(' ').toLowerCase();
+  String get searchableText {
+    if (!isLoaded) {
+      throw StateError('Load conversation $id before searching its contents.');
+    }
+    return [
+      title,
+      source,
+      ...artifactNames,
+      ...tags,
+      ...segments.map((segment) => segment.text),
+    ].join(' ').toLowerCase();
+  }
 
   /// Serialize to JSON.
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toJson() {
+    if (!isLoaded) {
+      throw StateError(
+        'Load conversation $id before serializing its contents.',
+      );
+    }
+    return _toJson(includeSegments: true);
+  }
+
+  Map<String, dynamic> toSummaryJson() => {
+    ..._toJson(includeSegments: false),
+    'segmentCount': segmentCount,
+    'previewText': previewText,
+  };
+
+  Map<String, dynamic> _toJson({required bool includeSegments}) => {
     if (sourceUrl != null) 'sourceUrl': sourceUrl,
     if (metadata.isNotEmpty) 'metadata': metadata,
     if (sourceThreadId != null) 'sourceThreadId': sourceThreadId,
@@ -264,7 +313,8 @@ class Conversation {
     'title': title,
     'source': source,
     'participantIds': participantIds,
-    'segments': segments.map((segment) => segment.toJson()).toList(),
+    if (includeSegments)
+      'segments': segments.map((segment) => segment.toJson()).toList(),
     'artifactNames': artifactNames,
     'tags': tags,
     'isFavorite': isFavorite,
@@ -273,7 +323,19 @@ class Conversation {
     'endedAt': endedAt.toJsonString(),
   };
 
-  factory Conversation.fromJson(Map<String, dynamic> json) => Conversation(
+  factory Conversation.fromJson(Map<String, dynamic> json) =>
+      Conversation._fromJson(json);
+
+  factory Conversation.fromSummaryJson(Map<String, dynamic> json) =>
+      Conversation._fromJson(json, isLoaded: false);
+
+  factory Conversation._fromJson(
+    Map<String, dynamic> json, {
+    bool isLoaded = true,
+  }) => Conversation(
+    isLoaded: isLoaded,
+    segmentCount: json['segmentCount'] as int? ?? 0,
+    previewText: json['previewText'] as String? ?? '',
     sourceUrl: json['sourceUrl'] as String?,
     metadata: (json['metadata'] as Map? ?? const {}).map(
       (key, value) => MapEntry('$key', '$value'),
@@ -283,10 +345,12 @@ class Conversation {
     title: json['title'] as String,
     source: json['source'] as String,
     participantIds: json.parseStringList('participantIds'),
-    segments: json.parseObjectList<ConversationSegment>(
-      'segments',
-      ConversationSegment.fromJson,
-    ),
+    segments: isLoaded
+        ? json.parseObjectList<ConversationSegment>(
+            'segments',
+            ConversationSegment.fromJson,
+          )
+        : const [],
     artifactNames: json.parseStringList('artifactNames'),
     tags: json.parseStringList('tags'),
     isFavorite: json['isFavorite'] as bool? ?? false,

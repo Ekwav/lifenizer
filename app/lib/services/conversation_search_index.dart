@@ -59,6 +59,91 @@ class ConversationSearchIndex {
   static final _digits = RegExp(r'^\d+$');
   static final _word = RegExp(r'[\p{L}\p{N}\p{M}]+', unicode: true);
 
+  /// Stores prepared search data and lightweight conversation summaries. Terms
+  /// and posting document IDs are represented by positions to avoid repeating
+  /// strings throughout the snapshot.
+  Map<String, dynamic> toJson() {
+    if (_pendingNorms.isNotEmpty) {
+      throw StateError('Refresh search statistics before saving the index');
+    }
+    final terms = invertedIndex.keys.toList();
+    final termIds = {for (var i = 0; i < terms.length; i++) terms[i]: i};
+    final ids = documents.keys.toList();
+    final documentIds = {for (var i = 0; i < ids.length; i++) ids[i]: i};
+    return {
+      'version': 1,
+      'terms': terms,
+      'idf': [for (final term in terms) idf[term]],
+      'postings': [
+        for (final term in terms)
+          [for (final id in invertedIndex[term]!) documentIds[id]!],
+      ],
+      'averageLength': averageLength,
+      'documents': [
+        for (final doc in documents.values)
+          [
+            doc.conversation.toSummaryJson(),
+            doc.haystack,
+            doc.titleTokens.toList(),
+            doc.personTokens.toList(),
+            doc.tagSet.toList(),
+            [
+              for (final entry in doc.termFrequency.entries) ...[
+                termIds[entry.key]!,
+                entry.value,
+              ],
+            ],
+            doc.vectorNorm,
+            doc.length,
+          ],
+      ],
+    };
+  }
+
+  /// Restores the prepared index without tokenizing text or recomputing scores.
+  static ConversationSearchIndex fromJson(Map<String, dynamic> json) {
+    if (json['version'] != 1) {
+      throw const FormatException('Unsupported search index version');
+    }
+    final terms = (json['terms'] as List).cast<String>();
+    final docs = <String, IndexedConversation>{};
+    for (final value in json['documents'] as List) {
+      final row = value as List;
+      final conversation = Conversation.fromSummaryJson(
+        row[0] as Map<String, dynamic>,
+      );
+      final frequency = row[5] as List;
+      docs[conversation.id] = IndexedConversation(
+        conversation: conversation,
+        haystack: row[1] as String,
+        titleTokens: (row[2] as List).cast<String>().toSet(),
+        personTokens: (row[3] as List).cast<String>().toSet(),
+        tagSet: (row[4] as List).cast<String>().toSet(),
+        termFrequency: {
+          for (var i = 0; i < frequency.length; i += 2)
+            terms[frequency[i] as int]: frequency[i + 1] as int,
+        },
+        vectorNorm: (row[6] as num).toDouble(),
+        length: row[7] as int,
+      );
+    }
+    final ids = docs.keys.toList();
+    final postings = json['postings'] as List;
+    final weights = json['idf'] as List;
+    return ConversationSearchIndex._(
+      docs,
+      {
+        for (var i = 0; i < terms.length; i++)
+          terms[i]: {for (final id in postings[i] as List) ids[id as int]},
+      },
+      {
+        for (var i = 0; i < terms.length; i++)
+          terms[i]: (weights[i] as num).toDouble(),
+      },
+      (json['averageLength'] as num).toDouble(),
+    );
+  }
+
   static ConversationSearchIndex build({
     required List<Conversation> conversations,
     required Map<String, String> participantById,

@@ -550,7 +550,7 @@ extension VaultImports on LifenizerAppState {
       final previousIndex = threadKey == null ? null : threads[threadKey];
       final previous = previousIndex == null
           ? null
-          : conversations[previousIndex];
+          : await loadConversation(conversations[previousIndex].id);
       final conversationId =
           previous?.id ??
           (threadKey == null
@@ -845,7 +845,7 @@ extension VaultTranscriptEnrichment on LifenizerAppState {
   ) => batchVaultChanges(() async {
     final index = conversations.indexWhere((c) => c.id == conversationId);
     if (index < 0) return;
-    final current = conversations[index];
+    final current = await loadConversation(conversationId);
     final nextSegments = segments == null
         ? current.segments
         : segments(current);

@@ -154,7 +154,7 @@ class LifenizerRunner extends DBusObject {
               'messages': state.isAuthenticated
                   ? state.conversations.fold<int>(
                       0,
-                      (n, c) => n + c.segments.length,
+                      (n, c) => n + c.segmentCount,
                     )
                   : 0,
               'people': state.isAuthenticated ? state.participants.length : 0,

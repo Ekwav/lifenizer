@@ -89,7 +89,7 @@ class ConversationCard extends StatelessWidget {
     final participants = conversation.participantIds
         .map(state.participantName)
         .join(', ');
-    final preview = _previewText(conversation);
+    final preview = conversation.previewText;
     return Card(
       child: InkWell(
         borderRadius: const BorderRadius.all(Radius.circular(8)),
@@ -308,7 +308,7 @@ void openConversationDetail(
 ///
 /// Displays conversation title, metadata, tags, images, and full transcript
 /// in a draggable modal sheet.
-class _ConversationDetailSheet extends StatelessWidget {
+class _ConversationDetailSheet extends StatefulWidget {
   const _ConversationDetailSheet({
     required this.state,
     required this.conversation,
@@ -318,17 +318,73 @@ class _ConversationDetailSheet extends StatelessWidget {
   final Conversation conversation;
 
   @override
+  State<_ConversationDetailSheet> createState() =>
+      _ConversationDetailSheetState();
+}
+
+class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
+  late Future<Conversation> _conversation;
+  late final bool _openedUnlocked;
+  bool _locked = false;
+
+  LifenizerAppState get state => widget.state;
+
+  @override
+  void initState() {
+    super.initState();
+    _openedUnlocked = state.isAuthenticated;
+    _conversation = _load();
+  }
+
+  Future<Conversation> _load() => widget.conversation.isLoaded
+      ? Future.value(widget.conversation)
+      : state.loadConversation(widget.conversation.id);
+
+  @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: state,
-    builder: (context, _) => _buildDetail(context),
+    builder: (context, _) {
+      if (_openedUnlocked && !state.isAuthenticated) _locked = true;
+      if (_locked) return const SizedBox.shrink();
+      return FutureBuilder<Conversation>(
+        future: _conversation,
+        initialData: widget.conversation.isLoaded ? widget.conversation : null,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return SizedBox(
+              height: 280,
+              child: Center(
+                child:
+                    snapshot.connectionState == ConnectionState.done &&
+                        snapshot.hasError
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Could not load this conversation.'),
+                          TextButton(
+                            onPressed: () => setState(() {
+                              _conversation = _load();
+                            }),
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      )
+                    : const CircularProgressIndicator(),
+              ),
+            );
+          }
+          return _buildDetail(context, snapshot.data!);
+        },
+      );
+    },
   );
 
-  Widget _buildDetail(BuildContext context) {
+  Widget _buildDetail(BuildContext context, Conversation loaded) {
     final conversation =
         state.conversations
-            .where((item) => item.id == this.conversation.id)
+            .where((item) => item.id == loaded.id && item.isLoaded)
             .firstOrNull ??
-        this.conversation;
+        loaded;
     final participants = conversation.participantIds
         .map(state.participantName)
         .join(', ');
@@ -542,21 +598,4 @@ String _formatSegmentLine(ConversationSegment segment) {
   final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
   final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
   return '[$minutes:$seconds] ${segment.text}';
-}
-
-String _previewText(Conversation conversation) {
-  final text = StringBuffer();
-  for (final segment in conversation.segments) {
-    if (segment.text.isEmpty) continue;
-    if (text.isNotEmpty) text.write(' ');
-    final remaining = 500 - text.length;
-    if (remaining <= 0) break;
-    text.write(
-      segment.text.length > remaining
-          ? segment.text.substring(0, remaining)
-          : segment.text,
-    );
-    if (text.length >= 500) break;
-  }
-  return text.toString();
 }

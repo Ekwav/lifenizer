@@ -143,6 +143,11 @@ class LifenizerAppState extends ChangeNotifier {
   Stopwatch? _progressStageClock;
   Timer? _syncProgressTicker;
   int _snapshotWriteRevision = 0;
+  String? _searchSnapshotNonce;
+  int _searchRevision = 0;
+  int _savedSearchRevision = -1;
+  final Set<int> _unloadedChunks = {};
+  final Map<int, Future<void>> _chunkLoads = {};
 
   /// Metadata of the pending recording (`recordedAt`, `title`,
   /// `participantNames`, `detailsPrompted`, `payloadBytes`, `payloadNonce`). The
@@ -226,6 +231,8 @@ class LifenizerAppState extends ChangeNotifier {
 
   bool get isAuthenticated =>
       session != null && _crypto.isUnlocked && !_unlocking;
+
+  Future<Conversation> loadConversation(String id) => _loadConversation(id);
 
   void _notifyChanged() {
     if (!_disposed) notifyListeners();
@@ -711,7 +718,7 @@ class LifenizerAppState extends ChangeNotifier {
         (count) => count + 1,
         ifAbsent: () => 1,
       );
-      totalSegments += conversation.segments.length;
+      totalSegments += conversation.segmentCount;
       totalArtifacts += conversation.artifactNames.length;
       final day = DateTime.utc(
         conversation.startedAt.toUtc().year,
@@ -1013,6 +1020,7 @@ class LifenizerAppState extends ChangeNotifier {
     if (source == null || target == null) {
       throw ArgumentError('Choose two existing people.');
     }
+    if (rewriteReferences) await _loadAllConversations();
     final combined = Participant(
       id: target.id,
       displayName: target.displayName,
@@ -1078,6 +1086,7 @@ class LifenizerAppState extends ChangeNotifier {
         }
       }
       if (changed) {
+        await _loadAllConversations();
         for (final conversation in _rewriteParticipantReferences()) {
           await _pushEntity(
             'conversation',
@@ -1518,6 +1527,7 @@ class LifenizerAppState extends ChangeNotifier {
 
   Future<void> extractRelations(Conversation conversation) async {
     await _run(() async {
+      conversation = await loadConversation(conversation.id);
       final api = _requireApi();
       final extracted = await api.extractRelations(
         text: conversation.segments.map((segment) => segment.text).join('\n'),
@@ -1568,10 +1578,14 @@ class LifenizerAppState extends ChangeNotifier {
     });
   }
 
-  void _applyEntity(String entityType, Map<String, dynamic> json) {
+  Future<void> _applyEntity(
+    String entityType,
+    Map<String, dynamic> json,
+  ) async {
     switch (entityType) {
       case 'participant':
         final incoming = Participant.fromJson(json);
+        if (incoming.mergedInto != null) await _loadAllConversations();
         final previous = _people[incoming.id];
         final participant = Participant(
           id: incoming.id,
@@ -1622,6 +1636,10 @@ class LifenizerAppState extends ChangeNotifier {
         break;
       case 'conversation':
         final incoming = _canonicalConversation(Conversation.fromJson(json));
+        if (incoming.sourceThreadId != null &&
+            conversations.any((c) => c.id == incoming.id && !c.isLoaded)) {
+          await loadConversation(incoming.id);
+        }
         final previous = conversations
             .where((item) => item.id == incoming.id)
             .firstOrNull;
@@ -1829,6 +1847,7 @@ class LifenizerAppState extends ChangeNotifier {
     _indexedConversationCount = conversationCount;
     _indexedRelationCount = relationCount;
     _indexedParticipantCount = participantCount;
+    _searchRevision++;
   }
 
   /// Applies pending conversation changes to the existing index on this
@@ -1879,6 +1898,7 @@ class LifenizerAppState extends ChangeNotifier {
       index.refreshStatistics();
     }
     incrementalSearchUpdates++;
+    _searchRevision++;
     _indexedConversationCount = conversations.length;
     return index.documents.length == conversations.length &&
         _searchDirtyIds.isEmpty;
@@ -1893,7 +1913,8 @@ class LifenizerAppState extends ChangeNotifier {
             conversations.length > synchronousIndexLimit)) {
       return;
     }
-    if (conversations.length <= synchronousIndexLimit) {
+    if (conversations.length <= synchronousIndexLimit &&
+        _unloadedChunks.isEmpty) {
       final index = _searchIndex;
       if (index != null && _canUpdateSearchIndexIncrementally) {
         final inputs = _searchIndexInputs(includeConversations: false);
@@ -1917,6 +1938,7 @@ class LifenizerAppState extends ChangeNotifier {
         _searchDirtyIds.clear();
         index.refreshStatistics();
         incrementalSearchUpdates++;
+        _searchRevision++;
         _indexedConversationCount = conversations.length;
         if (index.documents.length == conversations.length) return;
       }
@@ -1979,6 +2001,8 @@ class LifenizerAppState extends ChangeNotifier {
         _searchFullRebuildNeeded = true;
       }
       worked = true;
+      await _loadAllConversations();
+      if (generation != _searchGeneration || !_crypto.isUnlocked) return;
       final inputs = _searchIndexInputs();
       final relationCount = relations.length;
       final participantCount = participants.length;

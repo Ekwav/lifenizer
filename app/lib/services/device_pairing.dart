@@ -127,6 +127,24 @@ class DevicePairingService extends ChangeNotifier {
       }
       if (generation != _generation) return;
       _credentials = credentials;
+      if (credentials['vaultKey'] is String) {
+        loginStarted = true;
+        await state.login(
+          baseUrl: credentials['server'] as String,
+          email: credentials['email'] as String,
+          passphrase: credentials['vaultPassphrase'] as String,
+          deviceVaultKey: credentials['vaultKey'] as String,
+          deviceVaultSalt: credentials['vaultKeySalt'] as String?,
+          offline: true,
+        );
+        if (state.isAuthenticated) {
+          await state.waitForBackgroundSync();
+          if (generation != _generation) return;
+          state.resumePairedSync();
+          _startTimer();
+          return;
+        }
+      }
       state.reportUnlockProgress('Refreshing device access');
       AuthSession? auth;
       try {
@@ -172,6 +190,8 @@ class DevicePairingService extends ChangeNotifier {
       }
       if (!state.isAuthenticated) {
         error ??= state.error;
+      } else {
+        await _rememberVaultKey();
       }
       _startTimer();
     } catch (_) {
@@ -186,6 +206,7 @@ class DevicePairingService extends ChangeNotifier {
         _store.forgetUnlock();
         _credentials?.remove('secret');
         _credentials?.remove('vaultPassphrase');
+        _credentials?.remove('vaultKey');
         _credentials?.remove('refreshToken');
         _credentials?.remove('pendingEnrollment');
       }
@@ -200,6 +221,7 @@ class DevicePairingService extends ChangeNotifier {
     _store.forgetUnlock();
     _credentials?.remove('secret');
     _credentials?.remove('vaultPassphrase');
+    _credentials?.remove('vaultKey');
     _credentials?.remove('refreshToken');
     _credentials?.remove('pendingEnrollment');
     pending.clear();
@@ -429,6 +451,7 @@ class DevicePairingService extends ChangeNotifier {
       if (!state.isAuthenticated) {
         throw StateError(state.error ?? 'Could not unlock the paired vault.');
       }
+      await _rememberVaultKey();
       message = 'Device connected';
       _startTimer();
     } catch (exception) {
@@ -463,6 +486,23 @@ class DevicePairingService extends ChangeNotifier {
     return operation.whenComplete(() {
       _refreshing = null;
     });
+  }
+
+  Future<void> _rememberVaultKey() async {
+    final generation = _generation;
+    final credentials = _credentials;
+    if (credentials == null || !state.isAuthenticated) return;
+    final key = await state.exportDeviceVaultKey();
+    if (generation != _generation || !state.isAuthenticated) return;
+    credentials['vaultKey'] = key;
+    credentials['vaultKeySalt'] = state.session!.vaultSalt;
+    try {
+      await _store.write(credentials);
+    } catch (_) {
+      // A locked/unavailable keyring only disables the startup optimization.
+      credentials.remove('vaultKey');
+      credentials.remove('vaultKeySalt');
+    }
   }
 
   Future<String?> _refreshAccess() async {

@@ -8,6 +8,7 @@ import 'package:app/models.dart';
 import 'package:app/services/conversation_search_index.dart';
 import 'package:app/services/local_vault_store.dart';
 import 'package:app/services/sync_progress.dart';
+import 'package:app/services/vault_chunk_store_sembast.dart';
 import 'package:app/services/vault_chunks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -75,6 +76,31 @@ class _RecordingStore extends LocalVaultStore {
   }
 }
 
+class _TrackedChunks extends SembastVaultChunkStore {
+  _TrackedChunks(super.store);
+  final decrypted = <int>[];
+
+  @override
+  Future<Map<String, dynamic>> decryptChunk(
+    VaultCrypto crypto,
+    String key,
+    int n,
+    String expectedNonce, {
+    Iterable<String> alternateNonces = const [],
+    bool background = true,
+  }) {
+    decrypted.add(n);
+    return super.decryptChunk(
+      crypto,
+      key,
+      n,
+      expectedNonce,
+      alternateNonces: alternateNonces,
+      background: background,
+    );
+  }
+}
+
 Conversation _conversation(int i, {int messages = 2}) => Conversation(
   id: 'thread-$i',
   title: 'Archive thread $i',
@@ -109,8 +135,9 @@ void main() {
     await database.close();
   });
 
-  LifenizerAppState device() => LifenizerAppState(
+  LifenizerAppState device({_TrackedChunks? chunks}) => LifenizerAppState(
     localStore: store,
+    chunkStore: chunks,
     apiFactory: (url) =>
         LifenizerApiClient(baseUrl: url, client: MockClient(server.handle)),
   );
@@ -225,7 +252,11 @@ void main() {
       );
       final fresh = state.conversations.last;
       final bucket = vaultChunkFor(fresh.id, 4);
-      expect(store.written.toSet(), {_key, '$_key:chunk:$bucket'});
+      expect(store.written.toSet(), {
+        _key,
+        '$_key:chunk:$bucket',
+        '$_key:search-index',
+      });
       core = (await store.read(_key))!;
       final after = List<String>.from(core['chunkNonces'] as List);
       for (var n = 0; n < 4; n++) {
@@ -247,7 +278,7 @@ void main() {
   );
 
   test(
-    'parallel chunk restore equals the original vault and reports progress',
+    'cached search restores immediately and bodies load only on demand',
     () async {
       final state = await unlocked();
       await state.waitForBackgroundSync();
@@ -262,7 +293,8 @@ void main() {
       await state.lock();
       state.dispose();
 
-      final restored = device();
+      final chunks = _TrackedChunks(store);
+      final restored = device(chunks: chunks);
       final stages = <SyncStage>[];
       restored.addListener(() {
         if (restored.syncProgress case final value?) stages.add(value.stage);
@@ -270,19 +302,143 @@ void main() {
       await unlocked(offline: true, state: restored);
       await restored.waitForBackgroundSync();
       expect(restored.error, isNull);
+      expect(restored.searchIndexPreparing, isFalse);
+      expect(restored.fullSearchBuilds, 0);
+      expect(restored.conversations.every((c) => !c.isLoaded), isTrue);
+      expect(restored.search('topic42').first.id, 'thread-42');
+      expect(
+        chunks.decrypted,
+        isEmpty,
+        reason: 'cached startup/search must not decrypt conversation bodies',
+      );
+      expect(restored.conversations.every((c) => !c.isLoaded), isTrue);
+      await restored.loadConversation('thread-42');
+      expect(chunks.decrypted, [vaultChunkFor('thread-42', 4)]);
+      expect(
+        restored.conversations.where((c) => c.isLoaded).length,
+        lessThan(900),
+      );
+      for (final id in restored.conversations.map((c) => c.id).toList()) {
+        await restored.loadConversation(id);
+      }
       expect({
         for (final c in restored.conversations) c.id: jsonEncode(c.toJson()),
       }, expected);
-      expect(
-        stages,
-        containsAll([SyncStage.decryptingLocal, SyncStage.restoring]),
-      );
+      expect(stages, contains(SyncStage.decryptingLocal));
       expect(await restored.loadAudioDraftPayload(), [9]);
       await restored.lock();
       restored.dispose();
     },
     timeout: timeout,
   );
+
+  test(
+    'saving a new conversation hydrates only its dirty bucket and preserves lazy neighbors',
+    () async {
+      final first = await unlocked();
+      await first.waitForBackgroundSync();
+      server.offline = true;
+      first.conversations.addAll([
+        for (var i = 0; i < 600; i++) _conversation(i, messages: 3),
+      ]);
+      await first.saveAudioDraft([1], DateTime.utc(2026, 1, 2));
+      final expected = {
+        for (final c in first.conversations) c.id: jsonEncode(c.toJson()),
+      };
+      await first.lock();
+      first.dispose();
+
+      final chunks = _TrackedChunks(store);
+      final restored = await unlocked(
+        offline: true,
+        state: device(chunks: chunks),
+      );
+      await restored.waitForBackgroundSync();
+      expect(chunks.decrypted, isEmpty);
+      store.written.clear();
+      await restored.addManualText(
+        title: 'New note',
+        participantNames: '',
+        text: 'new content',
+      );
+      final fresh = restored.conversations.firstWhere(
+        (c) => c.title == 'New note',
+      );
+      final bucket = vaultChunkFor(fresh.id, 4);
+      expected[fresh.id] = jsonEncode(fresh.toJson());
+      expect(chunks.decrypted, [bucket]);
+      expect(restored.conversations.where((c) => !c.isLoaded), isNotEmpty);
+      expect(store.written.where((key) => key.contains(':chunk:')).toSet(), {
+        '$_key:chunk:$bucket',
+      });
+      await restored.lock();
+      restored.dispose();
+
+      final again = await unlocked(offline: true);
+      await again.waitForBackgroundSync();
+      for (final id in again.conversations.map((c) => c.id).toList()) {
+        await again.loadConversation(id);
+      }
+      expect({
+        for (final c in again.conversations) c.id: jsonEncode(c.toJson()),
+      }, expected);
+      await again.lock();
+      again.dispose();
+    },
+    timeout: timeout,
+  );
+
+  for (final damage in ['missing', 'corrupt']) {
+    test(
+      '$damage search cache falls back to authenticated bodies without losing data',
+      () async {
+        final first = await unlocked();
+        await first.waitForBackgroundSync();
+        server.offline = true;
+        first.conversations.addAll([
+          for (var i = 0; i < 12; i++) _conversation(i),
+        ]);
+        await first.saveAudioDraft([1], DateTime.utc(2026, 1, 2));
+        final expected = {
+          for (final c in first.conversations) c.id: jsonEncode(c.toJson()),
+        };
+        await first.lock();
+        first.dispose();
+        final cacheKey = '$_key:search-index';
+        if (damage == 'missing') {
+          await stringMapStoreFactory
+              .store('vaults')
+              .record(cacheKey)
+              .delete(database);
+        } else {
+          final cache = (await store.read(cacheKey))!;
+          await store.write(cacheKey, {...cache, 'cipherText': 'corrupt'});
+        }
+        final chunks = _TrackedChunks(store);
+        final restored = await unlocked(
+          offline: true,
+          state: device(chunks: chunks),
+        );
+        await restored.waitForBackgroundSync();
+        expect(restored.error, isNull);
+        expect(restored.isAuthenticated, isTrue);
+        expect(chunks.decrypted, [0]);
+        expect(restored.fullSearchBuilds, greaterThan(0));
+        expect(restored.search('topic7').first.id, 'thread-7');
+        expect({
+          for (final c in restored.conversations) c.id: jsonEncode(c.toJson()),
+        }, expected);
+        expect(
+          await store.read(cacheKey),
+          isNotNull,
+          reason: 'disposable cache is rebuilt',
+        );
+        await restored.lock();
+        restored.dispose();
+      },
+      timeout: timeout,
+    );
+  }
 
   for (final damage in ['missing chunk', 'nonce mismatch']) {
     test(
@@ -438,7 +594,7 @@ void main() {
   );
 
   test(
-    'search falls back to a linear scan while no index exists, then uses the index',
+    'cached index searches full text before background sync completes',
     () async {
       final first = await unlocked();
       await first.waitForBackgroundSync();
@@ -459,7 +615,7 @@ void main() {
       server.pullGate = Completer<void>();
       final state = device();
       await unlocked(state: state);
-      expect(state.searchIndexPreparing, isTrue);
+      expect(state.searchIndexPreparing, isFalse);
       final linear = state.search('tomatoes basil');
       expect(linear.map((c) => c.title), ['Garden plans']);
       expect(state.search('GARDEN').map((c) => c.title), ['Garden plans']);
@@ -469,7 +625,7 @@ void main() {
       server.pullGate!.complete();
       await state.waitForBackgroundSync();
       expect(state.searchIndexPreparing, isFalse);
-      expect(state.fullSearchBuilds, 1);
+      expect(state.fullSearchBuilds, 0);
       expect(state.search('tomatoes').map((c) => c.title), ['Garden plans']);
       await state.lock();
       state.dispose();

@@ -198,6 +198,7 @@ void main() {
       final restarted = device(server, disk);
       await login(restarted, offline: true);
       expect(restarted.participantById(discord.id)!.id, email.id);
+      await restarted.loadConversation(restarted.conversations.single.id);
       expect(restarted.conversations.single.segments.single.attachmentUrls, [
         'https://example.test/file',
       ]);

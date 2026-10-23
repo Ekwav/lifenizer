@@ -25,6 +25,8 @@ extension VaultSync on LifenizerAppState {
     String? registrationToken,
     bool offline = false,
     AuthSession? pairedSession,
+    String? deviceVaultKey,
+    String? deviceVaultSalt,
   }) async {
     await _run(() async {
       if (passphrase.isEmpty || email.trim().isEmpty) {
@@ -82,12 +84,22 @@ extension VaultSync on LifenizerAppState {
           );
         }
         _setSyncProgress(SyncStage.derivingKey);
-        await _crypto.unlock(
-          email: normalizedEmail,
-          passphrase: passphrase,
-          vaultSalt: auth?.vaultSalt ?? local!['vaultSalt'] as String,
-          background: true,
-        );
+        final salt = auth?.vaultSalt ?? local!['vaultSalt'] as String;
+        if (deviceVaultKey != null && deviceVaultSalt == salt) {
+          final bytes = base64Decode(deviceVaultKey);
+          try {
+            _crypto.unlockDeviceKey(bytes);
+          } finally {
+            bytes.fillRange(0, bytes.length, 0);
+          }
+        } else {
+          await _crypto.unlock(
+            email: normalizedEmail,
+            passphrase: passphrase,
+            vaultSalt: salt,
+            background: true,
+          );
+        }
         _clearVault();
         var repaired = false;
         var resyncRequired = false;
@@ -210,6 +222,21 @@ extension VaultSync on LifenizerAppState {
     await _storageTail;
   }
 
+  Future<String> exportDeviceVaultKey() async {
+    if (!isAuthenticated) throw StateError('Unlock the vault first.');
+    final bytes = await _crypto.exportDeviceKey();
+    try {
+      return base64Encode(bytes);
+    } finally {
+      bytes.fillRange(0, bytes.length, 0);
+    }
+  }
+
+  void resumePairedSync() => _runUnlockInBackground(() async {
+    await pairing.refreshAccess();
+    await _syncNow();
+  });
+
   Future<void> updatePairedSession(AuthSession auth) async {
     final current = session;
     if (current == null ||
@@ -272,6 +299,10 @@ extension VaultSync on LifenizerAppState {
     lastSyncedAt = null;
     _searchGeneration++;
     _searchIndex = null;
+    _searchSnapshotNonce = null;
+    _savedSearchRevision = -1;
+    _unloadedChunks.clear();
+    _chunkLoads.clear();
     _searchDirtyIds.clear();
     _indexedConversationCount = -1;
     _indexedRelationCount = -1;
@@ -469,7 +500,7 @@ extension VaultSync on LifenizerAppState {
         if (pending && !importedThread) {
           continue;
         }
-        _applyEntity(envelope.entityType, decoded[i]);
+        await _applyEntity(envelope.entityType, decoded[i]);
         _setSyncProgress(
           SyncStage.applying,
           completed: i + 1,
@@ -586,6 +617,11 @@ extension VaultSync on LifenizerAppState {
     'savedSearches': savedSearches.toList(),
     'pending': _pendingSync.toList(),
     if (audioDraft != null) 'audioDraft': audioDraft,
+    if (cursor == null &&
+        _searchSnapshotNonce != null &&
+        _savedSearchRevision == _searchRevision &&
+        !_needsSearchIndex)
+      'searchIndexNonce': _searchSnapshotNonce,
     'conversationBuckets': {
       'count': chunkCount,
       'conversations': conversationCounts,
@@ -653,9 +689,48 @@ extension VaultSync on LifenizerAppState {
           : [value as String];
     }
     try {
+      ConversationSearchIndex? cachedIndex;
+      final cacheNonce = core['searchIndexNonce'] as String?;
+      if (cacheNonce != null &&
+          pending.isEmpty &&
+          source.kind == _chunks.kind) {
+        try {
+          final record = await source.readBlob(key, 'search-index');
+          if (record != null && record['nonce'] == cacheNonce) {
+            cachedIndex = await decodeSearchSnapshot(
+              await _crypto.decryptJson(
+                cipherText: record['cipherText'] as String,
+                nonce: cacheNonce,
+                background: true,
+              ),
+            );
+          }
+        } catch (_) {
+          // A disposable cache must never make the encrypted vault unreadable.
+        }
+      }
+      if (cachedIndex != null) {
+        final counts = List<int>.from(
+          core['conversationBuckets']['conversations'],
+        );
+        final actualCounts = List<int>.filled(count, 0);
+        for (final id in cachedIndex.documents.keys) {
+          actualCounts[vaultChunkFor(id, count)]++;
+        }
+        if (!listEquals(counts, actualCounts)) cachedIndex = null;
+      }
+      if (cachedIndex != null) {
+        // Check file headers without decrypting their contents. Body integrity
+        // is authenticated when a chunk is actually opened.
+        final actual = await Future.wait([
+          for (var n = 0; n < count; n++) source.chunkNonce(key, n),
+        ]);
+        if (!listEquals(actual, nonces)) throw const _IncompleteChunks();
+      }
       final repaired = await _restoreSnapshot(
         core,
-        chunks: (source, key, nonces, pending),
+        chunks: cachedIndex == null ? (source, key, nonces, pending) : null,
+        cachedIndex: cachedIndex,
       );
       for (final n in pending.keys) {
         // Remember which nonce the file really carries.
@@ -681,8 +756,14 @@ extension VaultSync on LifenizerAppState {
       ];
       final migrating = source.kind != _chunks.kind;
       if (migrating) _chunkMigrationFrom = count;
+      if (cachedIndex != null) {
+        _unloadedChunks.addAll(Iterable.generate(count));
+        _searchSnapshotNonce = cacheNonce;
+        _savedSearchRevision = _searchRevision;
+      }
       return (
-        needsSave: repaired || migrating || pending.isNotEmpty,
+        needsSave:
+            repaired || migrating || pending.isNotEmpty || cachedIndex == null,
         resyncRequired: false,
       );
     } on _IncompleteChunks {
@@ -725,6 +806,7 @@ extension VaultSync on LifenizerAppState {
         'chunkNonces': const <String>[],
       });
       await _chunks.deleteAll(key);
+      await _chunks.deleteBlob(key, 'search-index');
       await SembastVaultChunkStore(
         _localStore!,
       ).deleteChunks(key, [for (var n = 0; n < count; n++) n]);
@@ -739,6 +821,7 @@ extension VaultSync on LifenizerAppState {
   Future<bool> _restoreSnapshot(
     Map<String, dynamic> json, {
     (VaultChunkStore, String, List<String?>, Map<int, List<String>>)? chunks,
+    ConversationSearchIndex? cachedIndex,
   }) async {
     audioDraft = json['audioDraft'] == null
         ? null
@@ -757,7 +840,11 @@ extension VaultSync on LifenizerAppState {
       json.parseObjectList('participants', Participant.fromJson),
     );
     _invalidateParticipantLookup();
-    if (chunks == null) {
+    if (cachedIndex != null) {
+      conversations.addAll(
+        cachedIndex.documents.values.map((d) => d.conversation),
+      );
+    } else if (chunks == null) {
       final rawConversations = json['conversations'] as List? ?? const [];
       final progress = _RestoreProgress(
         messages: rawConversations.fold<int>(
@@ -780,7 +867,7 @@ extension VaultSync on LifenizerAppState {
     _pendingSync.addAll(json.parseObjectList('pending', SyncEnvelope.fromJson));
     var repaired = legacyDraft;
     _people;
-    if (_hasParticipantRedirects) {
+    if (_hasParticipantRedirects && cachedIndex == null) {
       for (var i = 0; i < conversations.length; i++) {
         final canonical = _canonicalConversation(conversations[i]);
         if (!identical(canonical, conversations[i])) {
@@ -800,8 +887,97 @@ extension VaultSync on LifenizerAppState {
         }
       }
     }
-    _markSearchIndexDirty();
+    if (cachedIndex == null) {
+      _markSearchIndexDirty();
+    } else {
+      _installSearchIndex(
+        cachedIndex,
+        conversationCount: conversations.length,
+        participantCount: participants.length,
+        relationCount: relations.length,
+      );
+      _searchFullRebuildNeeded = false;
+    }
     return repaired;
+  }
+
+  /// Loads only the encrypted bucket containing this conversation. Concurrent
+  /// requests share a read; newer in-memory edits always win over disk.
+  Future<Conversation> _loadConversation(String id) async {
+    Conversation? current() =>
+        conversations.where((c) => c.id == id).firstOrNull;
+    final existing = current();
+    if (existing == null) throw StateError('Conversation no longer exists.');
+    if (existing.isLoaded) return existing;
+    if (!_crypto.isUnlocked) throw StateError('Unlock the vault first.');
+    await _loadConversationChunk(vaultChunkFor(id, _chunkCount));
+    final loaded = current();
+    if (loaded == null || !loaded.isLoaded) {
+      throw StateError('Conversation could not be loaded.');
+    }
+    return loaded;
+  }
+
+  Future<void> _loadConversationChunk(int n) async {
+    if (!_unloadedChunks.contains(n)) return;
+    final running = _chunkLoads[n];
+    if (running != null) return running;
+    final operation = _readConversationChunk(n);
+    _chunkLoads[n] = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_chunkLoads[n], operation)) _chunkLoads.remove(n);
+    }
+  }
+
+  Future<void> _readConversationChunk(int n) async {
+    final generation = _searchGeneration;
+    final decoded = await _chunks.decryptChunk(
+      _crypto,
+      _localVaultKey!,
+      n,
+      _chunkNonces[n]!,
+    );
+    final restored = {
+      for (final c in decoded.parseObjectList(
+        'conversations',
+        Conversation.fromJson,
+      ))
+        c.id: c,
+    };
+    if (generation != _searchGeneration || !_crypto.isUnlocked) {
+      throw StateError('Vault was locked while loading.');
+    }
+    // Validate the complete bucket before replacing any summaries.
+    for (final c in conversations) {
+      if (!c.isLoaded &&
+          vaultChunkFor(c.id, _chunkCount) == n &&
+          (restored[c.id] == null ||
+              restored[c.id]!.segmentCount != c.segmentCount)) {
+        throw StateError(_incompleteVaultMessage);
+      }
+    }
+    for (var i = 0; i < conversations.length; i++) {
+      final summary = conversations[i];
+      if (summary.isLoaded || vaultChunkFor(summary.id, _chunkCount) != n) {
+        continue;
+      }
+      final loaded = _canonicalConversation(restored[summary.id]!);
+      conversations[i] = loaded;
+      _searchIndex?.documents[loaded.id]?.conversation = loaded;
+      if (!identical(loaded, restored[summary.id])) {
+        _markConversationChanged(loaded.id);
+      }
+    }
+    _unloadedChunks.remove(n);
+    _notifyChanged();
+  }
+
+  Future<void> _loadAllConversations() async {
+    for (final n in _unloadedChunks.toList()) {
+      await _loadConversationChunk(n);
+    }
   }
 
   void _reportRestore(_RestoreProgress progress, {bool force = false}) =>
@@ -1073,6 +1249,7 @@ extension VaultSync on LifenizerAppState {
         !_crypto.isUnlocked) {
       return;
     }
+    await _prepareSearchIndex(complete: false);
     final payload = _pendingDraftPayload;
     if (payload != null && audioDraft != null) {
       // The audio goes into its own encrypted record before any core refers to
@@ -1107,7 +1284,7 @@ extension VaultSync on LifenizerAppState {
     for (final conversation in conversations) {
       final n = vaultChunkFor(conversation.id, chunkCount);
       conversationCounts[n]++;
-      messageCounts[n] += conversation.segments.length;
+      messageCounts[n] += conversation.segmentCount;
     }
     final dirty = rewriteAll
         ? {for (var n = 0; n < chunkCount; n++) n}
@@ -1120,6 +1297,31 @@ extension VaultSync on LifenizerAppState {
                   _chunkConversationCounts[n] != conversationCounts[n])
                 n,
           };
+    if (rewriteAll) {
+      await _loadAllConversations();
+    } else {
+      for (final n in dirty) {
+        await _loadConversationChunk(n);
+      }
+    }
+    if (_searchSnapshotNonce == null ||
+        _savedSearchRevision != _searchRevision) {
+      try {
+        final revision = _searchRevision;
+        final snapshot = await encodeSearchSnapshot(_searchIndex!);
+        final sealed = await _crypto.encryptJson(snapshot, background: true);
+        await _chunks.writeBlob(key, 'search-index', {
+          'cipherText': sealed.cipherText,
+          'nonce': sealed.nonce,
+        });
+        _searchSnapshotNonce = sealed.nonce;
+        _savedSearchRevision = revision;
+      } catch (_) {
+        // A cache failure must not prevent saving the outbox and original data.
+        _searchSnapshotNonce = null;
+        _savedSearchRevision = -1;
+      }
+    }
     final groups = {for (final n in dirty) n: <Conversation>[]};
     for (final conversation in conversations) {
       groups[vaultChunkFor(conversation.id, chunkCount)]?.add(conversation);

@@ -232,7 +232,10 @@ void main() {
       final core = (await store.read(_key))!;
       expect(core['chunkStorage'], 'files');
       expect(await store.read('$_key:chunk:0'), isNull);
-      expect(files().single.path, endsWith('chunk-0.bin'));
+      expect(
+        files().map((f) => f.path.split('/').last),
+        containsAll(['chunk-0.bin', 'search-index.bin']),
+      );
       await second.lock();
       second.dispose();
 
@@ -496,7 +499,10 @@ void main() {
       first.dispose();
 
       final chunks = FileVaultChunkStore(directory.path);
-      expect(files(), hasLength(1));
+      expect(
+        files().where((f) => f.path.endsWith('chunk-0.bin')),
+        hasLength(1),
+      );
       if (damage == 'deleted') {
         await File(chunks.pathFor(_key, 0)).delete();
       } else {
@@ -518,7 +524,7 @@ void main() {
         'Synced note',
         'Unsent note',
       });
-      expect(files(), hasLength(1), reason: 'chunks re-saved as files');
+      expect(files().map((f) => f.path.split('/').last), containsAll(['chunk-0.bin', 'search-index.bin']));
       await recovered.lock();
       recovered.dispose();
     });

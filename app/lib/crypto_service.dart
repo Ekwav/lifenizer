@@ -25,6 +25,16 @@ class VaultCrypto {
 
   bool get isUnlocked => _vaultKey != null;
 
+  /// Only persist this in the same protected device store as the passphrase.
+  Future<List<int>> exportDeviceKey() async =>
+      (await _requireKey().extractBytes()).toList();
+
+  void unlockDeviceKey(List<int> bytes) {
+    if (bytes.length != 32) throw const FormatException('Invalid device key.');
+    lock();
+    _vaultKey = SecretKeyData(bytes.toList(), overwriteWhenDestroyed: true);
+  }
+
   void lock() {
     _vaultKey?.destroy();
     _vaultKey = null;

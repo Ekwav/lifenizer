@@ -45,6 +45,8 @@ class _Server {
   bool loseBootstrapResponse = false;
   bool offline = false;
   bool failPull = false;
+  Completer<void>? refreshGate;
+  final refreshSeen = Completer<void>();
   String? refreshEmail;
   _Keyring? firstStore;
   Map<String, dynamic> auth(String id) => {
@@ -118,6 +120,8 @@ class _Server {
       pending.removeWhere((record) => record['id'] == path.split('/')[3]);
       return http.Response('', 204);
     } else if (path == '/api/pairing/refresh') {
+      if (!refreshSeen.isCompleted) refreshSeen.complete();
+      await refreshGate?.future;
       session['authToken'] = 'renewed-token';
       result = {
         ...auth(body['deviceId'] as String? ?? 'device-1'),
@@ -216,6 +220,63 @@ void main() {
       await state.pairing.unlockSaved();
       expect(state.isAuthenticated, isTrue, reason: state.error);
       expect(keyring.value, stored);
+    },
+  );
+
+  test(
+    'cached device key opens locally before remote refresh and manual passwords still authenticate',
+    () async {
+      final keyring = _Keyring();
+      final server = _Server()..firstStore = keyring;
+      final state = await _state(server, keyring);
+      await state.pairing.connect(_link());
+      expect(state.isAuthenticated, isTrue);
+      final cachedKey = keyring.value!['vaultKey'];
+      expect(base64Decode(cachedKey as String), hasLength(32));
+      expect(keyring.value!['vaultKeySalt'], server.session['vaultSalt']);
+      await state.lock();
+
+      server.refreshGate = Completer<void>();
+      addTearDown(() {
+        if (!server.refreshGate!.isCompleted) server.refreshGate!.complete();
+      });
+      // A different passphrase proves this unlock used the protected derived key,
+      // rather than accidentally deriving a new key from the saved passphrase.
+      keyring.value!['vaultPassphrase'] =
+          'deliberately incorrect saved passphrase';
+      await state.pairing.unlockSaved().timeout(const Duration(seconds: 10));
+      expect(
+        state.isAuthenticated,
+        isTrue,
+        reason: state.error ?? state.pairing.error,
+      );
+      await server.refreshSeen.future.timeout(const Duration(seconds: 10));
+      expect(server.refreshGate!.isCompleted, isFalse);
+      expect(state.session!.authToken, 'initial-token');
+      server.refreshGate!.complete();
+      await state.waitForBackgroundSync();
+      expect(state.session!.authToken, 'renewed-token');
+      expect(state.syncError, isNull);
+      await state.lock();
+
+      await state.login(
+        baseUrl: 'https://example.test/lifenizer',
+        email: 'paired@lifenizer.invalid',
+        passphrase: 'wrong manual password',
+        offline: true,
+      );
+      expect(
+        state.isAuthenticated,
+        isFalse,
+        reason: 'manual unlock must not silently reuse a paired device key',
+      );
+      expect(state.session, isNull);
+      expect(state.error, isNotNull);
+      expect(
+        keyring.value!['vaultKey'],
+        cachedKey,
+        reason: 'failed manual auth must preserve paired credentials',
+      );
     },
   );
 
@@ -389,7 +450,8 @@ void main() {
         isTrue,
       ); // Existing encrypted local cache unlocks offline.
       expect(state.session!.authToken, 'initial-token');
-      expect(state.pairing.error, contains('another paired account'));
+      await state.waitForBackgroundSync();
+      expect(state.syncError, contains('Paired account changed'));
       expect(keyring.value, saved);
       final missingCache = await _state(server, _Keyring()..value = saved);
       await missingCache.pairing.restore(autoUnlock: false);

@@ -55,9 +55,7 @@ extension VaultTraining on LifenizerAppState {
       try {
         await _syncInFlight;
       } catch (_) {}
-      final current = conversations.firstWhere(
-        (item) => item.id == conversation.id,
-      );
+      final current = await loadConversation(conversation.id);
       final index = current.segments.indexWhere(
         (item) => item.id == segment.id,
       );

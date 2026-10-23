@@ -122,10 +122,10 @@ void main() {
           SyncStage.readingLocal,
           SyncStage.derivingKey,
           SyncStage.decryptingLocal,
-          SyncStage.restoring,
-          SyncStage.indexing,
         ]),
       );
+      expect(stages, isNot(contains(SyncStage.indexing)));
+      expect(renewed.fullSearchBuilds, 0);
       final sidecar = (await disk.read('$key:session'))!;
       expect(sidecar['snapshotNonce'], before['nonce']);
       expect(jsonEncode(sidecar), isNot(contains('fresh-private-session')));
@@ -135,6 +135,7 @@ void main() {
       await login(offline, offline: true);
       expect(offline.error, isNull);
       expect(offline.session!.authToken, 'fresh-private-session');
+      await offline.loadConversation(offline.conversations.single.id);
       expect(
         offline.conversations.single.segments.single.text,
         'Retain this content',
@@ -150,6 +151,7 @@ void main() {
       await login(fallback, offline: true);
       expect(fallback.error, isNull);
       expect(fallback.session!.authToken, 'private-token');
+      await fallback.loadConversation(fallback.conversations.single.id);
       expect(
         fallback.conversations.single.segments.single.text,
         'Retain this content',
