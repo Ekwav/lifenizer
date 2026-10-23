@@ -4,13 +4,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'
-    show kDebugMode, kIsWeb, defaultTargetPlatform, TargetPlatform;
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 import '../app_state.dart';
 import '../models.dart';
 import '../services/export_file_reader.dart';
 import '../services/discord_archive.dart';
 import '../services/export_watch_service.dart';
+import '../services/source_links.dart';
+import '../widgets/browser_extension_section.dart';
 import '../widgets/imap_import_panel.dart';
 import '../widgets/document_import_panel.dart';
 import '../widgets/camera_photos_panel.dart';
@@ -40,6 +42,7 @@ class _ImportsPageState extends State<ImportsPage> {
     text: '{}',
   );
 
+  String _query = '';
   bool _watchExport = false;
   bool _dragging = false;
   String get _ownDiscordId {
@@ -73,8 +76,138 @@ class _ImportsPageState extends State<ImportsPage> {
     super.dispose();
   }
 
+  static const _adapters = [
+    (
+      id: 'email',
+      title: 'Email (IMAP)',
+      description: 'Connect a mailbox with an email app password.',
+      steps: [
+        'Enable IMAP for your email account and create an app password.',
+        'Check the configured server below, then enter your address and mailbox.',
+        'Connect and import; choose whether to remember this account.',
+      ],
+    ),
+    (
+      id: 'discord-export',
+      title: 'Discord data package',
+      description:
+          'Read a Discord account export locally, with optional file watching.',
+      steps: [
+        'Request your Discord data package in its privacy settings and download the ZIP.',
+        'Choose the ZIP below. Messages merge by ID; identical backups are skipped.',
+        'Optionally watch the file and replace it with a newer export later.',
+      ],
+    ),
+    (
+      id: 'discord-bot',
+      title: 'Discord bot',
+      description: 'Read selected server channels with your own bot.',
+      steps: [
+        'Create a Discord bot and give it access to the channels you want to import.',
+        'Enable Message Content Intent and copy the bot token and channel IDs.',
+        'Enter the details below and connect.',
+      ],
+    ),
+    (
+      id: 'documents',
+      title: 'Documents & Paperless',
+      description:
+          'Import PDFs and scans, watch a folder, or connect Paperless.',
+      steps: [
+        'Choose a PDF or scan using the file picker above.',
+        'For automatic imports, select a folder below.',
+        'For Paperless, enter its address and access token below.',
+      ],
+    ),
+    (
+      id: 'photos',
+      title: 'Camera photos',
+      description: 'Import camera photos and the text visible in them.',
+      steps: [
+        'Grant access to your photos or choose a camera folder.',
+        'Choose whether to keep original photos in the vault.',
+        'Import recent photos or turn on automatic imports below.',
+      ],
+    ),
+    (
+      id: 'history',
+      title: 'Browser & watch history files',
+      description:
+          'Import YouTube / TikTok exports or watch local browser history.',
+      steps: [
+        'For YouTube, export watch history with Google Takeout.',
+        'For TikTok, request Download your data and choose JSON or browsing-history text.',
+        'Choose your export below, or configure a local browser history file.',
+      ],
+    ),
+    (
+      id: 'audio',
+      title: 'Audio recording',
+      description: 'Transcribe an existing audio file.',
+      steps: [
+        'Choose an MP3, M4A, WAV, OGG, Opus, FLAC, AAC or WebM recording.',
+        'Optionally add a title, participants, language and recording date.',
+        'Import the recording; transcription can take a few minutes.',
+      ],
+    ),
+    (
+      id: 'manual',
+      title: 'Other source / pasted export',
+      description: 'Choose an adapter explicitly or paste an export payload.',
+      steps: [
+        'Enter the source adapter name for your export.',
+        'Choose a file or paste its text below.',
+        'Add a title or participants if needed, then import.',
+      ],
+    ),
+  ];
+  static const _extensions = [
+    (
+      id: 'youtube',
+      title: 'YouTube',
+      description: 'Watch history from your signed-in YouTube account.',
+    ),
+    (
+      id: 'tiktok',
+      title: 'TikTok',
+      description: 'Watch history from your signed-in TikTok account.',
+    ),
+    (
+      id: 'whatsapp',
+      title: 'WhatsApp Web',
+      description: 'New messages rendered in your open conversations.',
+    ),
+    (
+      id: 'discord',
+      title: 'Discord Web',
+      description: 'New messages rendered in your open conversations.',
+    ),
+  ];
+
+  bool _matches(String text) => text.toLowerCase().contains(_query);
+
   @override
   Widget build(BuildContext context) {
+    final adapters = _adapters
+        .where((a) => _matches('${a.title} ${a.description} ${a.id}'))
+        .toList();
+    final capabilities = widget.state.importCapabilities
+        .where(
+          (a) =>
+              !const {
+                'email',
+                'paperless',
+                'photo',
+                'audio',
+                'scanned-pdf',
+                'discord',
+              }.contains(a.source) &&
+              _matches('${a.displayName} ${a.source} ${a.status}'),
+        )
+        .toList();
+    final extensions = _extensions
+        .where((a) => _matches('${a.title} ${a.description} browser extension'))
+        .toList();
     return DropTarget(
       enable:
           _desktop &&
@@ -94,274 +227,373 @@ class _ImportsPageState extends State<ImportsPage> {
                   ? Theme.of(context).colorScheme.secondaryContainer
                   : null,
               child: Padding(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Import files',
+                      'Start with a file',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     const Text(
-                      'Discord data packages are read locally. Other configured importers process plaintext on your server. Results are encrypted before sync.',
+                      'Choose or drop an export, backup, PDF or scan. Lifenizer detects the source automatically.',
                     ),
                     const SizedBox(height: 12),
                     FilledButton.icon(
+                      key: const Key('imports-auto-file'),
                       onPressed: widget.state.busy ? null : () => _pickExport(),
                       icon: const Icon(Icons.upload_file),
                       label: const Text('Choose backup or export'),
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Drop PDFs, scans, or exports here. Choose a Discord data ZIP, Telegram JSON, WhatsApp text/ZIP, or Lifenizer JSON export. Discord updates merge by message ID; identical backups are skipped.',
-                    ),
-                    if (_desktop) ...[
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        value: _watchExport,
-                        onChanged: widget.state.busy
-                            ? null
-                            : (value) =>
-                                  setState(() => _watchExport = value ?? false),
-                        title: const Text(
-                          'Watch this Discord export for changes',
-                        ),
-                        subtitle: const Text(
-                          'Import again when you replace the ZIP with a newer export, while the app is open and unlocked.',
-                        ),
-                      ),
-                      ListenableBuilder(
-                        listenable: ExportWatchService.instance,
-                        builder: (context, _) {
-                          final path = ExportWatchService.instance.path;
-                          return path == null
-                              ? const SizedBox.shrink()
-                              : ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('Watching Discord export'),
-                                  subtitle: Text(path),
-                                  trailing: TextButton(
-                                    onPressed: () => ExportWatchService.instance
-                                        .stopWatching(),
-                                    child: const Text('Stop'),
-                                  ),
-                                );
-                        },
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        SizedBox(
-                          width: 220,
-                          child: TextField(
-                            controller: _sourceController,
-                            decoration: const InputDecoration(
-                              labelText: 'Source',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 300,
-                          child: TextField(
-                            controller: _titleController,
-                            decoration: const InputDecoration(
-                              labelText: 'Title',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 300,
-                          child: TextField(
-                            controller: _participantsController,
-                            decoration: const InputDecoration(
-                              labelText: 'Participants',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 240,
-                          child: TextField(
-                            controller: _fileController,
-                            decoration: const InputDecoration(
-                              labelText: 'Original file',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 220,
-                          child: TextField(
-                            controller: _mimeController,
-                            decoration: const InputDecoration(
-                              labelText: 'MIME type',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _textController,
-                      minLines: 5,
-                      maxLines: 9,
-                      decoration: const InputDecoration(
-                        labelText: 'Text or export payload',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _metadataController,
-                      minLines: 2,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: 'Provider metadata JSON',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: widget.state.busy ? null : _runImport,
-                          icon: const Icon(Icons.input),
-                          label: const Text('Send import and encrypt result'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: widget.state.busy
-                              ? null
-                              : () => _pickExport(useSource: true),
-                          icon: const Icon(Icons.file_open),
-                          label: const Text('Choose file for this source'),
-                        ),
-                        if (kDebugMode)
-                          for (final source in const [
-                            'whatsapp',
-                            'telegram',
-                            'signal',
-                            'slack',
-                            'teams',
-                            'facebook-messenger',
-                            'instagram',
-                            'imessage',
-                            'mbox',
-                            'git',
-                            'browser-capture',
-                            'google-search-history',
-                            'bookmarks',
-                            'lifenizer-backup',
-                            'browser-history',
-                            'youtube-transcript',
-                            'audio',
-                            'scanned-pdf',
-                          ])
-                            OutlinedButton(
-                              onPressed: widget.state.busy
-                                  ? null
-                                  : () => widget.state.importSample(source),
-                              child: Text(source),
-                            ),
-                      ],
+                      'Discord data packages are read locally. Other configured importers process plaintext on your server. Results are encrypted before sync.',
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            ImapImportPanel(state: widget.state),
-            const SizedBox(height: 16),
-            DiscordBotImportPanel(
-              service: widget.state.discordImport,
-              ownUserId: _ownDiscordId,
+            const SizedBox(height: 20),
+            TextField(
+              key: const Key('imports-search'),
+              decoration: const InputDecoration(
+                labelText: 'Find an importer',
+                hintText: 'Search an app, file type or connection',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) =>
+                  setState(() => _query = value.trim().toLowerCase()),
             ),
             const SizedBox(height: 16),
-            DocumentImportPanel(state: widget.state),
-            const SizedBox(height: 16),
-            CameraPhotosPanel(state: widget.state),
-            const SizedBox(height: 16),
-            ViewingHistoryPanel(state: widget.state),
-            const SizedBox(height: 16),
-            _AudioImportPanel(state: widget.state),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                for (final capability in widget.state.importCapabilities)
-                  SizedBox(
-                    width: 340,
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  capability.availableNow
-                                      ? Icons.check_circle_outline
-                                      : Icons.pending_outlined,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    capability.displayName,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(capability.source),
-                            const SizedBox(height: 8),
-                            Text(capability.status),
-                            const SizedBox(height: 8),
-                            Text(
-                              capability.requiresCredentials
-                                  ? 'Requires provider credentials'
-                                  : 'No provider credentials required',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            if (capability.acceptedFormats.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: [
-                                  for (final format
-                                      in capability.acceptedFormats)
-                                    Chip(
-                                      visualDensity: VisualDensity.compact,
-                                      label: Text(format),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
+            if (adapters.isNotEmpty || capabilities.isNotEmpty) ...[
+              Text(
+                'Files & connections',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              for (final adapter in adapters)
+                _adapterCard(
+                  adapter.id,
+                  adapter.title,
+                  adapter.description,
+                  () => _openAdapter(
+                    adapter.title,
+                    adapter.steps,
+                    () => _panel(adapter.id),
+                  ),
+                ),
+              for (final capability in capabilities)
+                _adapterCard(
+                  'source-${capability.source}',
+                  capability.displayName,
+                  'Export file • ${capability.availableNow ? 'Ready to import' : 'Currently unavailable'}',
+                  () {
+                    _sourceController.text = capability.source;
+                    _openAdapter(
+                      capability.displayName,
+                      [
+                        _exportStep(capability.source, capability.displayName),
+                        if (capability.acceptedFormats.isNotEmpty)
+                          'Supported formats: ${capability.acceptedFormats.join(', ')}.',
+                        'Choose the export below. The adapter is already selected.',
+                      ],
+                      () => Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            capability.availableNow
+                                ? 'Import an existing export file, or paste its text below.'
+                                : capability.status,
+                          ),
+                          _manualImport(),
+                        ],
                       ),
+                    );
+                  },
+                ),
+            ],
+            if (extensions.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Browser extension',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const Text(
+                'Install the Lifenizer extension on this computer, then choose what it may import.',
+              ),
+              const SizedBox(height: 8),
+              for (final extension in extensions)
+                _adapterCard(
+                  'extension-${extension.id}',
+                  extension.title,
+                  'Extension required • ${extension.description}',
+                  () => _openExtension(extension.id, extension.title),
+                ),
+            ],
+            if (adapters.isEmpty && capabilities.isEmpty && extensions.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'No importers match. Try another app name or file type.',
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _exportStep(String source, String title) => switch (source) {
+    'whatsapp' =>
+      'In WhatsApp, export the conversation as text or a ZIP. Use an export without media for a smaller file.',
+    'telegram' =>
+      'Export your data with Telegram Desktop and choose the machine-readable JSON format.',
+    'slack' =>
+      'Get a JSON workspace export from your Slack workspace administrator.',
+    'facebook-messenger' || 'instagram' =>
+      'Download your messages from Meta Accounts Center and choose JSON.',
+    'youtube-watch-history' =>
+      'Use Google Takeout to export YouTube watch history as JSON or HTML.',
+    'tiktok-watch-history' =>
+      'In TikTok, request Download your data as JSON or browsing-history text.',
+    'mbox' => 'Export a mailbox as an MBOX file from your email application.',
+    'bookmarks' =>
+      'Export bookmarks from your browser as an HTML or JSON file.',
+    'lifenizer-backup' => 'Choose a previously exported Lifenizer backup.',
+    'signal' =>
+      'Prepare a Signal-compatible CSV, JSON or text transcript. Encrypted Signal backup files are not supported.',
+    _ => 'Prepare a supported export file for $title.',
+  };
+
+  Widget _adapterCard(
+    String id,
+    String title,
+    String description,
+    VoidCallback open,
+  ) => Card(
+    child: ListTile(
+      key: Key('import-adapter-$id'),
+      title: Text(title),
+      subtitle: Text(description, maxLines: 2, overflow: TextOverflow.ellipsis),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: open,
+    ),
+  );
+
+  void _openAdapter(String title, List<String> steps, Widget Function() panel) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => SizedBox(
+        height: MediaQuery.sizeOf(context).height * .9,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
-              ],
+                  IconButton(
+                    tooltip: 'Close setup',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  24 + MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: AnimatedBuilder(
+                  animation: widget.state,
+                  builder: (context, _) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < steps.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text('${i + 1}. ${steps[i]}'),
+                        ),
+                      const SizedBox(height: 12),
+                      panel(),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
   }
+
+  Widget _panel(String id) => switch (id) {
+    'email' => ImapImportPanel(state: widget.state),
+    'discord-export' => Column(
+      children: [
+        _discordExportOptions(),
+        FilledButton.icon(
+          onPressed: widget.state.busy ? null : () => _pickExport(),
+          icon: const Icon(Icons.file_open),
+          label: const Text('Choose Discord data package'),
+        ),
+      ],
+    ),
+    'discord-bot' => DiscordBotImportPanel(
+      service: widget.state.discordImport,
+      ownUserId: _ownDiscordId,
+    ),
+    'documents' => DocumentImportPanel(state: widget.state),
+    'photos' => CameraPhotosPanel(state: widget.state),
+    'history' => ViewingHistoryPanel(state: widget.state),
+    'audio' => _AudioImportPanel(state: widget.state),
+    _ => _manualImport(showSource: true),
+  };
+
+  void _openExtension(String platform, String title) => _openAdapter(
+    '$title extension setup',
+    [
+      'Install the Lifenizer browser extension: in Chrome / Edge, open the Extensions page, enable Developer mode, choose Load unpacked and select the extension folder. In Firefox, open about:debugging, choose This Firefox → Load Temporary Add-on and select its manifest.json.',
+      'Enable the local connection below. In the extension’s Settings, enter this port and token, then test the connection. Keep Lifenizer open and the vault unlocked.',
+      if (platform == 'youtube' || platform == 'tiktok')
+        'In extension Settings, set the expected $title account ID or @handle. Sign in to that account in your browser, then use Sync now.'
+      else
+        'In extension Settings, enable $title capture. Open a signed-in conversation; only newly rendered messages are captured. Existing history is not imported.',
+    ],
+    () => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextButton.icon(
+          onPressed: () => openExternalLink(
+            'https://github.com/Ekwav/lifenizer/tree/main/integrations/browser-extension#install-and-pair',
+          ),
+          icon: const Icon(Icons.open_in_new),
+          label: const Text('Get the extension and installation guide'),
+        ),
+        if (!_desktop)
+          const Text(
+            'The browser extension connects to the desktop app on the same computer.',
+          ),
+        BrowserExtensionSection(
+          service: widget.state.browserExtension,
+          signedIn: widget.state.isAuthenticated,
+        ),
+      ],
+    ),
+  );
+
+  Widget _discordExportOptions() => StatefulBuilder(
+    builder: (context, update) => Column(
+      children: [
+        if (_desktop)
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _watchExport,
+            onChanged: widget.state.busy
+                ? null
+                : (value) => update(() => _watchExport = value ?? false),
+            title: const Text('Watch this Discord export for changes'),
+            subtitle: const Text(
+              'Import again when you replace the ZIP, while the app is open and unlocked.',
+            ),
+          ),
+        ListenableBuilder(
+          listenable: ExportWatchService.instance,
+          builder: (context, _) {
+            final path = ExportWatchService.instance.path;
+            return path == null
+                ? const SizedBox.shrink()
+                : ListTile(
+                    title: const Text('Watching Discord export'),
+                    subtitle: Text(path),
+                    trailing: TextButton(
+                      onPressed: ExportWatchService.instance.stopWatching,
+                      child: const Text('Stop'),
+                    ),
+                  );
+          },
+        ),
+      ],
+    ),
+  );
+
+  Widget _manualImport({bool showSource = false}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (showSource)
+        TextField(
+          controller: _sourceController,
+          decoration: const InputDecoration(labelText: 'Source adapter'),
+        ),
+      const SizedBox(height: 8),
+      FilledButton.icon(
+        onPressed: widget.state.busy
+            ? null
+            : () => _pickExport(useSource: true),
+        icon: const Icon(Icons.file_open),
+        label: const Text('Choose file for this source'),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _titleController,
+        decoration: const InputDecoration(labelText: 'Title (optional)'),
+      ),
+      TextField(
+        controller: _participantsController,
+        decoration: const InputDecoration(labelText: 'Participants (optional)'),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _textController,
+        minLines: 5,
+        maxLines: 9,
+        decoration: const InputDecoration(
+          labelText: 'Text or export payload',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      ExpansionTile(
+        title: const Text('Advanced import settings'),
+        children: [
+          TextField(
+            controller: _fileController,
+            decoration: const InputDecoration(labelText: 'Original file'),
+          ),
+          TextField(
+            controller: _mimeController,
+            decoration: const InputDecoration(labelText: 'MIME type'),
+          ),
+          TextField(
+            controller: _metadataController,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Provider metadata JSON',
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      FilledButton.icon(
+        onPressed: widget.state.busy ? null : _runImport,
+        icon: const Icon(Icons.input),
+        label: const Text('Send import and encrypt result'),
+      ),
+    ],
+  );
 
   Future<void> _runImport() async {
     final decoded = _metadataController.text.trim().isEmpty

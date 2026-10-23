@@ -18,10 +18,10 @@ Conversation _watched(String source, {Map<String, String>? metadata}) =>
     );
 
 void main() {
-  testWidgets('imports page shows camera photos and viewing history panels', (
+  testWidgets('import catalogue opens only the selected setup panel', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(1200, 6000);
+    tester.view.physicalSize = const Size(1200, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final state = LifenizerAppState();
@@ -31,24 +31,98 @@ void main() {
         home: Scaffold(body: ImportsPage(state: state)),
       ),
     );
-    await tester.pump();
+    expect(find.byKey(const Key('imports-auto-file')), findsOneWidget);
+    expect(
+      find.byKey(const Key('import-adapter-discord-export')),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('detects the source automatically'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('camera-photos-panel')), findsNothing);
+    expect(find.byKey(const Key('viewing-history-panel')), findsNothing);
+    expect(find.text('Text or export payload'), findsNothing);
 
+    await tester.tap(find.byKey(const Key('import-adapter-photos')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const Key('camera-photos-panel')), findsOneWidget);
-    expect(find.text('Camera photos'), findsOneWidget);
-    expect(find.textContaining('only while Lifenizer is open'), findsOneWidget);
     expect(find.byKey(const Key('camera-auto-import')), findsOneWidget);
     expect(find.byKey(const Key('camera-keep-in-vault')), findsOneWidget);
-    expect(find.byKey(const Key('camera-last-week')), findsOneWidget);
+    expect(find.byKey(const Key('viewing-history-panel')), findsNothing);
+    await tester.tap(find.byTooltip('Close setup'));
+    await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const Key('import-adapter-history')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const Key('viewing-history-panel')), findsOneWidget);
-    expect(find.text('Viewing history'), findsOneWidget);
-    expect(find.textContaining('Google Takeout'), findsOneWidget);
-    expect(find.textContaining('Download your data'), findsOneWidget);
     expect(find.byKey(const Key('viewing-history-pick')), findsOneWidget);
     expect(
       find.text('Fetch transcripts for the 25 most recent videos'),
       findsOneWidget,
     );
+    expect(find.byKey(const Key('camera-photos-panel')), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('search finds export adapters and separate extension setups', (
+    tester,
+  ) async {
+    final state = LifenizerAppState();
+    state.importCapabilities.add(
+      ImportCapability(
+        source: 'whatsapp',
+        displayName: 'WhatsApp chat export',
+        availableNow: true,
+        requiresCredentials: false,
+        status: 'Reads exported chats',
+        acceptedFormats: ['text/plain', 'application/zip'],
+      ),
+    );
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ImportsPage(state: state)),
+      ),
+    );
+    final search = find.byKey(const Key('imports-search'));
+    await tester.enterText(search, 'whatsapp');
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('import-adapter-source-whatsapp')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('import-adapter-extension-whatsapp')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('import-adapter-extension-discord')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('import-adapter-photos')), findsNothing);
+    await tester.ensureVisible(
+      find.byKey(const Key('import-adapter-extension-whatsapp')),
+    );
+    await tester.tap(
+      find.byKey(const Key('import-adapter-extension-whatsapp')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('WhatsApp Web extension setup'), findsOneWidget);
+    expect(find.textContaining('Load unpacked'), findsOneWidget);
+    expect(find.textContaining('only newly rendered messages'), findsOneWidget);
+    expect(
+      find.text('Get the extension and installation guide'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('Close setup'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(search);
+    await tester.enterText(search, 'unknown adapter 123');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('No importers match'), findsOneWidget);
+    expect(find.byKey(const Key('imports-auto-file')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets(
