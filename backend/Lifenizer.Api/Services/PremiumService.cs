@@ -1,7 +1,4 @@
 using Coflnet.Payments.Client.Api;
-using Coflnet.Payments.Client.Model;
-using Lifenizer.Api.Data;
-using Lifenizer.Api.Services;
 using Lifenizer.Core;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -14,6 +11,7 @@ namespace Lifenizer.Api.Services;
 /// </summary>
 public sealed class PremiumService(
     IUserApi userApi,
+    ITopUpApi topUpApi,
     UserAccountService accountService,
     IMemoryCache cache,
     IConfiguration configuration,
@@ -66,31 +64,34 @@ public sealed class PremiumService(
             return cached;
         }
 
+        if (string.IsNullOrWhiteSpace(configuration["Payments:BaseUrl"])) return (SubscriptionPlan.Free, null);
+
         try
         {
             var userIdStr = userId.ToString();
             var plusOwns = await userApi.UserUserIdOwnsUntilPostAsync(
                 userIdStr,
-                new List<string> { ProductSlugPremiumPlus });
+                new List<string> { ProductSlugPremiumPlus }, cancellationToken: cancellationToken);
             if (plusOwns?.TryGetValue(ProductSlugPremiumPlus, out var plusExpiry) == true
                 && plusExpiry > DateTime.UtcNow)
             {
                 var result = (SubscriptionPlan.PremiumPlus, (DateTimeOffset?)plusExpiry);
-                cache.Set(cacheKey, result, CacheTtl);
+                cache.Set(cacheKey, result, plusExpiry < DateTime.UtcNow.Add(CacheTtl) ? plusExpiry : DateTime.UtcNow.Add(CacheTtl));
                 return result;
             }
 
             var premiumOwns = await userApi.UserUserIdOwnsUntilPostAsync(
                 userIdStr,
-                new List<string> { ProductSlugPremium });
+                new List<string> { ProductSlugPremium }, cancellationToken: cancellationToken);
             if (premiumOwns?.TryGetValue(ProductSlugPremium, out var premiumExpiry) == true
                 && premiumExpiry > DateTime.UtcNow)
             {
                 var result = (SubscriptionPlan.Premium, (DateTimeOffset?)premiumExpiry);
-                cache.Set(cacheKey, result, CacheTtl);
+                cache.Set(cacheKey, result, premiumExpiry < DateTime.UtcNow.Add(CacheTtl) ? premiumExpiry : DateTime.UtcNow.Add(CacheTtl));
                 return result;
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Payments API unavailable for user {UserId}, defaulting to Free.", userId);
@@ -112,14 +113,16 @@ public sealed class PremiumService(
         var slug = plan.ToLowerInvariant() switch
         {
             "premium-plus" or "premiumplus" => ProductSlugPremiumPlus,
-            _ => ProductSlugPremium,
+            "premium" => ProductSlugPremium,
+            _ => throw new ArgumentException("Unknown premium plan.", nameof(plan)),
         };
 
-        // POST /TopUp/lemonsqueezy/subscribe
-        // The Coflnet.Payments.Client wraps this via ITopUpApi.
-        // We return a redirect URL the client can open in a browser.
-        var baseUrl = configuration["Payments:BaseUrl"]
-            ?? throw new InvalidOperationException("Payments:BaseUrl is not configured.");
-        return $"{baseUrl.TrimEnd('/')}/TopUp/lemonsqueezy/subscribe?userId={userId}&productId={slug}";
+        if (string.IsNullOrWhiteSpace(configuration["Payments:BaseUrl"]))
+            throw new InvalidOperationException("Payments are not configured.");
+        var checkout = await topUpApi.TopUpLemonsqueezySubscribePostAsync(
+            userId.ToString(), slug, cancellationToken: cancellationToken);
+        if (!Uri.TryCreate(checkout?.DirectLink, UriKind.Absolute, out var url) || url.Scheme != Uri.UriSchemeHttps)
+            throw new InvalidOperationException("Payments returned an invalid checkout URL.");
+        return url.AbsoluteUri;
     }
 }

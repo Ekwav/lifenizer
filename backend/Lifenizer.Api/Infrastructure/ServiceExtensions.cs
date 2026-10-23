@@ -180,20 +180,15 @@ public static class ServiceExtensions
     {
         services.AddScoped<PremiumService>();
 
-        // Coflnet Payments API client – gracefully skipped when Payments:BaseUrl is absent.
-        var paymentsBaseUrl = configuration["Payments:BaseUrl"];
-        if (!string.IsNullOrWhiteSpace(paymentsBaseUrl))
-        {
-            services.AddHttpClient<IUserApi, UserApi>(client =>
-            {
-                client.BaseAddress = new Uri(paymentsBaseUrl.TrimEnd('/') + "/");
-            });
-        }
-        else
-        {
-            // Register a no-op stub so DI resolves without crashing when payments is unconfigured.
-            services.AddSingleton<IUserApi>(new UserApi("http://localhost:8000"));
-        }
+        // Generated SDK clients own their HTTP transport; they do not accept HttpClient.
+        var baseUrl = configuration["Payments:BaseUrl"];
+        if (!string.IsNullOrWhiteSpace(baseUrl) &&
+            (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")))
+            throw new InvalidOperationException("Payments:BaseUrl must be an absolute HTTP(S) URL.");
+        // PremiumService never calls these clients while payments is unconfigured.
+        var sdkBaseUrl = string.IsNullOrWhiteSpace(baseUrl) ? "http://localhost:8000" : baseUrl.TrimEnd('/');
+        services.AddSingleton<IUserApi>(new UserApi(sdkBaseUrl));
+        services.AddSingleton<ITopUpApi>(new TopUpApi(sdkBaseUrl));
 
         return services;
     }

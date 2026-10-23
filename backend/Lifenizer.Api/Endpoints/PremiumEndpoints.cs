@@ -1,3 +1,4 @@
+using Coflnet.Payments.Client.Client;
 using Lifenizer.Api.Security;
 using Lifenizer.Api.Services;
 
@@ -34,10 +35,20 @@ public static class PremiumEndpoints
             string plan,
             ClaimsPrincipalUser currentUser,
             PremiumService premium,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken,
+            ILogger<PremiumService> logger) =>
         {
-            var url = await premium.CreateCheckoutUrlAsync(currentUser.UserId, plan, cancellationToken);
-            return Results.Ok(new { checkoutUrl = url });
+            try
+            {
+                var url = await premium.CreateCheckoutUrlAsync(currentUser.UserId, plan, cancellationToken);
+                return Results.Ok(new { checkoutUrl = url });
+            }
+            catch (ArgumentException) { return Results.BadRequest(new { error = "unknown_plan" }); }
+            catch (Exception error) when (error is ApiException or InvalidOperationException)
+            {
+                logger.LogWarning(error, "Unable to create subscription checkout");
+                return Results.Json(new { error = "checkout_unavailable" }, statusCode: 503);
+            }
         });
 
         return app;
