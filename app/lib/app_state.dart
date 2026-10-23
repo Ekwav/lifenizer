@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -38,6 +39,7 @@ import 'services/audio_cache_io.dart'
 import 'services/wav_audio.dart';
 import 'services/vault_chunks.dart';
 import 'services/vault_chunk_store.dart';
+import 'services/backup_archive.dart';
 import 'services/vault_chunk_store_sembast.dart';
 import 'services/vault_chunk_store_platform_io.dart'
     if (dart.library.js_interop) 'services/vault_chunk_store_platform_web.dart';
@@ -58,6 +60,7 @@ part 'services/vault_email.dart';
 part 'services/vault_training.dart';
 part 'services/vault_recordings.dart';
 part 'services/vault_search_cache.dart';
+part 'services/vault_backup.dart';
 
 class LifenizerAppState extends ChangeNotifier {
   LifenizerAppState({
