@@ -57,6 +57,77 @@ valid backup. App exports are separate: use **Sync → Make backup** and
 **Sync → Restore backup** for encrypted `.lfb` parts. Legacy conversation JSON
 backups use **Imports**. Do not extract app exports into the server data directory.
 
+## Private R2/S3 online storage
+
+Create a private Cloudflare R2 bucket with public access disabled. Create an S3
+access key scoped to that bucket with object read/write permissions (including
+object deletion); the API needs no account administration credentials. For another
+S3-compatible service, use its HTTPS endpoint, bucket and signing region.
+
+Keep a JSON file outside the checkout, owned by the deploying user with mode
+`0600` (or stricter). Its supported fields are:
+
+```json
+{
+  "ObjectStorage__ServiceUrl": "https://ACCOUNT_ID.r2.cloudflarestorage.com",
+  "ObjectStorage__Bucket": "lifenizer-private",
+  "ObjectStorage__AccessKeyId": "R2_ACCESS_KEY_ID",
+  "ObjectStorage__SecretAccessKey": "R2_SECRET_ACCESS_KEY",
+  "ObjectStorage__Region": "auto",
+  "ObjectStorage__Prefix": "lifenizer"
+}
+```
+
+Replace the placeholders with the bucket credentials, then deploy a reviewed
+commit using the existing installer:
+
+```bash
+chmod 600 /private/path/lifenizer-service.json
+./scripts/deploy-compose.py --service-config /private/path/lifenizer-service.json
+```
+
+`Region` defaults to `auto` for R2; `Prefix` is optional. The installer accepts
+only the six object-storage fields above, `Payments__BaseUrl`, `Products__Premium`
+and `Products__PremiumPlus`. Values must be JSON scalars other than null and safe
+unquoted dotenv values: single-line printable ASCII without whitespace, quotes,
+backslashes, `$` or `#`. Unsupported fields, unsafe values, symlinks and files with
+access for other users are rejected before building or contacting the server.
+Credentials travel inside the SSH stdin payload, never in command arguments or
+installer logs. The remote helper validates them again, reads the current `.env`,
+backs it up with the data, patches only supplied fields and atomically replaces it
+with owner-only permissions. Omitted fields retain their current values; later
+upgrades can omit `--service-config` entirely.
+
+With object storage configured, new encrypted photos, opted-in recordings and
+batched encrypted sync payloads go into private objects. SQLite retains the sync
+cursor, object references and account/quota metadata. The API authorizes reads;
+clients do not receive bucket credentials. Existing inline SQLite sync payloads
+and local media files remain readable; enabling R2 does not migrate or delete them.
+Without object-storage configuration, the same object adapter uses the persistent
+artifact directory.
+
+Clients save edits locally immediately and collect at least 20 seconds of changes
+before an automatic batch upload. One new object stores each accepted sync batch;
+retrying already committed envelope IDs does not create duplicate sync objects.
+**Sync now** bypasses the delay. Recording storage stays an explicit per-recording
+choice: **Store encrypted recording online** makes playback independent of the
+source device. Failed uploads/removals keep their requested state encrypted on
+that device and retry during ordinary sync while unlocked. Pending storage is
+shown separately from confirmed online storage, and removing the online copy
+keeps local audio.
+
+The installer archive includes SQLite, configuration and legacy local files;
+R2 objects need a separate bucket backup/retention policy. Preserve both the
+SQLite references and their referenced objects when restoring a deployment.
+Once object-backed sync rows exist, the database migration refuses downgrade
+instead of dropping their references. Roll back by restoring the consistent
+pre-upgrade backup and its matching server image.
+New sync batch objects count toward the same storage allowance as images and
+online recordings; existing inline SQLite history remains uncharged.
+Payment checkout additionally needs the operator to register the actual product
+slugs and configure the payments URL and product settings below; deploying R2
+credentials does not configure billing.
+
 ## Private transcription relay
 
 The mail API can use the existing KDE-to-Whisper tunnel without exposing Whisper
@@ -131,7 +202,13 @@ runs as a **non-root user** (uid 1001) with no unnecessary capabilities.
 | `Payments__BaseUrl` | Base URL of the Coflnet payments service | `https://payments.example.com` |
 | `Products__Premium` | Slug for the Premium product in the payments service | `lifenizer-premium` |
 | `Products__PremiumPlus` | Slug for the Premium+ product in the payments service | `lifenizer-premium-plus` |
-| `Artifacts__StorePath` | Path to the artifact blob directory | `/data/artifacts` |
+| `Artifacts__StorePath` | Persistent local object/legacy artifact directory | `/data/artifacts` |
+| `ObjectStorage__ServiceUrl` | Optional S3-compatible HTTPS endpoint; configure with bucket and credentials | `https://ACCOUNT_ID.r2.cloudflarestorage.com` |
+| `ObjectStorage__Bucket` | Private object-storage bucket | `lifenizer-private` |
+| `ObjectStorage__AccessKeyId` | Bucket-scoped object read/write access key | _(secret)_ |
+| `ObjectStorage__SecretAccessKey` | Corresponding secret access key | _(secret)_ |
+| `ObjectStorage__Region` | S3 signing region; R2 uses `auto` | `auto` |
+| `ObjectStorage__Prefix` | Optional object-key prefix within the bucket | `lifenizer` |
 | `Whisper__BaseUrl` | Base URL of the self-hosted whisper-trained transcription service | `http://whisper-trained.tab:9000` |
 | `Whisper__Language` | Optional default transcription language (ISO code); unset means auto-detect | _(unset)_ |
 | `Imports__MaxRequestBytes` | Max request body size accepted by `POST /api/imports/{source}`, to fit base64-encoded audio uploads | `200000000` |
@@ -148,7 +225,7 @@ runs as a **non-root user** (uid 1001) with no unnecessary capabilities.
 - **SQLite** supports single-replica deployments. PostgreSQL requires changing
   the EF provider, migrations and SQLite-specific upgrade logic; a different
   connection string alone is insufficient.
-- Artifact blobs default to `/tmp/lifenizer-artifacts` (ephemeral).
+- Without R2/S3 configuration, object blobs default to `/tmp/lifenizer-artifacts` (ephemeral).
   In production, mount persistent storage and point `Artifacts__StorePath` at it.
   The example mounts `/data` for both SQLite and artifact files.
 

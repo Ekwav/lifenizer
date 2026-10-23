@@ -12,6 +12,29 @@ import sys
 import tarfile
 
 
+SERVICE_CONFIG_KEYS = {
+    "ObjectStorage__ServiceUrl", "ObjectStorage__Bucket", "ObjectStorage__AccessKeyId",
+    "ObjectStorage__SecretAccessKey", "ObjectStorage__Region", "ObjectStorage__Prefix",
+    "Payments__BaseUrl", "Products__Premium", "Products__PremiumPlus",
+}
+
+
+def validate_service_config(config):
+    if not isinstance(config, dict) or config.keys() - SERVICE_CONFIG_KEYS:
+        raise ValueError("Service config must be an object containing only supported keys")
+    result = {}
+    for key, value in config.items():
+        if not isinstance(value, (str, int, float, bool)):
+            raise ValueError("Service config values must be JSON scalars other than null")
+        value = value if isinstance(value, str) else json.dumps(value, allow_nan=False)
+        # Values are written unquoted to Compose's dotenv file. Forbid expansion,
+        # comments, quoting and whitespace rather than transforming credentials.
+        if any(ord(c) < 33 or ord(c) > 126 or c in "\"'\\$#" for c in value):
+            raise ValueError("Service config values must be safe single-line unquoted dotenv values")
+        result[key] = value
+    return result
+
+
 def run(*args, capture=False):
     return subprocess.run(args, check=True, text=True, capture_output=capture)
 
@@ -19,6 +42,7 @@ def run(*args, capture=False):
 def main():
     os.umask(0o077)
     request = json.load(sys.stdin)
+    service_config = validate_service_config(request.get("serviceConfig", {}))
     directory = Path.home() / "dev/lifenizer-next"
     marker = directory / ".lifenizer-compose"
     if directory.exists() and any(directory.iterdir()) and not marker.exists():
@@ -80,11 +104,13 @@ def main():
         (directory / name).mkdir(mode=0o700, exist_ok=True)
     env.update({"LIFENIZER_IMAGE": request["image"], "LIFENIZER_UID": str(os.getuid()),
                 "LIFENIZER_GID": str(os.getgid()), "ReverseProxy__KnownProxies__0": request["proxy"]})
+    env.update(service_config)
     env.setdefault("Jwt__Secret", secrets.token_urlsafe(48))
     env.setdefault("Pairing__BootstrapTokenHash", request["bootstrapHash"])
     env.setdefault("Pairing__BootstrapExpiresAt", request["expiresAt"])
     temp = directory / ".env.next"
     temp.write_text("".join(f"{key}={value}\n" for key, value in env.items()))
+    temp.chmod(0o600)
     temp.replace(env_file)
     (directory / "compose.yaml").write_text(request["compose"])
     run("docker", "compose", "config", "--quiet")

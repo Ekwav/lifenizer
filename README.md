@@ -100,9 +100,16 @@ Sync checks on resume and every 30 seconds while active. Edits save to the
 encrypted local outbox immediately; automatic uploads collect at least 20 seconds
 of changes (normally 20–50 seconds until the next check). Repeated edits to the
 same item coalesce, and edits made during an upload wait for the next batch.
-**Sync now** sends waiting changes immediately. Sync envelopes currently use
-SQLite on the server; there is no R2/S3 object-storage adapter. Photos and explicitly
-enabled online recordings use separate file uploads, outside the change batches.
+**Sync now** sends waiting changes immediately. The server stores new encrypted
+sync batches, photos and opted-in recordings through a private R2/S3 object adapter
+(or persistent local files when unconfigured), with SQLite holding the cursor and
+object index. Committed sync envelope IDs are deduplicated on retry. Legacy inline
+sync data and local media remain readable. Photos and explicitly enabled online
+recordings use separate uploads outside the change batches. Recording storage
+requests survive offline failures and restart; ordinary sync retries while unlocked
+and the recording player shows pending upload/removal. Online removal keeps local
+audio. Configure bucket credentials with the installer's protected
+`--service-config` JSON file; see [deployment](docs/DEPLOYMENT.md#private-r2s3-online-storage).
 Capture typed text offline;
 recordings are saved encrypted locally until you explicitly send them to Whisper.
 Provider imports, transcription and relation extraction require the configured server;

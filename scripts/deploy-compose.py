@@ -12,6 +12,8 @@ import secrets
 import shlex
 import shutil
 import subprocess
+import stat
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -19,6 +21,18 @@ import urllib.request
 
 REPO = Path(__file__).resolve().parents[1]
 SERVER = "https://mail.coflnet.com/lifenizer"
+sys.path.insert(0, str(REPO / "deploy"))
+from manage import validate_service_config
+
+
+def read_service_config(path):
+    # Inspect the opened descriptor so a symlink or non-private file cannot
+    # expose credentials, including when the caller has a permissive umask.
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)) as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+            raise ValueError("Service config must be an owner-only regular file owned by the current user (chmod 600)")
+        return validate_service_config(json.load(stream))
 
 
 def run(*args, **kwargs):
@@ -56,7 +70,15 @@ def main():
     parser.add_argument("--show-link", action="store_true", help="Show the existing link without extending its deadline")
     parser.add_argument("--backup-only", action="store_true", help="Back up the server database, artifacts and configuration")
     parser.add_argument("--publish-apk", type=Path, help="Publish an already-built Android APK over HTTPS without changing pairing")
+    parser.add_argument("--service-config", type=Path,
+                        help="Owner-only JSON file patching supported object-storage/payment environment settings")
     args = parser.parse_args()
+    if args.service_config and (args.show_link or args.backup_only or args.publish_apk):
+        parser.error("--service-config applies only to installation or upgrade")
+    try:
+        service_config = read_service_config(args.service_config) if args.service_config else {}
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"Invalid service config: {error}") from None
     os.umask(0o077)
     directory = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "lifenizer/compose"
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -124,7 +146,8 @@ def main():
     state_file.write_text(json.dumps(state))
     remote(args.host, {"action": "install", "image": image, "proxy": info["proxy"],
                        "bootstrapHash": bootstrap_hash, "expiresAt": state["expiresAt"],
-                       "compose": (REPO / "deploy/compose.yaml").read_text()})
+                       "compose": (REPO / "deploy/compose.yaml").read_text(),
+                       "serviceConfig": service_config})
     # Docker health can pass before Traefik has discovered the new container.
     deadline = time.monotonic() + 60
     while True:
