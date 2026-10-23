@@ -90,6 +90,43 @@ class ConversationCard extends StatelessWidget {
         .map(state.participantName)
         .join(', ');
     final preview = conversation.previewText;
+    final category = categoryForSource(conversation.source);
+    final (typeLabel, typeIcon) = switch (category) {
+      SourceCategory.consumed => ('Consumed', Icons.visibility_outlined),
+      SourceCategory.documents => ('Documents', Icons.description_outlined),
+      SourceCategory.personal when conversation.source == 'audio' => (
+        'Recording',
+        Icons.mic_none,
+      ),
+      SourceCategory.personal
+          when ['email', 'imap', 'mbox'].contains(conversation.source) =>
+        ('Email', Icons.mail_outline),
+      SourceCategory.personal when conversation.source.startsWith('manual') => (
+        'Note',
+        Icons.notes,
+      ),
+      _ => ('Chat', Icons.chat_bubble_outline),
+    };
+    final sourceIcon = switch (conversation.source) {
+      'discord' => Icons.discord,
+      'telegram' => Icons.telegram,
+      'whatsapp' => Icons.phone_in_talk_outlined,
+      'tiktok-watch-history' => Icons.tiktok,
+      'youtube-watch-history' ||
+      'youtube-transcript' => Icons.smart_display_outlined,
+      'email' || 'imap' || 'mbox' => Icons.mail_outline,
+      'browser-history' || 'bookmarks' || 'browser-capture' => Icons.language,
+      'audio' || 'live-recording' => Icons.graphic_eq,
+      _ => Icons.forum_outlined,
+    };
+    final tags = conversation.tags
+        .where(
+          (tag) =>
+              tag.toLowerCase() != conversation.source.toLowerCase() &&
+              tag.toLowerCase() != typeLabel.toLowerCase() &&
+              !(typeLabel == 'Recording' && tag == 'recordings'),
+        )
+        .toList();
     return Card(
       child: InkWell(
         borderRadius: const BorderRadius.all(Radius.circular(8)),
@@ -115,25 +152,36 @@ class ConversationCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                participants.isEmpty
-                    ? watchHistoryLine(conversation) ??
-                          '${conversation.source} • $participants'
-                    : '${conversation.source} • $participants',
-              ),
-              if (categoryForSource(conversation.source) ==
-                  SourceCategory.consumed) ...[
-                const SizedBox(height: 4),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Chip(
-                    key: Key('consumed-badge'),
-                    label: Text('Consumed'),
-                    visualDensity: VisualDensity.compact,
-                    avatar: Icon(Icons.visibility_outlined, size: 16),
+              Row(
+                children: [
+                  Tooltip(
+                    message: conversation.source,
+                    child: Icon(
+                      sourceIcon,
+                      size: 16,
+                      semanticLabel: conversation.source,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  Tooltip(
+                    key: category == SourceCategory.consumed
+                        ? const Key('consumed-badge')
+                        : null,
+                    message: typeLabel,
+                    child: Icon(typeIcon, size: 16, semanticLabel: typeLabel),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      participants.isNotEmpty
+                          ? participants
+                          : watchHistoryLine(conversation) ?? '',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 2),
               Text(
                 conversation.startedAt.toCompactLocalString(),
@@ -141,13 +189,13 @@ class ConversationCard extends StatelessWidget {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-              if (conversation.tags.isNotEmpty) ...[
+              if (tags.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    for (final tag in conversation.tags)
+                    for (final tag in tags)
                       Chip(
                         label: Text(tag),
                         visualDensity: VisualDensity.compact,
