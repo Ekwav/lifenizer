@@ -190,6 +190,10 @@ namespace Lifenizer.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("BlobKey")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("CipherText")
                         .IsRequired()
                         .HasColumnType("TEXT");

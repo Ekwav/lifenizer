@@ -12,6 +12,7 @@ public sealed class SyncEnvelopeRecord
     public string Operation { get; set; } = string.Empty;
     public int Revision { get; set; }
     public string CipherText { get; set; } = string.Empty;
+    public string? BlobKey { get; set; }
     public string Nonce { get; set; } = string.Empty;
     public string KeyId { get; set; } = string.Empty;
     public DateTimeOffset ClientCreatedAt { get; set; }

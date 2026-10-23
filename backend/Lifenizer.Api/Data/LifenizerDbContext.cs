@@ -42,6 +42,7 @@ public sealed class LifenizerDbContext(DbContextOptions<LifenizerDbContext> opti
             entity.Property(envelope => envelope.EntityId).HasMaxLength(128);
             entity.Property(envelope => envelope.Operation).HasMaxLength(32);
             entity.Property(envelope => envelope.KeyId).HasMaxLength(128);
+            entity.Property(envelope => envelope.BlobKey).HasMaxLength(512);
         });
 
         modelBuilder.Entity<UsageEventRecord>(entity =>

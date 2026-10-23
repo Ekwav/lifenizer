@@ -31,6 +31,7 @@ public sealed class DatabaseUpgradeTests
                 await db.Database.ExecuteSqlRawAsync("DROP TABLE PairingRequests");
                 await db.Database.ExecuteSqlRawAsync("DROP TABLE PairedDevices");
                 await db.Database.ExecuteSqlRawAsync("DROP TABLE Recordings");
+                await db.Database.ExecuteSqlRawAsync("ALTER TABLE SyncEnvelopes DROP COLUMN BlobKey");
                 if (schema == "legacy")
                 {
                     await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users DROP COLUMN StorageUsedBytes");
