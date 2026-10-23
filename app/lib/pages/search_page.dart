@@ -51,6 +51,7 @@ class _SearchPageState extends State<SearchPage> {
       tagFilter: '',
     );
     _applyAction();
+    widget.state.pendingSearchQuery = '';
   }
 
   @override
@@ -62,7 +63,9 @@ class _SearchPageState extends State<SearchPage> {
   void _applyAction() {
     _resultLimit = 50;
     _viewModel.clearFilters();
-    _viewModel.setQuery(widget.action?.query ?? '');
+    _viewModel.setQuery(
+      widget.action?.query ?? widget.state.pendingSearchQuery,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final id = widget.action?.conversationId;

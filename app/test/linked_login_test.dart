@@ -34,8 +34,22 @@ class _Store extends PairingCredentialStore {
 }
 
 void main() {
-  setUp(() => debugDefaultTargetPlatformOverride = TargetPlatform.android);
-  tearDown(() => debugDefaultTargetPlatformOverride = null);
+  setUp(() {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('com.lifenizer/recording'),
+          (call) async => call.method == 'pending' ? [] : {'recording': false},
+        );
+  });
+  tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('com.lifenizer/recording'),
+          null,
+        );
+  });
 
   Future<void> show(WidgetTester tester, LifenizerAppState state) =>
       tester.pumpWidget(
@@ -59,7 +73,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Unlock this device'), findsOneWidget);
         expect(find.text('Link elsewhere'), findsOneWidget);
-        expect(find.byType(TextField), findsNothing);
+        expect(find.byType(TextField), findsOneWidget);
         expect(find.text('Scan connection QR'), findsNothing);
         expect(find.text('Use email and passwords'), findsNothing);
       } finally {
@@ -114,7 +128,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(store.prompts, 1);
         expect(find.text('Unlock this device'), findsOneWidget);
-        expect(find.byType(TextField), findsNothing);
+        expect(find.byType(TextField), findsOneWidget);
+        await tester.enterText(find.byType(TextField), 'meeting notes');
         state.reportError('A background update');
         await state.pairing.restore(autoUnlock: false);
         await tester.pumpAndSettle();
@@ -122,6 +137,8 @@ void main() {
         await tester.tap(find.text('Unlock this device'));
         await tester.pumpAndSettle();
         expect(store.prompts, 2);
+        expect(find.text('meeting notes'), findsOneWidget);
+        expect(state.pendingSearchQuery, 'meeting notes');
         expect(store.writes, 0);
       } finally {
         await tester.pumpWidget(const SizedBox());
@@ -153,7 +170,7 @@ void main() {
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
         expect(find.text('Unlock this device'), findsOneWidget);
-        expect(find.byType(TextField), findsNothing);
+        expect(find.byType(TextField), findsOneWidget);
         expect(state.pairing.isPaired, true);
         expect(store.prompts, 1);
         expect(store.writes, 0);

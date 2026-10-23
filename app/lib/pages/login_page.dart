@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
 import '../app_state.dart';
+import '../services/quick_action_service.dart';
 import '../widgets/sync_progress_indicator.dart';
 import '../widgets/device_security_dialog.dart';
 import 'connection_scanner_page.dart';
@@ -14,7 +17,10 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
+  late final _search = TextEditingController(
+    text: widget.state.pendingSearchQuery,
+  );
   late final _api = TextEditingController(text: widget.state.apiBaseUrl);
   late final _email = TextEditingController(text: widget.state.rememberedEmail);
   final _password = TextEditingController();
@@ -29,10 +35,101 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    widget.state.addListener(_maybeAutoUnlock);
+    WidgetsBinding.instance.addObserver(this);
+    widget.state.addListener(_stateChanged);
+    QuickActionService.instance.addListener(_receiveAction);
     widget.state.pairing.addListener(_maybeAutoUnlock);
-    _maybeAutoUnlock();
+    _stateChanged();
+    _receiveAction();
   }
+
+  void _stateChanged() {
+    _maybeAutoUnlock();
+    _maybeStartRecording();
+  }
+
+  void _receiveAction() {
+    final action = QuickActionService.instance.pending;
+    if (action?.action == 'search') {
+      _search.text = action!.query;
+      widget.state.pendingSearchQuery = action.query;
+    }
+    _maybeStartRecording();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (lifecycle == AppLifecycleState.resumed) _maybeStartRecording();
+  }
+
+  void _maybeStartRecording() {
+    if (kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android ||
+        widget.state.rememberedEmail.isEmpty ||
+        QuickActionService.instance.pending?.action != 'record') {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
+          QuickActionService.instance.pending?.action != 'record') {
+        return;
+      }
+      QuickActionService.instance.consume();
+      QuickActionService.instance.request(const QuickAction(action: 'capture'));
+      unawaited(widget.state.recording.start().whenComplete(_maybeAutoUnlock));
+    });
+  }
+
+  Widget _searchField() => TextField(
+    controller: _search,
+    onChanged: (query) {
+      widget.state.pendingSearchQuery = query;
+      if (QuickActionService.instance.pending?.action == 'search') {
+        QuickActionService.instance.consume();
+      }
+    },
+    textInputAction: TextInputAction.search,
+    decoration: const InputDecoration(
+      hintText: 'Search conversations',
+      prefixIcon: Icon(Icons.search),
+      border: OutlineInputBorder(),
+    ),
+  );
+
+  Widget _recordingControls() {
+    final recording = widget.state.recording;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton.icon(
+          onPressed: recording.working
+              ? null
+              : () {
+                  if (recording.recording) {
+                    unawaited(recording.stop());
+                  } else {
+                    unawaited(recording.start().whenComplete(_maybeAutoUnlock));
+                  }
+                },
+          icon: Icon(recording.recording ? Icons.stop : Icons.mic),
+          label: Text(
+            recording.recording
+                ? 'Stop and save recording'
+                : 'Start microphone recording',
+          ),
+        ),
+        if (recording.recording)
+          const Text('Recording continues while you unlock this device.'),
+        if (recording.error != null) Text(recording.error!),
+      ],
+    );
+  }
+
+  bool get _canRecord =>
+      !kIsWeb &&
+      defaultTargetPlatform == TargetPlatform.android &&
+      widget.state.rememberedEmail.isNotEmpty;
 
   void _maybeAutoUnlock() {
     final state = widget.state;
@@ -41,7 +138,10 @@ class _LoginPageState extends State<LoginPage> {
         state.startupLoading ||
         !state.startupUnlockPending ||
         state.busy ||
-        pairing.busy) {
+        pairing.busy ||
+        (_canRecord &&
+            (state.recording.working ||
+                QuickActionService.instance.pending?.action == 'record'))) {
       return;
     }
     state.startupUnlockPending = false;
@@ -60,9 +160,12 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
-    widget.state.removeListener(_maybeAutoUnlock);
+    WidgetsBinding.instance.removeObserver(this);
+    widget.state.removeListener(_stateChanged);
+    QuickActionService.instance.removeListener(_receiveAction);
     widget.state.pairing.removeListener(_maybeAutoUnlock);
     for (final controller in [
+      _search,
       _api,
       _email,
       _password,
@@ -118,29 +221,29 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      widget.state.startupLoading ? _startupPage() : _loginPage(context);
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: widget.state.recording,
+    builder: (context, _) =>
+        widget.state.startupLoading ? _startupPage() : _loginPage(context),
+  );
 
   Widget _startupPage() => Scaffold(
     body: SafeArea(
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
-          child: const Padding(
-            padding: EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  enabled: false,
-                  decoration: InputDecoration(
-                    hintText: 'Search conversations',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                SizedBox(height: 16),
-                LinearProgressIndicator(),
+                _searchField(),
+                const SizedBox(height: 16),
+                if (_canRecord) ...[
+                  _recordingControls(),
+                  const SizedBox(height: 16),
+                ],
+                const LinearProgressIndicator(),
               ],
             ),
           ),
@@ -168,6 +271,14 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 8),
                   const Text('Your conversations, searchable on every device.'),
                   const SizedBox(height: 24),
+                  if (widget.state.pairing.isPaired && !_linkElsewhere) ...[
+                    _searchField(),
+                    const SizedBox(height: 16),
+                    if (_canRecord) ...[
+                      _recordingControls(),
+                      const SizedBox(height: 16),
+                    ],
+                  ],
                   SyncProgressIndicator(progress: widget.state.syncProgress),
                   if (!kIsWeb) ...[
                     if (widget.state.pairing.isPaired && !_linkElsewhere) ...[

@@ -27,6 +27,7 @@ class _RecordingAudioPlayerState extends State<RecordingAudioPlayer> {
   );
   String? _identity;
   bool _syncing = false;
+  bool _transcribing = false;
   String? _error;
 
   @override
@@ -89,6 +90,24 @@ class _RecordingAudioPlayerState extends State<RecordingAudioPlayer> {
     }
   }
 
+  Future<void> _transcribe() async {
+    setState(() {
+      _transcribing = true;
+      _error = null;
+    });
+    try {
+      await widget.state.transcribeRecording(widget.conversationId!);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = 'Could not transcribe the recording. Try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _transcribing = false);
+    }
+  }
+
   String _time(Duration value) =>
       '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
   @override
@@ -140,6 +159,22 @@ class _RecordingAudioPlayerState extends State<RecordingAudioPlayer> {
               ),
             ],
           ),
+          if (conversation?.source == 'audio' &&
+              conversation!.segmentCount == 0) ...[
+            FilledButton.icon(
+              onPressed:
+                  _transcribing ||
+                      widget.state.busy ||
+                      !widget.state.isAuthenticated
+                  ? null
+                  : _transcribe,
+              icon: const Icon(Icons.transcribe),
+              label: const Text('Send to Whisper and transcribe'),
+            ),
+            const Text(
+              'Sends this recording to your configured server for transcription.',
+            ),
+          ],
           if (conversation != null)
             SwitchListTile(
               contentPadding: EdgeInsets.zero,

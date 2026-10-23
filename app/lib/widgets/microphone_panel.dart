@@ -119,7 +119,7 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
             const SizedBox(height: 8),
             Text(
               recording.supportsBackground
-                  ? 'Recording continues when you leave this page or lock the screen. Stop here or from the notification, then send to Whisper.'
+                  ? 'Recording continues when you leave this page or lock the screen. Stopped recordings are saved encrypted in your library after unlock. Open a recording to send it to Whisper for transcription.'
                   : 'Record here, then send to your Whisper server to transcribe. The transcript is encrypted before sync.',
             ),
             const SizedBox(height: 8),

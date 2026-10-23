@@ -3,6 +3,7 @@ import 'package:app/main.dart';
 import 'package:app/services/quick_action_service.dart';
 import 'package:app/services/recording_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _RecordingVault extends LifenizerAppState {
@@ -16,7 +17,15 @@ class _RecordingVault extends LifenizerAppState {
 
 class _Recorder extends RecordingController {
   _Recorder(super.state);
+  @override
+  bool get supportsBackground => false;
   int starts = 0;
+  int stops = 0;
+  void setActive() {
+    recording = true;
+    notifyListeners();
+  }
+
   @override
   Future<void> start() async {
     starts++;
@@ -24,7 +33,9 @@ class _Recorder extends RecordingController {
 
   @override
   Future<void> stop() async {
+    stops++;
     recording = false;
+    notifyListeners();
   }
 
   @override
@@ -70,6 +81,97 @@ void main() {
       state.dispose();
     },
   );
+
+  testWidgets('query entered during startup survives the unlocked app tree', (
+    tester,
+  ) async {
+    final state = _RecordingVault()..startupLoading = true;
+    await tester.pumpWidget(LifenizerApp(state: state));
+    await tester.enterText(find.byType(TextField), 'planning tomorrow');
+    state.startupLoading = false;
+    state.unlocked = true;
+    state.notifyListeners();
+    await tester.pumpAndSettle();
+    expect(find.text('planning tomorrow'), findsOneWidget);
+    expect(state.pendingSearchQuery, isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    state.dispose();
+  });
+
+  testWidgets('Android record shortcut starts once before unlock', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final state = _RecordingVault()
+      ..startupLoading = true
+      ..rememberedEmail = 'linked@example.test';
+    try {
+      QuickActionService.instance.request(const QuickAction(action: 'record'));
+      await tester.pumpWidget(LifenizerApp(state: state));
+      await tester.pump();
+      expect(state.recording.starts, 1);
+      expect(QuickActionService.instance.pending?.action, 'capture');
+      state.unlocked = true;
+      state.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(state.recording.starts, 1);
+      expect(QuickActionService.instance.pending, isNull);
+      expect(find.text('Start microphone recording'), findsOneWidget);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('Android startup exposes explicit start and stop before unlock', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final state = _RecordingVault()
+      ..startupLoading = true
+      ..rememberedEmail = 'linked@example.test';
+    try {
+      await tester.pumpWidget(LifenizerApp(state: state));
+      await tester.tap(find.text('Start microphone recording'));
+      await tester.pump();
+      expect(state.recording.starts, 1);
+      expect(state.isAuthenticated, false);
+      state.recording.setActive();
+      await tester.pump();
+      await tester.tap(find.text('Stop and save recording'));
+      await tester.pump();
+      expect(state.recording.stops, 1);
+      expect(state.isAuthenticated, false);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('startup actions scroll when the keyboard leaves little height', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    final state = _RecordingVault()
+      ..startupLoading = true
+      ..rememberedEmail = 'linked@example.test';
+    await tester.binding.setSurfaceSize(const Size(320, 160));
+    try {
+      await tester.pumpWidget(LifenizerApp(state: state));
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Start microphone recording'));
+      expect(find.text('Search conversations'), findsOneWidget);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
 
   testWidgets('record request waits for resumed foreground before starting', (
     tester,
