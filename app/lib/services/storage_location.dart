@@ -11,9 +11,10 @@ Future<String> Function() vaultStorageDescriber = platform.describeVaultStorage;
 const recordingStorageHeadline =
     "Stored encrypted in this device's Lifenizer vault";
 const recordingStorageExplanation =
-    'It is not a normal audio file. The recording leaves this device only when '
-    'you send it to Whisper for transcription; the transcript is then '
-    'encrypted and synced.';
+    'Saved recordings can stream encrypted to your other devices while this '
+    'app is open and unlocked. Optional encrypted online storage allows playback '
+    'when this device is offline. Transcription sends audio to Whisper; the '
+    'transcript is encrypted and synced.';
 
 Future<String> describeRecordingStorage() async {
   try {

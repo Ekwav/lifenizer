@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import 'recording_details_sheet.dart';
+import 'recording_audio_player.dart';
 
 class MicrophonePanel extends StatefulWidget {
   const MicrophonePanel({required this.state, super.key});
@@ -60,6 +61,12 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
         widget.state.audioDraft != null) {
       await _transcribe();
     }
+  }
+
+  Future<RecordingAudio> _loadDraftRecording() async {
+    final bytes = await widget.state.loadAudioDraftPayload();
+    if (bytes == null) throw StateError('Recording unavailable.');
+    return RecordingAudio(bytes: bytes);
   }
 
   Future<void> _transcribe() async {
@@ -134,6 +141,16 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
               _DraftDetails(
                 draft: draft,
                 onEdit: disabled ? null : _editDetails,
+              ),
+              RecordingAudioPlayer(
+                key: ValueKey(draft['recordedAt']),
+                state: widget.state,
+                loader: _loadDraftRecording,
+              ),
+              OutlinedButton.icon(
+                onPressed: disabled ? null : widget.state.retainAudioDraft,
+                icon: const Icon(Icons.library_music_outlined),
+                label: const Text('Save recording to library'),
               ),
               FilledButton.icon(
                 onPressed: disabled ? null : _transcribe,

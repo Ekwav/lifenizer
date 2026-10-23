@@ -3,12 +3,17 @@ part of '../app_state.dart';
 extension VaultTraining on LifenizerAppState {
   Future<void> _cacheCorrectionAudio(
     String conversationId,
-    List<int> bytes,
-  ) async {
+    List<int> bytes, {
+    String contentType = 'audio/wav',
+    String fileName = 'recording.wav',
+  }) async {
     final vault = _localVaultKey;
     if (vault == null) return;
     final payload = await _crypto.encryptJson({
       'vaultKey': vault,
+      'vaultId': session?.vaultId,
+      'contentType': contentType,
+      'fileName': fileName,
       'conversationId': conversationId,
       'bytes': base64Encode(bytes),
     }, background: true);

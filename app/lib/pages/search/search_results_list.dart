@@ -6,6 +6,7 @@ import '../../services/source_categories.dart';
 import '../../services/transcript_enrichment.dart';
 import '../../services/source_links.dart';
 import '../../widgets/transcription_correction_dialog.dart';
+import '../../widgets/recording_audio_player.dart';
 
 /// Displays the list of search results.
 ///
@@ -497,6 +498,13 @@ class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
                   ),
                 ),
               ),
+              if (conversation.source == 'audio')
+                SliverToBoxAdapter(
+                  child: RecordingAudioPlayer(
+                    state: state,
+                    conversationId: conversation.id,
+                  ),
+                ),
               if (sourceUrl != null)
                 SliverToBoxAdapter(
                   child: Align(

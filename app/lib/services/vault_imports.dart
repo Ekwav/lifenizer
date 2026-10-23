@@ -332,7 +332,12 @@ extension VaultImports on LifenizerAppState {
       for (final conversation in conversations) {
         if (conversation.source == 'audio' &&
             !previousIds.contains(conversation.id)) {
-          await _cacheCorrectionAudio(conversation.id, bytes);
+          await _cacheCorrectionAudio(
+            conversation.id,
+            bytes,
+            fileName: fileName,
+            contentType: mimeType ?? _guessAudioMimeType(fileName),
+          );
         }
       }
       status = '${normalized.message} Encrypted and synced.';

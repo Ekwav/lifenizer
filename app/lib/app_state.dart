@@ -31,6 +31,7 @@ import 'services/browser_history_watch_service.dart';
 import 'services/browser_extension_receiver_service.dart';
 import 'services/camera_roll_watch_service.dart';
 import 'services/recording_controller.dart';
+import 'services/recording_relay_service.dart';
 import 'services/audio_cache_io.dart'
     if (dart.library.js_interop) 'services/audio_cache_web.dart'
     as audio_cache;
@@ -55,6 +56,7 @@ part 'services/vault_sync.dart';
 part 'services/vault_imports.dart';
 part 'services/vault_email.dart';
 part 'services/vault_training.dart';
+part 'services/vault_recordings.dart';
 
 class LifenizerAppState extends ChangeNotifier {
   LifenizerAppState({
@@ -68,6 +70,7 @@ class LifenizerAppState extends ChangeNotifier {
   }) : _localStore = localStore,
        _chunkStore = chunkStore {
     recording = RecordingController(this);
+    recordingRelay = RecordingRelayService(this);
     stopRecording = recording.stop;
     pairing = DevicePairingService(this, store: pairingStore);
     pairing.addListener(_notifyChanged);
@@ -101,6 +104,7 @@ class LifenizerAppState extends ChangeNotifier {
   late final BrowserExtensionReceiverService browserExtension;
   late final DiscordBotImportService discordImport;
   late final RecordingController recording;
+  late final RecordingRelayService recordingRelay;
 
   void _updateDiscordIdentity() => discordImport.setIdentity(
     isAuthenticated && session != null
@@ -112,6 +116,7 @@ class LifenizerAppState extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     recording.dispose();
+    recordingRelay.dispose();
     _syncProgressTicker?.cancel();
     _progressStageClock?.stop();
     removeListener(_updateDiscordIdentity);

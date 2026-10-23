@@ -302,6 +302,108 @@ class LifenizerApiClient {
     return response['checkoutUrl'] as String;
   }
 
+  Future<Map<String, dynamic>> getRecording(String id) async {
+    final response = await _retry(
+      () => _client
+          .get(
+            _uri('/api/recordings/${Uri.encodeComponent(id)}'),
+            headers: _headers(),
+          )
+          .timeout(const Duration(minutes: 5)),
+    );
+    _ensureSuccess(response);
+    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+  }
+
+  Future<void> putRecording(String id, Map<String, dynamic> encrypted) async {
+    final response = await _retry(
+      () => _client
+          .put(
+            _uri('/api/recordings/${Uri.encodeComponent(id)}'),
+            headers: _headers(),
+            body: jsonEncode(encrypted),
+          )
+          .timeout(const Duration(minutes: 5)),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<void> deleteRecording(String id) async {
+    final response = await _retry(
+      () => _client
+          .delete(
+            _uri('/api/recordings/${Uri.encodeComponent(id)}'),
+            headers: _headers(),
+          )
+          .timeout(const Duration(seconds: 30)),
+    );
+    if (response.statusCode != 404) _ensureSuccess(response);
+  }
+
+  Future<void> answerRecordingRequest(
+    String requestId,
+    Map<String, dynamic> encrypted, {
+    http.Client? client,
+  }) async {
+    final response = await (client ?? _client)
+        .post(
+          _uri('/api/recordings/requests/${Uri.encodeComponent(requestId)}'),
+          headers: _headers(),
+          body: jsonEncode(encrypted),
+        )
+        .timeout(const Duration(minutes: 5));
+    _ensureSuccess(response);
+  }
+
+  /// The caller owns this dedicated client's lifetime to cancel on vault lock.
+  Stream<Map<String, dynamic>> recordingRequests(http.Client client) async* {
+    Future<http.StreamedResponse> connect() => client.send(
+      http.Request('GET', _uri('/api/recordings/requests'))
+        ..headers.addAll(_headers())
+        ..headers['accept'] = 'text/event-stream',
+    );
+    var response = await connect();
+    if (response.statusCode == 401 && refreshAuth != null) {
+      await response.stream.drain<void>();
+      final token = await refreshAuth!();
+      if (token != null) {
+        authToken = token;
+        response = await connect();
+      }
+    }
+    if (response.statusCode != 200) {
+      _ensureSuccess(await http.Response.fromStream(response));
+      return;
+    }
+    var event = '';
+    var dataLength = 0;
+    final data = <String>[];
+    await for (final line
+        in response.stream
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())) {
+      if (line.length > 8192) {
+        throw const FormatException('Recording request too large.');
+      }
+      if (line.isEmpty) {
+        if (event == 'request' && data.isNotEmpty) {
+          yield Map<String, dynamic>.from(jsonDecode(data.join('\n')) as Map);
+        }
+        event = '';
+        dataLength = 0;
+        data.clear();
+      } else if (line.startsWith('event:')) {
+        event = line.substring(6).trim();
+      } else if (line.startsWith('data:')) {
+        dataLength += line.length;
+        if (dataLength > 8192) {
+          throw const FormatException('Recording request too large.');
+        }
+        data.add(line.substring(5).trimLeft());
+      }
+    }
+  }
+
   Future<Map<String, dynamic>> _post(
     String path,
     Map<String, dynamic> body, {
