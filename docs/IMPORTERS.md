@@ -651,8 +651,14 @@ This works for custom extensions and automation scripts alike.
 
 ## Android Share Target and File Picker
 
-On Android, share an exported file to **Lifenizer**, unlock the vault, and the
-Imports page opens automatically. On Android, KDE and the web app, use
+On Android, share one or several files to **Lifenizer** from another app's share
+sheet, unlock the vault, and Imports opens automatically. The share target accepts
+single/multiple files of any MIME type, including exported chats/backups, PDFs,
+photos/scans and audio. Provider filenames and MIME types feed the same automatic
+source detection as the file picker: PDF and images go to document/photo import;
+audio MIME types or recognized audio extensions go to transcription. Generic
+`application/octet-stream` shares still work when the filename identifies a supported
+file type. Unknown JSON/CSV still requires choosing its adapter explicitly. On Android, KDE and the web app, use
 **Imports → Choose backup or export** to select a file directly.
 
 The app detects these readable exports from their contents:
@@ -679,8 +685,10 @@ are new imports. Discord data packages and paginated email imports use stable
 IDs to merge updates. The optional Discord export watch is described above. Avoid importing the same changed export on two
 devices simultaneously before they sync.
 
-Shared files wait in memory while locked, are read from Android content grants
-after unlock, and leave no app-created plaintext share cache. Closing/restarting
+Shared URI references wait in memory while locked or busy; file bytes are read from
+Android content grants after unlock, with no app-created plaintext share cache. A
+lock during reading keeps the URI queued for a later unlock. Empty/unreadable files
+report an actionable error and do not stop later shared items from importing. Closing/restarting
 before import completes requires sharing again. Native sharing and the general
 file picker accept files up to 64 MiB; native desktop Discord ZIP
 imports selectively read larger packages as described above. The configured server processes readable

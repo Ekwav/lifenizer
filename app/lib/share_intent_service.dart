@@ -56,16 +56,27 @@ class ShareIntentService {
     }
     _draining = true;
     try {
-      while (_pending.isNotEmpty && state.isAuthenticated && !state.busy) {
+      while (identical(_state, state) &&
+          _pending.isNotEmpty &&
+          state.isAuthenticated &&
+          !state.busy) {
         final payload = _pending.removeAt(0);
         final uri = payload['uri'] as String?;
         try {
           final bytes = uri == null
               ? null
               : await channel.invokeMethod<Uint8List>('readSharedFile', uri);
+          if (!identical(_state, state)) return;
           if (!state.isAuthenticated || state.busy) {
             _pending.insert(0, payload);
             return;
+          }
+          if (uri != null && (bytes == null || bytes.isEmpty)) {
+            throw PlatformException(
+              code: 'share',
+              message:
+                  'The shared file is empty or could not be read. Share it again or choose it in Imports.',
+            );
           }
           await state.importSharedPayload(
             fileName: payload['fileName'] as String?,
@@ -75,17 +86,30 @@ class ShareIntentService {
             metadata: const {'ingestedBy': 'android-share-target'},
           );
         } on PlatformException catch (error) {
-          state.reportError(
-            error.message ?? 'The shared file could not be read.',
-          );
+          if (identical(_state, state)) {
+            state.reportError(
+              error.message ?? 'The shared file could not be read.',
+            );
+          }
+        } catch (_) {
+          if (identical(_state, state)) {
+            state.reportError(
+              'The shared file could not be imported. Share it again or choose it in Imports.',
+            );
+          }
         } finally {
           if (uri != null && !_pending.any((item) => item['uri'] == uri)) {
-            await channel.invokeMethod<void>('releaseSharedFile', uri);
+            try {
+              await channel.invokeMethod<void>('releaseSharedFile', uri);
+            } catch (_) {
+              // An expired grant must not block the next shared item.
+            }
           }
         }
       }
     } finally {
       _draining = false;
+      if (_pending.isNotEmpty) _drainIfReady();
     }
   }
 }
