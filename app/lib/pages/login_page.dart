@@ -24,9 +24,44 @@ class _LoginPageState extends State<LoginPage> {
   final _connectionLink = TextEditingController();
   bool _manual = false;
   bool _register = false;
+  bool _linkElsewhere = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.state.addListener(_maybeAutoUnlock);
+    widget.state.pairing.addListener(_maybeAutoUnlock);
+    _maybeAutoUnlock();
+  }
+
+  void _maybeAutoUnlock() {
+    final state = widget.state;
+    final pairing = state.pairing;
+    if (!mounted ||
+        state.startupLoading ||
+        !state.startupUnlockPending ||
+        state.busy ||
+        pairing.busy) {
+      return;
+    }
+    state.startupUnlockPending = false;
+    if (_linkElsewhere ||
+        !pairing.isPaired ||
+        pairing.protectionMode == 'password' ||
+        state.isAuthenticated) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_linkElsewhere && !state.isAuthenticated) {
+        _unlockDevice();
+      }
+    });
+  }
 
   @override
   void dispose() {
+    widget.state.removeListener(_maybeAutoUnlock);
+    widget.state.pairing.removeListener(_maybeAutoUnlock);
     for (final controller in [
       _api,
       _email,
@@ -83,7 +118,38 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) =>
+      widget.state.startupLoading ? _startupPage() : _loginPage(context);
+
+  Widget _startupPage() => Scaffold(
+    body: SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: const Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  enabled: false,
+                  decoration: InputDecoration(
+                    hintText: 'Search conversations',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                SizedBox(height: 16),
+                LinearProgressIndicator(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _loginPage(BuildContext context) => Scaffold(
     body: SafeArea(
       child: Center(
         child: SingleChildScrollView(
@@ -104,18 +170,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 24),
                   SyncProgressIndicator(progress: widget.state.syncProgress),
                   if (!kIsWeb) ...[
-                    if (defaultTargetPlatform == TargetPlatform.android) ...[
-                      FilledButton.icon(
-                        onPressed:
-                            widget.state.busy || widget.state.pairing.busy
-                            ? null
-                            : _scanConnection,
-                        icon: const Icon(Icons.qr_code_scanner),
-                        label: const Text('Scan connection QR'),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (widget.state.pairing.isPaired)
+                    if (widget.state.pairing.isPaired && !_linkElsewhere) ...[
                       FilledButton.icon(
                         onPressed:
                             widget.state.busy || widget.state.pairing.busy
@@ -124,30 +179,71 @@ class _LoginPageState extends State<LoginPage> {
                         icon: const Icon(Icons.lock_open),
                         label: const Text('Unlock this device'),
                       ),
-                    TextField(
-                      controller: _connectionLink,
-                      obscureText: true,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      decoration: const InputDecoration(
-                        labelText: 'Connection link',
-                        helperText:
-                            'Paste your setup link or scan its QR code.',
-                        border: OutlineInputBorder(),
+                      TextButton(
+                        onPressed:
+                            widget.state.busy || widget.state.pairing.busy
+                            ? null
+                            : () => setState(() {
+                                widget.state.startupUnlockPending = false;
+                                _linkElsewhere = true;
+                              }),
+                        child: const Text('Link elsewhere'),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: widget.state.busy || widget.state.pairing.busy
-                          ? null
-                          : () {
-                              final link = _connectionLink.text;
-                              _connectionLink.clear();
-                              widget.state.pairing.connect(link);
-                            },
-                      icon: const Icon(Icons.link),
-                      label: const Text('Connect this device'),
-                    ),
+                    ],
+                    if (!widget.state.pairing.isPaired || _linkElsewhere) ...[
+                      if (_linkElsewhere) ...[
+                        TextButton(
+                          onPressed:
+                              widget.state.busy || widget.state.pairing.busy
+                              ? null
+                              : () => setState(() {
+                                  _linkElsewhere = false;
+                                  _manual = false;
+                                }),
+                          child: const Text('Cancel'),
+                        ),
+                        if (widget.state.pairing.higherSecurity)
+                          const Text(
+                            'Unlock this device before changing its protected connection.',
+                          ),
+                      ],
+                      if (defaultTargetPlatform == TargetPlatform.android) ...[
+                        FilledButton.icon(
+                          onPressed:
+                              widget.state.busy || widget.state.pairing.busy
+                              ? null
+                              : _scanConnection,
+                          icon: const Icon(Icons.qr_code_scanner),
+                          label: const Text('Scan connection QR'),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      TextField(
+                        controller: _connectionLink,
+                        obscureText: true,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        decoration: const InputDecoration(
+                          labelText: 'Connection link',
+                          helperText:
+                              'Paste your setup link or scan its QR code.',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed:
+                            widget.state.busy || widget.state.pairing.busy
+                            ? null
+                            : () {
+                                final link = _connectionLink.text;
+                                _connectionLink.clear();
+                                widget.state.pairing.connect(link);
+                              },
+                        icon: const Icon(Icons.link),
+                        label: const Text('Connect this device'),
+                      ),
+                    ],
                     if (widget.state.pairing.busy) ...[
                       if (widget.state.syncProgress == null)
                         const LinearProgressIndicator(),
@@ -166,16 +262,20 @@ class _LoginPageState extends State<LoginPage> {
                           color: Theme.of(context).colorScheme.error,
                         ),
                       ),
-                    TextButton(
-                      onPressed: () => setState(() => _manual = !_manual),
-                      child: Text(
-                        _manual
-                            ? 'Hide account login'
-                            : 'Use email and passwords',
+                    if (!widget.state.pairing.isPaired || _linkElsewhere)
+                      TextButton(
+                        onPressed: () => setState(() => _manual = !_manual),
+                        child: Text(
+                          _manual
+                              ? 'Hide account login'
+                              : 'Use email and passwords',
+                        ),
                       ),
-                    ),
                   ],
-                  if (kIsWeb || _manual) ...[
+                  if (kIsWeb ||
+                      (_manual &&
+                          (!widget.state.pairing.isPaired ||
+                              _linkElsewhere))) ...[
                     TextField(
                       controller: _api,
                       keyboardType: TextInputType.url,

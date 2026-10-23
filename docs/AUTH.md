@@ -6,11 +6,46 @@ Keep that device unlocked while connecting the other device. For the original on
 
 **Sync** and the initial login screen show live download bytes (with a batch percentage when the server supplies a content length), upload counts, decryption/merge counts, encrypted local saving, and search preparation. Progress counts vault records, which include conversations and people; it is not a total message count. An unknown overall vault size is never shown as a made-up percentage. Interrupted sync can retry from the last saved cursor. Keep Android open for the initial download; automatic sync runs every 30 seconds while open and on resume, without a continuous Android background service. The camera stops when the scanner is backgrounded or closed.
 
-Paired credentials are stored only through `flutter_secure_storage` in Android Keystore protected storage or Linux libsecret/KDE Wallet. Linux requires an available Secret Service and an unlocked wallet. There is no plaintext or web-storage fallback; one-link pairing is native only. **Unlock this device** reads the device keyring without asking for a vault password. Startup uses the same mechanism. Locking clears the in-memory vault key and pairing secrets; OS keyring access is governed by the device's own login/security settings. Cached conversations and queued changes remain encrypted and can unlock offline.
+Paired credentials are stored only through `flutter_secure_storage` in Android
+Keystore-protected storage or Linux libsecret/KDE Wallet. Linux requires an available
+Secret Service and an unlocked wallet. There is no plaintext or web-storage fallback;
+one-link pairing is native only. The UI renders before local storage initialization.
+Once initialization finishes, an already linked device attempts OS-backed unlock once
+per app launch, including Android fingerprint/PIN verification when configured.
+Cancelling leaves the login screen available without reopening the prompt. A manual
+lock never automatically unlocks again; use **Unlock this device** to retry. Device
+password mode requires explicit password entry rather than a startup attempt.
 
-Unlocking displays device verification, key derivation, cached decryption, message restoration and search preparation separately. Each active stage shows elapsed time; counted stages estimate remaining time from their measured rate after the first second. Key derivation and whole-snapshot decryption have no countable intermediate work, so their indicators remain indeterminate. An unchanged startup sync saves only the refreshed session in a small encrypted record tied to that exact cached snapshot, avoiding another full-vault rewrite. Offline startup can read this session record; invalid or stale records cannot replace the authenticated cached session.
+The protected credential payload may include the derived vault key and its salt as
+well as the paired passphrase. A valid cached key opens the authenticated local vault
+before remote access refresh; it never goes to the sync server or ordinary settings.
+Manual vault-passphrase login still derives and validates its key normally. Locking
+clears in-memory vault keys and pairing secrets. Cached conversations and pending
+changes stay encrypted and can unlock offline.
 
-**Sync → Device security** offers optional stronger protection; OS keyring auto-unlock remains the default. On Android 11 or newer, fingerprint or device PIN verification protects the complete credential payload using AES-GCM with a dedicated Android Keystore key. Every encryption or decryption requires a fresh OS `BiometricPrompt` authorizing that exact cipher operation; authentication is never reused from a cached storage initialization, and failed verification has no fallback. Older Android versions retain the default OS keyring mode and cannot enable this option. Desktop can require a device protection password of at least 12 characters: the complete pairing credential payload is encrypted with a fresh random salt, PBKDF2-SHA256 (180,000 iterations), and AES-GCM before entering the OS keyring. This password protects this device and is separate from the vault passphrase or account password. Protected devices require explicit verification at startup and after locking; locking destroys the cached password-derived key and cancels pending Android verification. Changing or disabling protection verifies the current password or device authentication, and new protected storage is verified before replacing the existing entry. Safe account/server metadata remains available for the locked login screen; pairing secrets, vault passphrases, and refresh tokens do not. Losing a device protection password requires recovery through another connected device; it cannot be reset by the sync server.
+Unlocking reports device verification, key derivation when needed, cached decryption,
+restoration and search preparation separately. Active stages show elapsed time;
+counted stages estimate remaining time from their measured rate. Native encrypted
+metadata/outbox and the compact search catalogue use SQLite, transactionally migrated
+from the preserved legacy Sembast `.db`; web storage remains Sembast. Startup restores
+the complete vocabulary/postings and conversation summaries, then reads encrypted
+scoring buckets only for search candidates and conversation-body buckets on opening.
+Missing or damaged disposable search caches rebuild from authenticated vault data.
+A cached unlock continues remote sync in the background. An unchanged sync refreshes
+the encrypted session record tied to that exact snapshot; invalid or stale session
+records cannot replace the authenticated cached session. These paths avoid eager
+whole-vault work but do not establish a fixed startup-time guarantee.
+
+**Sync → Device security** offers optional stronger protection; OS keyring auto-unlock remains the default. On Android 11 or newer, fingerprint or device PIN verification protects the complete credential payload using AES-GCM with a dedicated Android Keystore key. Every encryption or decryption requires a fresh OS `BiometricPrompt` authorizing that exact cipher operation; authentication is never reused from a cached storage initialization, and failed verification has no fallback. Older Android versions retain the default OS keyring mode and cannot enable this option. Desktop can require a device protection password of at least 12 characters: the complete pairing credential payload is encrypted with a fresh random salt, PBKDF2-SHA256 (180,000 iterations), and AES-GCM before entering the OS keyring. This password protects this device and is separate from the vault passphrase or account password. Biometric startup performs the one automatic verification attempt described above; password-protected devices require password entry. Unlock after a manual lock requires an explicit user action. Locking destroys the cached password-derived key and cancels pending Android verification. Changing or disabling protection verifies the current password or device authentication, and new protected storage is verified before replacing the existing entry. Safe account/server metadata remains available for the locked login screen; pairing secrets, vault passphrases, and refresh tokens do not. Losing a device protection password requires recovery through another connected device; it cannot be reset by the sync server.
+
+Normal unlock only decrypts biometric credentials; it does not rewrite them to
+add a derived key or refresh unchanged values. This avoids repeated OS prompts from
+post-unlock encryption/verification operations. Explicit **Device security** setup
+includes the derived vault key and salt inside the protected payload. Existing
+biometric credentials without that cache continue deriving the vault key with PBKDF
+until the user intentionally refreshes device security; they are not silently
+rewrapped during startup. Explicit setup still verifies the current protection and
+the replacement storage before committing it.
 
 Paired access tokens expire after one hour. The app refreshes them on startup/resume, before expiry while open, and retries an authenticated request once after a 401. The random refresh token stays in the device keyring; the server keeps only its SHA-256 hash. Refresh validity slides for 90 days. After a refresh expires or the keyring is lost, reconnect using the link and approve from another unlocked device. If every device's vault key is lost, encrypted conversations cannot be recovered. The first bootstrap request and generated vault key are saved to the keyring before enrollment; a lost response can be retried with the same identity during the original bootstrap window, or recovered afterwards using the initial device refresh secret while its 90-day validity remains. Recovery does not extend automatic approval. Pending approval exchange private keys stay in memory: restarting a pending device begins a new exchange.
 

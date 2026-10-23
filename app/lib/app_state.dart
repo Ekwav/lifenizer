@@ -184,6 +184,21 @@ class LifenizerAppState extends ChangeNotifier {
   bool busy = false;
   String? status;
   String? error;
+  bool startupLoading = false;
+  final Stopwatch _startupClock = Stopwatch()..start();
+  final Map<String, int> startupTimingsMs = {};
+
+  void markStartup(String phase) => startupTimingsMs.putIfAbsent(
+    phase,
+    () => _startupClock.elapsedMilliseconds,
+  );
+  bool startupUnlockPending = false;
+
+  void finishStartup([Object? failure]) {
+    startupLoading = false;
+    if (failure != null) error = 'Could not open this device: $failure';
+    _notifyChanged();
+  }
 
   final List<Participant> participants = [];
   final List<Conversation> conversations = [];

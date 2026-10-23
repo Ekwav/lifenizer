@@ -217,6 +217,7 @@ class DevicePairingService extends ChangeNotifier {
   }
 
   void onLocked() {
+    state.startupUnlockPending = false;
     _generation++;
     _store.forgetUnlock();
     _credentials?.remove('secret');
@@ -249,17 +250,31 @@ class DevicePairingService extends ChangeNotifier {
       'biometric' => DeviceProtection.biometric,
       _ => throw ArgumentError('Unknown device protection.'),
     };
+    final generation = _generation;
     busy = true;
     error = null;
     notifyListeners();
     try {
+      final credentials = Map<String, dynamic>.from(_credentials!);
+      if (target != DeviceProtection.keyring) {
+        credentials['vaultKey'] = await state.exportDeviceVaultKey();
+        if (generation != _generation || !state.isAuthenticated) {
+          throw StateError(
+            'The vault changed before device protection was saved.',
+          );
+        }
+        credentials['vaultKeySalt'] = state.session!.vaultSalt;
+      }
       await _store.setProtection(
         target,
-        Map<String, dynamic>.from(_credentials!),
+        credentials,
         password: password,
         currentPassword: currentPassword,
       );
       _protection = target;
+      if (generation == _generation && state.isAuthenticated) {
+        _credentials = credentials;
+      }
       if (state.isAuthenticated) state.status = 'Device security updated';
       return true;
     } catch (_) {
@@ -491,11 +506,21 @@ class DevicePairingService extends ChangeNotifier {
   Future<void> _rememberVaultKey() async {
     final generation = _generation;
     final credentials = _credentials;
-    if (credentials == null || !state.isAuthenticated) return;
+    // A biometric write requires fresh authenticated cipher operations. Caching
+    // the derived key is optional and must not reopen verification after unlock.
+    if (credentials == null ||
+        !state.isAuthenticated ||
+        _protection == DeviceProtection.biometric) {
+      return;
+    }
     final key = await state.exportDeviceVaultKey();
     if (generation != _generation || !state.isAuthenticated) return;
+    final salt = state.session!.vaultSalt;
+    if (credentials['vaultKey'] == key && credentials['vaultKeySalt'] == salt) {
+      return;
+    }
     credentials['vaultKey'] = key;
-    credentials['vaultKeySalt'] = state.session!.vaultSalt;
+    credentials['vaultKeySalt'] = salt;
     try {
       await _store.write(credentials);
     } catch (_) {

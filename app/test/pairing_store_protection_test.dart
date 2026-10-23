@@ -23,6 +23,7 @@ final _credentials = <String, dynamic>{
 class _MemoryStorage extends FlutterSecureStorage {
   final values = <String, String>{};
   bool failWrites = false;
+  int writes = 0;
   bool corruptHeader = false;
 
   @override
@@ -49,6 +50,7 @@ class _MemoryStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
+    writes++;
     if (failWrites) throw StateError('Secure storage unavailable');
     if (value == null) {
       values.remove(key);
@@ -134,6 +136,12 @@ void main() {
       expect(await store.readForUnlock(), _credentials);
     },
   );
+
+  test('unchanged keyring credentials do not rewrite secure storage', () async {
+    final writes = keyring.writes;
+    await store.write(Map<String, dynamic>.from(_credentials));
+    expect(keyring.writes, writes);
+  });
 
   test(
     'password wraps every secret and explicit unlock is required even with a cached key',

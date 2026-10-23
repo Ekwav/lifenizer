@@ -14,21 +14,32 @@ import 'widgets/vault_shell.dart';
 Future<void> main([List<String> arguments = const []]) async {
   WidgetsFlutterBinding.ensureInitialized();
   SemanticsBinding.instance.ensureSemantics();
-  final appState = LifenizerAppState();
-  await appState.initialize();
-  await appState.pairing.restore(autoUnlock: false);
-  appState.emailImport.start();
-  appState.documentImport.start();
-  appState.cameraRoll.start();
-  appState.browserHistory.start();
-  appState.browserExtension.start();
-  appState.recordingRelay.start();
-  installE2eBridge(appState);
-  unawaited(ShareIntentService.instance.start(appState));
-  await QuickActionService.instance.start(appState, arguments: arguments);
-  await ExportWatchService.instance.start(appState);
+  final appState = LifenizerAppState()
+    ..startupLoading = true
+    ..startupUnlockPending = true;
   runApp(LifenizerApp(state: appState));
-  if (!appState.pairing.busy) unawaited(appState.pairing.unlockSaved());
+  WidgetsBinding.instance.addPostFrameCallback(
+    (_) => appState.markStartup('firstFrame'),
+  );
+  try {
+    await appState.initialize();
+    appState.markStartup('metadata');
+    await appState.pairing.restore(autoUnlock: false);
+    appState.markStartup('deviceCredentials');
+    appState.emailImport.start();
+    appState.documentImport.start();
+    appState.cameraRoll.start();
+    appState.browserHistory.start();
+    appState.browserExtension.start();
+    appState.recordingRelay.start();
+    installE2eBridge(appState);
+    unawaited(ShareIntentService.instance.start(appState));
+    await QuickActionService.instance.start(appState, arguments: arguments);
+    await ExportWatchService.instance.start(appState);
+    appState.finishStartup();
+  } catch (error) {
+    appState.finishStartup(error);
+  }
 }
 
 class LifenizerApp extends StatefulWidget {

@@ -75,6 +75,7 @@ class PairingCredentialStore {
       throw UnsupportedError('Device pairing requires the native app.');
     }
     final header = await read();
+    if (header != null && jsonEncode(header) == jsonEncode(credentials)) return;
     if (protectionOf(header) != DeviceProtection.keyring) {
       _verifyMetadata(header!, credentials, includeDeadline: false);
     }

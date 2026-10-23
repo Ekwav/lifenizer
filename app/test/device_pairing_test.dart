@@ -29,6 +29,60 @@ class _Keyring extends PairingCredentialStore {
   }
 }
 
+class _BiometricKeyring extends _Keyring {
+  bool protected = false;
+  int prompts = 0;
+  int writes = 0;
+  @override
+  Future<Map<String, dynamic>?> read() async {
+    final credentials = await super.read();
+    if (!protected || credentials == null) return credentials;
+    return {
+      for (final key in ['server', 'email', 'deviceId', 'until'])
+        key: credentials[key],
+      'protection': 'biometric',
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> readForUnlock({
+    String? password,
+    bool authenticate = false,
+  }) async {
+    if (!protected) {
+      return super.readForUnlock(
+        password: password,
+        authenticate: authenticate,
+      );
+    }
+    if (!authenticate) throw StateError('Authenticate first.');
+    prompts++;
+    return super.read();
+  }
+
+  @override
+  Future<void> setProtection(
+    DeviceProtection mode,
+    Map<String, dynamic> credentials, {
+    String? password,
+    String? currentPassword,
+  }) async {
+    value = Map<String, dynamic>.from(
+      jsonDecode(jsonEncode(credentials)) as Map,
+    );
+    protected = mode == DeviceProtection.biometric;
+  }
+
+  @override
+  Future<void> write(Map<String, dynamic> credentials) async {
+    writes++;
+    if (protected) {
+      throw StateError('A write would reopen device verification.');
+    }
+    await super.write(credentials);
+  }
+}
+
 class _Server {
   final session = {
     'authToken': 'initial-token',
@@ -180,6 +234,53 @@ String _link({bool expired = false}) =>
     'lifenizer://connect?server=https%3A%2F%2Fexample.test%2Flifenizer#v=1&secret=${base64UrlEncode(List<int>.generate(32, (i) => i + 1))}&until=${DateTime.now().toUtc().add(Duration(minutes: expired ? -1 : 30)).millisecondsSinceEpoch ~/ 1000}';
 
 void main() {
+  test(
+    'biometric unlock authenticates once and never rewrites credentials for the optional key cache',
+    () async {
+      final keyring = _BiometricKeyring();
+      final server = _Server()..firstStore = keyring;
+      final state = await _state(server, keyring);
+      await state.pairing.connect(_link());
+      expect(state.isAuthenticated, true);
+      await state.lock();
+      keyring.value!.remove('vaultKey');
+      keyring.value!.remove('vaultKeySalt');
+      keyring.protected = true;
+      await state.pairing.restore(autoUnlock: false);
+      final writes = keyring.writes;
+      await state.pairing.unlockSaved(authenticate: true);
+      expect(
+        state.isAuthenticated,
+        true,
+        reason: state.error ?? state.pairing.error,
+      );
+      expect(keyring.prompts, 1);
+      expect(keyring.writes, writes);
+      expect(keyring.value!.containsKey('vaultKey'), false);
+      await state.pairing.refreshAccess();
+      expect(keyring.prompts, 1);
+      expect(keyring.writes, writes);
+      await state.lock();
+      await state.pairing.unlockSaved(authenticate: true);
+      expect(state.isAuthenticated, true);
+      expect(
+        keyring.prompts,
+        2,
+        reason: 'Each new lock still requires device verification.',
+      );
+      expect(keyring.writes, writes);
+      expect(await state.pairing.enableProtection('biometric'), true);
+      expect(base64Decode(keyring.value!['vaultKey'] as String), hasLength(32));
+      expect(keyring.value!['vaultKeySalt'], server.session['vaultSalt']);
+      await state.lock();
+      keyring.value!['vaultPassphrase'] =
+          'wrong saved passphrase proves cached-key unlock';
+      await state.pairing.unlockSaved(authenticate: true);
+      expect(state.isAuthenticated, true, reason: state.error);
+      expect(keyring.prompts, 3);
+    },
+  );
+
   test(
     'bootstrap saves credentials before enrollment and retries a lost response with the same vault key',
     () async {
