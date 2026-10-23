@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:app/crypto_service.dart';
 import 'package:app/models.dart';
 import 'package:app/services/conversation_search_index.dart';
 import 'package:app/services/search_index_worker_io.dart' as native;
@@ -237,6 +238,51 @@ void main() {
   });
 
   for (final useNative in [true, false]) {
+    test(
+      'encrypted catalog authenticates before decoding ${useNative ? 'native' : 'web'}',
+      () async {
+        final crypto = VaultCrypto()..unlockDeviceKey(List<int>.filled(32, 7));
+        addTearDown(crypto.lock);
+        final parts = await native.encodeSearchSnapshotParts(
+          build([conversation('one', 'invoice')]),
+          2,
+        );
+        final encrypted = await crypto.encryptJson({
+          ...parts.catalog,
+          'cacheVersion': 3,
+          'detailNonces': ['detail-a', 'detail-b'],
+          'postingNonces': ['posting-a', 'posting-b'],
+        });
+        final decode = useNative
+            ? native.decryptSearchSnapshot
+            : web.decryptSearchSnapshot;
+        final decoded = await decode(
+          crypto,
+          cipherText: encrypted.cipherText,
+          nonce: encrypted.nonce,
+        );
+        expect(decoded.index.documents.keys, ['one']);
+        expect(decoded.index.documents['one']!.detailsLoaded, false);
+        expect(decoded.index.postingsLoaded, false);
+        expect(decoded.metadata, {
+          'cacheVersion': 3,
+          'detailNonces': ['detail-a', 'detail-b'],
+          'postingNonces': ['posting-a', 'posting-b'],
+        });
+        final wrongKey = VaultCrypto()
+          ..unlockDeviceKey(List<int>.filled(32, 8));
+        addTearDown(wrongKey.lock);
+        await expectLater(
+          decode(
+            wrongKey,
+            cipherText: encrypted.cipherText,
+            nonce: encrypted.nonce,
+          ),
+          throwsA(anything),
+        );
+        expect(crypto.isUnlocked, true);
+      },
+    );
     test(
       'parts codec handles empty corpora and refuses unloaded posting writes ${useNative ? 'native' : 'web'}',
       () async {

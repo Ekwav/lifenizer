@@ -1,3 +1,4 @@
+import '../crypto_service.dart';
 import 'conversation_search_index.dart';
 import 'vault_chunks.dart';
 import 'dart:convert';
@@ -22,6 +23,21 @@ Future<Map<String, dynamic>> encodeSearchSnapshot(
 Future<ConversationSearchIndex> decodeSearchSnapshot(
   Map<String, dynamic> snapshot,
 ) async => ConversationSearchIndex.fromJson(_unpack(snapshot));
+
+Future<({ConversationSearchIndex index, Map<String, dynamic> metadata})>
+decryptSearchSnapshot(
+  VaultCrypto crypto, {
+  required String cipherText,
+  required String nonce,
+}) async {
+  final snapshot = await crypto.decryptJson(
+    cipherText: cipherText,
+    nonce: nonce,
+  );
+  final index = ConversationSearchIndex.fromJson(_unpack(snapshot));
+  snapshot.remove('gzip');
+  return (index: index, metadata: snapshot);
+}
 
 Future<
   ({

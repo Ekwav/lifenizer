@@ -107,6 +107,7 @@ class DevicePairingService extends ChangeNotifier {
   }) async {
     if (!isPaired || busy || state.busy || state.isAuthenticated) return;
     if (higherSecurity && !authenticate) return;
+    state.beginUnlockTiming();
     final generation = _generation;
     var loginStarted = false;
     busy = true;
@@ -122,6 +123,7 @@ class DevicePairingService extends ChangeNotifier {
         password: password,
         authenticate: authenticate,
       );
+      state.markUnlock('credentialsVerified');
       if (credentials == null || credentials['email'] is! String) {
         throw StateError('Device keyring credentials are missing.');
       }

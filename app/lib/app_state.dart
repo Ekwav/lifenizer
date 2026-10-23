@@ -200,6 +200,24 @@ class LifenizerAppState extends ChangeNotifier {
     phase,
     () => _startupClock.elapsedMilliseconds,
   );
+  final Stopwatch _unlockClock = Stopwatch();
+  final Map<String, int> unlockTimingsMs = {};
+
+  void beginUnlockTiming() {
+    unlockTimingsMs.clear();
+    _unlockClock
+      ..reset()
+      ..start();
+    markUnlock('started');
+  }
+
+  void markUnlock(String phase) {
+    if (!_unlockClock.isRunning) return;
+    final elapsed = _unlockClock.elapsedMilliseconds;
+    unlockTimingsMs[phase] = elapsed;
+    debugPrint('Lifenizer unlock $phase ${elapsed}ms');
+  }
+
   bool startupUnlockPending = false;
 
   void finishStartup([Object? failure]) {

@@ -28,6 +28,7 @@ extension VaultSync on LifenizerAppState {
     String? deviceVaultKey,
     String? deviceVaultSalt,
   }) async {
+    if (!pairing.busy) beginUnlockTiming();
     await _run(() async {
       if (passphrase.isEmpty || email.trim().isEmpty) {
         throw ArgumentError('Enter your email and vault passphrase.');
@@ -61,6 +62,7 @@ extension VaultSync on LifenizerAppState {
         final normalizedEmail = email.trim().toLowerCase();
         _localVaultKey = 'vault:${jsonEncode([apiBaseUrl, normalizedEmail])}';
         final local = await _localStore!.read(_localVaultKey!);
+        markUnlock('localRead');
         final anonymous =
             apiFactory?.call(apiBaseUrl) ??
             LifenizerApiClient(baseUrl: apiBaseUrl);
@@ -102,6 +104,7 @@ extension VaultSync on LifenizerAppState {
         }
         _clearVault();
         markStartup('vaultKey');
+        markUnlock('vaultKey');
         var repaired = false;
         var resyncRequired = false;
         if (local != null) {
@@ -172,6 +175,7 @@ extension VaultSync on LifenizerAppState {
           // a failure surfaces as syncError instead of failing the unlock.
           _unlocking = false;
           markStartup('searchReady');
+          markUnlock('searchReady');
           status = offline
               ? 'Local vault unlocked · changes will sync when connected'
               : 'Vault unlocked · syncing in background';
@@ -182,6 +186,7 @@ extension VaultSync on LifenizerAppState {
           // local vault that must be downloaded again: validate every remote
           // ciphertext before exposing the unlocked UI.
           await finishUnlock();
+          markUnlock('searchReady');
         }
       } catch (_) {
         _crypto.lock();
@@ -685,6 +690,7 @@ extension VaultSync on LifenizerAppState {
       nonce: local['nonce'] as String,
       background: true,
     );
+    markUnlock('coreDecrypted');
     final format = local['format'];
     if (format == null) {
       // Legacy single blob: restore as before; the first save converts it.
@@ -743,12 +749,15 @@ extension VaultSync on LifenizerAppState {
             record = await source.readBlob(key, 'search-index');
           }
           if (record != null && record['nonce'] == cacheNonce) {
-            final snapshot = await _crypto.decryptJson(
+            markUnlock('catalogRead');
+            final decoded = await decryptSearchSnapshot(
+              _crypto,
               cipherText: record['cipherText'] as String,
               nonce: cacheNonce,
-              background: true,
             );
-            cachedIndex = await decodeSearchSnapshot(snapshot);
+            final snapshot = decoded.metadata;
+            cachedIndex = decoded.index;
+            markUnlock('catalogDecoded');
             currentCatalog = snapshot['cacheVersion'] == 3;
             markStartup('searchCatalog');
             if (catalogInDatabase) {
@@ -794,6 +803,7 @@ extension VaultSync on LifenizerAppState {
           for (var n = 0; n < count; n++) source.chunkNonce(key, n),
         ]);
         if (!listEquals(actual, nonces)) throw const _IncompleteChunks();
+        markUnlock('chunkHeaders');
       }
       final repaired = await _restoreSnapshot(
         core,

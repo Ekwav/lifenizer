@@ -2,6 +2,7 @@ import 'dart:isolate';
 import 'dart:convert';
 import 'dart:io';
 
+import '../crypto_service.dart';
 import 'conversation_search_index.dart';
 import 'vault_chunks.dart';
 
@@ -21,6 +22,41 @@ Future<Map<String, dynamic>> encodeSearchSnapshot(
 Future<ConversationSearchIndex> decodeSearchSnapshot(
   Map<String, dynamic> snapshot,
 ) => Isolate.run(() => ConversationSearchIndex.fromJson(_unpack(snapshot)));
+
+/// Authenticate and decode the catalog in one operation; only the ready index
+/// and small cache metadata return to the UI isolate.
+Future<({ConversationSearchIndex index, Map<String, dynamic> metadata})>
+decryptSearchSnapshot(
+  VaultCrypto crypto, {
+  required String cipherText,
+  required String nonce,
+}) async {
+  final bytes = await crypto.exportDeviceKey();
+  try {
+    return await Isolate.run(
+      () => _decryptSearchSnapshot(bytes, cipherText, nonce),
+    );
+  } finally {
+    bytes.fillRange(0, bytes.length, 0);
+  }
+}
+
+Future<({ConversationSearchIndex index, Map<String, dynamic> metadata})>
+_decryptSearchSnapshot(List<int> bytes, String cipherText, String nonce) async {
+  final crypto = VaultCrypto()..unlockDeviceKey(bytes);
+  try {
+    final snapshot = await crypto.decryptJson(
+      cipherText: cipherText,
+      nonce: nonce,
+    );
+    final index = ConversationSearchIndex.fromJson(_unpack(snapshot));
+    snapshot.remove('gzip');
+    return (index: index, metadata: snapshot);
+  } finally {
+    crypto.lock();
+    bytes.fillRange(0, bytes.length, 0);
+  }
+}
 
 Future<
   ({
