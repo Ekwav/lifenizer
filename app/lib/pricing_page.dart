@@ -240,7 +240,7 @@ class _PricingPageState extends State<PricingPage> {
   bool _matchesPlan(_Tier tier) {
     if (tier.isFree) return _currentPlan == 'Free';
     if (tier.slug == 'premium') return _currentPlan == 'Premium';
-    if (tier.slug == 'premium-plus') return _currentPlan == 'Premium+';
+    if (tier.slug == 'premium-plus') return _currentPlan == 'PremiumPlus';
     return false;
   }
 }
