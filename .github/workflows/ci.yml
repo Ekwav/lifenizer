@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   backend:
@@ -125,3 +125,21 @@ jobs:
         with:
           name: playwright-report
           path: e2e/test-results/
+
+  container:
+    name: Cluster image
+    needs: [backend, flutter, e2e]
+    if: github.repository == 'Coflnet/Lifenizer' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      security-events: write
+    uses: Coflnet/.github/.github/workflows/container-ci.yml@9590d8eb788df71bb44c9601a3ae2e10b09f1a8a
+    with:
+      dockerfile: backend/Dockerfile
+      context: backend
+      k8s_file: lifenizer/app/chart/values.yaml
+      repo_url: https://github.com/Coflnet/fleet
+    secrets:
+      ARGO_WEBHOOK_SECRET: ${{ secrets.ARGO_WEBHOOK_SECRET }}

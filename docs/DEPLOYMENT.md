@@ -1,7 +1,43 @@
 # Deployment guide
 
-The mail server runs the single-replica API with Docker Compose, alongside its
-existing Traefik and Bitwarden services. Kubernetes examples follow below.
+The existing service runs on the mail server. Its replacement is prepared in
+`../fleet/lifenizer` for `https://lifenizer.coflnet.com`; it remains inactive until
+the database migration, secret provisioning and image promotion are verified.
+
+## Fleet cluster migration
+
+The Fleet chart is the authoritative Kubernetes configuration. Follow
+`../fleet/lifenizer/README.md` for its staged activation and gateway prerequisites.
+It uses one SQLite writer, a retained encrypted volume, and injected OpenBao
+files at `/var/run/secrets/lifenizer`. The API loads those files before configuring
+authentication, payments and object storage. Existing Compose deployments need
+no secret-file directory.
+
+Create a private R2 bucket and a bucket-scoped **Object Read & Write** token using
+[Cloudflare's S3 setup](https://developers.cloudflare.com/r2/get-started/s3/), then run:
+
+```bash
+cd ../ansible
+./scripts/configure-lifenizer-r2.sh
+```
+
+The interactive helper hides the credentials and CAS-patches only the six R2
+fields at `kv/services/lifenizer`. It uses Fleet's short-lived child session,
+revokes that child, verifies HTTP 403, and removes its credential artifacts.
+It does not create the bucket, enable billing, or deploy the application.
+
+Cluster image CI is prepared for `Coflnet/Lifenizer` on `main`; it does not publish
+from the existing personal repository or feature branches. After application
+checks, the shared workflow builds, then Argo validates, scans and pins the image
+in `lifenizer/app/chart/values.yaml`. Follow `../fleet/argo-workflow/CI.md`, including
+independent review where required. An image pin alone leaves the chart disabled.
+
+For cutover, preserve the current signing key, pairing configuration, complete
+SQLite state and local artifacts. Keep `https://mail.coflnet.com/lifenizer` as a
+transparent proxy to the cluster, preserving authorization, uploads and streaming
+responses. Do not redirect or relink existing devices: their full server URL is
+part of the local vault and recording-cache identity. Verify playback of the
+existing phone recording from the PC before retiring the old backend.
 
 ## Mail server: install and upgrade
 
@@ -228,139 +264,6 @@ runs as a **non-root user** (uid 1001) with no unnecessary capabilities.
 - Without R2/S3 configuration, object blobs default to `/tmp/lifenizer-artifacts` (ephemeral).
   In production, mount persistent storage and point `Artifacts__StorePath` at it.
   The example mounts `/data` for both SQLite and artifact files.
-
----
-
-## Kubernetes deployment example
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: lifenizer-api
-spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: lifenizer-api
-  template:
-    metadata:
-      labels:
-        app: lifenizer-api
-    spec:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1001
-        runAsGroup: 1001
-        fsGroup: 1001
-      containers:
-        - name: api
-          image: lifenizer-api:latest
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 8080
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          env:
-            - name: Auth__AllowDevLogin
-              value: "false"
-            - name: Artifacts__StorePath
-              value: /data/artifacts
-            - name: ConnectionStrings__Lifenizer
-              valueFrom:
-                secretKeyRef:
-                  name: lifenizer-secrets
-                  key: db-connection-string
-            - name: Jwt__Secret
-              valueFrom:
-                secretKeyRef:
-                  name: lifenizer-secrets
-                  key: jwt-secret
-            - name: Payments__BaseUrl
-              valueFrom:
-                secretKeyRef:
-                  name: lifenizer-secrets
-                  key: payments-base-url
-          volumeMounts:
-            - name: artifact-storage
-              mountPath: /data
-            - name: tmp
-              mountPath: /tmp
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 15
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 5
-            periodSeconds: 10
-      volumes:
-        - name: artifact-storage
-          persistentVolumeClaim:
-            claimName: lifenizer-artifacts-pvc
-        - name: tmp
-          emptyDir: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: lifenizer-api
-spec:
-  selector:
-    app: lifenizer-api
-  ports:
-    - port: 80
-      targetPort: 8080
-```
-
-### NetworkPolicy (restrict egress)
-
-This example permits DNS and in-cluster HTTPS only. Add destination-specific rules
-for the configured Whisper service (TCP 9000), IMAP, or external providers before
-using those imports.
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: lifenizer-api-netpol
-spec:
-  podSelector:
-    matchLabels:
-      app: lifenizer-api
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    - ports:
-        - port: 8080
-  egress:
-    # Allow DNS
-    - ports:
-        - port: 53
-          protocol: UDP
-    # Allow in-cluster HTTPS; restrict destinations for your deployment
-    - to:
-        - namespaceSelector: {}
-      ports:
-        - port: 443
-```
 
 ---
 

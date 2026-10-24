@@ -108,8 +108,10 @@ sync data and local media remain readable. Photos and explicitly enabled online
 recordings use separate uploads outside the change batches. Recording storage
 requests survive offline failures and restart; ordinary sync retries while unlocked
 and the recording player shows pending upload/removal. Online removal keeps local
-audio. Configure bucket credentials with the installer's protected
-`--service-config` JSON file; see [deployment](docs/DEPLOYMENT.md#private-r2s3-online-storage).
+audio. For the planned Fleet deployment, configure R2 through
+`../ansible/scripts/configure-lifenizer-r2.sh`; see
+[cluster migration](docs/DEPLOYMENT.md#fleet-cluster-migration).
+The Compose installer also accepts a protected `--service-config` JSON file.
 Capture typed text offline;
 recordings are saved encrypted locally until you explicitly send them to Whisper.
 Provider imports, transcription and relation extraction require the configured server;
