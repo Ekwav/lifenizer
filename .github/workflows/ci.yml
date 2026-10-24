@@ -29,6 +29,11 @@ jobs:
       - name: Build
         run: dotnet build backend/LifenizerNext.slnx --no-restore -c Release /property:GenerateFullPaths=true /consoleloggerparameters:NoSummary
 
+      - name: Install document extraction tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng
+
       - name: Test
         run: dotnet test backend/LifenizerNext.slnx --no-build -c Release --logger "trx;LogFileName=test-results.trx" --results-directory ./test-results
 
