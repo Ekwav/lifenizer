@@ -7,6 +7,7 @@ type Snapshot = {
   authenticated: boolean;
   busy: boolean;
   cursor: number;
+  pendingSync: number;
   participants: Array<{ displayName: string }>;
   conversations: Array<{ title: string; source: string; tags?: string[] }>;
   relations: Array<{ subject: string; relation: string; object: string }>;
@@ -73,6 +74,10 @@ test('encrypted sync, search, relations, and user isolation across browser conte
   await waitForSnapshot(page, data => data.relations.some(relation =>
     relation.subject === 'Person X' && relation.relation === 'brother' && relation.object === 'Person Y'
   ));
+
+  // Publish the first device's queued batch before opening a second device.
+  await runBridge(page, 'lifenizerE2ePull');
+  await waitForSnapshot(page, data => data.pendingSync === 0);
 
   const secondContext = await browser.newContext();
   const secondDevice = await secondContext.newPage();
