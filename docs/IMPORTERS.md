@@ -397,7 +397,8 @@ Optional metadata:
 - `page` (positive page number, default 1)
 - `modifiedAfter` (ISO date-time; inclusive `modified__gte` filter)
 
-Documents are ordered by `modified,id`. The response diagnostics contain
+Documents are ordered by stable `id`, so edits during a paginated import do not
+move already-seen documents between pages. The response diagnostics contain
 `hasMore`, `nextPage` and `nextModifiedAfter`. Keep the same `modifiedAfter`
 through a page loop and save cursor progress only after encrypting/persisting
 that page. The client maintains a modification watermark after a completed

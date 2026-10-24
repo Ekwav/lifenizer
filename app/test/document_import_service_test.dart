@@ -4,6 +4,7 @@ import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
 import 'package:app/services/document_credentials.dart';
 import 'package:app/services/local_vault_store.dart';
+import 'package:app/services/paperless_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -54,7 +55,7 @@ class _Fixture {
   bool more = true;
   bool futureModified = false;
   late final LifenizerAppState state;
-  Future<void> open() async {
+  Future<void> open({PaperlessClient? paperlessClient}) async {
     final client = MockClient((request) async {
       if (request.url.path.startsWith('/api/auth/')) {
         return http.Response(
@@ -119,6 +120,7 @@ class _Fixture {
     state = LifenizerAppState(
       localStore: vault,
       documentStore: credentials,
+      paperlessClient: paperlessClient,
       apiFactory: (base) => LifenizerApiClient(baseUrl: base, client: client),
     );
     await state.login(
@@ -132,6 +134,109 @@ class _Fixture {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'direct Paperless imports stay local and retry a failed encrypted save',
+    () async {
+      final f = _Fixture();
+      final pages = <String?>[];
+      var empty = false;
+      final local = PaperlessClient(
+        client: MockClient((request) async {
+          expect(request.url.origin, 'http://127.0.0.1:8002');
+          expect(request.headers['authorization'], 'Token local-private-token');
+          pages.add(request.url.queryParameters['page']);
+          if (empty) return http.Response('{"next":null,"results":[]}', 200);
+          final page = int.parse(pages.last!);
+          return http.Response(
+            jsonEncode({
+              'next': page == 1
+                  ? 'http://other.invalid/never-follow-this'
+                  : null,
+              'results': [
+                {
+                  'id': page,
+                  'title': 'Local scan $page',
+                  'content': 'Private local document $page',
+                  'modified': '2020-10-04T12:0$page:00Z',
+                },
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+      await f.open(paperlessClient: local);
+      addTearDown(f.state.dispose);
+      f.vault.fail = true;
+      await f.state.documentImport.connect(
+        baseUrl: 'http://127.0.0.1:8002',
+        token: 'local-private-token',
+      );
+      expect(f.state.documentImport.directConnection, isTrue);
+      expect(f.state.documentImport.baseUrl, 'http://127.0.0.1:8002/');
+      expect(f.credentials.account['page'], '1');
+      expect(f.state.documentImport.error, isNotNull);
+      expect(f.requests, isEmpty);
+      f.vault.fail = false;
+      await f.state.documentImport.fetch();
+      expect(pages, ['1', '1', '2']);
+      expect(f.state.conversations.length, 2);
+      final watermark = f.credentials.account['modifiedAfter'];
+      empty = true;
+      await f.state.documentImport.fetch();
+      await f.state.documentImport.fetch();
+      expect(
+        f.credentials.account['modifiedAfter'],
+        watermark,
+        reason: 'Empty checks must not move the overlap window backward',
+      );
+      expect(
+        f.state.conversations.first.sourceThreadId,
+        'paperless:http://127.0.0.1:8002/:1',
+      );
+      expect(f.credentials.account['page'], '1');
+      expect(
+        f.credentials.account['modifiedAfter'],
+        '2020-10-04T12:01:00.000Z',
+      );
+      expect(
+        jsonEncode(f.vault.records),
+        isNot(contains('local-private-token')),
+      );
+      expect(
+        jsonEncode(f.vault.records),
+        isNot(contains('Private local document')),
+      );
+      f.baseUrl = 'https://changed-server.example.test';
+      await f.state.documentImport.fetch();
+      expect(f.state.documentImport.error, isNull);
+      expect(f.requests, isEmpty);
+      expect(f.state.conversations.length, 2);
+    },
+  );
+
+  test(
+    'direct Paperless rejects unsafe addresses before saving a token',
+    () async {
+      final f = _Fixture();
+      await f.open(
+        paperlessClient: PaperlessClient(
+          client: MockClient((_) async {
+            fail('An invalid address must never receive a token');
+          }),
+        ),
+      );
+      addTearDown(f.state.dispose);
+      await f.state.documentImport.connect(
+        baseUrl: 'http://public.example.test',
+        token: 'private-token',
+      );
+      expect(f.state.documentImport.connected, isFalse);
+      expect(f.state.documentImport.error, isNotNull);
+      expect(f.credentials.records, isEmpty);
+      expect(f.requests, isEmpty);
+    },
+  );
   test(
     'Paperless pages persist encrypted before cursor and token stays in OS store',
     () async {

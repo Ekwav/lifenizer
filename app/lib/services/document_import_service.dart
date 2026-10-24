@@ -6,15 +6,21 @@ import 'package:flutter/foundation.dart';
 import '../app_state.dart';
 import 'document_credentials.dart';
 import 'document_folder_watch_service.dart';
+import 'paperless_client.dart';
 
 class DocumentImportService extends ChangeNotifier {
-  DocumentImportService(this.state, {DocumentCredentialStore? store})
-    : _store = store ?? const DocumentCredentialStore(),
-      folders = DocumentFolderWatchService(state, store: store) {
+  DocumentImportService(
+    this.state, {
+    DocumentCredentialStore? store,
+    PaperlessClient? client,
+  }) : _store = store ?? const DocumentCredentialStore(),
+       _client = client ?? PaperlessClient(),
+       folders = DocumentFolderWatchService(state, store: store) {
     folders.addListener(_notify);
   }
   final LifenizerAppState state;
   final DocumentCredentialStore _store;
+  final PaperlessClient _client;
   final DocumentFolderWatchService folders;
   Map<String, dynamic>? _account;
   String? _identity;
@@ -27,6 +33,8 @@ class DocumentImportService extends ChangeNotifier {
   String? status;
   String? error;
   bool get connected => _account != null;
+  String? get baseUrl => _account?['baseUrl'] as String?;
+  bool get directConnection => _account?['direct'] == true;
   bool get working => _running != null || _connection != null;
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -89,9 +97,13 @@ class DocumentImportService extends ChangeNotifier {
     );
   }
 
-  Future<void> connect({required String token, bool remember = true}) {
+  Future<void> connect({
+    required String token,
+    bool remember = true,
+    String? baseUrl,
+  }) {
     if (working || state.busy || !state.isAuthenticated) return Future.value();
-    _connection = _connect(token, remember).whenComplete(() {
+    _connection = _connect(token, remember, baseUrl).whenComplete(() {
       _connection = null;
       _notify();
     });
@@ -99,7 +111,7 @@ class DocumentImportService extends ChangeNotifier {
     return _connection!;
   }
 
-  Future<void> _connect(String token, bool remember) async {
+  Future<void> _connect(String token, bool remember, String? baseUrl) async {
     start();
     if (state.busy || _identity == null) return;
     if (token.trim().isEmpty) {
@@ -107,8 +119,14 @@ class DocumentImportService extends ChangeNotifier {
       _notify();
       return;
     }
+    if (baseUrl != null && kIsWeb) {
+      error = 'Use the installed app to connect directly to Paperless.';
+      _notify();
+      return;
+    }
     final api = Uri.parse(state.apiBaseUrl);
-    if (api.scheme != 'https' &&
+    if (baseUrl == null &&
+        api.scheme != 'https' &&
         !['localhost', '127.0.0.1', '::1'].contains(api.host)) {
       error = 'Paperless credentials require an HTTPS server connection.';
       _notify();
@@ -124,13 +142,20 @@ class DocumentImportService extends ChangeNotifier {
     };
     try {
       error = null;
-      final settings = await state.paperlessSettings();
-      if (!_current(identity, generation)) return;
-      if (settings['configured'] != true || settings['baseUrl'] is! String) {
-        error = 'The server has no configured Paperless address.';
-        return;
+      if (baseUrl != null) {
+        account['baseUrl'] = PaperlessClient.validateBaseUrl(
+          baseUrl,
+        ).toString();
+        account['direct'] = true;
+      } else {
+        final settings = await state.paperlessSettings();
+        if (!_current(identity, generation)) return;
+        if (settings['configured'] != true || settings['baseUrl'] is! String) {
+          error = 'The server has no configured Paperless address.';
+          return;
+        }
+        account['baseUrl'] = settings['baseUrl'];
       }
-      account['baseUrl'] = settings['baseUrl'];
       if (account['remember'] == true) {
         await _store.write(identity, 'paperless', account);
       } else {
@@ -140,6 +165,8 @@ class DocumentImportService extends ChangeNotifier {
       _account = account;
       _schedule();
       await fetch();
+    } on FormatException catch (e) {
+      if (_current(identity, generation)) error = e.message;
     } catch (_) {
       if (_current(identity, generation)) {
         _account = old;
@@ -170,26 +197,46 @@ class DocumentImportService extends ChangeNotifier {
     var documents = 0;
     try {
       error = null;
-      final settings = await state.paperlessSettings();
-      if (!_current(identity, generation)) return;
-      if (settings['configured'] != true ||
-          settings['baseUrl'] != account['baseUrl']) {
-        error =
-            'The configured Paperless server changed. Reconnect before sending the token.';
-        return;
+      if (account['direct'] != true) {
+        final settings = await state.paperlessSettings();
+        if (!_current(identity, generation)) return;
+        if (settings['configured'] != true ||
+            settings['baseUrl'] != account['baseUrl']) {
+          error =
+              'The configured Paperless server changed. Reconnect before sending the token.';
+          return;
+        }
       }
       account['cycleStartedAt'] ??= DateTime.now().toUtc().toIso8601String();
       for (var batch = 0; batch < 20; batch++) {
         if (!_current(identity, generation) || state.busy) return;
         status = 'Importing Paperless page ${account['page']}…';
         _notify();
-        final result = await state.importPaperlessPage({
+        final metadata = <String, String>{
           'token': account['token'] as String,
           'page': account['page'] as String? ?? '1',
           'limit': '10',
           if (account['modifiedAfter'] != null)
             'modifiedAfter': account['modifiedAfter'] as String,
-        });
+        };
+        final result = await state.importPaperlessPage(
+          metadata,
+          fetch: account['direct'] == true
+              ? () async {
+                  final page = await _client.fetchPage(
+                    baseUrl: account['baseUrl'] as String,
+                    token: account['token'] as String,
+                    metadata: metadata,
+                  );
+                  if (!_current(identity, generation)) {
+                    throw StateError(
+                      'Paperless connection changed during import.',
+                    );
+                  }
+                  return page;
+                }
+              : null,
+        );
         if (!_current(identity, generation)) return;
         if (result == null) {
           error =
@@ -226,11 +273,14 @@ class DocumentImportService extends ChangeNotifier {
               account['pendingModifiedAfter'] as String,
             );
             final started = DateTime.parse(account['cycleStartedAt'] as String);
-            account['modifiedAfter'] =
-                (maximum.isBefore(started) ? maximum : started)
-                    .subtract(const Duration(minutes: 1))
-                    .toUtc()
-                    .toIso8601String();
+            final next = (maximum.isBefore(started) ? maximum : started)
+                .subtract(const Duration(minutes: 1));
+            final previous = DateTime.tryParse(
+              account['modifiedAfter'] as String? ?? '',
+            );
+            if (previous == null || next.isAfter(previous)) {
+              account['modifiedAfter'] = next.toUtc().toIso8601String();
+            }
           }
           account.remove('pendingModifiedAfter');
           account.remove('cycleStartedAt');

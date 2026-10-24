@@ -28,6 +28,7 @@ import 'services/export_file_reader.dart';
 import 'services/discord_bot_import_service.dart';
 import 'services/document_import_service.dart';
 import 'services/document_credentials.dart';
+import 'services/paperless_client.dart';
 import 'services/browser_history_watch_service.dart';
 import 'services/browser_extension_receiver_service.dart';
 import 'services/camera_roll_watch_service.dart';
@@ -70,6 +71,7 @@ class LifenizerAppState extends ChangeNotifier {
     PairingCredentialStore? pairingStore,
     ImapCredentialStore? imapStore,
     DocumentCredentialStore? documentStore,
+    PaperlessClient? paperlessClient,
     DiscordBotCredentialStore? discordStore,
     DateTime Function()? syncClock,
   }) : _localStore = localStore,
@@ -82,7 +84,11 @@ class LifenizerAppState extends ChangeNotifier {
     pairing.addListener(_notifyChanged);
     emailImport = EmailImportService(this, store: imapStore);
     emailImport.addListener(_notifyChanged);
-    documentImport = DocumentImportService(this, store: documentStore);
+    documentImport = DocumentImportService(
+      this,
+      store: documentStore,
+      client: paperlessClient,
+    );
     documentImport.addListener(_notifyChanged);
     cameraRoll = CameraRollWatchService(this, store: documentStore);
     cameraRoll.addListener(_notifyChanged);

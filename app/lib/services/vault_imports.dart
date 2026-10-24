@@ -228,20 +228,23 @@ extension VaultImports on LifenizerAppState {
   }
 
   Future<NormalizedImportResult?> importPaperlessPage(
-    Map<String, String> metadata,
-  ) async {
+    Map<String, String> metadata, {
+    Future<NormalizedImportResult> Function()? fetch,
+  }) async {
     NormalizedImportResult? saved;
     await _run(() async {
       if (!isAuthenticated) {
         throw StateError('Unlock the vault to import documents.');
       }
-      final owner = session!.userId;
-      final result = await _requireApi().importSource(
-        'paperless',
-        ImportSourceRequest(metadata: metadata),
-        timeout: const Duration(minutes: 10),
-      );
-      if (!isAuthenticated || session!.userId != owner) {
+      final owner = session;
+      final result = await (fetch != null
+          ? fetch()
+          : _requireApi().importSource(
+              'paperless',
+              ImportSourceRequest(metadata: metadata),
+              timeout: const Duration(minutes: 10),
+            ));
+      if (!isAuthenticated || !identical(session, owner)) {
         throw StateError(
           'The vault changed before the document import completed.',
         );
