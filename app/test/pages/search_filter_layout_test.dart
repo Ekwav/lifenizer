@@ -2,6 +2,7 @@ import 'package:app/app_state.dart';
 import 'package:app/models.dart';
 import 'package:app/pages/search/search_filters.dart';
 import 'package:app/pages/search/search_input_field.dart';
+import 'package:app/pages/search/search_results_list.dart';
 import 'package:app/pages/search_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -96,6 +97,13 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('3 results'), findsOneWidget);
+      for (final label in ['Conversations', 'Participants', 'Relations', 'Saved']) {
+        expect(find.text(label), findsNothing);
+      }
+      expect(
+        tester.getRect(find.byType(ConversationCard).first).bottom,
+        lessThanOrEqualTo(844),
+      );
 
       await tester.tap(find.byKey(const Key('search-participant-filter')));
       await tester.pumpAndSettle();

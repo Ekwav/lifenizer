@@ -7,7 +7,6 @@ import '../widgets/sync_progress_indicator.dart';
 import 'page_frame.dart';
 import 'search/search_filters.dart';
 import 'search/search_input_field.dart';
-import 'search/search_metrics_bar.dart';
 import 'search/search_results_list.dart';
 
 /// Refactored search page with composable widgets.
@@ -16,7 +15,6 @@ import 'search/search_results_list.dart';
 /// - Search input field
 /// - Filters (source, participant, tag)
 /// - Saved searches
-/// - Metrics display
 /// - Search results list
 ///
 /// Significantly reduced nesting (from 11 levels to ~6) and improved maintainability.
@@ -181,10 +179,6 @@ class _SearchPageState extends State<SearchPage> {
                 ],
               ),
             ],
-            const SizedBox(height: 12),
-
-            // Metrics display
-            SearchMetricsBar(state: widget.state),
             const SizedBox(height: 12),
 
             // Search results.
