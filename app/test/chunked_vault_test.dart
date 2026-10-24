@@ -10,6 +10,8 @@ import 'package:app/services/local_vault_store.dart';
 import 'package:app/services/sync_progress.dart';
 import 'package:app/services/vault_chunk_store_sembast.dart';
 import 'package:app/services/vault_chunks.dart';
+import 'package:app/services/vault_worker_web.dart'
+    if (dart.library.io) 'package:app/services/vault_worker_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -334,6 +336,7 @@ void main() {
         _key,
         '$_key:chunk:$bucket',
         '$_key:search-index',
+        for (var n = 0; n < vaultWorkerCount(); n++) '$_key:search-catalog:$n',
         for (var n = 0; n < (state.conversations.length / 64).ceil(); n++)
           '$_key:search-detail:$n',
         for (var n = 0; n < (state.conversations.length / 64).ceil(); n++)
