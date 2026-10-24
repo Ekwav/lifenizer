@@ -58,7 +58,6 @@ jobs:
         with:
           flutter-version: "3.44.4"
           channel: stable
-          cache: true
 
       - name: Get dependencies
         working-directory: app
@@ -97,7 +96,6 @@ jobs:
         with:
           flutter-version: "3.44.4"
           channel: stable
-          cache: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
