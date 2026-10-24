@@ -35,8 +35,11 @@ independent review where required. An image pin alone leaves the chart disabled.
 For cutover, preserve the current signing key, pairing configuration, complete
 SQLite state and local artifacts. Keep `https://mail.coflnet.com/lifenizer` as a
 transparent proxy to the cluster, preserving authorization, uploads and streaming
-responses. Do not redirect or relink existing devices: their full server URL is
-part of the local vault and recording-cache identity. Verify playback of the
+responses. [cluster-alias.yaml](../deploy/cluster-alias.yaml) provides the matching
+Traefik file-provider route; activate it after stopping the old API writer and
+verifying the cluster endpoint. It strips the existing prefix and uses the new
+hostname for upstream TLS and HTTP. Do not redirect or relink existing devices:
+their full server URL is part of the local vault and recording-cache identity. Verify playback of the
 existing phone recording from the PC before retiring the old backend.
 
 ## Mail server: install and upgrade
