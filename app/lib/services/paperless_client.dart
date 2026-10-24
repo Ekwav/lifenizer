@@ -111,6 +111,7 @@ class PaperlessClient {
       final conversations = <NormalizedConversation>[];
       final correspondents = <String, String>{};
       final names = <String>{};
+      var documentsWithoutText = 0;
       for (final entry in results) {
         if (entry is! Map<String, dynamic>) throw const FormatException();
         final id = _id(entry['id']);
@@ -121,13 +122,11 @@ class PaperlessClient {
             root.resolve('api/documents/$id/'),
             token,
           );
+          if (_id(document['id']) != id) throw const FormatException();
         }
         final content = _text(document['content']);
-        if (content == null || content.trim().isEmpty) {
-          throw PaperlessException(
-            'Paperless has no extracted text for document $id. Finish OCR in Paperless, then retry.',
-          );
-        }
+        final hasText = content != null && content.trim().isNotEmpty;
+        if (!hasText) documentsWithoutText++;
         final correspondent = document['correspondent'];
         String? name;
         if (correspondent is num) {
@@ -176,12 +175,15 @@ class PaperlessClient {
                 if (_text(document[key]) case final String value) key: value,
             },
             segments: [
-              NormalizedSegment(
-                text: content,
-                participantName: name,
-                createdAt: DateTime.tryParse(_text(document['created']) ?? ''),
-                sourceMessageId: identity,
-              ),
+              if (hasText)
+                NormalizedSegment(
+                  text: content,
+                  participantName: name,
+                  createdAt: DateTime.tryParse(
+                    _text(document['created']) ?? '',
+                  ),
+                  sourceMessageId: identity,
+                ),
             ],
           ),
         );
@@ -199,6 +201,7 @@ class PaperlessClient {
             .toList(),
         diagnostics: {
           'baseUrl': root.toString(),
+          'documentsWithoutText': '$documentsWithoutText',
           'hasMore': '$hasMore',
           'nextPage': hasMore ? '${page + 1}' : '',
           'nextModifiedAfter': latest?.toUtc().toIso8601String() ?? '',

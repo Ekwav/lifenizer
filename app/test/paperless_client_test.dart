@@ -183,15 +183,20 @@ void main() {
   );
 
   test(
-    'fetches missing text once and fails without skipping pending OCR',
+    'imports pending OCR metadata and later text with the same identity',
     () async {
       final paths = <String>[];
+      var ready = false;
       final client = PaperlessClient(
         client: MockClient((request) async {
           paths.add(request.url.path);
           return json(
             request.url.path.endsWith('/7/')
-                ? {'id': 7, 'content': '   '}
+                ? {
+                    ...document(7),
+                    'correspondent': null,
+                    'content': ready ? 'OCR finished' : '   ',
+                  }
                 : {
                     'results': [
                       {'id': 7},
@@ -201,20 +206,31 @@ void main() {
           );
         }),
       );
-      await expectLater(
-        fetch(client),
-        throwsA(
-          isA<PaperlessException>().having(
-            (e) => e.message,
-            'message',
-            contains('Finish OCR'),
-          ),
-        ),
+      final pending = await fetch(client);
+      final pendingDocument = pending.conversations.single;
+      expect(pendingDocument.segments, isEmpty);
+      expect(pendingDocument.title, 'Überweisung 東京');
+      expect(pendingDocument.metadata['id'], '7');
+      expect(
+        pendingDocument.sourceUrl,
+        'http://127.0.0.1:8002/paperless/documents/7/details',
       );
+      expect(pending.diagnostics['documentsWithoutText'], '1');
       expect(paths, [
         '/paperless/api/documents/',
         '/paperless/api/documents/7/',
       ]);
+      ready = true;
+      final completed = await fetch(client);
+      expect(
+        completed.conversations.single.sourceThreadId,
+        pendingDocument.sourceThreadId,
+      );
+      expect(
+        completed.conversations.single.segments.single.text,
+        'OCR finished',
+      );
+      expect(completed.diagnostics['documentsWithoutText'], '0');
     },
   );
 
