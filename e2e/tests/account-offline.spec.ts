@@ -34,6 +34,7 @@ test('account UI, search quick action, offline unlock and queued capture survive
   await expect(page.getByRole('textbox', { name: /Search text, people, relations/ })).toHaveValue('Person X');
   await page.evaluate(() => (window as any).lifenizerE2eImportText());
   await settled(page, data => data.conversations.length === 1 && data.pendingSync === 0);
+  const original = (await snapshot(page)).conversations[0];
 
   // Reload reopens IndexedDB and drops all in-memory decrypted state.
   await page.reload();
@@ -42,6 +43,10 @@ test('account UI, search quick action, offline unlock and queued capture survive
   await fillField(page, /^Vault passphrase/, 'correct horse battery staple');
   await page.getByRole('button', { name: 'Unlock this device offline', exact: true }).click();
   await settled(page, data => data.authenticated && data.conversations.length === 1);
+  const restored = (await snapshot(page)).conversations[0];
+  expect(restored.id).toBe(original.id);
+  expect(restored.title).toBe(original.title);
+  expect(restored.segmentCount ?? restored.segments.length).toBe(original.segments.length);
   await page.evaluate(() => (window as any).lifenizerE2eImportText());
   await settled(page, data => data.conversations.length === 2 && data.pendingSync > 0);
   await context.setOffline(false);

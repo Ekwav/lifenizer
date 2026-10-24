@@ -141,7 +141,11 @@ void installE2eBridge(LifenizerAppState state) {
           .map((participant) => participant.toJson())
           .toList(),
       'conversations': state.conversations
-          .map((conversation) => conversation.toJson())
+          .map(
+            (conversation) => conversation.isLoaded
+                ? conversation.toJson()
+                : conversation.toSummaryJson(),
+          )
           .toList(),
       'relations': state.relations
           .map((relation) => relation.toJson())
