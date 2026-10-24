@@ -63,6 +63,8 @@ void main() {
   late List<String> requests;
   Future<void>? fetchGate;
   Completer<void>? fetching;
+  Future<void>? recordingWriteGate;
+  Completer<void>? recordingWriting;
   var databases = 0;
   var failRecordingWrites = false;
 
@@ -76,6 +78,8 @@ void main() {
     requests = [];
     fetchGate = null;
     fetching = null;
+    recordingWriteGate = null;
+    recordingWriting = null;
     failRecordingWrites = false;
   });
   tearDown(() async {
@@ -142,6 +146,12 @@ void main() {
           if (path.startsWith('/api/recordings/')) {
             expect(request.headers['authorization'], 'Bearer token');
             final id = path.split('/').last;
+            if (request.method != 'GET') {
+              if (recordingWriting != null && !recordingWriting!.isCompleted) {
+                recordingWriting!.complete();
+              }
+              await recordingWriteGate;
+            }
             if (failRecordingWrites && request.method != 'GET') {
               return http.Response('offline', 503);
             }
@@ -231,13 +241,102 @@ void main() {
       final saved = await cache.readAudioCache('$_key:audio:${recording.id}');
       expect(saved!.keys.toSet(), {'cipherText', 'nonce'});
       await state.setRecordingOnlineSync(recording.id, true);
+      await state.waitForBackgroundSync();
       expect(online, contains(recording.id));
       expect(state.conversations.single.metadata['recordingSync'], 'true');
       await state.setRecordingOnlineSync(recording.id, false);
+      await state.waitForBackgroundSync();
       expect(online, isEmpty);
       expect(state.conversations.single.metadata['recordingSync'], 'false');
       await state.setRecordingOnlineSync(recording.id, false);
+      await state.waitForBackgroundSync();
       expect(state.conversations.single.metadata['recordingSync'], 'false');
+    },
+  );
+
+  test(
+    'slow online upload returns after saving intent, leaves navigation unblocked and preserves a newer toggle',
+    () async {
+      final state = await device();
+      await state.importPendingRecording([1, 2, 3], DateTime.utc(2026), 'slow');
+      final id = state.conversations.single.id;
+      final gate = Completer<void>();
+      recordingWriteGate = gate.future;
+      recordingWriting = Completer<void>();
+      try {
+        await state.setRecordingOnlineSync(id, true);
+        await recordingWriting!.future.timeout(const Duration(seconds: 5));
+        expect(state.busy, false);
+        expect(state.pendingRecordingOnlineSync(id), true);
+        expect(state.conversations.single.metadata['recordingSync'], isNull);
+        expect(online, isEmpty);
+        await state.setRecordingOnlineSync(id, false);
+        expect(state.busy, false);
+        expect(state.pendingRecordingOnlineSync(id), false);
+      } finally {
+        gate.complete();
+        await state.waitForBackgroundSync();
+      }
+      expect(state.pendingRecordingOnlineSync(id), isNull);
+      expect(
+        state.conversations
+            .firstWhere((c) => c.id == id)
+            .metadata['recordingSync'],
+        'false',
+      );
+      expect(online, isEmpty);
+      expect(
+        requests.where((r) => r == 'PUT /api/recordings/$id'),
+        hasLength(1),
+      );
+      expect(
+        requests.where((r) => r == 'DELETE /api/recordings/$id'),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
+    'lock waits for a slow failed upload and preserves intent for the original vault',
+    () async {
+      final state = await device();
+      await state.importPendingRecording(
+        [1, 2, 3],
+        DateTime.utc(2026),
+        'lock-upload',
+      );
+      final id = state.conversations.single.id;
+      final gate = Completer<void>();
+      recordingWriteGate = gate.future;
+      recordingWriting = Completer<void>();
+      failRecordingWrites = true;
+      await state.setRecordingOnlineSync(id, true);
+      await recordingWriting!.future.timeout(const Duration(seconds: 5));
+      final locking = state.lock();
+      expect(state.busy, true);
+      expect(state.isAuthenticated, true);
+      gate.complete();
+      await locking;
+      expect(state.isAuthenticated, false);
+      await state.login(
+        baseUrl: 'https://other.example.test',
+        email: _email,
+        password: 'account-password',
+        passphrase: _phrase,
+      );
+      await state.waitForBackgroundSync();
+      expect(state.pendingRecordingOnlineSync(id), isNull);
+      expect(state.conversations, isEmpty);
+      await state.lock();
+      await state.login(
+        baseUrl: _base,
+        email: _email,
+        passphrase: _phrase,
+        offline: true,
+      );
+      await state.waitForBackgroundSync();
+      expect(state.pendingRecordingOnlineSync(id), true);
+      expect(state.conversations.single.metadata['recordingSync'], isNull);
     },
   );
 
@@ -252,10 +351,8 @@ void main() {
       );
       final id = state.conversations.single.id;
       failRecordingWrites = true;
-      await expectLater(
-        state.setRecordingOnlineSync(id, true),
-        throwsStateError,
-      );
+      await state.setRecordingOnlineSync(id, true);
+      await state.waitForBackgroundSync();
       expect(state.pendingRecordingOnlineSync(id), true);
       expect(state.conversations.single.metadata['recordingSync'], isNull);
       expect(online, isEmpty);
@@ -284,10 +381,8 @@ void main() {
       expect(state.conversations.single.metadata['recordingSync'], 'true');
       expect(online, contains(id));
       failRecordingWrites = true;
-      await expectLater(
-        state.setRecordingOnlineSync(id, false),
-        throwsStateError,
-      );
+      await state.setRecordingOnlineSync(id, false);
+      await state.waitForBackgroundSync();
       expect(state.pendingRecordingOnlineSync(id), false);
       expect(state.conversations.single.metadata['recordingSync'], 'true');
       expect((await state.loadRecordingAudio(id)).bytes, [1, 2, 3]);

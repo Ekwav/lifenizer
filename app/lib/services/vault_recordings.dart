@@ -270,7 +270,7 @@ extension VaultRecordings on LifenizerAppState {
   /// A device-local request waiting for confirmed online storage or removal.
   bool? pendingRecordingOnlineSync(String id) => _pendingRecordingSync[id];
 
-  /// Online persistence is opt-in; intent survives offline requests and restart.
+  /// Saves opt-in intent locally; transfer and retries run in background sync.
   Future<void> setRecordingOnlineSync(String id, bool enabled) async {
     if (busy) throw StateError('Wait for the current vault operation.');
     final api = _requireApi();
@@ -280,25 +280,30 @@ extension VaultRecordings on LifenizerAppState {
       throw StateError('Recording not found in this vault.');
     }
     await _run(() async {
-      // Background sync may already be running when the switch is pressed.
-      try {
-        await _syncInFlight;
-      } catch (_) {
-        // Keep the new request even if the preceding sync was offline.
-      }
       _checkRecordingSession(api, identity);
       _pendingRecordingSync[id] = enabled;
       await _persistLocal();
-      _notifyChanged();
-      await _syncRecording(id, enabled);
-    });
+    }, prepareIndex: false);
     if (error != null) throw StateError(error!);
+    unawaited(() async {
+      if (_syncInFlight != null) {
+        try {
+          await _syncInFlight;
+        } catch (_) {
+          // A preceding offline sync must not drop the newly saved request.
+        }
+      }
+      if (!_disposed && recordingIdentity == identity && identical(_api, api)) {
+        await syncQuietly();
+      }
+    }());
   }
 
   Future<bool> _retryRecordingSync() async {
     final pending = _pendingRecordingSync.entries.toList();
     Object? failure;
     for (final entry in pending) {
+      if (_pendingRecordingSync[entry.key] != entry.value) continue;
       try {
         await _syncRecording(entry.key, entry.value);
       } catch (exception) {
@@ -334,7 +339,7 @@ extension VaultRecordings on LifenizerAppState {
     _markConversationChanged(id);
     await _pushEntity('conversation', id, updated.toJson());
     _checkRecordingSession(api, identity);
-    _pendingRecordingSync.remove(id);
+    if (_pendingRecordingSync[id] == enabled) _pendingRecordingSync.remove(id);
     await _persistLocal();
     _notifyChanged();
   }

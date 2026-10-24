@@ -81,11 +81,7 @@ class _RecordingAudioPlayerState extends State<RecordingAudioPlayer> {
     } catch (_) {
       if (mounted) {
         setState(
-          () => _error =
-              widget.state.pendingRecordingOnlineSync(widget.conversationId!) ==
-                  null
-              ? 'Could not change online recording storage. Try again.'
-              : null,
+          () => _error = 'Could not save online storage preference. Try again.',
         );
       }
     } finally {
@@ -187,9 +183,9 @@ class _RecordingAudioPlayerState extends State<RecordingAudioPlayer> {
               title: const Text('Store encrypted recording online'),
               subtitle: Text(
                 pendingSync == true
-                    ? 'Waiting to upload encrypted audio. Sync retries automatically while unlocked.'
+                    ? 'Online storage pending. You can keep using the app; sync retries automatically while unlocked.'
                     : pendingSync == false
-                    ? 'Waiting to remove online audio. Sync retries automatically while unlocked.'
+                    ? 'Online removal pending. You can keep using the app; sync retries automatically while unlocked.'
                     : 'Play on other devices even when this device is offline. Otherwise, keep this app open and unlocked to share playback.',
               ),
               value:
