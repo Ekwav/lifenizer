@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddKeyPerFile("/var/run/secrets/lifenizer", optional: true);
 
 // Register services in logical groups
 builder.Services.AddCoreServices();
