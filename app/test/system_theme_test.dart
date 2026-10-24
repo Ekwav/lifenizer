@@ -18,6 +18,37 @@ double _contrast(Color foreground, Color background) {
 }
 
 void main() {
+  testWidgets('sync survives focus loss and stops when paused or detached', (
+    tester,
+  ) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final state = _UnlockedVault();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(LifenizerApp(state: state));
+    await tester.pumpAndSettle();
+    // This UI-only vault has no API: a sync error proves an attempt ran.
+    expect(state.syncError, isNotNull);
+    for (final (lifecycle, syncs) in [
+      (AppLifecycleState.inactive, true),
+      (AppLifecycleState.hidden, true),
+      (AppLifecycleState.paused, false),
+      (AppLifecycleState.detached, false),
+      (AppLifecycleState.resumed, true),
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(lifecycle);
+      await tester.pump();
+      state.syncError = null;
+      await tester.pump(const Duration(seconds: 30));
+      expect(
+        state.syncError,
+        syncs ? isNotNull : isNull,
+        reason: 'Sync scheduling in $lifecycle',
+      );
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  });
+
   testWidgets('login starts dark and follows OS brightness changes', (
     tester,
   ) async {

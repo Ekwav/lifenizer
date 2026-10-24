@@ -95,7 +95,8 @@ class _LifenizerAppState extends State<LifenizerApp>
   void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
     if (lifecycle == AppLifecycleState.resumed) {
       _resumeSync();
-    } else {
+    } else if (lifecycle == AppLifecycleState.paused ||
+        lifecycle == AppLifecycleState.detached) {
       _syncTimer?.cancel();
     }
   }
