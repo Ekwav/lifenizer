@@ -137,6 +137,7 @@ jobs:
       security-events: write
     uses: Coflnet/.github/.github/workflows/container-ci.yml@9590d8eb788df71bb44c9601a3ae2e10b09f1a8a
     with:
+      runner: '["ubuntu-latest"]'
       dockerfile: backend/Dockerfile
       context: backend
       k8s_file: lifenizer/app/chart/values.yaml
