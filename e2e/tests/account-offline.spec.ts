@@ -14,7 +14,9 @@ async function settled(page: Page, predicate: (data: any) => boolean) {
 async function fillField(page: Page, name: RegExp, value: string) {
   const field = page.getByRole('textbox', { name });
   await field.click();
-  await field.fill(value);
+  // Send keyboard events through Flutter's editor as well as its semantics input.
+  await field.press('ControlOrMeta+A');
+  await field.pressSequentially(value);
   await field.press('Tab');
   await expect(field).toHaveValue(value);
 }
@@ -25,7 +27,7 @@ test('account UI, search quick action, offline unlock and queued capture survive
   await page.waitForFunction(() => typeof (window as any).lifenizerE2eSnapshot === 'function');
   await page.getByRole('button', { name: 'Create an account', exact: true }).click();
   await fillField(page, /^API URL/, 'http://127.0.0.1:5076');
-  await fillField(page, /^Email/, 'offline-ui@example.test');
+  await fillField(page, /^Email/, `offline-ui-${test.info().repeatEachIndex}@example.test`);
   await fillField(page, /^Account password/, 'account password for e2e');
   await fillField(page, /^Vault passphrase/, 'correct horse battery staple');
   await fillField(page, /^Repeat vault passphrase/, 'correct horse battery staple');
