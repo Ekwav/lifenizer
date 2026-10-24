@@ -13,7 +13,7 @@ concurrency:
 jobs:
   backend:
     name: Backend (.NET)
-    runs-on: ubuntu-latest
+    runs-on: coflnet-devserver
 
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +46,7 @@ jobs:
 
   flutter:
     name: Flutter App
-    runs-on: ubuntu-latest
+    runs-on: coflnet-devserver
 
     steps:
       - uses: actions/checkout@v4
@@ -76,7 +76,7 @@ jobs:
 
   e2e:
     name: E2E (Playwright)
-    runs-on: ubuntu-latest
+    runs-on: coflnet-devserver
     needs: [backend, flutter]
     if: github.event_name == 'pull_request' || contains(fromJSON('["refs/heads/main","refs/heads/master"]'), github.ref)
 
@@ -142,7 +142,7 @@ jobs:
       security-events: write
     uses: Coflnet/.github/.github/workflows/container-ci.yml@9590d8eb788df71bb44c9601a3ae2e10b09f1a8a
     with:
-      runner: '["ubuntu-latest"]'
+      runner: '["coflnet-devserver"]'
       dockerfile: backend/Dockerfile
       context: backend
       k8s_file: lifenizer/app/chart/values.yaml
