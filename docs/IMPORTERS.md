@@ -362,8 +362,11 @@ steps after opening Paperless. If a connection attempt fails, the token stays in
 the field so you can correct it and retry. After a successful connection, setup
 is replaced by update and disconnect controls.
 
-If no Paperless address is configured, the setup panel explains what the
-Lifenizer server administrator needs to set and provides a retry button.
+If no Paperless address is configured, token setup stays hidden. If you run the
+Lifenizer server, you are its administrator: set the environment variable
+`Imports__Paperless__BaseUrl` to your trusted Paperless address and restart the
+server, then select **Retry Paperless setup**. An API token alone cannot configure
+the server address.
 
 Set server configuration `Imports:Paperless:BaseUrl` to the trusted Paperless
 installation. Compose maps `LIFENIZER_PAPERLESS_URL` to that setting; no guessed

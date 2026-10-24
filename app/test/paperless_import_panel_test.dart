@@ -162,7 +162,7 @@ void main() {
   );
 
   testWidgets(
-    'loading, missing configuration and errors disable setup and allow retry',
+    'loading, missing configuration and errors hide token setup and allow retry',
     (tester) async {
       final f = _Fixture();
       await tester.runAsync(f.open);
@@ -171,12 +171,8 @@ void main() {
       await tester.pumpWidget(f.widget);
       await tester.pump();
       expect(find.text('Loading Paperless setup…'), findsOneWidget);
-      expect(
-        tester
-            .widget<TextField>(find.byKey(const Key('paperless-token')))
-            .enabled,
-        isFalse,
-      );
+      expect(find.byKey(const Key('paperless-token')), findsNothing);
+      expect(find.text('Open Paperless'), findsNothing);
       f.settingsFail = true;
       f.settingsGate!.complete();
       await tester.pumpAndSettle();
@@ -184,20 +180,26 @@ void main() {
         find.textContaining('Check your Lifenizer connection'),
         findsOneWidget,
       );
+      expect(find.byKey(const Key('paperless-token')), findsNothing);
       f.settingsFail = false;
       f.configured = false;
       await tester.ensureVisible(find.text('Retry Paperless setup'));
       await tester.tap(find.text('Retry Paperless setup'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('administrator'), findsOneWidget);
       expect(
-        tester
-            .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Connect & import'),
-            )
-            .onPressed,
-        isNull,
+        find.textContaining('Your Lifenizer server has no Paperless address'),
+        findsOneWidget,
       );
+      expect(
+        find.textContaining('Imports__Paperless__BaseUrl'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('restart the server, then retry'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('paperless-token')), findsNothing);
+      expect(find.text('Connect & import'), findsNothing);
       f.configured = true;
       await tester.tap(find.text('Retry Paperless setup'));
       await tester.pumpAndSettle();
@@ -227,14 +229,8 @@ void main() {
       f.address = address;
       await tester.pumpWidget(f.widget);
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<OutlinedButton>(
-              find.widgetWithText(OutlinedButton, 'Open Paperless'),
-            )
-            .onPressed,
-        isNull,
-      );
+      expect(find.text('Open Paperless'), findsNothing);
+      expect(find.byKey(const Key('paperless-token')), findsNothing);
       expect(find.textContaining('secret'), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
     }

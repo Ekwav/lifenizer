@@ -47,7 +47,7 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
         _server = uri;
       } else {
         _error =
-            'Paperless is not set up. Ask your Lifenizer server administrator to configure its address, then retry.';
+            'Your Lifenizer server has no Paperless address configured. If you run this server, set Imports__Paperless__BaseUrl to your trusted Paperless address, restart the server, then retry.';
       }
     } catch (_) {
       if (mounted) {
@@ -134,13 +134,13 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
                 ),
               ],
             ),
-          ] else ...[
+          ] else if (configured) ...[
             const Text(
               'An API token is an access key for your Paperless account. It lets Lifenizer read your document text. Keep it private, like a password.',
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: configured ? _openPaperless : null,
+              onPressed: _openPaperless,
               icon: const Icon(Icons.open_in_new),
               label: const Text('Open Paperless'),
             ),
@@ -154,7 +154,7 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
             TextField(
               key: const Key('paperless-token'),
               controller: _token,
-              enabled: enabled && configured,
+              enabled: enabled,
               obscureText: true,
               autocorrect: false,
               enableSuggestions: false,
@@ -170,12 +170,12 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
                   'Saved in the OS credential store. Checks for updates every 5 minutes while unlocked.',
                 ),
                 value: _remember,
-                onChanged: enabled && configured
+                onChanged: enabled
                     ? (value) => setState(() => _remember = value!)
                     : null,
               ),
             FilledButton(
-              onPressed: enabled && configured ? _connect : null,
+              onPressed: enabled ? _connect : null,
               child: const Text('Connect & import'),
             ),
             if (_editing && service.connected && service.error == null)
