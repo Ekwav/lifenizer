@@ -44,6 +44,24 @@ class AliasTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(path.read_text(), request['desired'])
 
+    def test_separate_backup_directory_is_private_and_preserves_inode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); path = root / 'config.yml'
+            path.write_bytes(b'tls: {}\n'); before = path.read_bytes(); inode = path.stat().st_ino
+            backups = root / 'backups'; backups.mkdir(mode=0o700)
+            request = alias.prepare(before, Path(__file__).with_name('cluster-alias.yaml').read_bytes())
+            result = alias.apply(path, request, backups)
+            backup = Path(result['backup'])
+            self.assertEqual(backup.parent, backups)
+            self.assertEqual(backup.read_bytes(), before)
+            self.assertEqual((backup.stat().st_uid, backup.stat().st_gid), (backups.stat().st_uid, backups.stat().st_gid))
+            self.assertEqual(backup.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(path.stat().st_ino, inode)
+            path.write_bytes(before); backups.chmod(0o755)
+            with self.assertRaisesRegex(ValueError, 'Backup directory must be private'):
+                alias.apply(path, request, backups)
+            self.assertEqual(path.read_bytes(), before)
+
     def test_conflicting_route_is_preserved(self):
         with self.assertRaisesRegex(ValueError, 'Conflicting existing routers/lifenizer'):
             alias.prepare(b'http: {routers: {lifenizer: {rule: existing}}}',

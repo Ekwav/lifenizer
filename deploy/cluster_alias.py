@@ -29,7 +29,7 @@ def prepare(source, alias):
     return {'expectedSha256': digest(source), 'desired': yaml.safe_dump(current, sort_keys=False)}
 
 
-def apply(path, request):
+def apply(path, request, backup_dir=None):
     desired = request['desired'].encode()
     if not desired:
         raise ValueError('Empty config refused')
@@ -42,8 +42,14 @@ def apply(path, request):
         before = output.read()
         if digest(before) != request['expectedSha256']:
             raise ValueError('Source config changed; nothing written')
-        backup = Path(str(path) + f'.lifenizer-backup-{time.time_ns()}')
+        directory = path.parent if backup_dir is None else Path(backup_dir)
+        owner = directory.stat(follow_symlinks=False)
+        if backup_dir is not None and (not stat.S_ISDIR(owner.st_mode) or owner.st_mode & 0o077):
+            raise ValueError('Backup directory must be private (0700)')
+        backup = directory / f'{path.name}.lifenizer-backup-{time.time_ns()}'
         with os.fdopen(os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as saved:
+            if backup_dir is not None:
+                os.fchown(saved.fileno(), owner.st_uid, owner.st_gid)
             saved.write(before)
             saved.flush()
             os.fsync(saved.fileno())
@@ -70,9 +76,10 @@ def main():
     parser.add_argument('mode', choices=('prepare', 'apply'))
     parser.add_argument('config', type=Path)
     parser.add_argument('--alias', type=Path)
+    parser.add_argument('--backup-dir', type=Path, help='Existing private directory; backup ownership follows its owner')
     args = parser.parse_args()
     result = (prepare(args.config.read_bytes(), (args.alias or Path(__file__).with_name('cluster-alias.yaml')).read_bytes()) if args.mode == 'prepare'
-              else apply(args.config, json.load(sys.stdin)))
+              else apply(args.config, json.load(sys.stdin), args.backup_dir))
     print(json.dumps(result))
 
 
