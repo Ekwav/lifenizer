@@ -21,7 +21,7 @@ void main() {
         background: true,
       );
       final value = {
-        'nested': {'message': 'Private content'},
+        'nested': {'message': 'Private content: Grüße 日本語 e\u0301 🔐'},
         'items': [1, 2, 3],
       };
       final fromDirect = await direct.encryptJson(value);
@@ -37,6 +37,7 @@ void main() {
         await direct.decryptJson(
           cipherText: fromWorker.cipherText,
           nonce: fromWorker.nonce,
+          background: true,
         ),
         value,
       );

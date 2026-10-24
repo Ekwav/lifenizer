@@ -244,7 +244,7 @@ void main() {
         final crypto = VaultCrypto()..unlockDeviceKey(List<int>.filled(32, 7));
         addTearDown(crypto.lock);
         final parts = await native.encodeSearchSnapshotParts(
-          build([conversation('one', 'invoice')]),
+          build([conversation('one', 'invoice Grüße 日本語 e\u0301 🔐')]),
           2,
         );
         final encrypted = await crypto.encryptJson({
@@ -262,6 +262,10 @@ void main() {
           nonce: encrypted.nonce,
         );
         expect(decoded.index.documents.keys, ['one']);
+        expect(
+          decoded.index.documents['one']!.conversation.previewText,
+          'invoice Grüße 日本語 e\u0301 🔐',
+        );
         expect(decoded.index.documents['one']!.detailsLoaded, false);
         expect(decoded.index.postingsLoaded, false);
         expect(decoded.metadata, {

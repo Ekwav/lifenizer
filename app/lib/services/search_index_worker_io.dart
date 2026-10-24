@@ -12,7 +12,9 @@ Map<String, dynamic> _pack(Map<String, dynamic> value) => {
 };
 
 Map<String, dynamic> _unpack(Map<String, dynamic> value) =>
-    jsonDecode(utf8.decode(gzip.decode(base64Decode(value['gzip'] as String))))
+    utf8.decoder
+            .fuse(json.decoder)
+            .convert(gzip.decode(base64Decode(value['gzip'] as String)))
         as Map<String, dynamic>;
 
 Future<Map<String, dynamic>> encodeSearchSnapshot(

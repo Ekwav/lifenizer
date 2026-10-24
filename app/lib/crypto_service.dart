@@ -102,14 +102,15 @@ class VaultCrypto {
         bytes.fillRange(0, bytes.length, 0);
       }
     }
-    final packed = jsonDecode(utf8.decode(base64Decode(cipherText))) as Map;
+    final decoder = utf8.decoder.fuse(json.decoder);
+    final packed = decoder.convert(base64Decode(cipherText)) as Map;
     final box = SecretBox(
       base64Decode(packed['c'] as String),
       nonce: base64Decode(nonce),
       mac: Mac(base64Decode(packed['m'] as String)),
     );
     final clearText = await _algorithm.decrypt(box, secretKey: key);
-    return Map<String, dynamic>.from(jsonDecode(utf8.decode(clearText)) as Map);
+    return Map<String, dynamic>.from(decoder.convert(clearText) as Map);
   }
 
   /// Decrypts a record produced by [load]. With [background] the loader runs
