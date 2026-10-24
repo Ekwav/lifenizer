@@ -135,6 +135,63 @@ class _Fixture {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
+    'documents without OCR stay searchable and later text updates in place',
+    () async {
+      final f = _Fixture();
+      var content = '';
+      final local = PaperlessClient(
+        client: MockClient((request) async {
+          final document = {
+            'id': 34,
+            'title': 'Receipt waiting for OCR',
+            'content': content,
+            'modified': content.isEmpty
+                ? '2020-10-04T12:00:00Z'
+                : '2020-10-04T12:10:00Z',
+          };
+          return http.Response(
+            jsonEncode(
+              request.url.path.endsWith('/34/')
+                  ? document
+                  : {
+                      'results': [document],
+                      'next': null,
+                    },
+            ),
+            200,
+          );
+        }),
+      );
+      await f.open(paperlessClient: local);
+      addTearDown(f.state.dispose);
+      await f.state.documentImport.connect(
+        baseUrl: 'http://127.0.0.1:8002',
+        token: 'private-token',
+      );
+      expect(f.state.documentImport.error, isNull);
+      expect(f.state.conversations.single.title, 'Receipt waiting for OCR');
+      expect(f.state.conversations.single.segments.single.text, isEmpty);
+      expect(
+        (await f.state.searchAsync('Receipt waiting')).single.id,
+        f.state.conversations.single.id,
+      );
+      expect(
+        f.state.documentImport.status,
+        contains('1 without extracted text'),
+      );
+      final id = f.state.conversations.single.id;
+      content = 'OCR text now available';
+      await f.state.documentImport.fetch();
+      expect(f.state.documentImport.error, isNull);
+      expect(f.state.conversations.single.id, id);
+      expect(f.state.conversations.single.segments.single.text, content);
+      expect(
+        f.state.documentImport.status,
+        isNot(contains('without extracted text')),
+      );
+    },
+  );
+  test(
     'direct Paperless imports stay local and retry a failed encrypted save',
     () async {
       final f = _Fixture();

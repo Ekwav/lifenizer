@@ -409,9 +409,12 @@ configured base and the next page number.
 
 Imported records include Paperless OCR/text content, original document links,
 filenames and available metadata. Missing list content triggers a detail fetch;
-if still blank, the PDF download is extracted/OCRed with the same limits above.
-Numeric correspondent IDs are resolved to their names. Unreadable documents
-fail the page explicitly. Original document files are not stored in the vault.
+if still blank, direct connections index the title and metadata and report the
+missing text without blocking other documents. Later OCR updates replace the
+same document's empty text. Server-proxied imports instead extract/OCR the PDF
+download with the limits above. Numeric correspondent IDs are resolved to their
+names. Request failures retain the page for retry. Original document files are
+not stored in the vault.
 See the [Paperless REST API](https://docs.paperless-ngx.com/api/) for token access,
 document content and pagination.
 

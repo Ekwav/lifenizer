@@ -195,6 +195,7 @@ class DocumentImportService extends ChangeNotifier {
     final generation = _generation;
     final account = Map<String, dynamic>.from(_account!);
     var documents = 0;
+    var withoutText = 0;
     try {
       error = null;
       if (account['direct'] != true) {
@@ -265,6 +266,8 @@ class DocumentImportService extends ChangeNotifier {
           }
         }
         documents += result.conversations.length;
+        withoutText +=
+            int.tryParse(diagnostics['documentsWithoutText'] ?? '') ?? 0;
         account['page'] = hasMore ? nextPage : '1';
         if (!hasMore) {
           if (account['pendingModifiedAfter'] != null) {
@@ -293,7 +296,7 @@ class DocumentImportService extends ChangeNotifier {
         _account = Map<String, dynamic>.from(account);
         if (!hasMore) {
           status =
-              '$documents Paperless documents checked · saved encrypted. Checking every 5 minutes while unlocked.';
+              '$documents Paperless documents checked · saved encrypted.${withoutText > 0 ? ' $withoutText without extracted text; their titles are searchable.' : ''} Checking every 5 minutes while unlocked.';
           return;
         }
       }
