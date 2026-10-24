@@ -88,11 +88,13 @@ public sealed class PremiumTests
         Assert.That((await client.PostAsync("/api/premium/checkout/premium", null)).StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
     }
 
-    [Test]
-    public async Task ConfiguredPlanUsesSdkEntitlementAndCancellation()
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task ConfiguredPlanUsesSdkEntitlementAndCancellation(bool freePremiumEnabled)
     {
         var expiry = DateTime.UtcNow.AddDays(1);
-        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?> { ["Payments:BaseUrl"] = "https://payments.example.test" })
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+            { ["Payments:BaseUrl"] = "https://payments.example.test", ["Payments:FreePremiumEnabled"] = freePremiumEnabled.ToString() })
             .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
                 services.AddSingleton(Proxy<IUserApi>((method, args) =>
                 {

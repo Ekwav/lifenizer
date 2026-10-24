@@ -23,6 +23,7 @@ public static class PremiumEndpoints
                 usedBytes = status.UsedBytes,
                 limitBytes = status.LimitBytes,
                 expiresAt = status.ExpiresAt,
+                freePremiumEnabled = premium.FreePremiumEnabled,
                 usedPercent = status.LimitBytes > 0
                     ? (double)status.UsedBytes / status.LimitBytes * 100.0
                     : 0,

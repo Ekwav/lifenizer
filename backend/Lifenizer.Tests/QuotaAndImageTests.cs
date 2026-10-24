@@ -8,6 +8,7 @@ using Lifenizer.Core;
 using Lifenizer.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 
 namespace Lifenizer.Tests;
 
@@ -43,6 +44,40 @@ public sealed class QuotaAndImageTests
             Assert.That(body.GetProperty("limitBytes").GetInt64(), Is.EqualTo(StorageQuota.FreeLimitBytes));
             Assert.That(body.GetProperty("usedBytes").GetInt64(), Is.EqualTo(0));
         });
+    }
+
+    [Test]
+    public async Task FreePremiumGrantsTenGbAndEnforcesItWithoutPaidCheckout()
+    {
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Payments:FreePremiumEnabled"] = "true",
+            ["Payments:BaseUrl"] = "",
+            ["Artifacts:StorePath"] = Path.Combine(Path.GetTempPath(), "lifenizer-test-blobs", Guid.NewGuid().ToString("N"))
+        });
+        using var client = factory.CreateClient();
+        var auth = await LoginAsync(client, "free-premium@example.test");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AuthToken);
+        var status = await client.GetFromJsonAsync<JsonElement>("/api/premium/status", JsonOptions);
+        Assert.That(status.GetProperty("plan").GetString(), Is.EqualTo("Premium"));
+        Assert.That(status.GetProperty("limitBytes").GetInt64(), Is.EqualTo(StorageQuota.PremiumLimitBytes));
+        Assert.That(status.GetProperty("freePremiumEnabled").GetBoolean(), Is.True);
+        Assert.That(status.GetProperty("expiresAt").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<LifenizerDbContext>();
+        await db.Users.ExecuteUpdateAsync(update => update.SetProperty(user => user.StorageUsedBytes, StorageQuota.PremiumLimitBytes - MinimalJpeg().Length));
+        using var allowed = ImageForm();
+        Assert.That((await client.PostAsync("/api/images", allowed)).StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        using var denied = ImageForm();
+        Assert.That((await client.PostAsync("/api/images", denied)).StatusCode, Is.EqualTo(HttpStatusCode.PaymentRequired));
+        Assert.That((await client.GetFromJsonAsync<JsonElement>("/api/premium/status", JsonOptions)).GetProperty("usedBytes").GetInt64(), Is.EqualTo(StorageQuota.PremiumLimitBytes));
+        Assert.That((await client.PostAsync("/api/premium/checkout/premium", null)).StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
+        Assert.That((await client.PostAsync("/api/premium/checkout/premium-plus", null)).StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
+        factory.Services.GetRequiredService<IConfiguration>()["Payments:FreePremiumEnabled"] = "false";
+        var restored = await client.GetFromJsonAsync<JsonElement>("/api/premium/status", JsonOptions);
+        Assert.That(restored.GetProperty("plan").GetString(), Is.EqualTo("Free"));
+        Assert.That(restored.GetProperty("limitBytes").GetInt64(), Is.EqualTo(StorageQuota.FreeLimitBytes));
+        Assert.That(restored.GetProperty("usedBytes").GetInt64(), Is.EqualTo(StorageQuota.PremiumLimitBytes));
     }
 
     [Test]

@@ -15,7 +15,7 @@ import tarfile
 SERVICE_CONFIG_KEYS = {
     "ObjectStorage__ServiceUrl", "ObjectStorage__Bucket", "ObjectStorage__AccessKeyId",
     "ObjectStorage__SecretAccessKey", "ObjectStorage__Region", "ObjectStorage__Prefix",
-    "Payments__BaseUrl", "Products__Premium", "Products__PremiumPlus",
+    "Payments__BaseUrl", "Payments__FreePremiumEnabled", "Products__Premium", "Products__PremiumPlus",
 }
 
 

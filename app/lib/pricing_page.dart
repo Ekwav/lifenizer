@@ -136,6 +136,22 @@ class _PricingPageState extends State<PricingPage> {
     final tt = Theme.of(context).textTheme;
     final quota = widget.state.quotaStatus;
 
+    if (quota?.freePremiumEnabled == true) {
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Text('Premium is free for now', style: tt.headlineMedium),
+          const SizedBox(height: 12),
+          const Text(
+            '10 GB of encrypted storage is already active. No payment or card required. '
+            'Paid checkout is paused during this offer.',
+          ),
+          const SizedBox(height: 16),
+          _CurrentPlanBadge(quota: quota!),
+        ],
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 80),
       child: Center(

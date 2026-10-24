@@ -127,20 +127,27 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
               ),
               const SizedBox(height: 8),
             ],
-            _PlanCard(
-              title: 'Premium',
-              price: '€4.99 / month',
-              storage: '10 GB',
-              onTap: _loading ? null : () => _checkout('premium'),
-            ),
-            const SizedBox(height: 8),
-            _PlanCard(
-              title: 'Premium+',
-              price: '€19.99 / month',
-              storage: '100 GB',
-              highlighted: true,
-              onTap: _loading ? null : () => _checkout('premium-plus'),
-            ),
+            if (quota?.freePremiumEnabled == true)
+              const Text(
+                'Premium is free for now: 10 GB is already active. '
+                'Paid checkout is paused. Remove stored files to free up space if your storage is full.',
+              )
+            else ...[
+              _PlanCard(
+                title: 'Premium',
+                price: '€4.99 / month',
+                storage: '10 GB',
+                onTap: _loading ? null : () => _checkout('premium'),
+              ),
+              const SizedBox(height: 8),
+              _PlanCard(
+                title: 'Premium+',
+                price: '€19.99 / month',
+                storage: '100 GB',
+                highlighted: true,
+                onTap: _loading ? null : () => _checkout('premium-plus'),
+              ),
+            ],
           ],
         ),
       ),

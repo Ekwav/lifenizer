@@ -18,6 +18,7 @@ public sealed class PremiumService(
     ILogger<PremiumService> logger)
 {
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+    public bool FreePremiumEnabled => configuration.GetValue<bool>("Payments:FreePremiumEnabled");
 
     private string ProductSlugPremium => configuration["Products:Premium"] ?? "lifenizer-premium";
     private string ProductSlugPremiumPlus => configuration["Products:PremiumPlus"] ?? "lifenizer-premium-plus";
@@ -36,6 +37,8 @@ public sealed class PremiumService(
     public async Task<QuotaStatus> GetQuotaStatusAsync(Guid userId, CancellationToken cancellationToken)
     {
         var (plan, expiresAt) = await ResolvePlanAsync(userId, cancellationToken);
+        if (FreePremiumEnabled && StorageQuota.ForPlan(plan) < StorageQuota.PremiumLimitBytes)
+            (plan, expiresAt) = (SubscriptionPlan.Premium, null);
         var user = await accountService.GetByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException($"User {userId} not found.");
 
@@ -117,6 +120,8 @@ public sealed class PremiumService(
             _ => throw new ArgumentException("Unknown premium plan.", nameof(plan)),
         };
 
+        if (FreePremiumEnabled)
+            throw new InvalidOperationException("Premium is temporarily free; paid checkout is paused.");
         if (string.IsNullOrWhiteSpace(configuration["Payments:BaseUrl"]))
             throw new InvalidOperationException("Payments are not configured.");
         var checkout = await topUpApi.TopUpLemonsqueezySubscribePostAsync(

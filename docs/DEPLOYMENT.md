@@ -126,7 +126,7 @@ chmod 600 /private/path/lifenizer-service.json
 ```
 
 `Region` defaults to `auto` for R2; `Prefix` is optional. The installer accepts
-only the six object-storage fields above, `Payments__BaseUrl`, `Products__Premium`
+only the six object-storage fields above, `Payments__BaseUrl`, `Payments__FreePremiumEnabled`, `Products__Premium`
 and `Products__PremiumPlus`. Values must be JSON scalars other than null and safe
 unquoted dotenv values: single-line printable ASCII without whitespace, quotes,
 backslashes, `$` or `#`. Unsupported fields, unsafe values, symlinks and files with
@@ -239,6 +239,7 @@ runs as a **non-root user** (uid 1001) with no unnecessary capabilities.
 | `Auth__EnableFirebase` | Optional Google authentication, disabled by default | `false` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Credential file only used when Firebase is explicitly enabled | `/run/secrets/firebase.json` |
 | `Payments__BaseUrl` | Base URL of the Coflnet payments service | `https://payments.example.com` |
+| `Payments__FreePremiumEnabled` | Temporary free Premium: 10 GB minimum for every account, paid checkout paused; existing paid entitlements still resolve | `false` |
 | `Products__Premium` | Slug for the Premium product in the payments service | `lifenizer-premium` |
 | `Products__PremiumPlus` | Slug for the Premium+ product in the payments service | `lifenizer-premium-plus` |
 | `Artifacts__StorePath` | Persistent local object/legacy artifact directory | `/data/artifacts` |
@@ -271,6 +272,14 @@ runs as a **non-root user** (uid 1001) with no unnecessary capabilities.
 ---
 
 ## Subscription tiers
+
+For the temporary free Premium rollout, set `Payments__FreePremiumEnabled=true`.
+Every account immediately receives at least 10 GB through the same quota service
+used by uploads and sync. The app shows the offer and no payment is taken.
+Configured paid subscriptions (including Premium+ with 100 GB) retain their
+entitlements. Disable the flag to return to normal payment-based tiers; existing
+stored data stays accessible if usage exceeds the restored limit, and further
+uploads are blocked. The flag is also supported by the Compose service-config flow.
 
 | Plan | Price | Storage |
 |---|---|---|
