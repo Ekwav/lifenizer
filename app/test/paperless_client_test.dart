@@ -208,7 +208,11 @@ void main() {
       );
       final pending = await fetch(client);
       final pendingDocument = pending.conversations.single;
-      expect(pendingDocument.segments, isEmpty);
+      expect(pendingDocument.segments.single.text, isEmpty);
+      expect(
+        pendingDocument.segments.single.sourceMessageId,
+        pendingDocument.sourceThreadId,
+      );
       expect(pendingDocument.title, 'Überweisung 東京');
       expect(pendingDocument.metadata['id'], '7');
       expect(
@@ -229,6 +233,10 @@ void main() {
       expect(
         completed.conversations.single.segments.single.text,
         'OCR finished',
+      );
+      expect(
+        completed.conversations.single.segments.single.sourceMessageId,
+        pendingDocument.segments.single.sourceMessageId,
       );
       expect(completed.diagnostics['documentsWithoutText'], '0');
     },

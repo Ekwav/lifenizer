@@ -175,15 +175,12 @@ class PaperlessClient {
                 if (_text(document[key]) case final String value) key: value,
             },
             segments: [
-              if (hasText)
-                NormalizedSegment(
-                  text: content,
-                  participantName: name,
-                  createdAt: DateTime.tryParse(
-                    _text(document['created']) ?? '',
-                  ),
-                  sourceMessageId: identity,
-                ),
+              NormalizedSegment(
+                text: hasText ? content : '',
+                participantName: name,
+                createdAt: DateTime.tryParse(_text(document['created']) ?? ''),
+                sourceMessageId: identity,
+              ),
             ],
           ),
         );
