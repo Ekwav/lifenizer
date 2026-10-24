@@ -239,6 +239,69 @@ void main() {
 
   for (final useNative in [true, false]) {
     test(
+      'catalog shards preserve ordering and lazy state ${useNative ? 'native' : 'web'}',
+      () async {
+        for (final size in [0, 2, 12]) {
+          final original = build([
+            for (var n = 0; n < size; n++)
+              conversation('doc-$n', 'invoice Grüße $n'),
+          ]);
+          final parts = await native.encodeSearchSnapshotParts(
+            original,
+            2,
+            catalogShardCount: 6,
+          );
+          final crypto = VaultCrypto()..unlockDeviceKey(List.filled(32, 7));
+          addTearDown(crypto.lock);
+          final records = await Future.wait([
+            for (final catalog in parts.catalogs)
+              () async {
+                final sealed = await crypto.encryptJson(catalog);
+                return {'cipherText': sealed.cipherText, 'nonce': sealed.nonce};
+              }(),
+          ]);
+          final restored = await (useNative
+              ? native.decryptSearchCatalogShards
+              : web.decryptSearchCatalogShards)(crypto, records);
+          final expected = ConversationSearchIndex.fromJson(
+            original.toJson(includeDetails: false, includePostings: false),
+          );
+          expect(
+            restored.documents.keys.toList(),
+            expected.documents.keys.toList(),
+          );
+          expect(restored.idf.keys.toList(), expected.idf.keys.toList());
+          expect(restored.idf, expected.idf);
+          expect(restored.averageLength, expected.averageLength);
+          expect(restored.unloadedPostingTerms, expected.unloadedPostingTerms);
+          for (var bucket = 0; bucket < 2; bucket++) {
+            restored.loadPostings(
+              await native.decodeSearchDetails(parts.postings[bucket]),
+            );
+            restored.loadDetails(
+              await native.decodeSearchDetails(parts.details[bucket]),
+            );
+          }
+          expect(restored.toJson(), original.toJson());
+          expect(
+            restored.lookupCandidates(['invoice']),
+            original.lookupCandidates(['invoice']),
+          );
+          if (size > 0) {
+            await expectLater(
+              (useNative
+                  ? native.decryptSearchCatalogShards
+                  : web.decryptSearchCatalogShards)(crypto, [
+                records.first,
+                records.first,
+              ]),
+              throwsFormatException,
+            );
+          }
+        }
+      },
+    );
+    test(
       'encrypted catalog authenticates before decoding ${useNative ? 'native' : 'web'}',
       () async {
         final crypto = VaultCrypto()..unlockDeviceKey(List<int>.filled(32, 7));
@@ -248,7 +311,7 @@ void main() {
           2,
         );
         final encrypted = await crypto.encryptJson({
-          ...parts.catalog,
+          ...parts.catalogs.single,
           'cacheVersion': 3,
           'detailNonces': ['detail-a', 'detail-b'],
           'postingNonces': ['posting-a', 'posting-b'],
@@ -294,8 +357,8 @@ void main() {
             ? await native.encodeSearchSnapshotParts(build([]), 3)
             : await web.encodeSearchSnapshotParts(build([]), 3);
         final empty = useNative
-            ? await web.decodeSearchSnapshot(parts.catalog)
-            : await native.decodeSearchSnapshot(parts.catalog);
+            ? await web.decodeSearchSnapshot(parts.catalogs.single)
+            : await native.decodeSearchSnapshot(parts.catalogs.single);
         expect(empty.postingsLoaded, true);
         expect(parts.postings, hasLength(3));
         for (final bucket in parts.postings) {
@@ -325,8 +388,8 @@ void main() {
             ? await native.encodeSearchSnapshotParts(original, 4)
             : await web.encodeSearchSnapshotParts(original, 4);
         final catalog = useNative
-            ? await web.decodeSearchSnapshot(parts.catalog)
-            : await native.decodeSearchSnapshot(parts.catalog);
+            ? await web.decodeSearchSnapshot(parts.catalogs.single)
+            : await native.decodeSearchSnapshot(parts.catalogs.single);
         expect(
           catalog.documents.values.every((document) => !document.detailsLoaded),
           isTrue,

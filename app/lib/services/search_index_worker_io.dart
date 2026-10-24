@@ -60,43 +60,84 @@ _decryptSearchSnapshot(List<int> bytes, String cipherText, String nonce) async {
   }
 }
 
+Future<ConversationSearchIndex> decryptSearchCatalogShards(
+  VaultCrypto crypto,
+  List<Map<String, dynamic>> records,
+) async {
+  final bytes = await crypto.exportDeviceKey();
+  try {
+    return await Isolate.run(() => _decryptSearchCatalogShards(bytes, records));
+  } finally {
+    bytes.fillRange(0, bytes.length, 0);
+  }
+}
+
+// Receive and merge ready shards in this coordinator, so their object graphs
+// never have to be copied from the UI isolate into another worker.
+Future<ConversationSearchIndex> _decryptSearchCatalogShards(
+  List<int> bytes,
+  List<Map<String, dynamic>> records,
+) async {
+  try {
+    final shards = await Future.wait([
+      for (final record in records)
+        Isolate.run(
+          () => _decryptSearchSnapshot(
+            bytes,
+            record['cipherText'] as String,
+            record['nonce'] as String,
+          ),
+        ),
+    ]);
+    return ConversationSearchIndex.mergeCatalogs([
+      for (final shard in shards) shard.index,
+    ]);
+  } finally {
+    bytes.fillRange(0, bytes.length, 0);
+  }
+}
+
 Future<
   ({
-    Map<String, dynamic> catalog,
+    List<Map<String, dynamic>> catalogs,
     List<Map<String, dynamic>> details,
     List<Map<String, dynamic>> postings,
   })
 >
-encodeSearchSnapshotParts(ConversationSearchIndex index, int bucketCount) =>
-    Isolate.run(() {
-      if (bucketCount < 1) {
-        throw ArgumentError.value(bucketCount, 'bucketCount');
-      }
-      if (!index.postingsLoaded) {
-        throw StateError('Load search postings before saving index parts');
-      }
-      final buckets = List.generate(bucketCount, (_) => <String, dynamic>{});
-      final postings = List.generate(bucketCount, (_) => <String, dynamic>{});
-      for (final entry in index.invertedIndex.entries) {
-        postings[vaultChunkFor(entry.key, bucketCount)][entry.key] = entry.value
-            .toList();
-      }
-      for (final entry in index.documents.entries) {
-        buckets[vaultChunkFor(entry.key, bucketCount)][entry.key] = {
-          'haystack': entry.value.haystack,
-          'termFrequency': entry.value.termFrequency,
-          'titleTokens': entry.value.titleTokens.toList(),
-          'personTokens': entry.value.personTokens.toList(),
-        };
-      }
-      return (
-        catalog: _pack(
-          index.toJson(includeDetails: false, includePostings: false),
-        ),
-        details: [for (final bucket in buckets) _pack(bucket)],
-        postings: [for (final bucket in postings) _pack(bucket)],
-      );
-    });
+encodeSearchSnapshotParts(
+  ConversationSearchIndex index,
+  int bucketCount, {
+  int catalogShardCount = 1,
+}) => Isolate.run(() {
+  if (bucketCount < 1) {
+    throw ArgumentError.value(bucketCount, 'bucketCount');
+  }
+  if (!index.postingsLoaded) {
+    throw StateError('Load search postings before saving index parts');
+  }
+  final buckets = List.generate(bucketCount, (_) => <String, dynamic>{});
+  final postings = List.generate(bucketCount, (_) => <String, dynamic>{});
+  for (final entry in index.invertedIndex.entries) {
+    postings[vaultChunkFor(entry.key, bucketCount)][entry.key] = entry.value
+        .toList();
+  }
+  for (final entry in index.documents.entries) {
+    buckets[vaultChunkFor(entry.key, bucketCount)][entry.key] = {
+      'haystack': entry.value.haystack,
+      'termFrequency': entry.value.termFrequency,
+      'titleTokens': entry.value.titleTokens.toList(),
+      'personTokens': entry.value.personTokens.toList(),
+    };
+  }
+  return (
+    catalogs: [
+      for (final shard in index.toCatalogShards(catalogShardCount))
+        _pack(shard),
+    ],
+    details: [for (final bucket in buckets) _pack(bucket)],
+    postings: [for (final bucket in postings) _pack(bucket)],
+  );
+});
 
 Future<Map<String, dynamic>> decodeSearchDetails(
   Map<String, dynamic> details,

@@ -757,15 +757,46 @@ extension VaultSync on LifenizerAppState {
           }
           if (record != null && record['nonce'] == cacheNonce) {
             markUnlock('catalogRead');
-            final decoded = await decryptSearchSnapshot(
-              _crypto,
-              cipherText: record['cipherText'] as String,
-              nonce: cacheNonce,
-            );
-            final snapshot = decoded.metadata;
-            cachedIndex = decoded.index;
+            late Map<String, dynamic> snapshot;
+            if (catalogInDatabase && record['cacheVersion'] == 4) {
+              snapshot = await _crypto.decryptJson(
+                cipherText: record['cipherText'] as String,
+                nonce: cacheNonce,
+                background: true,
+              );
+              final shardNonces = List<String>.from(
+                snapshot['catalogNonces'] as List,
+              );
+              if (snapshot['cacheVersion'] != 4 ||
+                  shardNonces.isEmpty ||
+                  shardNonces.length > 6) {
+                throw const FormatException('Invalid catalog manifest');
+              }
+              final shards = await Future.wait([
+                for (var n = 0; n < shardNonces.length; n++)
+                  _localStore!.read('$key:search-catalog:$n'),
+              ]);
+              for (var n = 0; n < shards.length; n++) {
+                if (shards[n] == null ||
+                    shards[n]!['nonce'] != shardNonces[n]) {
+                  throw const FormatException('Missing catalog shard');
+                }
+              }
+              cachedIndex = await decryptSearchCatalogShards(
+                _crypto,
+                shards.cast<Map<String, dynamic>>(),
+              );
+            } else {
+              final decoded = await decryptSearchSnapshot(
+                _crypto,
+                cipherText: record['cipherText'] as String,
+                nonce: cacheNonce,
+              );
+              snapshot = decoded.metadata;
+              cachedIndex = decoded.index;
+            }
             markUnlock('catalogDecoded');
-            currentCatalog = snapshot['cacheVersion'] == 3;
+            currentCatalog = snapshot['cacheVersion'] == 4;
             markStartup('searchCatalog');
             if (catalogInDatabase) {
               _searchDetailNonces = List<String>.from(

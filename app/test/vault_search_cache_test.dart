@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
+import 'package:app/crypto_service.dart';
 import 'package:app/models.dart';
 import 'package:app/services/local_vault_store.dart';
+import 'package:app/services/search_index_worker_io.dart' as native;
 import 'package:app/services/sync_progress.dart';
 import 'package:app/services/vault_chunks.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +27,7 @@ class _Store extends LocalVaultStore {
   Completer<void>? gate;
   bool corruptDetails = false;
   bool failCoreWrites = false;
+  String? corruptCatalog;
   @override
   Future<void> write(String key, Map<String, dynamic> value) async {
     if (key.contains(':search-posting:')) postingWrites.add(key);
@@ -35,6 +39,14 @@ class _Store extends LocalVaultStore {
 
   @override
   Future<Map<String, dynamic>?> read(String key) async {
+    if (key.endsWith(':search-catalog:0') && corruptCatalog != null) {
+      final result = await super.read(key);
+      return switch (corruptCatalog) {
+        'missing' => null,
+        'nonce' => {...result!, 'nonce': 'wrong-nonce'},
+        _ => {...result!, 'cipherText': 'invalid encrypted catalog'},
+      };
+    }
     if (key.contains(':chunk:') && bodyGate != null) {
       if (bodyReadStarted?.isCompleted == false) bodyReadStarted!.complete();
       await bodyGate!.future;
@@ -154,6 +166,119 @@ void main() {
     postingBucketCount = store.postingWrites.length;
   });
   tearDown(() => database.close());
+
+  for (final corruption in ['missing', 'nonce', 'cipherText']) {
+    test(
+      '$corruption catalog shard rebuilds without losing unsent changes',
+      () async {
+        final original = await open();
+        await original.addManualText(
+          title: 'Unsent note',
+          participantNames: '',
+          text: 'private unsent text',
+        );
+        final pending = original.pendingSyncCount;
+        expect(pending, greaterThan(0));
+        await original.lock();
+        original.dispose();
+        store.corruptCatalog = corruption;
+        final restored = await open();
+        expect(restored.error, isNull);
+        expect(restored.conversations, hasLength(257));
+        expect(restored.pendingSyncCount, pending);
+        expect(restored.fullSearchBuilds, greaterThan(0));
+        expect(
+          (await restored.searchAsync('zebralantern')).single.id,
+          'thread-7',
+        );
+        expect(
+          restored.conversations.any(
+            (conversation) => conversation.title == 'Unsent note',
+          ),
+          isTrue,
+        );
+        store.corruptCatalog = null;
+        await restored.lock();
+        restored.dispose();
+      },
+    );
+  }
+
+  test(
+    'version 3 catalog opens lazily and migrates to authenticated shards',
+    () async {
+      final records = stringMapStoreFactory.store('vaults');
+      final all = await records.find(database);
+      final root = all.singleWhere((record) => record.value['format'] == 2);
+      final key = root.key;
+      final crypto = VaultCrypto();
+      addTearDown(crypto.lock);
+      await crypto.unlock(
+        email: 'person@test.invalid',
+        passphrase: 'vault passphrase',
+        vaultSalt: 'salt',
+      );
+      final manifestRecord = (await store.read('$key:search-index'))!;
+      final manifest = await crypto.decryptJson(
+        cipherText: manifestRecord['cipherText'] as String,
+        nonce: manifestRecord['nonce'] as String,
+      );
+      final shards = [
+        for (var n = 0; n < (manifest['catalogNonces'] as List).length; n++)
+          (await store.read('$key:search-catalog:$n'))!,
+      ];
+      final index = await native.decryptSearchCatalogShards(crypto, shards);
+      final legacy = await crypto.encryptJson({
+        'gzip': base64Encode(
+          gzip.encode(
+            utf8.encode(
+              jsonEncode(
+                index.toJson(includeDetails: false, includePostings: false),
+              ),
+            ),
+          ),
+        ),
+        'cacheVersion': 3,
+        'detailNonces': manifest['detailNonces'],
+        'postingNonces': manifest['postingNonces'],
+      });
+      final core = await crypto.decryptJson(
+        cipherText: root.value['cipherText'] as String,
+        nonce: root.value['nonce'] as String,
+      );
+      core['searchIndexNonce'] = legacy.nonce;
+      final sealedCore = await crypto.encryptJson(core);
+      await store.write('$key:search-index', {
+        'cipherText': legacy.cipherText,
+        'nonce': legacy.nonce,
+      });
+      await store.write(key, {
+        ...root.value,
+        'cipherText': sealedCore.cipherText,
+        'nonce': sealedCore.nonce,
+      });
+      final restored = await open();
+      expect(restored.fullSearchBuilds, 0);
+      expect(
+        restored.conversations.every((conversation) => !conversation.isLoaded),
+        isTrue,
+      );
+      final migratedRecord = (await store.read('$key:search-index'))!;
+      expect(migratedRecord['cacheVersion'], 4);
+      final migrated = await crypto.decryptJson(
+        cipherText: migratedRecord['cipherText'] as String,
+        nonce: migratedRecord['nonce'] as String,
+      );
+      expect(migrated['cacheVersion'], 4);
+      expect(migrated['catalogNonces'], isNotEmpty);
+      expect(
+        (await restored.searchAsync('zebralantern')).single.id,
+        'thread-7',
+      );
+      await restored.lock();
+      restored.dispose();
+    },
+  );
 
   test(
     'duplicate queries share detail reads and lock does not wait for them',

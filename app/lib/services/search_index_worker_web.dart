@@ -39,17 +39,30 @@ decryptSearchSnapshot(
   return (index: index, metadata: snapshot);
 }
 
+Future<ConversationSearchIndex> decryptSearchCatalogShards(
+  VaultCrypto crypto,
+  List<Map<String, dynamic>> records,
+) async => ConversationSearchIndex.mergeCatalogs([
+  for (final record in records)
+    (await decryptSearchSnapshot(
+      crypto,
+      cipherText: record['cipherText'] as String,
+      nonce: record['nonce'] as String,
+    )).index,
+]);
+
 Future<
   ({
-    Map<String, dynamic> catalog,
+    List<Map<String, dynamic>> catalogs,
     List<Map<String, dynamic>> details,
     List<Map<String, dynamic>> postings,
   })
 >
 encodeSearchSnapshotParts(
   ConversationSearchIndex index,
-  int bucketCount,
-) async {
+  int bucketCount, {
+  int catalogShardCount = 1,
+}) async {
   if (bucketCount < 1) throw ArgumentError.value(bucketCount, 'bucketCount');
   if (!index.postingsLoaded) {
     throw StateError('Load search postings before saving index parts');
@@ -69,7 +82,10 @@ encodeSearchSnapshotParts(
     };
   }
   return (
-    catalog: _pack(index.toJson(includeDetails: false, includePostings: false)),
+    catalogs: [
+      for (final shard in index.toCatalogShards(catalogShardCount))
+        _pack(shard),
+    ],
     details: [for (final bucket in buckets) _pack(bucket)],
     postings: [for (final bucket in postings) _pack(bucket)],
   );

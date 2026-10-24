@@ -177,7 +177,12 @@ extension VaultSearchCache on LifenizerAppState {
       1,
       math.min(64, (index.documents.length / 64).ceil()),
     );
-    final parts = await encodeSearchSnapshotParts(index, count);
+    final shardCount = vaultWorkerCount();
+    final parts = await encodeSearchSnapshotParts(
+      index,
+      count,
+      catalogShardCount: shardCount,
+    );
     final records = <String, Map<String, dynamic>>{};
     final nonces = List<String>.filled(count, '');
     final postingNonces = List<String>.filled(count, '');
@@ -203,13 +208,28 @@ extension VaultSearchCache on LifenizerAppState {
     await Future.wait([
       for (var n = 0; n < math.min(vaultWorkerCount(), count); n++) lane(),
     ]);
+    final catalogNonces = await Future.wait([
+      for (var n = 0; n < shardCount; n++)
+        () async {
+          final sealed = await _crypto.encryptJson(
+            parts.catalogs[n],
+            background: true,
+          );
+          records['$key:search-catalog:$n'] = {
+            'cipherText': sealed.cipherText,
+            'nonce': sealed.nonce,
+          };
+          return sealed.nonce;
+        }(),
+    ]);
     final catalog = await _crypto.encryptJson({
-      ...parts.catalog,
-      'cacheVersion': 3,
+      'cacheVersion': 4,
+      'catalogNonces': catalogNonces,
       'detailNonces': nonces,
       'postingNonces': postingNonces,
     }, background: true);
     records['$key:search-index'] = {
+      'cacheVersion': 4,
       'cipherText': catalog.cipherText,
       'nonce': catalog.nonce,
     };

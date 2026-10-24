@@ -124,6 +124,57 @@ class ConversationSearchIndex {
     };
   }
 
+  /// Contiguous ranges preserve document and vocabulary ordering after merging.
+  List<Map<String, dynamic>> toCatalogShards(int count) {
+    if (count < 1) throw ArgumentError.value(count, 'count');
+    final catalog = toJson(includeDetails: false, includePostings: false);
+    final terms = catalog['terms'] as List;
+    final weights = catalog['idf'] as List;
+    final rows = catalog['documents'] as List;
+    List<dynamic> slice(List<dynamic> values, int n) => values.sublist(
+      values.length * n ~/ count,
+      values.length * (n + 1) ~/ count,
+    );
+    return [
+      for (var n = 0; n < count; n++)
+        {
+          ...catalog,
+          'terms': slice(terms, n),
+          'idf': slice(weights, n),
+          'documents': slice(rows, n),
+        },
+    ];
+  }
+
+  static ConversationSearchIndex mergeCatalogs(
+    List<ConversationSearchIndex> shards,
+  ) {
+    if (shards.isEmpty) throw const FormatException('Missing catalog shards');
+    final merged = ConversationSearchIndex._(
+      {},
+      {},
+      {},
+      shards.first.averageLength,
+    );
+    for (final shard in shards) {
+      if (shard.averageLength != merged.averageLength ||
+          shard.documents.values.any((doc) => doc.detailsLoaded) ||
+          shard.invertedIndex.values.any((ids) => ids.isNotEmpty)) {
+        throw const FormatException('Invalid catalog shard');
+      }
+      final docs = merged.documents.length + shard.documents.length;
+      final terms = merged.idf.length + shard.idf.length;
+      merged.documents.addAll(shard.documents);
+      merged.invertedIndex.addAll(shard.invertedIndex);
+      merged.idf.addAll(shard.idf);
+      merged._unloadedPostingTerms.addAll(shard._unloadedPostingTerms);
+      if (merged.documents.length != docs || merged.idf.length != terms) {
+        throw const FormatException('Duplicate catalog shard entries');
+      }
+    }
+    return merged;
+  }
+
   /// Restores the prepared index without tokenizing text or recomputing scores.
   static ConversationSearchIndex fromJson(Map<String, dynamic> json) {
     if (json['version'] != 1) {
