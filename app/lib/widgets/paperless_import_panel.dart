@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../services/source_links.dart';
+import '../services/paperless_client.dart';
 
 class PaperlessImportPanel extends StatefulWidget {
   const PaperlessImportPanel({required this.state, super.key});
@@ -15,6 +16,7 @@ class PaperlessImportPanel extends StatefulWidget {
 
 class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
   final _token = TextEditingController();
+  final _address = TextEditingController();
   bool _remember = !kIsWeb;
   bool _loading = true;
   bool _editing = false;
@@ -45,27 +47,62 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
           : null;
       if (uri != null && !uri.hasQuery && !uri.hasFragment) {
         _server = uri;
-      } else {
+      } else if (kIsWeb) {
         _error =
             'Your Lifenizer server has no Paperless address configured. If you run this server, set Imports__Paperless__BaseUrl to your trusted Paperless address, restart the server, then retry.';
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted && kIsWeb) {
         _error =
             'Could not load Paperless setup. Check your Lifenizer connection, then retry.';
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        if (!kIsWeb && _address.text.isEmpty) {
+          final platform = defaultTargetPlatform;
+          _address.text =
+              widget.state.documentImport.baseUrl ??
+              _server?.toString() ??
+              (platform == TargetPlatform.android ||
+                      platform == TargetPlatform.iOS
+                  ? ''
+                  : 'http://127.0.0.1:8002');
+        }
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  bool _matchesServer(Uri address) =>
+      _server != null &&
+      address.toString().replaceFirst(RegExp(r'/$'), '') ==
+          _server.toString().replaceFirst(RegExp(r'/$'), '');
+
+  Uri? _connectionAddress() {
+    if (kIsWeb) return _server;
+    final configured = externalLinkUri(_address.text);
+    if (configured != null &&
+        _matchesServer(configured) &&
+        !widget.state.documentImport.directConnection) {
+      return configured;
+    }
+    try {
+      return PaperlessClient.validateBaseUrl(_address.text);
+    } on FormatException catch (error) {
+      setState(() => _error = error.message);
+      return null;
     }
   }
 
   Future<void> _openPaperless() async {
     setState(() => _error = null);
-    final opened = await openExternalLink(_server.toString());
+    final address = _connectionAddress();
+    if (address == null) return;
+    final opened = await openExternalLink(address.toString());
     if (!opened && mounted) {
       setState(
         () => _error =
-            'Could not open the browser. Open $_server in your browser to copy the token.',
+            'Could not open the browser. Open $address in your browser to copy the token.',
       );
     }
   }
@@ -75,8 +112,16 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
       _editing = true;
       _error = null;
     });
+    final address = _connectionAddress();
+    if (address == null) return;
     final service = widget.state.documentImport;
-    await service.connect(token: _token.text, remember: _remember);
+    await service.connect(
+      token: _token.text,
+      remember: _remember,
+      baseUrl: !kIsWeb && (service.directConnection || !_matchesServer(address))
+          ? address.toString()
+          : null,
+    );
     if (!mounted) return;
     if (service.error == null && service.connected) {
       _token.clear();
@@ -87,6 +132,7 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
   @override
   void dispose() {
     _token.dispose();
+    _address.dispose();
     super.dispose();
   }
 
@@ -111,14 +157,16 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
               _error!,
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
-          if (!configured && !_loading)
+          if (kIsWeb && !configured && !_loading)
             TextButton(
               onPressed: _loadSettings,
               child: const Text('Retry Paperless setup'),
             ),
-          if (_server != null) Text('Paperless server: $_server'),
+          if (kIsWeb && _server != null) Text('Paperless server: $_server'),
           if (connected) ...[
             const Text('Paperless connected.'),
+            if (!kIsWeb && service.baseUrl != null)
+              Text('Paperless address: ${service.baseUrl}'),
             Wrap(
               spacing: 8,
               children: [
@@ -128,13 +176,32 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
                 ),
                 TextButton(
                   onPressed: enabled
-                      ? () => setState(() => _editing = true)
+                      ? () {
+                          _address.text = service.baseUrl ?? _address.text;
+                          setState(() => _editing = true);
+                        }
                       : null,
                   child: const Text('Change API token'),
                 ),
               ],
             ),
-          ] else if (configured) ...[
+          ] else if (!kIsWeb || configured) ...[
+            if (!kIsWeb) ...[
+              const Text(
+                'Connect to your Paperless library. Imported documents sync encrypted.',
+              ),
+              TextField(
+                key: const Key('paperless-address'),
+                controller: _address,
+                enabled: enabled,
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                  labelText: 'Paperless address',
+                  hintText: 'https://paperless.example.com',
+                ),
+              ),
+            ],
             const Text(
               'An API token is an access key for your Paperless account. It lets Lifenizer read your document text. Keep it private, like a password.',
             ),

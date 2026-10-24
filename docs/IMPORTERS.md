@@ -343,8 +343,16 @@ store, like the document folder watch.
 
 ### paperless
 
-Open **Imports → Paperless**. An API token is an account access key that lets
-Lifenizer read your Paperless documents without asking for your Paperless password.
+Open **Imports → Paperless**. In the installed app, enter your Paperless address.
+Desktop setup defaults to `http://127.0.0.1:8002` when no server address is configured;
+change it if Paperless runs elsewhere. On a phone, enter the address reachable
+from that phone. The installed app reads directly from Paperless when you enter
+an address different from the server default; no Lifenizer server administrator
+is needed. Imported documents sync through the encrypted vault. Remembered direct
+connections retain their address and token in the device OS credential store.
+
+An API token is an account access key that lets Lifenizer read your Paperless
+documents without asking for your Paperless password.
 
 1. Select **Open Paperless** and sign in to the account whose documents you want
    to import.
@@ -362,21 +370,23 @@ steps after opening Paperless. If a connection attempt fails, the token stays in
 the field so you can correct it and retry. After a successful connection, setup
 is replaced by update and disconnect controls.
 
-If no Paperless address is configured, token setup stays hidden. If you run the
-Lifenizer server, you are its administrator: set the environment variable
+In the web app, if no Paperless address is configured, token setup stays hidden.
+If you run the Lifenizer server, you are its administrator: set the environment variable
 `Imports__Paperless__BaseUrl` to your trusted Paperless address and restart the
 server, then select **Retry Paperless setup**. An API token alone cannot configure
 the server address.
 
 Set server configuration `Imports:Paperless:BaseUrl` to the trusted Paperless
 installation. Compose maps `LIFENIZER_PAPERLESS_URL` to that setting; no guessed
-server URL is used. Request endpoint overrides and HTTP redirects are rejected.
+server URL is used. Server request endpoint overrides and HTTP redirects are
+rejected. Native direct connections support HTTPS, or HTTP for local/private hosts, and reject credentials
+in addresses, query strings, fragments, and redirects.
 `GET /api/imports/paperless/settings` requires authentication and returns
 `{configured,baseUrl}` without credentials. The backend uses the API token only
 for the current request; optional remembered credentials remain in
 the device OS credential store.
 
-Required:
+Required for server imports:
 
 - Server config `Imports:Paperless:BaseUrl` (no request override)
 - `metadata.token` or config `Imports:Paperless:Token`

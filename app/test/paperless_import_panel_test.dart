@@ -5,6 +5,7 @@ import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
 import 'package:app/services/document_credentials.dart';
 import 'package:app/services/local_vault_store.dart';
+import 'package:app/services/paperless_client.dart';
 import 'package:app/widgets/paperless_import_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -57,6 +58,7 @@ class _Fixture {
   Completer<void>? settingsGate;
   int settingsRequests = 0;
   final tokens = <String>[];
+  final directRequests = <http.Request>[];
 
   Future<void> open() async {
     final client = MockClient((request) async {
@@ -105,6 +107,15 @@ class _Fixture {
     state = LifenizerAppState(
       localStore: _VaultStore(),
       documentStore: _Credentials(),
+      paperlessClient: PaperlessClient(
+        client: MockClient((request) async {
+          directRequests.add(request);
+          return http.Response(
+            importFail ? '{}' : '{"results":[],"next":null}',
+            importFail ? 401 : 200,
+          );
+        }),
+      ),
       apiFactory: (base) => LifenizerApiClient(baseUrl: base, client: client),
     );
     await state.login(
@@ -161,81 +172,119 @@ void main() {
     },
   );
 
+  for (final settingsFail in [false, true]) {
+    testWidgets(
+      'native setup connects locally without server settings (failure: $settingsFail)',
+      (tester) async {
+        final f = _Fixture()
+          ..configured = false
+          ..settingsFail = settingsFail;
+        await tester.runAsync(f.open);
+        addTearDown(f.close);
+        await tester.pumpWidget(f.widget);
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Connect to your Paperless library'),
+          findsOneWidget,
+        );
+        expect(find.text('Retry Paperless setup'), findsNothing);
+        final address = find.byKey(const Key('paperless-address'));
+        expect(
+          tester.widget<TextField>(address).controller!.text,
+          'http://127.0.0.1:8002',
+        );
+        await tester.enterText(address, 'http://127.0.0.1:8002/paperless');
+        await tester.enterText(
+          find.byKey(const Key('paperless-token')),
+          'local-token',
+        );
+        final action = tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Connect & import'),
+            )
+            .onPressed!;
+        await tester.runAsync(
+          () async => await (action as Future<void> Function())(),
+        );
+        await tester.pumpAndSettle();
+        expect(f.directRequests.single.url.path, '/paperless/api/documents/');
+        expect(
+          f.directRequests.single.headers['Authorization'],
+          'Token local-token',
+        );
+        expect(f.tokens, isEmpty);
+        expect(find.text('Check now'), findsOneWidget);
+        await tester.tap(find.text('Change API token'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextField>(address).controller!.text,
+          'http://127.0.0.1:8002/paperless/',
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        f.close();
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.linux),
+    );
+  }
+
   testWidgets(
-    'loading, missing configuration and errors hide token setup and allow retry',
+    'invalid native addresses preserve inputs and do not send tokens',
     (tester) async {
-      final f = _Fixture();
+      final f = _Fixture()..configured = false;
       await tester.runAsync(f.open);
       addTearDown(f.close);
-      f.settingsGate = Completer<void>();
       await tester.pumpWidget(f.widget);
-      await tester.pump();
-      expect(find.text('Loading Paperless setup…'), findsOneWidget);
-      expect(find.byKey(const Key('paperless-token')), findsNothing);
-      expect(find.text('Open Paperless'), findsNothing);
-      f.settingsFail = true;
-      f.settingsGate!.complete();
-      await tester.pumpAndSettle();
-      expect(
-        find.textContaining('Check your Lifenizer connection'),
-        findsOneWidget,
-      );
-      expect(find.byKey(const Key('paperless-token')), findsNothing);
-      f.settingsFail = false;
-      f.configured = false;
-      await tester.ensureVisible(find.text('Retry Paperless setup'));
-      await tester.tap(find.text('Retry Paperless setup'));
-      await tester.pumpAndSettle();
-      expect(
-        find.textContaining('Your Lifenizer server has no Paperless address'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('Imports__Paperless__BaseUrl'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('restart the server, then retry'),
-        findsOneWidget,
-      );
-      expect(find.byKey(const Key('paperless-token')), findsNothing);
-      expect(find.text('Connect & import'), findsNothing);
-      f.configured = true;
-      await tester.tap(find.text('Retry Paperless setup'));
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<TextField>(find.byKey(const Key('paperless-token')))
-            .enabled,
-        isTrue,
+            .widget<TextField>(find.byKey(const Key('paperless-address')))
+            .controller!
+            .text,
+        isEmpty,
       );
-      expect(f.settingsRequests, 3);
+      await tester.enterText(
+        find.byKey(const Key('paperless-token')),
+        'private-token',
+      );
+      for (final address in [
+        'https://user:secret@example.test/',
+        'https://example.test/?token=secret',
+        'javascript:alert(1)',
+        'http://public.example.test/',
+      ]) {
+        await tester.enterText(
+          find.byKey(const Key('paperless-address')),
+          address,
+        );
+        await tester.ensureVisible(find.text('Connect & import'));
+        await tester.tap(find.text('Connect & import'));
+        await tester.pumpAndSettle();
+        expect(f.directRequests, isEmpty);
+        expect(f.tokens, isEmpty);
+        expect(
+          tester
+              .widget<TextField>(find.byKey(const Key('paperless-token')))
+              .controller!
+              .text,
+          'private-token',
+        );
+        expect(
+          tester
+              .widget<TextField>(find.byKey(const Key('paperless-address')))
+              .controller!
+              .text,
+          address,
+        );
+        expect(
+          find.textContaining('Use HTTPS').evaluate().isNotEmpty ||
+              find.textContaining('without credentials').evaluate().isNotEmpty,
+          isTrue,
+        );
+      }
       await tester.pumpWidget(const SizedBox.shrink());
       f.close();
     },
   );
-
-  testWidgets('unsafe configured browser links are not enabled', (
-    tester,
-  ) async {
-    final f = _Fixture();
-    await tester.runAsync(f.open);
-    addTearDown(f.close);
-    for (final address in [
-      'https://user:secret@example.test/',
-      'https://example.test/?token=secret',
-      'javascript:alert(1)',
-    ]) {
-      f.address = address;
-      await tester.pumpWidget(f.widget);
-      await tester.pumpAndSettle();
-      expect(find.text('Open Paperless'), findsNothing);
-      expect(find.byKey(const Key('paperless-token')), findsNothing);
-      expect(find.textContaining('secret'), findsNothing);
-      await tester.pumpWidget(const SizedBox.shrink());
-    }
-    f.close();
-  });
 
   testWidgets(
     'failed imports retain the token and successful retry shows compact controls',
