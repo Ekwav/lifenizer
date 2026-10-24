@@ -105,9 +105,27 @@ class PricingPage extends StatefulWidget {
 
 class _PricingPageState extends State<PricingPage> {
   bool _loading = false;
+  bool _loadingQuota = true;
   String? _error;
 
   String get _currentPlan => widget.state.quotaStatus?.plan ?? 'Free';
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshQuota();
+  }
+
+  Future<void> _refreshQuota() async {
+    setState(() => _loadingQuota = true);
+    try {
+      await widget.state.refreshQuota();
+    } catch (_) {
+      // A disconnected account can retry after reconnecting.
+    } finally {
+      if (mounted) setState(() => _loadingQuota = false);
+    }
+  }
 
   Future<void> _checkout(String slug) async {
     if (slug.isEmpty) return;
@@ -136,7 +154,24 @@ class _PricingPageState extends State<PricingPage> {
     final tt = Theme.of(context).textTheme;
     final quota = widget.state.quotaStatus;
 
-    if (quota?.freePremiumEnabled == true) {
+    if (quota == null) {
+      return Center(
+        child: _loadingQuota
+            ? const CircularProgressIndicator()
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Could not load your storage plan.'),
+                  TextButton(
+                    onPressed: _refreshQuota,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+      );
+    }
+
+    if (quota.freePremiumEnabled) {
       return ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -147,7 +182,7 @@ class _PricingPageState extends State<PricingPage> {
             'Paid checkout is paused during this offer.',
           ),
           const SizedBox(height: 16),
-          _CurrentPlanBadge(quota: quota!),
+          _CurrentPlanBadge(quota: quota),
         ],
       );
     }
@@ -176,10 +211,8 @@ class _PricingPageState extends State<PricingPage> {
               ),
 
               // ── Current plan badge ─────────────────────────────────────────
-              if (quota != null) ...[
-                const SizedBox(height: 16),
-                _CurrentPlanBadge(quota: quota),
-              ],
+              const SizedBox(height: 16),
+              _CurrentPlanBadge(quota: quota),
 
               if (_error != null) ...[
                 const SizedBox(height: 12),
