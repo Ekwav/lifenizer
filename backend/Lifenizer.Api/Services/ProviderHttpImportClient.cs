@@ -25,7 +25,7 @@ public sealed class ProviderHttpImportClient(
         var since = ImportTextParsers.Metadata(request, "modifiedAfter");
         if (since is not null && CommonParsing.TryParseDate(since) is null) throw new InvalidOperationException("Paperless modifiedAfter must be an ISO date-time.");
         var root = new Uri(baseUrl.TrimEnd('/') + "/");
-        var relative = $"api/documents/?page_size={limit}&page={page}&ordering=modified,id" +
+        var relative = $"api/documents/?page_size={limit}&page={page}&ordering=id" +
             (since is null ? "" : "&modified__gte=" + Uri.EscapeDataString(since));
         using var doc = JsonDocument.Parse(await PaperlessTextAsync(new Uri(root, relative), token, cancellationToken));
         var conversations = new List<NormalizedConversation>();

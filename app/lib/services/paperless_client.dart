@@ -100,7 +100,7 @@ class PaperlessClient {
               queryParameters: {
                 'page_size': '$limit',
                 'page': '$page',
-                'ordering': 'modified,id',
+                'ordering': 'id',
                 'modified__gte': ?since,
               },
             ),

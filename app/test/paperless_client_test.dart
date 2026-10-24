@@ -86,7 +86,7 @@ void main() {
           expect(request.url.queryParameters, {
             'page_size': '50',
             'page': '2',
-            'ordering': 'modified,id',
+            'ordering': 'id',
             'modified__gte': '2025-01-01T00:00:00Z',
           });
           return json({
@@ -131,6 +131,53 @@ void main() {
       expect(
         result.diagnostics['nextModifiedAfter'],
         '2026-02-03T04:05:06.000Z',
+      );
+    },
+  );
+
+  test(
+    'editing an imported document between pages preserves the next document',
+    () async {
+      final documents = [
+        {
+          ...document(1),
+          'correspondent': null,
+          'modified': '2026-01-01T00:00:00Z',
+        },
+        {
+          ...document(2),
+          'correspondent': null,
+          'modified': '2026-02-01T00:00:00Z',
+        },
+      ];
+      final client = PaperlessClient(
+        client: MockClient((request) async {
+          final page = int.parse(request.url.queryParameters['page']!);
+          if (page == 2) documents[0]['modified'] = '2026-03-01T00:00:00Z';
+          final ordered = [...documents];
+          if (request.url.queryParameters['ordering']!.startsWith('modified')) {
+            ordered.sort(
+              (a, b) =>
+                  (a['modified'] as String).compareTo(b['modified'] as String),
+            );
+          }
+          return json({
+            'results': [ordered[page - 1]],
+            'next': page == 1 ? '?page=2' : null,
+          });
+        }),
+      );
+      final first = await fetch(client, metadata: {'limit': '1'});
+      final second = await fetch(
+        client,
+        metadata: {'limit': '1', 'page': first.diagnostics['nextPage']!},
+      );
+      expect(
+        [
+          first.conversations.single.metadata['id'],
+          second.conversations.single.metadata['id'],
+        ],
+        ['1', '2'],
       );
     },
   );

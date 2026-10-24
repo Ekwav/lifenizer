@@ -124,6 +124,7 @@ public sealed class DocumentImportTests
             Assert.That(first.Conversations.Single().SourceUrl, Is.EqualTo(server.Url + "documents/1/details"));
             Assert.That(first.Conversations.Single().SourceThreadId, Is.EqualTo(first.Conversations.Single().Segments.Single().SourceMessageId));
             Assert.That(queries.All(query => query.Contains("modified__gte=")), Is.True);
+            Assert.That(queries.All(query => query.Contains("ordering=id")), Is.True);
         });
     }
     [Test]
