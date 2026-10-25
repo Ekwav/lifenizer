@@ -67,8 +67,8 @@ class _BrowserExtensionSectionState extends State<BrowserExtensionSection> {
           'The Lifenizer browser extension can send your YouTube and TikTok '
           'watch history and new messages from WhatsApp Web and Discord Web to this app. '
           'The app listens on 127.0.0.1 only '
-          '(this computer) and requires the token below. See '
-          'integrations/browser-extension/README.md for installation.',
+          '(this computer) and requires the token below. For installation, '
+          'open Imports → Browser extension and choose your provider.',
           style: muted,
         ),
         SwitchListTile(

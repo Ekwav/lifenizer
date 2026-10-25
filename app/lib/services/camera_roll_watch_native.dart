@@ -76,7 +76,7 @@ class CameraRollWatchService extends ChangeNotifier
   int skipped = 0;
   int failed = 0;
 
-  bool get supported => true;
+  bool get supported => !_unsupportedPlatform;
   bool get needsFolderChoice => !_platform.isMobile;
   bool get enabled => _enabled;
   bool get keepInVault => _keepInVault;

@@ -6,8 +6,13 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 
 class ImapImportPanel extends StatefulWidget {
-  const ImapImportPanel({required this.state, super.key});
+  const ImapImportPanel({
+    required this.state,
+    this.registerDraftCheck,
+    super.key,
+  });
   final LifenizerAppState state;
+  final ValueChanged<bool Function()>? registerDraftCheck;
   @override
   State<ImapImportPanel> createState() => _ImapImportPanelState();
 }
@@ -19,10 +24,19 @@ class _ImapImportPanelState extends State<ImapImportPanel> {
   Map<String, dynamic>? _settings;
   String? _error;
   bool _remember = !kIsWeb;
+  late List<Object?> _savedDraft;
+  List<Object?> get _draft => [
+    _username.text,
+    _password.text,
+    _mailbox.text,
+    _remember,
+  ];
 
   @override
   void initState() {
     super.initState();
+    _savedDraft = _draft;
+    widget.registerDraftCheck?.call(() => !listEquals(_draft, _savedDraft));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) widget.state.emailImport.start();
     });
@@ -67,6 +81,7 @@ class _ImapImportPanelState extends State<ImapImportPanel> {
         widget.state.emailImport.error == null &&
         widget.state.emailImport.connected) {
       _password.clear();
+      _savedDraft = _draft;
     }
   }
 

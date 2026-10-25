@@ -11,8 +11,13 @@ import '../services/source_links.dart';
 import '../services/paperless_client.dart';
 
 class PaperlessImportPanel extends StatefulWidget {
-  const PaperlessImportPanel({required this.state, super.key});
+  const PaperlessImportPanel({
+    required this.state,
+    this.registerDraftCheck,
+    super.key,
+  });
   final LifenizerAppState state;
+  final ValueChanged<bool Function()>? registerDraftCheck;
   @override
   State<PaperlessImportPanel> createState() => _PaperlessImportPanelState();
 }
@@ -25,10 +30,14 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
   bool _editing = false;
   Uri? _server;
   String? _error;
+  late List<Object?> _savedDraft;
+  List<Object?> get _draft => [_address.text, _token.text, _remember];
 
   @override
   void initState() {
     super.initState();
+    _savedDraft = _draft;
+    widget.registerDraftCheck?.call(() => !listEquals(_draft, _savedDraft));
     unawaited(_loadSettings());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) widget.state.documentImport.start();
@@ -70,6 +79,7 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
                       platform == TargetPlatform.iOS
                   ? ''
                   : 'http://127.0.0.1:8002');
+          _savedDraft[0] = _address.text;
         }
         setState(() => _loading = false);
       }
@@ -161,6 +171,7 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
     if (!mounted) return;
     if (service.error == null && service.connected) {
       _token.clear();
+      _savedDraft = _draft;
       setState(() => _editing = false);
     }
   }
@@ -294,7 +305,11 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
                 onPressed: enabled
                     ? () {
                         _token.clear();
-                        setState(() => _editing = false);
+                        _address.text = _savedDraft[0] as String;
+                        setState(() {
+                          _remember = _savedDraft[2] as bool;
+                          _editing = false;
+                        });
                       }
                     : null,
                 child: const Text('Cancel token change'),

@@ -148,6 +148,48 @@ void main() {
     },
   );
 
+  testWidgets('setup protects unsaved audio details on Close and back', (
+    tester,
+  ) async {
+    final state = LifenizerAppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ImportsPage(state: state)),
+      ),
+    );
+    await tester.enterText(find.byKey(const Key('imports-search')), 'audio');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('import-adapter-audio')));
+    await tester.pumpAndSettle();
+    final title = find.widgetWithText(TextField, 'Title (optional)');
+    await tester.enterText(title, 'Unsaved recording');
+    await tester.tap(find.byTooltip('Close setup'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard setup changes?'), findsOneWidget);
+    await tester.tap(find.text('Keep editing'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(title).controller!.text,
+      'Unsaved recording',
+    );
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Discard setup changes?'), findsOneWidget);
+    await tester.tap(find.text('Discard changes'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Close setup'), findsNothing);
+    await tester.tap(find.byKey(const Key('import-adapter-audio')));
+    await tester.pumpAndSettle();
+    await tester.enterText(title, 'temporary');
+    await tester.enterText(title, '');
+    await tester.tap(find.byTooltip('Close setup'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard setup changes?'), findsNothing);
+    expect(find.byTooltip('Close setup'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('search finds export adapters and separate extension setups', (
     tester,
   ) async {
@@ -195,7 +237,7 @@ void main() {
     expect(find.textContaining('Load unpacked'), findsOneWidget);
     expect(find.textContaining('only newly rendered messages'), findsOneWidget);
     expect(
-      find.text('Get the extension and installation guide'),
+      find.text('Open extension guide (GitHub access required)'),
       findsOneWidget,
     );
     await tester.tap(find.byTooltip('Close setup'));

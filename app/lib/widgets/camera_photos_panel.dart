@@ -95,7 +95,7 @@ class _CameraPhotosPanelState extends State<CameraPhotosPanel> {
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
                   child: Text(
-                    'Not available in the browser. Use the Android or desktop app.',
+                    'Automatic photo imports require the Android or desktop app.',
                   ),
                 )
               else ...[

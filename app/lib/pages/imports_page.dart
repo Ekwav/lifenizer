@@ -4,7 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform;
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, listEquals;
 
 import '../app_state.dart';
 import '../models.dart';
@@ -49,6 +49,7 @@ class _ImportsPageState extends State<ImportsPage> {
   String _query = '';
   bool _watchExport = false;
   bool _dragging = false;
+  bool Function() _setupHasDraft = () => false;
   String get _ownDiscordId {
     final email = widget.state.rememberedEmail.toLowerCase();
     for (final person in widget.state.participants) {
@@ -393,74 +394,118 @@ class _ImportsPageState extends State<ImportsPage> {
   );
 
   void _openAdapter(String title, List<String> steps, Widget Function() panel) {
+    _setupHasDraft = () => false;
+    var closing = false;
+    Future<void> close(BuildContext context) async {
+      if (closing) return;
+      closing = true;
+      final discard =
+          !_setupHasDraft() ||
+          await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Discard setup changes?'),
+                  content: const Text(
+                    'Your unsaved setup details will be lost.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Keep editing'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Discard changes'),
+                    ),
+                  ],
+                ),
+              ) ==
+              true;
+      closing = false;
+      if (discard && context.mounted) Navigator.of(context).pop();
+    }
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (context) => SizedBox(
-        height: MediaQuery.sizeOf(context).height * .9,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleLarge,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (context) => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) close(context);
+        },
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .9,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close setup',
+                      onPressed: () => close(context),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    8,
+                    16,
+                    24 + MediaQuery.viewInsetsOf(context).bottom,
+                  ),
+                  child: AnimatedBuilder(
+                    animation: widget.state,
+                    builder: (context, _) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < steps.length; i++)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text('${i + 1}. ${steps[i]}'),
+                          ),
+                        const SizedBox(height: 12),
+                        panel(),
+                        if (widget.state.error != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            widget.state.error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Close setup',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  8,
-                  16,
-                  24 + MediaQuery.viewInsetsOf(context).bottom,
-                ),
-                child: AnimatedBuilder(
-                  animation: widget.state,
-                  builder: (context, _) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (var i = 0; i < steps.length; i++)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text('${i + 1}. ${steps[i]}'),
-                        ),
-                      const SizedBox(height: 12),
-                      panel(),
-                      if (widget.state.error != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          widget.state.error!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    );
+    ).whenComplete(() => _setupHasDraft = () => false);
   }
 
+  void _registerDraftCheck(bool Function() check) => _setupHasDraft = check;
+
   Widget _panel(String id) => switch (id) {
-    'email' => ImapImportPanel(state: widget.state),
+    'email' => ImapImportPanel(
+      state: widget.state,
+      registerDraftCheck: _registerDraftCheck,
+    ),
     'discord-export' => Column(
       children: [
         _discordExportOptions(),
@@ -474,37 +519,53 @@ class _ImportsPageState extends State<ImportsPage> {
     'discord-bot' => DiscordBotImportPanel(
       service: widget.state.discordImport,
       ownUserId: _ownDiscordId,
+      registerDraftCheck: _registerDraftCheck,
     ),
     'documents' => DocumentImportPanel(
       state: widget.state,
       onPickFile: () => _pickExport(),
     ),
-    'paperless' => PaperlessImportPanel(state: widget.state),
+    'paperless' => PaperlessImportPanel(
+      state: widget.state,
+      registerDraftCheck: _registerDraftCheck,
+    ),
     'photos' => CameraPhotosPanel(state: widget.state),
     'history' => ViewingHistoryPanel(state: widget.state),
-    'audio' => _AudioImportPanel(state: widget.state),
+    'audio' => _AudioImportPanel(
+      state: widget.state,
+      registerDraftCheck: _registerDraftCheck,
+    ),
     _ => _manualImport(showSource: true),
   };
 
   void _openExtension(String platform, String title) => _openAdapter(
     '$title extension setup',
     [
-      'Install the Lifenizer browser extension: in Chrome / Edge, open the Extensions page, enable Developer mode, choose Load unpacked and select the extension folder. In Firefox, open about:debugging, choose This Firefox → Load Temporary Add-on and select its manifest.json.',
-      'Enable the local connection below. In the extension’s Settings, enter this port and token, then test the connection. Keep Lifenizer open and the vault unlocked.',
+      if (!_desktop)
+        'Continue on a computer running the Lifenizer desktop app. Browser and mobile apps cannot accept the extension connection.',
+      'Get the integrations/browser-extension folder from the source repository linked below (GitHub access required). In desktop Chrome / Edge, open the Extensions page, enable Developer mode, choose Load unpacked and select that folder. In Firefox 140+, open about:debugging, choose This Firefox → Load Temporary Add-on and select its manifest.json. Temporary Firefox installs disappear after restart.',
+      '${_desktop ? 'Enable the local connection below' : 'In the desktop app, open Imports → Browser extension → $title and enable the local connection'}. In extension Settings, enter the desktop app’s port and token, then Test connection. Keep the desktop app open and its vault unlocked.',
       if (platform == 'youtube' || platform == 'tiktok')
-        'In extension Settings, set the expected $title account ID or @handle. Sign in to that account in your browser, then use Sync now.'
+        'In extension Settings, set the expected $title account ID or @handle, then Save. Sign in to that account in your desktop browser. In the extension popup, choose $title and Sync now. Use Retry delivery to resend queued imports after unlocking or reopening the desktop app.'
       else
-        'In extension Settings, enable $title capture. Open a signed-in conversation; only newly rendered messages are captured. Existing history is not imported.',
+        'In extension Settings, enable $title capture, then Save. Reload existing browser tabs after installing the extension. Open a signed-in conversation; only newly rendered messages are captured. Existing history is not imported. Use Retry delivery to resend queued messages after unlocking or reopening the desktop app.',
     ],
     () => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextButton.icon(
-          onPressed: () => openExternalLink(
-            'https://github.com/Ekwav/lifenizer/tree/main/integrations/browser-extension#install-and-pair',
-          ),
+          onPressed: () async {
+            final opened = await openExternalLink(
+              'https://github.com/Coflnet/Lifenizer/blob/main/integrations/browser-extension/README.md#install-and-pair',
+            );
+            if (!opened && mounted) {
+              widget.state.reportError(
+                'Could not open the extension guide. Check your browser and try again.',
+              );
+            }
+          },
           icon: const Icon(Icons.open_in_new),
-          label: const Text('Get the extension and installation guide'),
+          label: const Text('Open extension guide (GitHub access required)'),
         ),
         if (!_desktop)
           const Text(
@@ -769,9 +830,10 @@ class _ImportsPageState extends State<ImportsPage> {
 /// app-wide busy indicator and status/error banner (see VaultShell), same as
 /// every other import.
 class _AudioImportPanel extends StatefulWidget {
-  const _AudioImportPanel({required this.state});
+  const _AudioImportPanel({required this.state, this.registerDraftCheck});
 
   final LifenizerAppState state;
+  final ValueChanged<bool Function()>? registerDraftCheck;
 
   @override
   State<_AudioImportPanel> createState() => _AudioImportPanelState();
@@ -795,6 +857,21 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
   final TextEditingController _languageController = TextEditingController();
   String? _pickError;
   DateTime? _recordedAt;
+  late List<Object?> _savedDraft;
+  List<Object?> get _draft => [
+    _titleController.text,
+    _participantsController.text,
+    _languageController.text,
+    _recordedAt,
+    ..._participantIds,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _savedDraft = _draft;
+    widget.registerDraftCheck?.call(() => !listEquals(_draft, _savedDraft));
+  }
 
   @override
   void dispose() {
@@ -821,6 +898,7 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
         );
         return;
       }
+      final submittedDraft = _draft;
       await widget.state.importAudioBytes(
         bytes: bytes,
         fileName: file.name,
@@ -830,6 +908,7 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
         language: _languageController.text,
         recordedAt: _recordedAt,
       );
+      if (mounted && widget.state.error == null) _savedDraft = submittedDraft;
     } catch (exception) {
       if (mounted) {
         setState(

@@ -7,10 +7,12 @@ class DiscordBotImportPanel extends StatefulWidget {
   const DiscordBotImportPanel({
     required this.service,
     this.ownUserId = '',
+    this.registerDraftCheck,
     super.key,
   });
   final DiscordBotImportService service;
   final String ownUserId;
+  final ValueChanged<bool Function()>? registerDraftCheck;
   @override
   State<DiscordBotImportPanel> createState() => _DiscordBotImportPanelState();
 }
@@ -21,6 +23,21 @@ class _DiscordBotImportPanelState extends State<DiscordBotImportPanel> {
   final _guild = TextEditingController();
   late final _own = TextEditingController(text: widget.ownUserId);
   bool _remember = true;
+  late List<Object?> _savedDraft;
+  List<Object?> get _draft => [
+    _token.text,
+    _channels.text,
+    _guild.text,
+    _own.text,
+    _remember,
+  ];
+  @override
+  void initState() {
+    super.initState();
+    _savedDraft = _draft;
+    widget.registerDraftCheck?.call(() => !listEquals(_draft, _savedDraft));
+  }
+
   @override
   void dispose() {
     _token.dispose();
@@ -41,6 +58,7 @@ class _DiscordBotImportPanelState extends State<DiscordBotImportPanel> {
     );
     if (mounted && widget.service.error == null && widget.service.connected) {
       _token.clear();
+      _savedDraft = _draft;
     }
   }
 
