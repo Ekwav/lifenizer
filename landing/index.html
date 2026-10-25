@@ -3,53 +3,50 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lifenizer</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta name="description" content="A private place for your recordings, documents, conversations and browser history. Download Lifenizer for Android and Linux.">
+  <title>Lifenizer · Keep the context</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/landing.js" defer></script>
 </head>
 <body>
   <header class="site-header">
-    <a class="logo" href="index.html">Lifenizer</a>
-    <nav class="nav">
-      <a href="security.html">Security</a>
-      <a href="imports.html">Imports</a>
-      <a href="hosted.html">Hosted</a>
-      <a href="privacy.html">Privacy</a>
-    </nav>
+    <a class="logo" href="/" aria-label="Lifenizer home"><span class="logo-mark" aria-hidden="true">L</span> Lifenizer</a>
+    <nav class="nav" aria-label="Main navigation"><a href="#downloads">Downloads</a><a href="/security.html">Security</a><a href="/privacy.html">Privacy</a></nav>
   </header>
-
   <main>
     <section class="hero">
       <div class="hero-content">
-        <h1>Lifenizer</h1>
-        <p>A private searchable archive for the conversations, documents, recordings, chats, browser traces, and transcripts that make up your life.</p>
-        <div class="actions">
-          <a class="button primary" href="../app/build/web/index.html">Open web app</a>
-          <a class="button" href="security.html">Security model</a>
-        </div>
+        <p class="eyebrow">YOUR LIFE, WITH CONTEXT</p>
+        <h1>Keep what matters.<br><span>Find it again.</span></h1>
+        <p class="lede">Bring recordings, documents, conversations and browser history into one private, searchable archive.</p>
+        <div class="actions"><a class="button primary" href="lifenizer://connect-extension" data-lifenizer-connect>Open Lifenizer <span aria-hidden="true">↗</span></a><a class="button" href="#downloads">Get the app <span aria-hidden="true">↓</span></a></div>
+        <p class="connection" id="connection-status" role="status">Already installed? Open the app to connect your browser.</p>
       </div>
+      <aside class="archive-preview" aria-label="Sources you can bring together">
+        <div class="preview-heading"><span class="status-dot"></span> A little less scattered.</div>
+        <div class="source-row"><span class="source-icon" aria-hidden="true">◉</span><div><strong>A conversation worth keeping</strong><span>Recordings & transcripts</span></div><span class="source-tag">Audio</span></div>
+        <div class="source-row"><span class="source-icon" aria-hidden="true">▤</span><div><strong>The details you might need</strong><span>Documents & notes</span></div><span class="source-tag">Files</span></div>
+        <div class="source-row"><span class="source-icon" aria-hidden="true">↗</span><div><strong>That page from the other day</strong><span>Browser history & bookmarks</span></div><span class="source-tag">Web</span></div>
+        <div class="preview-footer">Your sources. One place to look.</div>
+      </aside>
     </section>
-
-    <section class="section">
-      <h2>One vault, many sources.</h2>
-      <p class="lede">Lifenizer normalizes life data into encrypted conversations with participants, timestamps, artifacts, searchable segments, and relation facts.</p>
+    <section class="features" aria-label="How Lifenizer works">
+      <article><span class="eyebrow">01 / COLLECT</span><h2>Start with what you have.</h2><p>Record a conversation or import files and chat exports. Add browser history with the companion extension.</p><a href="/imports.html">Explore imports →</a></article>
+      <article><span class="eyebrow">02 / REMEMBER</span><h2>Search with context.</h2><p>Find text across your archive and return to the people, sources and dates behind it.</p></article>
+      <article><span class="eyebrow">03 / KEEP CONTROL</span><h2>Private by design.</h2><p>Search runs on your device. Synced archive contents are encrypted; hosted processing requires sharing the content you choose.</p><a href="/security.html">Read the security model →</a></article>
+    </section>
+    <section class="section downloads" id="downloads">
+      <div class="section-heading"><div><p class="eyebrow">TAKE IT WITH YOU</p><h2>A home for your archive.</h2></div><p>Native apps for Android and Linux.<br>Browser extensions connect to your local app.</p></div>
+      <p class="download-status" id="download-status" role="status">Checking download availability…</p>
       <div class="grid">
-        <article class="card"><h3>Recordings</h3><p>Live sessions group speech chunks into a single participant-aware conversation.</p></article>
-        <article class="card"><h3>Documents</h3><p>Scanned PDFs, files, and OCR outputs live beside the original artifact metadata.</p></article>
-        <article class="card"><h3>Chats</h3><p>WhatsApp, Telegram, Signal, Discord, and manual text imports share the same model.</p></article>
-        <article class="card"><h3>Relations</h3><p>Detected facts become graph edges tied back to their evidence.</p></article>
+        <article class="card"><span class="platform" aria-hidden="true">↓</span><h3>Android</h3><p>Download the APK to your Android device, open it and allow installation from your browser when Android asks.</p><a class="button download" data-download="lifenizer.apk" aria-disabled="true">Checking…</a><span class="format">APK · direct installation</span></article>
+        <article class="card"><span class="platform" aria-hidden="true">›_</span><h3>Linux</h3><p>Extract the archive, then run <code>lifenizer</code> from the extracted folder on a Linux desktop.</p><a class="button download" data-download="lifenizer-linux-x64.tar.gz" aria-disabled="true">Checking…</a><span class="format">tar.gz · x64</span></article>
+        <article class="card extension-card"><span class="platform" aria-hidden="true">↗</span><h3>Browser companion</h3><p>Bring browsing context into Lifenizer. Install the extension, then open its popup to connect the app.</p><div class="extension-links"><a class="button download" data-download="lifenizer-history-sync-chromium.zip" aria-disabled="true">Checking…</a><a class="button download" data-download="lifenizer-history-sync-firefox.zip" aria-disabled="true">Checking…</a></div><details><summary>Extension installation</summary><p><strong>Chrome / Chromium:</strong> extract the ZIP, open <code>chrome://extensions</code>, enable Developer mode, choose Load unpacked and select the extracted folder.</p><p><strong>Firefox:</strong> extract the ZIP, open <code>about:debugging#/runtime/this-firefox</code>, choose Load Temporary Add-on and select <code>manifest.json</code>. This temporary installation lasts until Firefox restarts.</p></details></article>
       </div>
-    </section>
-
-    <section class="section alt band">
-      <div>
-        <h2>Local-first search.</h2>
-        <p class="lede">Synced payloads stay encrypted on the server. Devices decrypt locally, rebuild search indexes, and let you search text, people, sources, dates, and relationships.</p>
-        <div class="actions"><a class="button dark" href="imports.html">Import routes</a></div>
-      </div>
-      <img src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1400&q=80" alt="Documents and notes on a desk">
+      <noscript><p>JavaScript is needed to check which packages are available. Enable it and reload this page to download.</p></noscript>
+      <p class="download-note">Early software, still evolving. Keep a separate copy of important originals. <a href="/hosted.html">About hosted services</a></p>
     </section>
   </main>
-
-  <footer class="footer">Lifenizer Next prototype. Flutter app and ASP.NET backend live under the repository's next folder.</footer>
+  <footer class="footer"><a class="logo" href="/">Lifenizer</a><span>A little more of life, within reach.</span><nav aria-label="More information"><a href="/security.html">Security</a><a href="/privacy.html">Privacy</a></nav></footer>
 </body>
 </html>

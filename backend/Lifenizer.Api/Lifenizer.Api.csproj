@@ -21,6 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="../../landing/*" LogicalName="Lifenizer.Landing.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Lifenizer.Core\Lifenizer.Core.csproj" />
   </ItemGroup>
 
