@@ -925,8 +925,9 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
       );
       if (mounted &&
           widget.state.recordingIdentity == identity &&
-          widget.state.error == null)
+          widget.state.error == null) {
         _savedDraft = submittedDraft;
+      }
     } catch (exception) {
       if (mounted && widget.state.recordingIdentity == identity) {
         setState(
