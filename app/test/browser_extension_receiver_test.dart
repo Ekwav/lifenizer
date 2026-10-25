@@ -22,6 +22,8 @@ class _Vault extends LifenizerAppState {
 class _Store extends DocumentCredentialStore {
   final saved = <String, Map<String, dynamic>>{};
   Completer<void>? readGate;
+  Completer<void>? writeGate;
+  Completer<void>? writeStarted;
   @override
   Future<Map<String, dynamic>?> read(String identity, String source) async {
     await readGate?.future;
@@ -33,7 +35,12 @@ class _Store extends DocumentCredentialStore {
     String identity,
     String source,
     Map<String, dynamic> value,
-  ) async => saved['$identity/$source'] = jsonDecode(jsonEncode(value));
+  ) async {
+    writeStarted?.complete();
+    writeStarted = null;
+    await writeGate?.future;
+    saved['$identity/$source'] = jsonDecode(jsonEncode(value));
+  }
 }
 
 const _id = 'dQw4w9WgXcQ';
@@ -52,7 +59,10 @@ void main() {
   late HttpClient client;
   late String token;
 
-  Future<void> create({bool realMessages = false}) async {
+  Future<void> create({
+    bool realMessages = false,
+    ViewingBatchImporter? importer,
+  }) async {
     state = _Vault()
       ..session = AuthSession(
         authToken: 't',
@@ -76,10 +86,12 @@ void main() {
       store: store,
       supportedOverride: true,
       defaultPort: 0,
-      importer: (batch) async {
-        sent.add(batch);
-        return batch.entries;
-      },
+      importer:
+          importer ??
+          (batch) async {
+            sent.add(batch);
+            return batch.entries;
+          },
       messageImporter: realMessages
           ? null
           : (batch) async {
@@ -374,6 +386,116 @@ void main() {
       );
     }
   });
+
+  test(
+    'queued settings from an old vault cannot replace new pairing',
+    () async {
+      await create();
+      const nextToken = 'another-vaults-existing-extension-token';
+      final nextSession = AuthSession(
+        authToken: 'other',
+        userId: 'other-user',
+        vaultId: 'other-vault',
+        vaultSalt: 'other-salt',
+      );
+      final nextIdentity = jsonEncode([
+        state.apiBaseUrl,
+        state.rememberedEmail,
+        nextSession.userId,
+        nextSession.vaultId,
+      ]);
+      store.saved['$nextIdentity/browser-extension'] = {
+        'enabled': true,
+        'token': nextToken,
+        'port': service.port,
+      };
+      final started = Completer<void>();
+      final gate = Completer<void>();
+      store.writeStarted = started;
+      store.writeGate = gate;
+      final saving = service.setPort(service.port);
+      await started.future;
+      final rotating = service.regenerateToken();
+      state.session = nextSession;
+      state.changed();
+      gate.complete();
+      await saving;
+      await rotating;
+      await service.setEnabled(true);
+      expect(service.token, nextToken);
+      expect(
+        store.saved['$nextIdentity/browser-extension']!['token'],
+        nextToken,
+      );
+      expect((await call('GET', '/v1/ping', bearer: token)).$1, 401);
+      expect((await call('GET', '/v1/ping', bearer: nextToken)).$1, 200);
+    },
+  );
+
+  test(
+    'history stops between batches and cannot update another vault',
+    () async {
+      final started = Completer<void>();
+      final release = Completer<void>();
+      var batches = 0;
+      await create(
+        importer: (_) async {
+          batches++;
+          started.complete();
+          await release.future;
+          return 1;
+        },
+      );
+      final response = call(
+        'POST',
+        '/v1/watch-history',
+        body: payload(
+          List.generate(
+            501,
+            (index) => visit(
+              yt,
+              time: DateTime.utc(
+                2026,
+                10,
+                1,
+              ).add(Duration(seconds: index)).toIso8601String(),
+            ),
+          ),
+        ),
+      );
+      await started.future;
+      final next = AuthSession(
+        authToken: 'other',
+        userId: 'next',
+        vaultId: 'next',
+        vaultSalt: 'salt',
+      );
+      final identity = jsonEncode([
+        state.apiBaseUrl,
+        state.rememberedEmail,
+        next.userId,
+        next.vaultId,
+      ]);
+      store.saved['$identity/browser-extension'] = {
+        'enabled': true,
+        'port': service.port,
+        'token': 'next-vault-token',
+      };
+      state.session = next;
+      state.changed();
+      await service.setEnabled(true);
+      release.complete();
+      final result = await response;
+      expect(result.$1, 503);
+      expect(result.$2, {'error': 'vault-changed'});
+      expect(batches, 1);
+      expect(hooked, isEmpty);
+      expect(service.lastSync, isNull);
+      expect(service.visitsAccepted, 0);
+      expect(service.videosImported, 0);
+      expect(store.saved['$identity/browser-extension']!['lastSync'], isNull);
+    },
+  );
 
   group('endpoints', () {
     test('ping reports the unlocked state', () async {

@@ -143,6 +143,7 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
 
   Future<void> _save() async {
     if (_identity == null) return;
+    final generation = _generation;
     try {
       await _store.write(_identity!, 'browser-extension', {
         'enabled': _enabled,
@@ -153,7 +154,9 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
         'videosImported': videosImported,
       });
     } catch (_) {
-      error ??= 'Could not save the browser extension settings.';
+      if (generation == _generation) {
+        error ??= 'Could not save the browser extension settings.';
+      }
     }
   }
 
@@ -195,11 +198,14 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     if (_identity == null) {
       throw StateError('Unlock the vault before enabling the receiver.');
     }
+    final generation = _generation;
     return _lifecycle = _lifecycle.then((_) async {
+      if (_disposed || generation != _generation) return;
       _enabled = value;
       error = null;
       if (value) _token ??= _newToken();
       await _apply();
+      if (_disposed || generation != _generation) return;
       await _save();
       _notify();
     });
@@ -209,10 +215,13 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     if (value < 1 || value > 65535) {
       throw const FormatException('Enter a port between 1 and 65535.');
     }
+    final generation = _generation;
     return _lifecycle = _lifecycle.then((_) async {
+      if (_disposed || generation != _generation) return;
       _port = value;
       error = null;
       await _apply();
+      if (_disposed || generation != _generation) return;
       await _save();
       _notify();
     });
@@ -224,7 +233,9 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     if (_identity == null) {
       throw StateError('Unlock the vault before changing the token.');
     }
+    final generation = _generation;
     return _lifecycle = _lifecycle.then((_) async {
+      if (_disposed || generation != _generation) return;
       _token = _newToken();
       await _save();
       _notify();
@@ -419,10 +430,17 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
         return await _respond(request, 503, {'error': 'busy'}, origin: origin);
       }
       final imported = messageBatch == null
-          ? await _import(pending)
+          ? await _import(pending, generation)
           : messageBatch.conversations.isEmpty
           ? 0
           : await _messageImporter(messageBatch);
+      if (!state.isAuthenticated ||
+          _identity != identity ||
+          _generation != generation) {
+        return await _respond(request, 503, {
+          'error': 'vault-changed',
+        }, origin: origin);
+      }
       if (imported == null) {
         return await _respond(request, 503, {
           'error': 'import-failed',
@@ -641,7 +659,9 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     return out;
   }
 
-  Future<int?> _import(List<_Pending> pending) async {
+  Future<int?> _import(List<_Pending> pending, int generation) async {
+    bool current() =>
+        !_disposed && state.isAuthenticated && _generation == generation;
     final dayThreads = pending
         .where((p) => p.dayOnly)
         .map((p) => '${p.visit.platform}:${p.visit.id}')
@@ -650,12 +670,14 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
       if (!conversation.isLoaded &&
           dayThreads.contains(conversation.sourceThreadId)) {
         await state.loadConversation(conversation.id);
+        if (!current()) return null;
       }
     }
     var imported = 0;
     for (final batch in buildViewingBatches(_dedupe(pending))) {
+      if (!current()) return null;
       final added = await _importer(batch);
-      if (added == null) return null;
+      if (added == null || !current()) return null;
       imported += added;
     }
     return imported;
