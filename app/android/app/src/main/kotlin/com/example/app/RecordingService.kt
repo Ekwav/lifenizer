@@ -88,17 +88,21 @@ class RecordingService : Service() {
             val completion = onStarted
             onStarted = null
             val locationReady = CountDownLatch(if (captureLocation) 1 else 0)
-            PendingRecordings.worker.execute { capture(scope, id, startedAt, completion, locationReady) }
-            if (captureLocation) RecordingLocation.current(this) { location ->
-                if (location != null) PendingRecordings.metadataWorker.execute {
-                    try { PendingRecordings.saveLocation(this, scope, id, location) }
-                    catch (_: Exception) { }
-                    finally { locationReady.countDown() }
-                } else locationReady.countDown()
-                if (Build.VERSION.SDK_INT >= 29 && activeId == id) {
-                    runCatching { startForeground(42, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE) }
+            val captureStarted: (Exception?) -> Unit = { error ->
+                completion?.invoke(error)
+                // The acknowledgement runs only after the capture file is durable and the mic started.
+                if (error == null && captureLocation) RecordingLocation.current(this) { location ->
+                    if (location != null) PendingRecordings.metadataWorker.execute {
+                        try { PendingRecordings.saveLocation(this, scope, id, location) }
+                        catch (_: Exception) { }
+                        finally { locationReady.countDown() }
+                    } else locationReady.countDown()
+                    if (Build.VERSION.SDK_INT >= 29 && activeId == id) {
+                        runCatching { startForeground(42, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE) }
+                    }
                 }
             }
+            PendingRecordings.worker.execute { capture(scope, id, startedAt, captureStarted, locationReady) }
         } catch (error: Exception) {
             onStarted?.invoke(error)
             onStarted = null
