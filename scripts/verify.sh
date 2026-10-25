@@ -18,6 +18,12 @@ fi
 dotnet restore backend/LifenizerNext.slnx
 dotnet test backend/LifenizerNext.slnx -c Release --no-restore
 (
+  cd integrations/browser-extension
+  npm ci
+  npm test
+  npm run build
+)
+(
   cd app
   flutter pub get
   flutter analyze

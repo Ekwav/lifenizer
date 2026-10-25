@@ -11,6 +11,38 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  extension:
+    name: Browser extension
+    runs-on: coflnet-devserver
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: integrations/browser-extension/package-lock.json
+
+      - name: Install ZIP tool if needed
+        run: |
+          if ! command -v zip >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends zip
+          fi
+
+      - name: Test and package extensions
+        working-directory: integrations/browser-extension
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-extension-zips
+          path: integrations/browser-extension/dist/*.zip
+
   backend:
     name: Backend (.NET)
     runs-on: coflnet-devserver
@@ -135,7 +167,7 @@ jobs:
 
   container:
     name: Cluster image
-    needs: [backend, flutter, e2e]
+    needs: [backend, flutter, e2e, extension]
     if: github.repository == 'Coflnet/Lifenizer' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
     permissions:
       contents: read
