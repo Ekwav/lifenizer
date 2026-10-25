@@ -24,7 +24,7 @@ The API image includes `poppler-utils`, `tesseract-ocr` and German/English OCR l
 
 References: [MailKit TLS options](https://mimekit.net/docs/html/T_MailKit_Security_SecureSocketOptions.htm), [UIDVALIDITY](https://mimekit.net/docs/html/P_MailKit_IMailFolder_UidValidity.htm), [MimeParser](https://mimekit.net/docs/html/T_MimeKit_MimeParser.htm).
 
-Attachment indexing shares a two-minute, 32-attempt, four-PDF and 8 MiB text
+Attachment indexing shares a two-minute, 32-attempt and 8 MiB text
 budget per import response. Office ZIPs have the same entry, expansion, path and
 CRC protections as Paperless ZIP imports. Only their document XML is read, with
 DTDs and external entity resolution disabled. General ZIP attachments,

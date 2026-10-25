@@ -105,19 +105,23 @@ public sealed class EmailAttachmentTests
     }
 
     [Test]
-    public void AggregateTextAndPdfAttemptLimitsDoNotDiscardOtherAttachmentTypes()
+    public void AggregateTextLimitDoesNotDiscardTheEmailBody()
     {
         var text = Encoding.UTF8.GetBytes(new string('x', BoundedAttachmentText.MaxTextChars));
         using var first = Message(Part("a.txt", "text/plain", text), Part("b.txt", "text/plain", text), Part("c.txt", "text/plain", [1]));
         var full = Normalize(first);
         Assert.That(full.Segments, Has.Count.EqualTo(3));
         Assert.That(full.Metadata!["attachment-2-indexing"], Does.StartWith("skipped:").And.Contain("budget"));
-        using var second = Message(Enumerable.Range(0, 5).Select(i => Part($"{i}.pdf", "application/pdf", "invalid"u8.ToArray()))
-            .Append(Part("ok.txt", "text/plain", "still indexed"u8.ToArray())).ToArray());
-        var limited = Normalize(second);
-        Assert.That(limited.Metadata!["attachment-3-indexing"], Does.StartWith("failed:"));
-        Assert.That(limited.Metadata["attachment-4-indexing"], Does.StartWith("skipped:").And.Contain("budget"));
-        Assert.That(limited.Metadata["attachment-5-indexing"], Is.EqualTo("indexed"));
+    }
+
+    [Test]
+    public void OrdinaryPdfPagesCanIndexMoreThanFourAttachmentsWithinTheSharedBudget()
+    {
+        var pdf = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "MockData", "documents", "text.pdf"));
+        using var message = Message(Enumerable.Range(0, 5).Select(i => Part($"{i}.pdf", "application/pdf", pdf)).ToArray());
+        var result = Normalize(message);
+        Assert.That(result.Segments, Has.Count.EqualTo(6));
+        Assert.That(result.Metadata!["attachment-4-indexing"], Is.EqualTo("indexed"));
     }
 
     [Test]

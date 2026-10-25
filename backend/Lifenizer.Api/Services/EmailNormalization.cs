@@ -20,7 +20,6 @@ public static class EmailNormalization
         var conversations = new List<NormalizedConversation>();
         var budget = Stopwatch.StartNew();
         var attempts = 0;
-        var pdfAttempts = 0;
         var indexedChars = 0;
         foreach (var (message, extraMetadata) in messages)
         {
@@ -60,13 +59,12 @@ public static class EmailNormalization
                     metadata[key] = "skipped: unsupported attachment type";
                     continue;
                 }
-                if (attempts >= 32 || (kind == "pdf" && pdfAttempts >= 4) || indexedChars >= 8 * 1024 * 1024 || budget.Elapsed >= TimeSpan.FromMinutes(2))
+                if (attempts >= 32 || indexedChars >= 8 * 1024 * 1024 || budget.Elapsed >= TimeSpan.FromMinutes(2))
                 {
                     metadata[key] = "skipped: email attachment indexing budget exceeded";
                     continue;
                 }
                 attempts++;
-                if (kind == "pdf") pdfAttempts++;
                 try
                 {
                     using var decoded = new BoundedAttachmentStream();
