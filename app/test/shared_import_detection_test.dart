@@ -24,6 +24,34 @@ List<int> _zip(Map<String, String> files) {
 }
 
 void main() {
+  test(
+    'Paperless ZIP detection uses document names and preserves other sources',
+    () {
+      for (final name in [
+        'manifest.json',
+        'export/documents.json',
+        'documents/invoice.pdf',
+        'documents/scan.png',
+      ]) {
+        expect(isPaperlessExportZip(_zip({name: 'not inflated'})), isTrue);
+      }
+      for (final name in [
+        'Takeout/history/watch-history.json',
+        'Video Browsing History.txt',
+        'package/messages/123/messages.json',
+      ]) {
+        expect(
+          isPaperlessExportZip(
+            _zip({name: '{}', 'attachment.pdf': 'document'}),
+          ),
+          isFalse,
+        );
+      }
+      expect(isPaperlessExportZip(_zip({'chat.txt': 'chat'})), isFalse);
+      expect(isPaperlessExportZip([1, 2, 3]), isFalse);
+    },
+  );
+
   group('detectSharedImportSource', () {
     test('YouTube Takeout JSON, even with a generic file name', () {
       expect(

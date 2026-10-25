@@ -7,6 +7,7 @@ import 'package:app/app_state.dart';
 import 'package:app/services/local_vault_store.dart';
 import 'package:app/services/shared_import_source.dart';
 import 'package:app/services/export_file_reader.dart';
+import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -91,6 +92,39 @@ class _ImportServer {
 }
 
 void main() {
+  test(
+    'shared Paperless ZIPs send original bytes for server parsing',
+    () async {
+      final server = _ImportServer()
+        ..normalizedOverride = {
+          'source': 'paperless-export',
+          'participants': [],
+          'conversations': [],
+        };
+      final state = LifenizerAppState();
+      addTearDown(state.dispose);
+      await state.debugAuthenticateForTesting(
+        LifenizerApiClient(
+          baseUrl: 'https://vault.example.test',
+          client: MockClient(server.handle),
+        ),
+      );
+      for (final name in ['manifest.json', 'documents/invoice.pdf']) {
+        final contents = utf8.encode('content left compressed on the client');
+        final archive = Archive()
+          ..addFile(ArchiveFile(name, contents.length, contents));
+        final bytes = ZipEncoder().encode(archive);
+        await state.importSharedPayload(fileName: 'download.zip', bytes: bytes);
+        expect(state.error, isNull);
+        expect(server.importSources.last, 'paperless-export');
+        expect(server.lastImport!['payloadBase64'], base64Encode(bytes));
+        expect(server.lastImport!['mimeType'], 'application/zip');
+        expect(server.lastImport!['originalFileName'], 'download.zip');
+        expect(server.lastImport!['text'], isNull);
+      }
+    },
+  );
+
   test(
     'export reader rejects declared oversize before reading and stops unknown-size streams at the bound',
     () async {

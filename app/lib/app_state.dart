@@ -1378,6 +1378,20 @@ class LifenizerAppState extends ChangeNotifier {
         (normalizedName.toLowerCase().endsWith('.zip') ||
             normalizedMime.contains('zip') ||
             (bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4b))) {
+      if (isPaperlessExportZip(bytes)) {
+        if (bytes.length > 25 * 1024 * 1024) {
+          reportError('Choose a Paperless ZIP of at most 25 MiB.');
+          return;
+        }
+        return importSource(
+          source: 'paperless-export',
+          title: normalizedName.isEmpty ? 'Paperless export' : normalizedName,
+          originalFileName: normalizedName.isEmpty ? null : normalizedName,
+          mimeType: 'application/zip',
+          payloadBase64: base64Encode(bytes),
+          metadata: {...metadata, 'shared': 'true'},
+        );
+      }
       final entry = selectWatchHistoryZipEntry(bytes, fileNameHints: hints);
       if (entry != null) {
         bytes = entry.bytes;

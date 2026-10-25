@@ -10,11 +10,42 @@ import 'package:app/widgets/paperless_import_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sembast/sembast.dart';
 
 class _Database extends Fake implements Database {}
+
+class _ZipPicker extends FilePickerPlatform {
+  int size = 3;
+  @override
+  Future<FilePickerResult?> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    int compressionQuality = 0,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+    bool cancelUploadOnWindowBlur = true,
+  }) async {
+    expect(allowedExtensions, ['zip']);
+    expect(withReadStream, isTrue);
+    return FilePickerResult([
+      PlatformFile(
+        name: 'paperless.zip',
+        size: size,
+        readStream: Stream.value([1, 2, 3]),
+      ),
+    ]);
+  }
+}
 
 class _VaultStore extends LocalVaultStore {
   _VaultStore() : super(_Database());
@@ -59,6 +90,7 @@ class _Fixture {
   int settingsRequests = 0;
   final tokens = <String>[];
   final directRequests = <http.Request>[];
+  final zipImports = <Map<String, dynamic>>[];
 
   Future<void> open() async {
     final client = MockClient((request) async {
@@ -102,6 +134,15 @@ class _Fixture {
           importFail ? 400 : 200,
         );
       }
+      if (request.url.path == '/api/imports/paperless-export') {
+        zipImports.add(jsonDecode(request.body) as Map<String, dynamic>);
+        return http.Response(
+          importFail
+              ? '{}'
+              : '{"source":"paperless-export","conversations":[],"participants":[]}',
+          importFail ? 400 : 200,
+        );
+      }
       return http.Response('{"cursor":0,"envelopes":[]}', 200);
     });
     state = LifenizerAppState(
@@ -134,6 +175,74 @@ class _Fixture {
 }
 
 void main() {
+  testWidgets(
+    'ZIP import needs no server or token and preserves connection inputs on retry',
+    (tester) async {
+      final f = _Fixture()
+        ..configured = false
+        ..settingsFail = true
+        ..importFail = true;
+      await tester.runAsync(f.open);
+      addTearDown(f.close);
+      final previousPicker = FilePickerPlatform.instance;
+      final picker = _ZipPicker();
+      FilePickerPlatform.instance = picker;
+      addTearDown(() => FilePickerPlatform.instance = previousPicker);
+      await tester.pumpWidget(f.widget);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('paperless-address')),
+        'http://127.0.0.1:8002',
+      );
+      await tester.enterText(
+        find.byKey(const Key('paperless-token')),
+        'keep-token',
+      );
+      Future<void> importZip() async {
+        final action = tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Import Paperless ZIP'),
+            )
+            .onPressed!;
+        await tester.runAsync(
+          () async => await (action as Future<void> Function())(),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await importZip();
+      expect(f.state.error, isNotNull);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('paperless-token')))
+            .controller!
+            .text,
+        'keep-token',
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('paperless-address')))
+            .controller!
+            .text,
+        'http://127.0.0.1:8002',
+      );
+      f.importFail = false;
+      await importZip();
+      expect(f.state.error, isNull);
+      expect(f.zipImports, hasLength(2));
+      expect(f.zipImports.last['payloadBase64'], base64Encode([1, 2, 3]));
+      expect(f.zipImports.last['originalFileName'], 'paperless.zip');
+      expect(f.zipImports.last['metadata'], isNot(contains('token')));
+      expect(f.tokens, isEmpty);
+      picker.size = 25 * 1024 * 1024 + 1;
+      await importZip();
+      expect(find.text('Choose an export of at most 25 MiB.'), findsOneWidget);
+      expect(f.zipImports, hasLength(2));
+      await tester.pumpWidget(const SizedBox.shrink());
+      f.close();
+    },
+  );
+
   testWidgets(
     'explains tokens and opens the configured installation in an external browser',
     (tester) async {

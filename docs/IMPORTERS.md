@@ -343,6 +343,14 @@ store, like the document folder watch.
 
 ### paperless
 
+For an exported library, open **Imports → Paperless → Import Paperless ZIP**.
+Choose an official Paperless backup ZIP (including its manifest and extracted
+document text) or a ZIP of documents, up to 25 MiB. This works without a Paperless
+address or API token. You can also drop the ZIP onto Imports or use its top file
+picker; document ZIPs are detected automatically, while Discord and watch-history
+exports retain their existing routes. ZIP entries remain compressed on the client
+and are parsed on the server. Imported text is encrypted into your vault.
+
 Open **Imports → Paperless**. In the installed app, enter your Paperless address.
 Desktop setup defaults to `http://127.0.0.1:8002` when no server address is configured;
 change it if Paperless runs elsewhere. On a phone, enter the address reachable

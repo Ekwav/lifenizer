@@ -6,8 +6,10 @@ Future<Uint8List> readExportBytes(
   PlatformFile file, {
   int maxBytes = 64 * 1024 * 1024,
 }) async {
+  final sizeError =
+      'Choose an export of at most ${maxBytes ~/ (1024 * 1024)} MiB.';
   if (file.size > maxBytes) {
-    throw const FormatException('Choose an export of at most 64 MiB.');
+    throw FormatException(sizeError);
   }
   final stream =
       file.readStream ??
@@ -18,7 +20,7 @@ Future<Uint8List> readExportBytes(
   final bytes = BytesBuilder(copy: false);
   await for (final chunk in stream) {
     if (bytes.length + chunk.length > maxBytes) {
-      throw const FormatException('Choose an export of at most 64 MiB.');
+      throw FormatException(sizeError);
     }
     bytes.add(chunk);
   }

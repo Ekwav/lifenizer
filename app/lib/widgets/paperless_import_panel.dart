@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../services/export_file_reader.dart';
 import '../services/source_links.dart';
 import '../services/paperless_client.dart';
 
@@ -107,6 +110,39 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
     }
   }
 
+  Future<void> _importZip() async {
+    setState(() => _error = null);
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['zip'],
+        withData: false,
+        withReadStream: true,
+      );
+      final file = result?.files.single;
+      if (file == null || !mounted) return;
+      final bytes = await readExportBytes(file, maxBytes: 25 * 1024 * 1024);
+      if (!mounted || !widget.state.isAuthenticated || widget.state.busy) {
+        return;
+      }
+      await widget.state.importSource(
+        source: 'paperless-export',
+        title: file.name,
+        originalFileName: file.name,
+        mimeType: 'application/zip',
+        payloadBase64: base64Encode(bytes),
+      );
+    } on FormatException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = 'Could not read this ZIP. Select it again to retry.',
+        );
+      }
+    }
+  }
+
   Future<void> _connect() async {
     setState(() {
       _editing = true;
@@ -151,6 +187,14 @@ class _PaperlessImportPanelState extends State<PaperlessImportPanel> {
         key: const Key('paperless-import-panel'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const Text(
+            'Have a Paperless export? Import its ZIP without an address or API token. Choose a Paperless backup or a ZIP of documents, up to 25 MiB.',
+          ),
+          OutlinedButton.icon(
+            onPressed: enabled ? _importZip : null,
+            icon: const Icon(Icons.folder_zip_outlined),
+            label: const Text('Import Paperless ZIP'),
+          ),
           if (_loading) const Text('Loading Paperless setup…'),
           if (_error != null)
             Text(
