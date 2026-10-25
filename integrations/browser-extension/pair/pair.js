@@ -9,6 +9,20 @@ function stop() {
   stream?.getTracks().forEach(track => track.stop()); stream = null;
   $('preview').pause(); $('preview').srcObject = null; $('preview').hidden = true;
 }
+async function permission() {
+  try {
+    const host = {origins:['http://127.0.0.1/*']};
+    if (!await ext.permissions.contains(host) && !await ext.permissions.request(host)) {
+      say('Local app access was denied. Choose Connect again and allow access to 127.0.0.1 to retry.'); return false;
+    }
+  } catch (_) { say('Local app permission could not be requested. Reopen this extension page and retry Connect.'); return false; }
+  let access;
+  try { access = await navigator.permissions?.query({name:'loopback-network'}); } catch (_) { /* older browsers do not expose this permission */ }
+  if (access?.state === 'denied') {
+    say('Your browser blocked access to device apps and services. Allow access in this page’s browser permissions, then choose Connect again.'); return false;
+  }
+  return true;
+}
 async function consent() {
   const {settings = {}, visits = [], messages = []} = await ext.storage.local.get(['settings','visits','messages']);
   if ((settings.token || visits.some(v => !v.sent) || messages.some(m => !m.sent)) && !confirm('Replace the browser connection? Any queued imports, including private messages, may be delivered to the vault you unlock in Lifenizer. Continue only if this is the intended vault.')) return false;
@@ -20,6 +34,7 @@ async function connect(pair) {
   const attempt = async () => {
     if (run !== generation) return;
     try {
+      say('Waiting for Lifenizer. Unlock the intended vault and approve the connection in Lifenizer if asked. If your browser asks to access device apps and services, choose Allow.');
       const connection = await P.exchange(pair, fetch);
       if (run !== generation) return;
       const saved = await ext.runtime.sendMessage({type:'lifenizer-pair-save',connection});
@@ -30,7 +45,7 @@ async function connect(pair) {
       if (['expired','invalid-response','sync-running','save-failed'].includes(error.message) || Date.now() >= until) {
         stop(); say(error.message === 'sync-running' ? 'Sync is running. Wait for it to finish, then create a new pairing code and retry.' : 'Pairing ended or the code expired. Create a new QR code in Lifenizer, or choose Open Lifenizer and connect again.'); return;
       }
-      say('Waiting for Lifenizer. Unlock the intended vault and enable the browser receiver. Cancel to stop.');
+      say('Waiting for Lifenizer. Unlock the intended vault, approve the connection in Lifenizer if asked, and enable the browser receiver. Allow any browser prompt for device apps and services. If blocked, allow access in this page’s browser permissions and retry. Cancel to stop.');
       timer = setTimeout(attempt, 1000);
     }
   };
@@ -42,9 +57,13 @@ function stage(value) {
   stop(); staged = pair; $('port').value = pair.port; $('accept').hidden = false;
   say('Pairing code ready. Unlock the intended vault, then confirm Connect using scanned code.'); return true;
 }
-$('accept').onclick = async () => { if (staged && await consent()) connect(staged); };
+$('accept').onclick = async () => {
+  const pair = staged, run = generation;
+  if (pair && await permission() && run === generation && await consent() && run === generation) connect(pair);
+};
 $('open').onclick = async () => {
-  if (!$('port').reportValidity() || !await consent()) return;
+  const run = generation;
+  if (!$('port').reportValidity() || !await permission() || run !== generation || !await consent() || run !== generation) return;
   stop();
   const code = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
   const port = Number($('port').value);
