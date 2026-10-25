@@ -236,10 +236,7 @@ void main() {
     expect(find.text('WhatsApp Web extension setup'), findsOneWidget);
     expect(find.textContaining('Load unpacked'), findsOneWidget);
     expect(find.textContaining('only newly rendered messages'), findsOneWidget);
-    expect(
-      find.text('Open extension guide (GitHub access required)'),
-      findsOneWidget,
-    );
+    expect(find.text('Get browser extension'), findsOneWidget);
     await tester.tap(find.byTooltip('Close setup'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(search);

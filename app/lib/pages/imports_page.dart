@@ -543,8 +543,8 @@ class _ImportsPageState extends State<ImportsPage> {
     [
       if (!_desktop)
         'Continue on a computer running the Lifenizer desktop app. Browser and mobile apps cannot accept the extension connection.',
-      'Get the integrations/browser-extension folder from the source repository linked below (GitHub access required). In desktop Chrome / Edge, open the Extensions page, enable Developer mode, choose Load unpacked and select that folder. In Firefox 140+, open about:debugging, choose This Firefox → Load Temporary Add-on and select its manifest.json. Temporary Firefox installs disappear after restart.',
-      '${_desktop ? 'Enable the local connection below' : 'In the desktop app, open Imports → Browser extension → $title and enable the local connection'}. In extension Settings, enter the desktop app’s port and token, then Test connection. Keep the desktop app open and its vault unlocked.',
+      'Download the browser extension from lifenizer.coflnet.com. In desktop Chrome / Edge, extract its ZIP, open Extensions, enable Developer mode and choose Load unpacked. In Firefox 140+, open about:debugging → This Firefox → Load Temporary Add-on and select its ZIP. Temporary Firefox installs disappear after restart.',
+      '${_desktop ? 'Choose Connect browser below' : 'On a computer, open the Lifenizer website and choose Connect browser'}. Confirm the connection in the desktop app. You can also choose Show QR code here and Scan QR code in the extension. No port or token copying is needed. Keep the desktop app open and its vault unlocked.',
       if (platform == 'youtube' || platform == 'tiktok')
         'In extension Settings, set the expected $title account ID or @handle, then Save. Sign in to that account in your desktop browser. In the extension popup, choose $title and Sync now. Use Retry delivery to resend queued imports after unlocking or reopening the desktop app.'
       else
@@ -556,16 +556,16 @@ class _ImportsPageState extends State<ImportsPage> {
         TextButton.icon(
           onPressed: () async {
             final opened = await openExternalLink(
-              'https://github.com/Coflnet/Lifenizer/blob/main/integrations/browser-extension/README.md#install-and-pair',
+              'https://lifenizer.coflnet.com/#extensions',
             );
             if (!opened && mounted) {
               widget.state.reportError(
-                'Could not open the extension guide. Check your browser and try again.',
+                'Could not open the download page. Check your browser and try again.',
               );
             }
           },
           icon: const Icon(Icons.open_in_new),
-          label: const Text('Open extension guide (GitHub access required)'),
+          label: const Text('Get browser extension'),
         ),
         if (!_desktop)
           const Text(
