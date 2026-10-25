@@ -50,6 +50,8 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
   (String?, bool)? _lastMessage;
   bool _messageDismissed = false;
   Timer? _messageTimer;
+  CaptureDraft? _captureDraft;
+  String? _captureIdentity;
 
   @override
   void initState() {
@@ -62,6 +64,7 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     _messageTimer?.cancel();
+    _captureDraft?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     QuickActionService.instance.removeListener(_receiveAction);
     super.dispose();
@@ -171,6 +174,12 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final identity = widget.state.recordingIdentity;
+    if (_captureIdentity != identity) {
+      _captureDraft?.dispose();
+      _captureDraft = null;
+      _captureIdentity = identity;
+    }
     final selectedPage = AppPage.values[_selectedPageIndex];
     final message =
         widget.state.error ?? widget.state.syncError ?? widget.state.status;
@@ -344,7 +353,11 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
         actionRevision: _searchRevision,
       ),
       AppPage.insights => InsightsPage(state: state),
-      AppPage.capture => CapturePage(state: state),
+      AppPage.capture => CapturePage(
+        key: ValueKey(state.recordingIdentity),
+        state: state,
+        draft: _captureDraft ??= CaptureDraft(),
+      ),
       AppPage.imports => ImportsPage(state: state),
       AppPage.participants => ParticipantsPage(state: state),
       AppPage.relations => RelationsPage(state: state),

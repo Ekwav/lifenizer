@@ -2,43 +2,88 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../services/export_file_reader.dart';
 import '../widgets/microphone_panel.dart';
 import '../widgets/participant_picker.dart';
 import 'page_frame.dart';
 
 class CapturePage extends StatefulWidget {
-  const CapturePage({required this.state, super.key});
+  const CapturePage({required this.state, this.draft, super.key});
 
   final LifenizerAppState state;
+  final CaptureDraft? draft;
 
   @override
   State<CapturePage> createState() => _CapturePageState();
 }
 
-class _CapturePageState extends State<CapturePage> {
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _participantsController = TextEditingController();
-  final TextEditingController _textController = TextEditingController();
-  final TextEditingController _recordingTitleController = TextEditingController(
+class CaptureDraft {
+  final TextEditingController titleController = TextEditingController();
+  final TextEditingController participantsController = TextEditingController();
+  final TextEditingController textController = TextEditingController();
+  final TextEditingController recordingTitleController = TextEditingController(
     text: 'Live session',
   );
-  final TextEditingController _recordingParticipantsController =
+  final TextEditingController recordingParticipantsController =
       TextEditingController();
-  final TextEditingController _segmentController = TextEditingController();
-  final List<String> _segments = [];
-  List<String> _participantIds = [];
-  List<String> _recordingParticipantIds = [];
-  bool _recording = false;
+  final TextEditingController segmentController = TextEditingController();
+  final List<String> segments = [];
+  List<String> participantIds = [];
+  List<String> recordingParticipantIds = [];
+  bool recording = false;
+
+  void dispose() {
+    titleController.dispose();
+    participantsController.dispose();
+    textController.dispose();
+    recordingTitleController.dispose();
+    recordingParticipantsController.dispose();
+    segmentController.dispose();
+  }
+}
+
+class _CapturePageState extends State<CapturePage> {
+  late final CaptureDraft draft = widget.draft ?? CaptureDraft();
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _participantsController.dispose();
-    _textController.dispose();
-    _recordingTitleController.dispose();
-    _recordingParticipantsController.dispose();
-    _segmentController.dispose();
+    if (widget.draft == null) draft.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    final identity = widget.state.recordingIdentity;
+    if (identity == null) return;
+    try {
+      final result = await FilePicker.pickFiles(
+        withData: false,
+        withReadStream: true,
+      );
+      final file = result?.files.single;
+      if (file == null ||
+          !mounted ||
+          widget.state.recordingIdentity != identity)
+        return;
+      final bytes = await readExportBytes(file);
+      if (!mounted || widget.state.recordingIdentity != identity) return;
+      if (widget.state.busy) {
+        widget.state.reportError(
+          'Wait for the current operation, then select the file again.',
+        );
+        return;
+      }
+      await widget.state.importSharedPayload(
+        fileName: file.name,
+        bytes: bytes,
+        mimeType: file.extension?.toLowerCase() == 'pdf'
+            ? 'application/pdf'
+            : null,
+      );
+    } catch (failure) {
+      if (mounted && widget.state.recordingIdentity == identity) {
+        widget.state.reportError('Could not import the file: $failure');
+      }
+    }
   }
 
   @override
@@ -51,86 +96,107 @@ class _CapturePageState extends State<CapturePage> {
           final children = [
             MicrophonePanel(state: widget.state),
             _ManualTextPanel(
-              titleController: _titleController,
+              enabled: !widget.state.busy,
+              titleController: draft.titleController,
               participantsField: ParticipantPicker(
                 state: widget.state,
-                controller: _participantsController,
-                selectedIds: _participantIds,
-                onChanged: (ids) => setState(() => _participantIds = ids),
+                controller: draft.participantsController,
+                selectedIds: draft.participantIds,
+                onChanged: (ids) => setState(() => draft.participantIds = ids),
                 enabled: !widget.state.busy,
                 decoration: const InputDecoration(
                   labelText: 'Participants',
                   border: OutlineInputBorder(),
                 ),
               ),
-              textController: _textController,
+              textController: draft.textController,
               onSubmit: widget.state.busy
                   ? null
-                  : () => widget.state.addManualText(
-                      title: _titleController.text,
-                      participantNames: _participantsController.text,
-                      participantIds: _participantIds,
-                      text: _textController.text,
-                    ),
+                  : () async {
+                      if (draft.textController.text.trim().isEmpty) {
+                        widget.state.reportError('Enter some text to save.');
+                        return;
+                      }
+                      final session = widget.state.session;
+                      await widget.state.addManualText(
+                        title: draft.titleController.text,
+                        participantNames: draft.participantsController.text,
+                        participantIds: draft.participantIds,
+                        text: draft.textController.text,
+                      );
+                      if (identical(session, widget.state.session) &&
+                          widget.state.error == null) {
+                        draft.titleController.clear();
+                        draft.participantsController.clear();
+                        draft.textController.clear();
+                        draft.participantIds = [];
+                        if (mounted) setState(() {});
+                      }
+                    },
             ),
             _RecordingPanel(
-              recording: _recording,
-              titleController: _recordingTitleController,
+              enabled: !widget.state.busy,
+              recording: draft.recording,
+              titleController: draft.recordingTitleController,
               participantsField: ParticipantPicker(
                 state: widget.state,
-                controller: _recordingParticipantsController,
-                selectedIds: _recordingParticipantIds,
+                controller: draft.recordingParticipantsController,
+                selectedIds: draft.recordingParticipantIds,
                 onChanged: (ids) =>
-                    setState(() => _recordingParticipantIds = ids),
+                    setState(() => draft.recordingParticipantIds = ids),
                 enabled: !widget.state.busy,
                 decoration: const InputDecoration(
                   labelText: 'Participants',
                   border: OutlineInputBorder(),
                 ),
               ),
-              segmentController: _segmentController,
-              segments: _segments,
+              segmentController: draft.segmentController,
+              segments: draft.segments,
               onStart: () => setState(() {
-                _segments.clear();
-                _recording = true;
+                draft.segments.clear();
+                draft.recording = true;
               }),
               onAddSegment: () => setState(() {
-                if (_segmentController.text.trim().isNotEmpty) {
-                  _segments.add(_segmentController.text.trim());
-                  _segmentController.clear();
+                if (draft.segmentController.text.trim().isNotEmpty) {
+                  draft.segments.add(draft.segmentController.text.trim());
+                  draft.segmentController.clear();
                 }
               }),
               onStop: widget.state.busy
                   ? null
                   : () async {
-                      await widget.state.addRecordingConversation(
-                        title: _recordingTitleController.text,
-                        participantNames: _recordingParticipantsController.text,
-                        participantIds: _recordingParticipantIds,
-                        segmentTexts: _segments,
-                      );
-                      if (mounted && widget.state.error == null) {
-                        setState(() => _recording = false);
-                      }
-                    },
-            ),
-            _FilePanel(
-              onPick: widget.state.busy
-                  ? null
-                  : () async {
-                      final result = await FilePicker.pickFiles(withData: true);
-                      final file = result?.files.single;
-                      if (file != null) {
-                        await widget.state.importSharedPayload(
-                          fileName: file.name,
-                          bytes: file.bytes,
-                          mimeType: file.extension == 'pdf'
-                              ? 'application/pdf'
-                              : null,
+                      final segments = [
+                        ...draft.segments,
+                        if (draft.segmentController.text.trim().isNotEmpty)
+                          draft.segmentController.text.trim(),
+                      ];
+                      if (segments.isEmpty) {
+                        widget.state.reportError(
+                          'Add a note before saving the session.',
                         );
+                        return;
+                      }
+                      final session = widget.state.session;
+                      await widget.state.addRecordingConversation(
+                        title: draft.recordingTitleController.text,
+                        participantNames:
+                            draft.recordingParticipantsController.text,
+                        participantIds: draft.recordingParticipantIds,
+                        segmentTexts: segments,
+                      );
+                      if (identical(session, widget.state.session) &&
+                          widget.state.error == null) {
+                        draft.recording = false;
+                        draft.segments.clear();
+                        draft.segmentController.clear();
+                        draft.recordingTitleController.text = 'Live session';
+                        draft.recordingParticipantsController.clear();
+                        draft.recordingParticipantIds = [];
+                        if (mounted) setState(() {});
                       }
                     },
             ),
+            _FilePanel(onPick: widget.state.busy ? null : _pickFile),
           ];
           if (twoColumns) {
             return Wrap(
@@ -159,12 +225,14 @@ class _CapturePageState extends State<CapturePage> {
 
 class _ManualTextPanel extends StatelessWidget {
   const _ManualTextPanel({
+    required this.enabled,
     required this.titleController,
     required this.participantsField,
     required this.textController,
     required this.onSubmit,
   });
 
+  final bool enabled;
   final TextEditingController titleController;
   final Widget participantsField;
   final TextEditingController textController;
@@ -181,6 +249,7 @@ class _ManualTextPanel extends StatelessWidget {
             Text('Manual text', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
             TextField(
+              enabled: enabled,
               controller: titleController,
               decoration: const InputDecoration(
                 labelText: 'Title',
@@ -191,6 +260,7 @@ class _ManualTextPanel extends StatelessWidget {
             participantsField,
             const SizedBox(height: 8),
             TextField(
+              enabled: enabled,
               controller: textController,
               minLines: 5,
               maxLines: 8,
@@ -216,6 +286,7 @@ class _ManualTextPanel extends StatelessWidget {
 class _RecordingPanel extends StatelessWidget {
   const _RecordingPanel({
     required this.recording,
+    required this.enabled,
     required this.titleController,
     required this.participantsField,
     required this.segmentController,
@@ -226,6 +297,7 @@ class _RecordingPanel extends StatelessWidget {
   });
 
   final bool recording;
+  final bool enabled;
   final TextEditingController titleController;
   final Widget participantsField;
   final TextEditingController segmentController;
@@ -256,6 +328,7 @@ class _RecordingPanel extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             TextField(
+              enabled: enabled,
               controller: titleController,
               decoration: const InputDecoration(
                 labelText: 'Session title',
@@ -267,6 +340,7 @@ class _RecordingPanel extends StatelessWidget {
             const SizedBox(height: 8),
             if (recording) ...[
               TextField(
+                enabled: enabled,
                 controller: segmentController,
                 decoration: const InputDecoration(
                   labelText: 'Typed segment',
@@ -275,7 +349,7 @@ class _RecordingPanel extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
-                onPressed: onAddSegment,
+                onPressed: enabled ? onAddSegment : null,
                 icon: const Icon(Icons.playlist_add_outlined),
                 label: const Text('Add segment'),
               ),
@@ -289,7 +363,7 @@ class _RecordingPanel extends StatelessWidget {
               ),
             ] else
               FilledButton.icon(
-                onPressed: onStart,
+                onPressed: enabled ? onStart : null,
                 icon: const Icon(Icons.edit_note_outlined),
                 label: const Text('Start session'),
               ),

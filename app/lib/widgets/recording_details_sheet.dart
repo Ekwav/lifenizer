@@ -6,6 +6,28 @@ import '../services/recording_suggestions.dart';
 import '../services/storage_location.dart';
 import 'recording_location_fields.dart';
 
+Future<bool> confirmRecordingDiscard(BuildContext context) async =>
+    await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard recording?'),
+        content: const Text(
+          'The saved audio will be deleted from this device and cannot be recovered.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    ) ??
+    false;
+
 enum RecordingDetailsResult { transcribe, saved, discarded }
 
 /// Where the recording is stored, shown permanently in the panel and in the sheet.
@@ -250,25 +272,7 @@ class _RecordingDetailsSheetState extends State<_RecordingDetailsSheet> {
   }
 
   Future<void> _confirmDiscard() async {
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Discard recording?'),
-        content: const Text(
-          'The saved audio will be deleted from this device and cannot be recovered.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard'),
-          ),
-        ],
-      ),
-    );
+    final discard = await confirmRecordingDiscard(context);
     if (discard == true && mounted) {
       Navigator.pop(context, RecordingDetailsResult.discarded);
     }

@@ -73,6 +73,22 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
     return RecordingAudio(bytes: bytes);
   }
 
+  Future<void> _discard() async {
+    final identity = widget.state.recordingIdentity;
+    final draft = widget.state.audioDraft;
+    if (draft == null || !await confirmRecordingDiscard(context)) return;
+    if (!mounted ||
+        widget.state.recordingIdentity != identity ||
+        !identical(widget.state.audioDraft, draft))
+      return;
+    try {
+      await widget.state.discardAudioDraft();
+    } catch (_) {
+      if (mounted)
+        widget.state.reportError('Could not discard the recording. Try again.');
+    }
+  }
+
   Future<void> _transcribe() async {
     final draft = widget.state.audioDraft!;
     final title = (draft['title'] as String? ?? '').trim();
@@ -180,7 +196,9 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
                 'Recording · ${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')} · maximum 30 minutes',
               ),
               FilledButton.icon(
-                onPressed: disabled ? null : recording.stop,
+                onPressed: _working || recording.working
+                    ? null
+                    : recording.stop,
                 icon: const Icon(Icons.stop),
                 label: const Text('Stop and save recording'),
               ),
@@ -209,7 +227,7 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
                 label: const Text('Send to Whisper and transcribe'),
               ),
               TextButton(
-                onPressed: disabled ? null : widget.state.discardAudioDraft,
+                onPressed: disabled ? null : _discard,
                 child: const Text('Discard recording'),
               ),
             ] else

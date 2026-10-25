@@ -221,6 +221,78 @@ void main() {
   );
 
   testWidgets(
+    'recording can stop while an unrelated operation is busy',
+    (tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final vault = await mount(tester);
+      vault.state.addListener(() {
+        vault.state.audioDraft?['detailsPrompted'] = true;
+      });
+      await start(tester);
+      recorder.pcm.add(samples);
+      vault.state.busy = true;
+      vault.state.reportError('Import in progress');
+      await tester.pump();
+      final stop = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Stop and save recording'),
+      );
+      expect(stop.onPressed, isNotNull);
+      await tester.tap(find.text('Stop and save recording'));
+      await finish(tester, vault.state.recording.stop());
+      vault.state.audioDraft!['detailsPrompted'] = true;
+      await tester.pump();
+      await verifyDraft(tester, vault);
+      vault.state.busy = false;
+      await remove(tester, vault);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
+
+  testWidgets(
+    'discard asks first and cannot discard a replacement recording',
+    (tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final vault = await mount(tester);
+      vault.state.addListener(() {
+        vault.state.audioDraft?['detailsPrompted'] = true;
+      });
+      await start(tester);
+      recorder.pcm.add(samples);
+      await finish(tester, vault.state.recording.stop());
+      vault.state.audioDraft!['detailsPrompted'] = true;
+      await tester.pump();
+      await tester.ensureVisible(find.text('Discard recording'));
+      await tester.tap(find.text('Discard recording'));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard recording?'), findsOneWidget);
+      await tester.tap(find.text('Keep'));
+      await tester.pumpAndSettle();
+      expect(vault.state.audioDraft, isNotNull);
+      await tester.tap(find.text('Discard recording'));
+      await tester.pumpAndSettle();
+      final replacement = {...vault.state.audioDraft!, 'title': 'Replacement'};
+      vault.state.audioDraft = replacement;
+      await tester.tap(find.text('Discard'));
+      await tester.pumpAndSettle();
+      expect(vault.state.audioDraft, same(replacement));
+      final discardButton = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Discard recording'),
+      );
+      final discard = (discardButton.onPressed! as Future<void> Function())();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Discard'));
+      await finish(tester, discard);
+      expect(vault.state.audioDraft, isNull);
+      await remove(tester, vault);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
+
+  testWidgets(
     'desktop navigation saves the draft while app state retains the recorder',
     (tester) async {
       final vault = await mount(tester);
