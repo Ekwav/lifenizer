@@ -556,7 +556,7 @@ class _ImportsPageState extends State<ImportsPage> {
         TextButton.icon(
           onPressed: () async {
             final opened = await openExternalLink(
-              'https://lifenizer.coflnet.com/#extensions',
+              'https://lifenizer.coflnet.com/extension',
             );
             if (!opened && mounted) {
               widget.state.reportError(

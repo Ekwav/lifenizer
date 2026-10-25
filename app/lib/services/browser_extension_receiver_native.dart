@@ -407,7 +407,7 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
               '<meta name="viewport" content="width=device-width,initial-scale=1">'
               '<title>Connect Lifenizer</title><h1>Connect your browser</h1>'
               '<p>Continue in the Lifenizer extension. If it did not open, '
-              '<a href="https://lifenizer.coflnet.com/#extensions" rel="noreferrer">'
+              '<a href="https://lifenizer.coflnet.com/extension" rel="noreferrer">'
               'install the extension</a>, then choose Connect browser in the app again.</p></html>',
             );
           await request.response.close();
