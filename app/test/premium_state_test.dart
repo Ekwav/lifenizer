@@ -16,6 +16,10 @@ void main() {
     addTearDown(state.dispose);
     await expectLater(state.activateFreePremium(), throwsStateError);
     await expectLater(state.cancelFreePremium(), throwsStateError);
+    expect(
+      () => state.submitCancellationFeedback('Feedback'),
+      throwsStateError,
+    );
   });
 
   test(

@@ -139,8 +139,15 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
               'Could not cancel the free activation. Check your connection and retry.',
         );
       }
+      return;
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+    if (mounted &&
+        identical(state.session, session) &&
+        state.apiBaseUrl == server &&
+        state.isAuthenticated) {
+      await showPremiumCancellationFeedback(context, state);
     }
   }
 
@@ -157,6 +164,7 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (quota != null) ...[
+                OnlineStorageDeletionNotice(quota: quota),
                 Text(
                   'Current plan: ${quota.plan}',
                   style: Theme.of(context).textTheme.bodySmall,

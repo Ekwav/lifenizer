@@ -269,7 +269,16 @@ void main() {
               'usedPercent': 0.0,
               if (route == '/api/premium/activate')
                 'freePremiumActivatedAt': '2026-10-25T12:00:00Z',
+              if (route == '/api/premium/cancel-free')
+                'onlineStorageDeleteAt': '2026-11-24T12:00:00Z',
             };
+          } else if (route == '/api/premium/cancellation-feedback') {
+            expect(request.method, 'POST');
+            expect(request.headers['authorization'], 'Bearer token');
+            expect(jsonDecode(request.body), {
+              'feedback': 'Sync was unreliable',
+            });
+            return http.Response('', 204);
           } else if (route == '/api/premium/checkout/premium') {
             body = {'checkoutUrl': 'https://checkout.example.test'};
           } else {
@@ -324,12 +333,16 @@ void main() {
           QuotaStatus.fromJson(activated.toJson()).freePremiumActivatedAt,
           activated.freePremiumActivatedAt,
         );
+        final cancelled = await authenticated.cancelFreePremium();
+        expect(cancelled.freePremiumActivatedAt, isNull);
+        expect(cancelled.onlineStorageDeleteAt, DateTime.utc(2026, 11, 24, 12));
         expect(
-          (await authenticated.cancelFreePremium()).freePremiumActivatedAt,
-          isNull,
+          QuotaStatus.fromJson(cancelled.toJson()).onlineStorageDeleteAt,
+          cancelled.onlineStorageDeleteAt,
         );
+        await authenticated.submitCancellationFeedback('Sync was unreliable');
         await authenticated.createCheckoutUrl('premium');
-        expect(requests, hasLength(16));
+        expect(requests, hasLength(17));
         client.close();
       }
     },

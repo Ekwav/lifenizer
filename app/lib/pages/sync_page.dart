@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../image_widgets.dart';
+import '../pricing_page.dart';
 import '../widgets/sync_progress_indicator.dart';
 import 'page_frame.dart';
 import '../widgets/device_security_dialog.dart';
@@ -114,6 +115,7 @@ class SyncPage extends StatelessWidget {
           const SizedBox(height: 20),
           // Storage indicator
           if (quota != null) ...[
+            OnlineStorageDeletionNotice(quota: quota),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [

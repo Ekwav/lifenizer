@@ -21,9 +21,12 @@ Future<bool> confirmFreePremiumCancellation(
           child: Text(
             quota.expiresAt == null
                 ? 'Your storage limit immediately returns to 50 MB. Your data stays '
-                      'in your vault and remains readable. Further uploads are blocked '
-                      'if you are over the limit. You can reactivate free Premium '
-                      'while the offer is available.'
+                      'readable online for 30 days. Then your hosted sync data, '
+                      'recordings and images are deleted and online uploads stop. '
+                      'Download or back up anything you need before then. Data '
+                      'already saved on your devices is unaffected. Reactivate '
+                      'Premium before the deadline to stop deletion. Further '
+                      'uploads are blocked if you are over the limit.'
                 : 'Only your free Premium activation will end. Your paid entitlement '
                       'and its storage limit remain in place until expiry. This does '
                       'not cancel a paid subscription or stop its charges. Your data '
@@ -43,6 +46,125 @@ Future<bool> confirmFreePremiumCancellation(
       ),
     ) ??
     false;
+
+class OnlineStorageDeletionNotice extends StatelessWidget {
+  const OnlineStorageDeletionNotice({required this.quota, super.key});
+
+  final QuotaStatus quota;
+
+  @override
+  Widget build(BuildContext context) {
+    final deadline = quota.onlineStorageDeleteAt;
+    if (deadline == null) return const SizedBox.shrink();
+    final date = MaterialLocalizations.of(
+      context,
+    ).formatFullDate(deadline.toLocal());
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        quota.onlineStorageExpired
+            ? 'Your online storage retention period ended on $date. Online '
+                  'data is being deleted. Reactivate Premium to enable uploads '
+                  'again; data already deleted cannot be recovered from the server.'
+            : 'Online sync data, recordings and images are scheduled for deletion '
+                  'on $date. Download or back up anything you need. Data already '
+                  'saved on your devices is unaffected. Reactivate Premium before '
+                  'then to stop deletion.',
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      ),
+    );
+  }
+}
+
+Future<void> showPremiumCancellationFeedback(
+  BuildContext context,
+  LifenizerAppState state,
+) async {
+  final session = state.session;
+  final server = state.apiBaseUrl;
+  final quota = state.quotaStatus;
+  var feedback = '';
+  var sending = false;
+  String? error;
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => StatefulBuilder(
+      builder: (context, update) => AlertDialog(
+        title: const Text('Cancellation complete'),
+        content: SizedBox(
+          width: 360,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('What could we improve? Feedback is optional.'),
+                if (quota != null) OnlineStorageDeletionNotice(quota: quota),
+                TextField(
+                  enabled: !sending,
+                  maxLength: 2000,
+                  minLines: 2,
+                  maxLines: 5,
+                  decoration: const InputDecoration(
+                    labelText: 'Feedback (optional)',
+                    helperText: 'Sent to your Lifenizer server.',
+                  ),
+                  onChanged: (value) => update(() => feedback = value),
+                ),
+                if (error != null)
+                  Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Skip'),
+          ),
+          FilledButton(
+            onPressed: sending || feedback.trim().isEmpty
+                ? null
+                : () async {
+                    if (!state.isAuthenticated ||
+                        !identical(state.session, session) ||
+                        state.apiBaseUrl != server) {
+                      update(
+                        () => error =
+                            'Your account or server changed. Close this feedback form.',
+                      );
+                      return;
+                    }
+                    update(() {
+                      sending = true;
+                      error = null;
+                    });
+                    try {
+                      await state.submitCancellationFeedback(feedback);
+                      if (context.mounted) Navigator.pop(context);
+                    } catch (_) {
+                      if (context.mounted) {
+                        update(() {
+                          sending = false;
+                          error =
+                              'Could not send feedback. Your cancellation is complete. Check your connection and retry, or skip.';
+                        });
+                      }
+                    }
+                  },
+            child: Text(sending ? 'Sending…' : 'Send feedback'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Pricing data
@@ -231,8 +353,15 @@ class _PricingPageState extends State<PricingPage> {
               'Could not cancel the free activation. Check your connection and retry.',
         );
       }
+      return;
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+    if (mounted &&
+        identical(state.session, session) &&
+        state.apiBaseUrl == server &&
+        state.isAuthenticated) {
+      await showPremiumCancellationFeedback(context, state);
     }
   }
 
@@ -315,6 +444,7 @@ class _PricingPageState extends State<PricingPage> {
               // ── Current plan badge ─────────────────────────────────────────
               const SizedBox(height: 16),
               _CurrentPlanBadge(quota: quota),
+              OnlineStorageDeletionNotice(quota: quota),
               const SizedBox(height: 12),
               Text(
                 'Account: ${widget.state.rememberedEmail}\nServer: ${widget.state.apiBaseUrl}',

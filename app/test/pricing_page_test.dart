@@ -23,6 +23,54 @@ void main() {
   setUp(() => QuickActionService.instance.consume());
   tearDown(() => QuickActionService.instance.consume());
 
+  for (final changeServer in [false, true]) {
+    testWidgets(
+      'feedback stays bound to the canceled account (server: $changeServer)',
+      (tester) async {
+        final state = _SignedInState()
+          ..apiBaseUrl = 'https://original.example.test';
+        addTearDown(state.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: FilledButton(
+                  onPressed: () =>
+                      showPremiumCancellationFeedback(context, state),
+                  child: const Text('Open feedback'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Open feedback'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Private feedback');
+        await tester.pump();
+        if (changeServer) {
+          state.apiBaseUrl = 'https://other.example.test';
+        } else {
+          state.session = AuthSession(
+            authToken: 'other-account',
+            userId: 'other',
+            vaultId: 'other-vault',
+            vaultSalt: 'other-salt',
+          );
+        }
+        await tester.tap(find.text('Send feedback'));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Your account or server changed'),
+          findsOneWidget,
+        );
+        expect(find.text('Private feedback'), findsOneWidget);
+        await tester.tap(find.text('Skip'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'upgrade intent survives login navigator replacement without activating storage',
     (tester) async {
@@ -201,6 +249,8 @@ void main() {
         var activated = true;
         var cancellations = 0;
         var activations = 0;
+        var feedbackAttempts = 0;
+        final deadline = DateTime.now().toUtc().add(const Duration(days: 30));
         Map<String, dynamic> quota() => {
           'plan': activated ? 'Premium' : 'Free',
           'usedBytes': 60 * 1024 * 1024,
@@ -208,9 +258,17 @@ void main() {
           'usedPercent': activated ? 0.6 : 120.0,
           'freePremiumEnabled': true,
           if (activated) 'freePremiumActivatedAt': '2026-10-25T12:00:00Z',
+          if (!activated) 'onlineStorageDeleteAt': deadline.toIso8601String(),
         };
         final client = MockClient((request) async {
-          if (request.url.path == '/api/premium/cancel-free') {
+          if (request.url.path == '/api/premium/cancellation-feedback') {
+            feedbackAttempts++;
+            expect(request.headers['authorization'], 'Bearer same-account');
+            expect(jsonDecode(request.body), {
+              'feedback': 'Please improve sync',
+            });
+            return http.Response('', feedbackAttempts == 1 ? 503 : 204);
+          } else if (request.url.path == '/api/premium/cancel-free') {
             expect(request.method, 'POST');
             cancellations++;
             if (cancellations == 1) return http.Response('unavailable', 503);
@@ -272,7 +330,11 @@ void main() {
           find.textContaining('immediately returns to 50 MB'),
           findsOneWidget,
         );
-        expect(find.textContaining('remains readable'), findsOneWidget);
+        expect(
+          find.textContaining('readable online for 30 days'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Download or back up'), findsOneWidget);
         await tester.tap(find.text('Keep current plan'));
         await tester.pumpAndSettle();
         expect(cancellations, 0);
@@ -280,6 +342,7 @@ void main() {
         await tester.tap(find.text('Confirm cancellation'));
         await tester.pumpAndSettle();
         expect(cancellations, 1);
+        expect(find.text('Cancellation complete'), findsNothing);
         expect(state.quotaStatus!.freePremiumActivatedAt, isNotNull);
         expect(
           find.textContaining('Check your connection and retry'),
@@ -293,11 +356,42 @@ void main() {
         expect(state.quotaStatus!.freePremiumActivatedAt, isNull);
         expect(state.quotaStatus!.usedBytes, 60 * 1024 * 1024);
         expect(state.quotaStatus!.isOverLimit, isTrue);
+        expect(state.quotaStatus!.onlineStorageDeleteAt, deadline);
+        expect(find.text('Cancellation complete'), findsOneWidget);
+        expect(find.textContaining('scheduled for deletion'), findsWidgets);
+        if (dialog) {
+          await tester.tap(find.text('Skip'));
+          await tester.pumpAndSettle();
+          expect(feedbackAttempts, 0);
+        } else {
+          await tester.enterText(
+            find.byType(TextField),
+            '  Please improve sync  ',
+          );
+          await tester.pump();
+          await tester.ensureVisible(find.text('Send feedback'));
+          await tester.tap(find.text('Send feedback'));
+          await tester.pumpAndSettle();
+          expect(feedbackAttempts, 1);
+          expect(
+            find.textContaining('Could not send feedback'),
+            findsOneWidget,
+          );
+          expect(find.text('  Please improve sync  '), findsOneWidget);
+          expect(state.quotaStatus!.plan, 'Free');
+          await tester.tap(find.text('Send feedback'));
+          await tester.pumpAndSettle();
+          expect(feedbackAttempts, 2);
+          expect(cancellations, 2);
+          expect(find.text('Cancellation complete'), findsNothing);
+        }
         await tester.ensureVisible(find.text('Activate free Premium'));
         await tester.tap(find.text('Activate free Premium'));
         await tester.pumpAndSettle();
         expect(activations, 1);
         expect(state.quotaStatus!.plan, 'Premium');
+        expect(state.quotaStatus!.onlineStorageDeleteAt, isNull);
+        expect(find.textContaining('scheduled for deletion'), findsNothing);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
       },

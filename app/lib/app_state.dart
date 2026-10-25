@@ -464,6 +464,11 @@ class LifenizerAppState extends ChangeNotifier {
 
   Future<void> cancelFreePremium() => _changeFreePremium(activate: false);
 
+  Future<void> submitCancellationFeedback(String feedback) {
+    if (!isAuthenticated) throw StateError('Sign in to send feedback.');
+    return _requireApi().submitCancellationFeedback(feedback.trim());
+  }
+
   Future<void> _changeFreePremium({required bool activate}) async {
     if (!isAuthenticated) throw StateError('Sign in to manage Premium.');
     final api = _requireApi();

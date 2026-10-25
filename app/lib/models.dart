@@ -1017,6 +1017,7 @@ class QuotaStatus {
     this.expiresAt,
     this.freePremiumEnabled = false,
     this.freePremiumActivatedAt,
+    this.onlineStorageDeleteAt,
   });
 
   final String plan;
@@ -1026,6 +1027,11 @@ class QuotaStatus {
   final DateTime? expiresAt;
   final bool freePremiumEnabled;
   final DateTime? freePremiumActivatedAt;
+  final DateTime? onlineStorageDeleteAt;
+
+  bool get onlineStorageExpired =>
+      onlineStorageDeleteAt != null &&
+      !onlineStorageDeleteAt!.isAfter(DateTime.now());
 
   /// Whether usage is at or near the 80% threshold.
   bool get isNearLimit => usedPercent >= 80;
@@ -1059,6 +1065,8 @@ class QuotaStatus {
     'freePremiumEnabled': freePremiumEnabled,
     if (freePremiumActivatedAt != null)
       'freePremiumActivatedAt': freePremiumActivatedAt!.toJsonString(),
+    if (onlineStorageDeleteAt != null)
+      'onlineStorageDeleteAt': onlineStorageDeleteAt!.toJsonString(),
     if (expiresAt != null) 'expiresAt': expiresAt!.toJsonString(),
   };
 
@@ -1071,6 +1079,7 @@ class QuotaStatus {
       expiresAt: json.parseDateTime('expiresAt'),
       freePremiumEnabled: json['freePremiumEnabled'] as bool? ?? false,
       freePremiumActivatedAt: json.parseDateTime('freePremiumActivatedAt'),
+      onlineStorageDeleteAt: json.parseDateTime('onlineStorageDeleteAt'),
     );
   }
 }
