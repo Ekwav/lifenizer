@@ -1016,6 +1016,7 @@ class QuotaStatus {
     required this.usedPercent,
     this.expiresAt,
     this.freePremiumEnabled = false,
+    this.freePremiumActivatedAt,
   });
 
   final String plan;
@@ -1024,6 +1025,7 @@ class QuotaStatus {
   final double usedPercent;
   final DateTime? expiresAt;
   final bool freePremiumEnabled;
+  final DateTime? freePremiumActivatedAt;
 
   /// Whether usage is at or near the 80% threshold.
   bool get isNearLimit => usedPercent >= 80;
@@ -1055,6 +1057,8 @@ class QuotaStatus {
     'limitBytes': limitBytes,
     'usedPercent': usedPercent,
     'freePremiumEnabled': freePremiumEnabled,
+    if (freePremiumActivatedAt != null)
+      'freePremiumActivatedAt': freePremiumActivatedAt!.toJsonString(),
     if (expiresAt != null) 'expiresAt': expiresAt!.toJsonString(),
   };
 
@@ -1066,6 +1070,7 @@ class QuotaStatus {
       usedPercent: (json['usedPercent'] as num).toDouble(),
       expiresAt: json.parseDateTime('expiresAt'),
       freePremiumEnabled: json['freePremiumEnabled'] as bool? ?? false,
+      freePremiumActivatedAt: json.parseDateTime('freePremiumActivatedAt'),
     );
   }
 }

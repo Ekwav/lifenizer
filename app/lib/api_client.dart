@@ -305,6 +305,9 @@ class LifenizerApiClient {
   Future<QuotaStatus> activateFreePremium() async =>
       QuotaStatus.fromJson(await _post('/api/premium/activate', {}));
 
+  Future<QuotaStatus> cancelFreePremium() async =>
+      QuotaStatus.fromJson(await _post('/api/premium/cancel-free', {}));
+
   Future<Map<String, dynamic>> getRecording(String id) async {
     final response = await _retry(
       () => _client

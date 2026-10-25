@@ -455,10 +455,16 @@ class LifenizerAppState extends ChangeNotifier {
   Future<String> checkoutUrl(String plan) =>
       _requireApi().createCheckoutUrl(plan);
 
-  Future<void> activateFreePremium() async {
-    if (!isAuthenticated) throw StateError('Sign in to activate Premium.');
+  Future<void> activateFreePremium() => _changeFreePremium(activate: true);
+
+  Future<void> cancelFreePremium() => _changeFreePremium(activate: false);
+
+  Future<void> _changeFreePremium({required bool activate}) async {
+    if (!isAuthenticated) throw StateError('Sign in to manage Premium.');
     final api = _requireApi();
-    final quota = await api.activateFreePremium();
+    final quota = await (activate
+        ? api.activateFreePremium()
+        : api.cancelFreePremium());
     if (!identical(api, _api) || !isAuthenticated) return;
     quotaStatus = quota;
     _notifyChanged();

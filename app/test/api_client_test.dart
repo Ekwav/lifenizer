@@ -255,12 +255,20 @@ void main() {
           } else if (route == '/api/images/image-id' &&
               request.method == 'DELETE') {
             return http.Response('', 204);
-          } else if (route == '/api/premium/status') {
+          } else if (route == '/api/premium/status' ||
+              route == '/api/premium/activate' ||
+              route == '/api/premium/cancel-free') {
+            if (route != '/api/premium/status') {
+              expect(request.method, 'POST');
+              expect(request.headers['authorization'], 'Bearer token');
+            }
             body = {
-              'plan': 'free',
+              'plan': route == '/api/premium/activate' ? 'Premium' : 'Free',
               'usedBytes': 0,
               'limitBytes': 1000,
               'usedPercent': 0.0,
+              if (route == '/api/premium/activate')
+                'freePremiumActivatedAt': '2026-10-25T12:00:00Z',
             };
           } else if (route == '/api/premium/checkout/premium') {
             body = {'checkoutUrl': 'https://checkout.example.test'};
@@ -307,8 +315,21 @@ void main() {
         expect(await authenticated.downloadImage('image-id'), [1, 2, 3]);
         await authenticated.deleteImage('image-id');
         await authenticated.getQuotaStatus();
+        final activated = await authenticated.activateFreePremium();
+        expect(
+          activated.freePremiumActivatedAt,
+          DateTime.utc(2026, 10, 25, 12),
+        );
+        expect(
+          QuotaStatus.fromJson(activated.toJson()).freePremiumActivatedAt,
+          activated.freePremiumActivatedAt,
+        );
+        expect(
+          (await authenticated.cancelFreePremium()).freePremiumActivatedAt,
+          isNull,
+        );
         await authenticated.createCheckoutUrl('premium');
-        expect(requests, hasLength(14));
+        expect(requests, hasLength(16));
         client.close();
       }
     },
