@@ -518,6 +518,13 @@ class ConversationSearchIndex {
     Map<String, Map<String, double>>? expansions,
   }) {
     final expanded = expansions ?? expandTokens(queryTokens);
+    final location = document.conversation.location;
+    final townTokens = location == null
+        ? const <String>{}
+        : tokenize(location.town).toSet();
+    final placeTokens = location == null
+        ? const <String>{}
+        : tokenize('${location.venue} ${location.address}').toSet();
     var score = 0.0;
     for (final matches in expanded.values) {
       var best = 0.0;
@@ -542,7 +549,9 @@ class ConversationSearchIndex {
         final fieldBoost =
             (document.titleTokens.contains(entry.key) ? 4.0 : 0.0) +
             (document.personTokens.contains(entry.key) ? 5.0 : 0.0) +
-            (document.tagSet.contains(entry.key) ? 2.0 : 0.0);
+            (document.tagSet.contains(entry.key) ? 2.0 : 0.0) +
+            (townTokens.contains(entry.key) ? 5.0 : 0.0) +
+            (placeTokens.contains(entry.key) ? 2.0 : 0.0);
         best = math.max(best, entry.value * (4 + bm25 + fieldBoost));
       }
       score += best;

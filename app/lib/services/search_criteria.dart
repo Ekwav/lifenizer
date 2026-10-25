@@ -1,3 +1,6 @@
+import '../models.dart';
+import 'conversation_search_index.dart';
+
 /// Encapsulates search parameters and provides computed properties.
 ///
 /// This class normalizes and validates search criteria, reducing parameter
@@ -9,6 +12,7 @@ class SearchCriteria {
     this.source,
     this.participantId,
     this.tag,
+    this.location,
     this.favoritesOnly = false,
     this.useVector = true,
     this.from,
@@ -20,6 +24,7 @@ class SearchCriteria {
   final String? source;
   final String? participantId;
   final String? tag;
+  final String? location;
   final bool favoritesOnly;
   final bool useVector;
 
@@ -34,8 +39,45 @@ class SearchCriteria {
   /// picked by the user in their local timezone). Treated as end-of-day.
   final DateTime? to;
 
-  /// Returns the normalized (trimmed, lowercase) query.
-  String get normalized => _query.trim().toLowerCase();
+  static final _locationPattern = RegExp(
+    r'(?:^|\s)(town|location):(?:"([^"]+)"(?=\s|$)|([^\s"]+)(?=\s|$))',
+    caseSensitive: false,
+  );
+
+  static String withoutLocationFilters(String query) =>
+      query.replaceAll(_locationPattern, ' ').trim();
+
+  /// Lexical query after explicit location filters have been removed.
+  String get normalized => withoutLocationFilters(_query).toLowerCase();
+
+  List<String> get locationLabels => [
+    if (_cleanFilter(location) case final String value) value,
+    for (final match in _locationPattern.allMatches(_query))
+      match.group(2) ?? match.group(3)!,
+  ];
+
+  late final _locationFilters = [
+    if (_cleanFilter(location) case final String value)
+      (townOnly: false, tokens: ConversationSearchIndex.tokenize(value)),
+    for (final match in _locationPattern.allMatches(_query))
+      (
+        townOnly: match.group(1)!.toLowerCase() == 'town',
+        tokens: ConversationSearchIndex.tokenize(
+          match.group(2) ?? match.group(3)!,
+        ),
+      ),
+  ];
+
+  bool matchesLocation(RecordingLocation? value) =>
+      _locationFilters.every((filter) {
+        if (value == null) return false;
+        final words = ConversationSearchIndex.tokenize(
+          filter.townOnly ? value.town : value.searchableText,
+        );
+        return filter.tokens.every(
+          (token) => words.any((word) => word.startsWith(token)),
+        );
+      });
 
   /// Returns the normalized source filter, or null if empty/invalid.
   String? get normalizedSource => _cleanFilter(source);

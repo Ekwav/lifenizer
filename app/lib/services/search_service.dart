@@ -86,6 +86,8 @@ class SearchService {
 
       final conversation = document.conversation;
 
+      if (!criteria.matchesLocation(conversation.location)) continue;
+
       // Apply filters
       if (sourceFilter != null && conversation.source != sourceFilter) {
         continue;

@@ -142,6 +142,10 @@ class _SearchPageState extends State<SearchPage> {
                   .map((item) => item.id)
                   .toList(),
               availableTags: widget.state.allTags,
+              availableLocations: widget.state.conversations
+                  .map((conversation) => conversation.location)
+                  .whereType<RecordingLocation>()
+                  .toList(),
               participantName: widget.state.participantName,
               onFilterChanged: () => setState(() => _resultLimit = 50),
               onClearFilters: () => setState(() {

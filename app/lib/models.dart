@@ -208,9 +208,81 @@ class ConversationSegment {
   }
 }
 
+/// Optional recording context, stored only inside encrypted vault data.
+class RecordingLocation {
+  factory RecordingLocation({
+    String town = '',
+    String venue = '',
+    String address = '',
+    double? latitude,
+    double? longitude,
+  }) {
+    final validCoordinates =
+        latitude != null &&
+        longitude != null &&
+        latitude.isFinite &&
+        longitude.isFinite &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180;
+    return RecordingLocation._(
+      town.trim(),
+      venue.trim(),
+      address.trim(),
+      validCoordinates ? latitude : null,
+      validCoordinates ? longitude : null,
+    );
+  }
+
+  const RecordingLocation._(
+    this.town,
+    this.venue,
+    this.address,
+    this.latitude,
+    this.longitude,
+  );
+
+  final String town;
+  final String venue;
+  final String address;
+  final double? latitude;
+  final double? longitude;
+
+  String get searchableText =>
+      [town, venue, address].where((value) => value.isNotEmpty).join(' ');
+  String get displayName => [
+    town,
+    venue,
+    address,
+  ].where((value) => value.isNotEmpty).toSet().join(' · ');
+
+  Map<String, dynamic> toJson() => {
+    if (town.isNotEmpty) 'town': town,
+    if (venue.isNotEmpty) 'venue': venue,
+    if (address.isNotEmpty) 'address': address,
+    if (latitude != null) 'latitude': latitude,
+    if (longitude != null) 'longitude': longitude,
+  };
+
+  factory RecordingLocation.fromJson(Map<String, dynamic> json) =>
+      RecordingLocation(
+        town: json['town'] is String ? json['town'] as String : '',
+        venue: json['venue'] is String ? json['venue'] as String : '',
+        address: json['address'] is String ? json['address'] as String : '',
+        latitude: json['latitude'] is num
+            ? (json['latitude'] as num).toDouble()
+            : null,
+        longitude: json['longitude'] is num
+            ? (json['longitude'] as num).toDouble()
+            : null,
+      );
+}
+
 /// Represents a conversation/thread with metadata and segments.
 class Conversation {
   Conversation({
+    this.location,
     this.sourceUrl,
     this.metadata = const {},
     this.sourceThreadId,
@@ -237,6 +309,7 @@ class Conversation {
   final Map<String, String> metadata;
 
   final String? sourceThreadId;
+  final RecordingLocation? location;
   final String id;
   final String title;
   final String source;
@@ -285,6 +358,7 @@ class Conversation {
       source,
       ...artifactNames,
       ...tags,
+      if (location != null) location!.searchableText,
       ...segments.map((segment) => segment.text),
     ].join(' ').toLowerCase();
   }
@@ -311,6 +385,7 @@ class Conversation {
   }
 
   Map<String, dynamic> _toJson({required bool includeSegments}) => {
+    if (location != null) 'location': location!.toJson(),
     if (sourceUrl != null) 'sourceUrl': sourceUrl,
     if (metadata.isNotEmpty) 'metadata': metadata,
     if (sourceThreadId != null) 'sourceThreadId': sourceThreadId,
@@ -338,6 +413,11 @@ class Conversation {
     Map<String, dynamic> json, {
     bool isLoaded = true,
   }) => Conversation(
+    location: json['location'] is Map
+        ? RecordingLocation.fromJson(
+            Map<String, dynamic>.from(json['location'] as Map),
+          )
+        : null,
     isLoaded: isLoaded,
     segmentCount: json['segmentCount'] as int? ?? 0,
     previewText: json['previewText'] as String? ?? '',

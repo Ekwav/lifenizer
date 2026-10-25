@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models.dart';
+import '../../services/search_criteria.dart';
 import 'search_input_field.dart';
 
 /// Compact search filters with searchable participant and tag pickers.
@@ -9,6 +10,7 @@ class SearchFilters extends StatelessWidget {
     required this.availableSources,
     required this.availableParticipants,
     required this.availableTags,
+    this.availableLocations = const [],
     required this.participantName,
     required this.onFilterChanged,
     required this.onClearFilters,
@@ -28,6 +30,7 @@ class SearchFilters extends StatelessWidget {
 
   /// List of available tags for filtering.
   final List<String> availableTags;
+  final List<RecordingLocation> availableLocations;
 
   /// Function to resolve participant ID to display name.
   final String Function(String id) participantName;
@@ -46,6 +49,24 @@ class SearchFilters extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final towns =
+        availableLocations
+            .map((location) => location.town)
+            .where((town) => town.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    final places =
+        availableLocations
+            .where(
+              (location) =>
+                  location.venue.isNotEmpty || location.address.isNotEmpty,
+            )
+            .map((location) => location.searchableText)
+            .toSet()
+            .toList()
+          ..sort();
+    final criteria = SearchCriteria(query: viewModel.queryController.text);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -112,6 +133,31 @@ class SearchFilters extends StatelessWidget {
           spacing: 8,
           runSpacing: 4,
           children: [
+            if (towns.isNotEmpty ||
+                places.isNotEmpty ||
+                criteria.locationLabels.isNotEmpty)
+              _FilterDropdown(
+                label: 'Location',
+                value: criteria.locationLabels.firstOrNull ?? '',
+                items: [...towns, ...places],
+                searchable: true,
+                compact: true,
+                onChanged: (value) {
+                  final query = SearchCriteria.withoutLocationFilters(
+                    viewModel.queryController.text,
+                  );
+                  final location = value.isEmpty
+                      ? ''
+                      : '${towns.contains(value) ? 'town' : 'location'}:"${value.replaceAll('"', '')}"';
+                  viewModel.setQuery(
+                    [
+                      query,
+                      location,
+                    ].where((part) => part.isNotEmpty).join(' '),
+                  );
+                  onFilterChanged();
+                },
+              ),
             FilterChip(
               key: const Key('search-hide-consumed'),
               avatar: const Icon(Icons.visibility_off_outlined, size: 18),
@@ -148,6 +194,7 @@ class _FilterDropdown extends StatelessWidget {
     required this.onChanged,
     this.itemLabel,
     this.searchable = false,
+    this.compact = false,
   });
 
   final String label;
@@ -156,6 +203,7 @@ class _FilterDropdown extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final String Function(String value)? itemLabel;
   final bool searchable;
+  final bool compact;
 
   String _label(String item) =>
       item.isEmpty ? 'All' : itemLabel?.call(item) ?? item;
@@ -219,7 +267,21 @@ class _FilterDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedValue = items.contains(value) ? value : '';
+    final selectedValue = compact || items.contains(value) ? value : '';
+    if (compact) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 220),
+        child: ActionChip(
+          key: ValueKey('search-${label.toLowerCase()}-filter'),
+          avatar: const Icon(Icons.place_outlined, size: 18),
+          label: Text(
+            value.isEmpty ? label : '$label: $value',
+            overflow: TextOverflow.ellipsis,
+          ),
+          onPressed: () => _pick(context),
+        ),
+      );
+    }
     final decoration = InputDecoration(
       labelText: label,
       isDense: true,
