@@ -80,7 +80,7 @@ class _ImapImportPanelState extends State<ImapImportPanel> {
             ),
           const SizedBox(height: 8),
           const Text(
-            'Use your email account’s app password where available. Messages and PDF attachment text are processed by your server, then saved encrypted in your vault. Reindex older mail to include previously skipped PDFs.',
+            'Use your email account’s app password where available. Messages and supported attachment text are processed by your server, then saved encrypted in your vault. Reindex older mail to add attachment text.',
           ),
           TextField(
             controller: _username,
@@ -131,7 +131,7 @@ class _ImapImportPanelState extends State<ImapImportPanel> {
               if (service.connected)
                 OutlinedButton(
                   onPressed: enabled ? service.reindexAttachments : null,
-                  child: const Text('Reindex PDF attachments'),
+                  child: const Text('Reindex attachments'),
                 ),
               if (service.connected || service.error != null)
                 TextButton(

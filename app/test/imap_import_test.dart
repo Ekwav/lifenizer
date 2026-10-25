@@ -55,6 +55,8 @@ class _Fixture {
   final requests = <Map<String, String>>[];
   String host = 'imap.example.test';
   bool more = false;
+  int? lastUid;
+  final attachments = <int, Map<String, String>>{};
   int messages = 0;
   late final LifenizerAppState state;
   Future<void> open() async {
@@ -110,6 +112,7 @@ class _Fixture {
                 'participantNames': ['Sender'],
                 'participantIdentifiers': ['email:sender@example.test'],
                 'sourceThreadId': 'email-thread',
+                'metadata': attachments[uid] ?? {},
                 'segments': [
                   {
                     'text': 'Private email body $uid',
@@ -123,7 +126,9 @@ class _Fixture {
             'diagnostics': {
               'nextUid': '$uid',
               'uidValidity': '123',
-              'hasMore': more ? 'true' : 'false',
+              'hasMore': more && (lastUid == null || uid < lastUid!)
+                  ? 'true'
+                  : 'false',
             },
           }),
           200,
@@ -155,6 +160,53 @@ class _Fixture {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'attachment warnings accumulate across pages without blocking cursor progress',
+    () async {
+      final f = _Fixture()
+        ..more = true
+        ..lastUid = 3;
+      f.attachments.addAll({
+        1: {'attachment-0-indexing': 'failed: extraction unavailable'},
+        2: {'attachment-1-indexing': 'skipped: unsupported type'},
+        3: {
+          'attachment-0-indexing': 'indexed',
+          'attachment-1-indexing': 'failed: unreadable document',
+          'other-indexing': 'failed: unrelated metadata',
+        },
+      });
+      await f.open();
+      addTearDown(f.dispose);
+      await f.connect();
+      expect(f.state.emailImport.error, isNull);
+      expect(f.credentials.records.values.single['afterUid'], '3');
+      expect(
+        f.state.emailImport.status,
+        contains('3 email message(s) checked'),
+      );
+      expect(
+        f.state.emailImport.status,
+        contains(
+          '3 attachments not indexed (unsupported, unsafe, or unreadable)',
+        ),
+      );
+      expect(
+        f.state.emailImport.status,
+        contains('Reindex attachments can retry temporary failures'),
+      );
+      expect(
+        f.state.emailImport.status,
+        isNot(contains('see message details')),
+      );
+      await f.state.emailImport.fetch();
+      expect(f.requests.last['afterUid'], '3');
+      expect(
+        f.state.emailImport.status,
+        isNot(contains('attachments not indexed')),
+      );
+    },
+  );
 
   test(
     'reindex attachments replays earlier UIDs without duplicate messages',
@@ -220,10 +272,17 @@ void main() {
       await f.open();
       addTearDown(f.dispose);
       f.more = true;
+      f.attachments[1] = {'attachment-0-indexing': 'skipped: size limit'};
       await f.connect();
       expect(f.requests, hasLength(20));
       expect(f.credentials.records.values.single['afterUid'], '20');
       expect(f.state.emailImport.status, contains('more remain'));
+      expect(
+        f.state.emailImport.status,
+        contains(
+          '1 attachment not indexed (unsupported, unsafe, or unreadable)',
+        ),
+      );
       f.host = 'different.example.test';
       await f.state.emailImport.fetch();
       expect(f.requests, hasLength(20));

@@ -270,6 +270,11 @@ class EmailImportService extends ChangeNotifier {
         );
       }
       var messages = 0;
+      var unindexedAttachments = 0;
+      final attachmentIndexing = RegExp(r'^attachment-\d+-indexing$');
+      String attachmentWarning() => unindexedAttachments == 0
+          ? ''
+          : ' $unindexedAttachments attachment${unindexedAttachments == 1 ? '' : 's'} not indexed (unsupported, unsafe, or unreadable). Reindex attachments can retry temporary failures.';
       for (var page = 0; page < 20; page++) {
         if (_disposed ||
             _generation != generation ||
@@ -310,14 +315,23 @@ class EmailImportService extends ChangeNotifier {
         }
         _account = Map<String, dynamic>.from(account);
         messages += result.conversations.length;
+        for (final conversation in result.conversations) {
+          for (final entry in conversation.metadata.entries) {
+            if (!attachmentIndexing.hasMatch(entry.key)) continue;
+            if (entry.value.startsWith('failed:') ||
+                entry.value.startsWith('skipped:')) {
+              unindexedAttachments++;
+            }
+          }
+        }
         if (diagnostics['hasMore'] != 'true') {
           status =
-              '$messages email message(s) checked · saved encrypted. Checking every 5 minutes while unlocked.';
+              '$messages email message(s) checked · saved encrypted. Checking every 5 minutes while unlocked.${attachmentWarning()}';
           return;
         }
       }
       status =
-          '$messages email message(s) checked · more remain. Continuing at the next check.';
+          '$messages email message(s) checked · more remain. Continuing at the next check.${attachmentWarning()}';
     } catch (exception) {
       if (_generation == generation) error = exception.toString();
     }

@@ -82,7 +82,10 @@ Notes:
 ### email (IMAP)
 
 Use **Imports → Email (IMAP)** in the app. See the [email setup guide](EMAIL.md)
-for credentials, automatic checks and TLS configuration.
+for credentials, automatic checks and TLS configuration. Supported attachment
+text (PDF, TXT, CSV, HTML, DOCX and ODT) is indexed alongside the message body.
+Skipped or failed attachments preserve the body and appear in the import status;
+**Reindex attachments** can retry temporary failures.
 
 Required:
 
