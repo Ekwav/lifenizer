@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
-    'large search renders fifty results and resets after a new query',
+    'large search pages fifty results at a time and resets after a new query',
     (tester) async {
       final state = LifenizerAppState();
       state.conversations.addAll(
@@ -31,18 +31,49 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byType(ConversationCard), findsNWidgets(50));
+      expect(
+        tester
+            .widget<SearchResultsList>(find.byType(SearchResultsList))
+            .results,
+        hasLength(50),
+      );
       expect(find.text('Showing first 50 results'), findsOneWidget);
-      await tester.ensureVisible(find.text('Show more conversations'));
+      final scrollable = find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        find.text('Show more conversations'),
+        600,
+        maxScrolls: 50,
+        scrollable: scrollable,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Show more conversations'));
       await tester.pumpAndSettle();
-      expect(find.byType(ConversationCard), findsNWidgets(100));
-      await tester.ensureVisible(find.byType(TextField).first);
+      expect(
+        tester
+            .widget<SearchResultsList>(find.byType(SearchResultsList))
+            .results,
+        hasLength(100),
+      );
+      await tester.scrollUntilVisible(
+        find.byType(TextField),
+        -600,
+        maxScrolls: 50,
+        scrollable: scrollable,
+      );
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'archive');
       await tester.pumpAndSettle();
-      expect(find.byType(ConversationCard), findsNWidgets(50));
+      expect(
+        tester
+            .widget<SearchResultsList>(find.byType(SearchResultsList))
+            .results,
+        hasLength(50),
+      );
       await tester.pumpWidget(const SizedBox.shrink());
       state.dispose();
     },
