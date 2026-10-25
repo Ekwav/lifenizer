@@ -2,19 +2,20 @@
 #  Build stage                                                                  #
 # ---------------------------------------------------------------------------- #
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
-WORKDIR /src
+WORKDIR /src/backend
 
 # Copy solution and project files first so layer cache is reused when only
 # source files change.
-COPY LifenizerNext.slnx ./
-COPY Lifenizer.Core/Lifenizer.Core.csproj  Lifenizer.Core/
-COPY Lifenizer.Api/Lifenizer.Api.csproj    Lifenizer.Api/
+COPY backend/LifenizerNext.slnx ./
+COPY backend/Lifenizer.Core/Lifenizer.Core.csproj  Lifenizer.Core/
+COPY backend/Lifenizer.Api/Lifenizer.Api.csproj    Lifenizer.Api/
 
 RUN dotnet restore Lifenizer.Api/Lifenizer.Api.csproj
 
 # Copy only application source and publish a release build.
-COPY Lifenizer.Core/ Lifenizer.Core/
-COPY Lifenizer.Api/ Lifenizer.Api/
+COPY backend/Lifenizer.Core/ Lifenizer.Core/
+COPY backend/Lifenizer.Api/ Lifenizer.Api/
+COPY landing/ /src/landing/
 RUN dotnet publish Lifenizer.Api/Lifenizer.Api.csproj \
       --configuration Release \
       --no-restore \

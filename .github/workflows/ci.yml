@@ -178,7 +178,7 @@ jobs:
     with:
       runner: '["coflnet-devserver"]'
       dockerfile: backend/Dockerfile
-      context: backend
+      context: .
       k8s_file: lifenizer/app/chart/values.yaml
       repo_url: https://github.com/Coflnet/fleet
     secrets:

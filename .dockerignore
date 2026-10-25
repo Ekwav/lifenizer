@@ -1,0 +1,22 @@
+# Only the API, its library and canonical landing enter the container build.
+**
+!backend/
+!backend/LifenizerNext.slnx
+!backend/Lifenizer.Api/
+!backend/Lifenizer.Api/**
+!backend/Lifenizer.Core/
+!backend/Lifenizer.Core/**
+!landing/
+!landing/**
+**/bin
+**/obj
+**/.*
+**/downloads
+**/*.db*
+**/*.sqlite*
+**/*.pem
+**/*.key
+**/*.pfx
+**/secrets.json
+**/appsettings.Local.json
+**/appsettings.*.Local.json
