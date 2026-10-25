@@ -11,6 +11,8 @@ import android.media.MediaRecorder
 import java.io.DataOutputStream
 import java.io.FileOutputStream
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** Owns the microphone and encrypted capture independently of any Activity or Flutter engine. */
 class RecordingService : Service() {
@@ -61,8 +63,17 @@ class RecordingService : Service() {
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .addAction(Notification.Action.Builder(android.R.drawable.ic_media_pause, "Stop and save", stop).build())
                 .build()
-            if (Build.VERSION.SDK_INT >= 29) startForeground(42, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-            else startForeground(42, notification)
+            var captureLocation = intent?.getBooleanExtra("captureLocation", false) == true && RecordingLocation.permitted(this)
+            if (Build.VERSION.SDK_INT >= 29) {
+                val microphone = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                try {
+                    startForeground(42, notification, microphone or if (captureLocation) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0)
+                } catch (_: SecurityException) {
+                    // Optional location access must never prevent microphone recording.
+                    captureLocation = false
+                    startForeground(42, notification, microphone)
+                }
+            } else startForeground(42, notification)
             if (wakeLock == null) {
                 wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
                     .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "lifenizer:recording")
@@ -76,7 +87,18 @@ class RecordingService : Service() {
             val id = activeId!!
             val completion = onStarted
             onStarted = null
-            PendingRecordings.worker.execute { capture(scope, id, startedAt, completion) }
+            val locationReady = CountDownLatch(if (captureLocation) 1 else 0)
+            PendingRecordings.worker.execute { capture(scope, id, startedAt, completion, locationReady) }
+            if (captureLocation) RecordingLocation.current(this) { location ->
+                if (location != null) PendingRecordings.metadataWorker.execute {
+                    try { PendingRecordings.saveLocation(this, scope, id, location) }
+                    catch (_: Exception) { }
+                    finally { locationReady.countDown() }
+                } else locationReady.countDown()
+                if (Build.VERSION.SDK_INT >= 29 && activeId == id) {
+                    runCatching { startForeground(42, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE) }
+                }
+            }
         } catch (error: Exception) {
             onStarted?.invoke(error)
             onStarted = null
@@ -84,7 +106,7 @@ class RecordingService : Service() {
         }
         return START_NOT_STICKY
     }
-    private fun capture(scope: String, id: String, timestamp: Long, completion: ((Exception?) -> Unit)?) {
+    private fun capture(scope: String, id: String, timestamp: Long, completion: ((Exception?) -> Unit)?, locationReady: CountDownLatch) {
         var starting = true
         var recorder: AudioRecord? = null
         val target = PendingRecordings.file(this, scope, id, true)
@@ -121,6 +143,9 @@ class RecordingService : Service() {
         } finally {
             try { recorder?.stop() } catch (_: Exception) { }
             recorder?.release()
+            // Publish a short capture only after its bounded snapshot finishes; the mic is already off.
+            if (!starting) try { locationReady.await(7, TimeUnit.SECONDS) }
+            catch (_: InterruptedException) { Thread.currentThread().interrupt() }
             if (target.exists()) target.renameTo(PendingRecordings.file(this, scope, id))
             running = false
             activeId = null

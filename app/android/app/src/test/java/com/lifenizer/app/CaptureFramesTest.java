@@ -42,4 +42,16 @@ public class CaptureFramesTest {
             catch (AEADBadTagException expected) { }
         }
     }
+    @Test public void locationMetadataIsBoundToCaptureAndCannotReplaceAudio() throws Exception {
+        byte[] location = "{\"town\":\"Berlin\",\"latitude\":52.52,\"longitude\":13.405}".getBytes("UTF-8");
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        DataOutputStream output = new DataOutputStream(bytes);
+        output.writeLong(0);
+        CaptureFrames.append(output, key, "library-a/location", "capture", 0, 0, location, location.length);
+        assertArrayEquals(location, read(bytes.toByteArray(), "library-a/location", "capture"));
+        for (String[] binding : new String[][]{{"library-a", "capture"}, {"library-a/location", "other"}, {"library-b/location", "capture"}}) {
+            try { read(bytes.toByteArray(), binding[0], binding[1]); fail("Location binding accepted"); }
+            catch (AEADBadTagException expected) { }
+        }
+    }
 }

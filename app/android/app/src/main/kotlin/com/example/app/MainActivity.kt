@@ -17,6 +17,7 @@ class MainActivity : FlutterActivity() {
     private var recordingPermission: MethodChannel.Result? = null
     private var recordingPermissionGranted = false
     private var imagesPermission: MethodChannel.Result? = null
+    private var locationPermission: MethodChannel.Result? = null
     private var resumed = false
     private lateinit var actions: MethodChannel
     private lateinit var shares: MethodChannel
@@ -35,6 +36,20 @@ class MainActivity : FlutterActivity() {
         deviceProtection = DeviceCredentialProtection(this, flutterEngine.dartExecutor.binaryMessenger)
         backupFiles?.dispose()
         backupFiles = BackupFiles(this, flutterEngine.dartExecutor.binaryMessenger)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.lifenizer/recording_location").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "permission" -> {
+                    if (RecordingLocation.permitted(this)) result.success(true)
+                    else if (locationPermission != null || !resumed) result.success(false)
+                    else {
+                        locationPermission = result
+                        requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), 9044)
+                    }
+                }
+                "current" -> RecordingLocation.current(this) { result.success(it) }
+                else -> result.notImplemented()
+            }
+        }
         actions = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.lifenizer/quick_actions")
         shares = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.lifenizer/shares")
         actions.setMethodCallHandler { call, result ->
@@ -110,6 +125,7 @@ class MainActivity : FlutterActivity() {
                             else result.error("recording", error.message, null)
                         }
                         val service = Intent(this, RecordingService::class.java).putExtra("scope", scope)
+                            .putExtra("captureLocation", call.argument<Boolean>("captureLocation") == true)
                         if (Build.VERSION.SDK_INT >= 26) startForegroundService(service) else startService(service)
                     } catch (error: Exception) {
                         RecordingService.onStarted = null
@@ -132,8 +148,7 @@ class MainActivity : FlutterActivity() {
                                     "pending" -> PendingRecordings.pending(this, scope)
                                     "read" -> PendingRecordings.read(this, scope, requireNotNull(call.argument<String>("id")))
                                     else -> {
-                                        val file = PendingRecordings.file(this, scope, requireNotNull(call.argument<String>("id")))
-                                        check(!file.exists() || file.delete()) { "Could not remove the imported capture." }
+                                        PendingRecordings.acknowledge(this, scope, requireNotNull(call.argument<String>("id")))
                                         null
                                     }
                                 }
@@ -247,6 +262,10 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 9044) {
+            locationPermission?.success(RecordingLocation.permitted(this))
+            locationPermission = null
+        }
         if (requestCode == 9043) {
             val result = imagesPermission
             imagesPermission = null
@@ -271,6 +290,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        locationPermission?.success(false)
+        locationPermission = null
         backupFiles?.dispose()
         backupFiles = null
         imagesPermission?.error("media", "Photo permission request was interrupted.", null)
