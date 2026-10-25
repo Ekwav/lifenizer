@@ -32,7 +32,6 @@ class _DiscordBotImportPanelState extends State<DiscordBotImportPanel> {
 
   Future<void> _connect() async {
     final token = _token.text;
-    _token.clear();
     await widget.service.connect(
       token: token,
       channels: _channels.text.split(RegExp(r'[\s,]+')),
@@ -40,6 +39,9 @@ class _DiscordBotImportPanelState extends State<DiscordBotImportPanel> {
       ownUserId: _own.text.trim(),
       remember: _remember,
     );
+    if (mounted && widget.service.error == null && widget.service.connected) {
+      _token.clear();
+    }
   }
 
   @override
@@ -88,7 +90,7 @@ class _DiscordBotImportPanelState extends State<DiscordBotImportPanel> {
             controller: _own,
             enabled: enabled,
             decoration: const InputDecoration(
-              labelText: 'Your Discord user ID (ekwav)',
+              labelText: 'Your Discord user ID (optional)',
               helperText:
                   'Real authors and replies are indexed; this identifies your side of conversations.',
             ),
@@ -121,7 +123,7 @@ class _DiscordBotImportPanelState extends State<DiscordBotImportPanel> {
                 ),
               if (service.connected || service.error != null)
                 TextButton(
-                  onPressed: service.removeAccount,
+                  onPressed: enabled ? service.removeAccount : null,
                   child: const Text('Stop & remove bot'),
                 ),
             ],

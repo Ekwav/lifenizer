@@ -5,6 +5,8 @@ import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
 import 'package:app/services/imap_import_service.dart';
 import 'package:app/services/local_vault_store.dart';
+import 'package:app/widgets/imap_import_panel.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -160,6 +162,35 @@ class _Fixture {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets(
+    'failed email setup preserves the password for correction and retry',
+    (tester) async {
+      final f = _Fixture();
+      await tester.runAsync(f.open);
+      addTearDown(f.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(child: ImapImportPanel(state: f.state)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final password = find.widgetWithText(TextField, 'Email app password');
+      await tester.enterText(password, 'draft-password');
+      final connect = find.text('Connect & import');
+      await tester.ensureVisible(connect);
+      await tester.tap(connect);
+      await tester.pumpAndSettle();
+      expect(f.state.emailImport.error, isNotNull);
+      expect(
+        tester.widget<TextField>(password).controller!.text,
+        'draft-password',
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   test(
     'attachment warnings accumulate across pages without blocking cursor progress',

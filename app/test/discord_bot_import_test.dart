@@ -1,9 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:app/services/discord_bot_import_service.dart';
+import 'package:app/widgets/discord_bot_import_panel.dart';
 
 class MemoryStore extends DiscordBotCredentialStore {
   Map<String, dynamic>? account;
@@ -33,6 +35,37 @@ Map<String, dynamic> message(
   'attachments': [],
 };
 void main() {
+  testWidgets('failed bot setup preserves the token for correction and retry', (
+    tester,
+  ) async {
+    final service = DiscordBotImportService(
+      liveUpdates: false,
+      ingest: (_) async => true,
+      store: MemoryStore(),
+    );
+    addTearDown(service.dispose);
+    service.setIdentity('test');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: DiscordBotImportPanel(service: service),
+          ),
+        ),
+      ),
+    );
+    final token = find.widgetWithText(TextField, 'Bot token');
+    await tester.enterText(token, 'draft-token');
+    final connect = find.text('Connect & import history');
+    await tester.ensureVisible(connect);
+    await tester.tap(connect);
+    await tester.pumpAndSettle();
+    expect(service.error, contains('numeric channel IDs'));
+    expect(tester.widget<TextField>(token).controller!.text, 'draft-token');
+    expect(find.text('Your Discord user ID (optional)'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   test(
     'Real authors and replies share archive identifiers and stable links',
     () {

@@ -30,12 +30,19 @@ class _ImapImportPanelState extends State<ImapImportPanel> {
   }
 
   Future<void> _loadSettings() async {
+    setState(() {
+      _settings = null;
+      _error = null;
+    });
     try {
       final settings = await widget.state.imapSettings();
       if (mounted) setState(() => _settings = settings);
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Could not load the configured email server.');
+        setState(
+          () => _error =
+              'Could not load the configured email server. Check your connection, then retry.',
+        );
       }
     }
   }
@@ -50,13 +57,17 @@ class _ImapImportPanelState extends State<ImapImportPanel> {
 
   Future<void> _connect() async {
     final password = _password.text;
-    _password.clear();
     await widget.state.emailImport.connect(
       username: _username.text,
       password: password,
       mailbox: _mailbox.text,
       remember: _remember,
     );
+    if (mounted &&
+        widget.state.emailImport.error == null &&
+        widget.state.emailImport.connected) {
+      _password.clear();
+    }
   }
 
   @override
@@ -64,7 +75,10 @@ class _ImapImportPanelState extends State<ImapImportPanel> {
     animation: Listenable.merge([widget.state, widget.state.emailImport]),
     builder: (context, _) {
       final service = widget.state.emailImport;
-      final enabled = !service.working && !widget.state.busy;
+      final enabled =
+          widget.state.isAuthenticated &&
+          !service.working &&
+          !widget.state.busy;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -77,6 +91,11 @@ class _ImapImportPanelState extends State<ImapImportPanel> {
               _settings!['configured'] == true
                   ? '${_settings!['host']}:${_settings!['port']} · ${_settings!['useTls'] == true ? 'TLS encrypted' : 'Local test server'}'
                   : 'The server administrator must configure an IMAP host.',
+            ),
+          if (_error != null || _settings?['configured'] == false)
+            TextButton(
+              onPressed: enabled ? _loadSettings : null,
+              child: const Text('Retry email setup'),
             ),
           const SizedBox(height: 8),
           const Text(
@@ -135,7 +154,7 @@ class _ImapImportPanelState extends State<ImapImportPanel> {
                 ),
               if (service.connected || service.error != null)
                 TextButton(
-                  onPressed: service.removeAccount,
+                  onPressed: enabled ? service.removeAccount : null,
                   child: const Text('Stop & remove account'),
                 ),
             ],
