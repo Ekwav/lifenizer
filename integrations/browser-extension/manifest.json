@@ -13,7 +13,8 @@
     "https://www.tiktok.com/*",
     "http://127.0.0.1/*",
     "https://web.whatsapp.com/*",
-    "https://discord.com/*"
+    "https://discord.com/*",
+    "https://lifenizer.coflnet.com/*"
   ],
   "background": {
     "service_worker": "src/background.js",
@@ -25,6 +26,7 @@
       "src/lib/sync.js",
       "src/lib/messages.js",
       "src/lib/debug.js",
+      "src/lib/pair.js",
       "src/background.js"
     ]
   },
@@ -66,6 +68,17 @@
         "src/lib/messages.js",
         "src/content/messages.js",
         "src/content/debug.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://lifenizer.coflnet.com/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "src/lib/pair.js",
+        "src/content/pair.js"
       ],
       "run_at": "document_idle"
     }

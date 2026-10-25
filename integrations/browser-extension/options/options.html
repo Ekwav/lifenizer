@@ -12,9 +12,12 @@
   @media (prefers-color-scheme:dark){body{background:#1e1e1e;color:#ddd}input{background:#2a2a2a;color:#ddd}.muted{color:#aaa}details,.actions{border-color:#555}}
 </style></head><body>
 <h1>Lifenizer History Sync</h1>
-<p class="muted">Open Lifenizer → Imports → Browser extension, choose a provider and enable the receiver to get its port and token. Data only goes to 127.0.0.1. Test connection checks the entered port and token; Save applies your settings.</p>
+<p><button id="pair">Connect / Pair with QR</button></p>
+<p class="muted">Connect to your unlocked Lifenizer vault with one click or scan its pairing QR. Your existing account choices are preserved.</p>
+<details><summary>Advanced manual connection</summary>
 <label>Port <input id="port" type="number" min="1" max="65535" required></label>
 <label>Token <input id="token" type="password" autocomplete="off"></label>
+</details>
 <div class="actions"><button id="save">Save</button> <button id="test">Test connection</button><span id="msg" class="muted" role="status" aria-live="polite"></span></div>
 <label><input id="periodic" type="checkbox"> Sync automatically once a day (browser must be running)</label>
 <label>Expected YouTube account (channel ID or @handle) <input id="youtubeAccount" type="text" autocomplete="off"></label>

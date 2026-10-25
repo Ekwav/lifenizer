@@ -9,6 +9,7 @@
     "debug:mcp": "node debug/bridge.cjs"
   },
   "dependencies": {
+    "jsqr": "1.4.0",
     "ws": "8.22.0"
   },
   "engines": {

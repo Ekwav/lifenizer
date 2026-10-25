@@ -12,8 +12,8 @@ function background(options = {}) {
   const store = { settings: { token: 'pair', discordEnabled: true, ...options.settings } }, requests = [], tabs = [];
   const event = { addListener() {} };
   const runtime = { id: 'extension-id', getURL: path => `chrome-extension://extension-id/${path}`, onMessage: { addListener: fn => { handler = fn; } }, onInstalled: event, onStartup: event };
-  const ext = { runtime, tabs: { create: async opts => { tabs.push(opts); throw Error('unexpected collection'); } }, storage: { local: { get: async keys => { const result = typeof keys === 'string' ? { [keys]: store[keys] } : Object.fromEntries(keys.map(k => [k, store[k]])); return result; }, set: async values => { Object.assign(store, values); if (values.status?.running === false) finish(); } }, onChanged: event }, alarms: { onAlarm: event, clear: async () => {}, create() {} } };
-  const context = { chrome: ext, LF: { sync: S, messages: M, payload: P }, URL, Date, Promise, Set, AbortSignal: options.AbortSignal || AbortSignal, setTimeout, clearTimeout, fetch: async (url, opts) => { requests.push([url, opts]); if (options.fetch) return options.fetch(url, opts); throw Error('app offline'); } };
+  const ext = { runtime, tabs: { create: async opts => { tabs.push(opts); if (opts.url.includes('/pair/pair.html')) return {id:99}; throw Error('unexpected collection'); } }, storage: { local: { get: async keys => { const result = typeof keys === 'string' ? { [keys]: store[keys] } : Object.fromEntries(keys.map(k => [k, store[k]])); return result; }, set: async values => { Object.assign(store, values); if (values.status?.running === false) finish(); } }, onChanged: event }, alarms: { onAlarm: event, clear: async () => {}, create() {} } };
+  const context = { chrome: ext, LF: { sync: S, messages: M, payload: P, pair: require('../src/lib/pair') }, URL, Date, Promise, Set, AbortSignal: options.AbortSignal || AbortSignal, setTimeout, clearTimeout, fetch: async (url, opts) => { requests.push([url, opts]); if (options.fetch) return options.fetch(url, opts); throw Error('app offline'); } };
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/background.js'), 'utf8'), context);
   return { store, requests, tabs, finished, send: (message, sender) => new Promise(resolve => { if (!handler(message, sender, resolve)) resolve(undefined); }) };
 }
@@ -117,4 +117,33 @@ test('stalled history and message requests use deadlines, preserve the queues an
   assert.equal(bg.store.visits[0].sent, false); assert.equal(bg.store.messages[0].sent, false);
   assert.equal(bg.store.status.delivery.error, 'timeout'); assert.equal(bg.store.status.messages.error, 'timeout');
   assert.equal((await bg.send({ type: 'lifenizer-state' }, popup)).running, false);
+});
+
+
+test('pair save accepts only own pairing page, preserves settings and blocks site credentials', async () => {
+  const bg = background({settings:{youtubeAccount:'@mine',debugEnabled:false}});
+  const connection = {port:43210,token:'new'};
+  const site = {id:'extension-id',frameId:0,tab:{id:1},url:'https://lifenizer.coflnet.com/'};
+  assert.equal(await bg.send({type:'lifenizer-pair-save',connection},site),undefined);
+  assert.equal((await bg.send({type:'lifenizer-pair-save',connection},{id:'extension-id',url:'chrome-extension://extension-id/pair/pair.html'})).ok,true);
+  assert.equal(bg.store.settings.port,43210);assert.equal(bg.store.settings.token,'new');
+  assert.equal(bg.store.settings.youtubeAccount,'@mine');assert.equal(bg.store.settings.discordEnabled,true);assert.equal(bg.store.settings.debugEnabled,false);
+});
+
+test('website discovery returns only minimal app state and is sender gated',async()=>{
+  const bg=background({fetch:async()=>({ok:true,json:async()=>({app:'lifenizer',version:1,unlocked:true,enabled:true,token:'never expose'})})});
+  const site={id:'extension-id',frameId:0,tab:{id:1},url:'https://lifenizer.coflnet.com/'};
+  assert.equal(await bg.send({type:'lifenizer-discovery'},{...site,frameId:1}),undefined);
+  const state=await bg.send({type:'lifenizer-discovery'},site);
+  assert.deepEqual(JSON.parse(JSON.stringify(state)),{installed:true,local:true,unlocked:true,enabled:true});
+});
+
+
+test('helper handoff accepts exact loopback nonce links from own top-frame content only',async()=>{
+  const bg=background(), link='http://127.0.0.1:47615/v1/pair#code='+'A'.repeat(43);
+  const helper={id:'extension-id',frameId:0,tab:{id:1},url:link};
+  for(const sender of [{...helper,frameId:1},{...helper,url:link.replace('127.0.0.1','evil.test')},{...helper,id:'other'}]) assert.equal(await bg.send({type:'lifenizer-open-pair',link},sender),undefined);
+  assert.equal(await bg.send({type:'lifenizer-open-pair',link:link+'evil'},helper),undefined);
+  await bg.send({type:'lifenizer-open-pair',link},helper);
+  assert.equal(bg.tabs[0].url,'chrome-extension://extension-id/pair/pair.html#'+encodeURIComponent(link));
 });

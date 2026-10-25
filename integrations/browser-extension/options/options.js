@@ -27,6 +27,8 @@ $('save').onclick = async () => {
     $('debugToken').closest('details')?.setAttribute('open', '');
     $('debugToken').focus(); say('Debug requires a separate 32–256 character secret'); return;
   }
+  const old = (await get('settings')).settings || {};
+  if ((old.token || old.port) && (old.token !== settings.token || old.port !== settings.port) && !confirm('Replace this browser connection? Queued imports may be delivered to the newly selected vault. Continue only if this is the intended vault.')) return;
   await set({ settings }); say('Saved');
 };
 $('test').onclick = async () => {
@@ -42,4 +44,5 @@ $('clear').onclick = async () => {
   $('clear').disabled = false;
   say(r?.ok ? 'Collected data deleted' : r?.error === 'sync-running' ? 'Sync is running. Wait for it to finish, then retry deletion.' : 'Data could not be deleted. Reload the extension and retry.');
 };
+$('pair').onclick = () => ext.tabs.create({url:ext.runtime.getURL('pair/pair.html')});
 load();

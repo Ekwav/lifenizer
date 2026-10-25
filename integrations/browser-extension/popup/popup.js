@@ -76,3 +76,5 @@ $('download').onclick = async () => {
 };
 ext.storage.onChanged.addListener(render);
 render(); checkApp();
+
+$('pair').onclick = () => ext.tabs.create({url:ext.runtime.getURL('pair/pair.html')});

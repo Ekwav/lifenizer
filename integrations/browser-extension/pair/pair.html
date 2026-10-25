@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Connect Lifenizer</title><style>
+:root{color-scheme:light dark}body{font:16px system-ui;max-width:620px;margin:40px auto;padding:16px}button,input{font:inherit;padding:10px;margin:4px}video{width:100%;max-height:320px}#status{min-height:3em}details{margin-top:24px}a{color:inherit}
+</style></head><body><h1>Connect your browser to Lifenizer</h1>
+<p>Open the desktop app and unlock the vault you want to receive browser imports. Connecting preserves your account choices and message capture settings.</p>
+<p id="status" role="status" aria-live="polite">Ready to connect.</p>
+<button id="open">Open Lifenizer and connect</button><button id="accept" hidden>Connect using scanned code</button>
+<h2>Pair with QR</h2><p>In Lifenizer, open Imports → Browser extension → Pair browser. Share the window displaying its QR, choose a saved QR image, or use a camera. Scanning stays on this device.</p>
+<button id="screen">Scan screen or window</button><button id="camera">Scan with camera</button><label>Scan QR image <input id="image" type="file" accept="image/*"></label>
+<video id="preview" muted playsinline hidden></video><button id="cancel">Cancel</button>
+<details><summary>Custom port</summary><label>Use the receiver port configured in Lifenizer <input id="port" type="number" min="1" max="65535" value="47615"></label></details>
+<p><a href="../options/options.html">Settings and advanced manual connection</a></p>
+<script src="../src/lib/pair.js"></script><script src="../vendor/jsQR.js"></script><script src="pair.js"></script></body></html>

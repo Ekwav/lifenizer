@@ -40,6 +40,9 @@ test('testing unsaved settings does not enable capture, and invalid settings can
   assert.equal(ui.writes.length, 0);
   ui.elements.port.valid = true;
   await ui.elements.save.onclick();
+  assert.equal(ui.writes.length, 0);
+  ui.context.confirm = () => true;
+  await ui.elements.save.onclick();
   assert.equal(ui.store.settings.discordEnabled, true);
 });
 

@@ -2,7 +2,7 @@
 // Orchestrates: open history tab -> ask content script to collect -> merge
 // into local store -> deliver to the desktop app on 127.0.0.1.
 if (typeof importScripts === 'function') {
-  importScripts('lib/headers.js', 'lib/youtube.js', 'lib/tiktok.js', 'lib/payload.js', 'lib/sync.js', 'lib/messages.js', 'lib/debug.js');
+  importScripts('lib/headers.js', 'lib/youtube.js', 'lib/tiktok.js', 'lib/payload.js', 'lib/sync.js', 'lib/messages.js', 'lib/debug.js', 'lib/pair.js');
 }
 const ext = globalThis.browser || globalThis.chrome;
 const LF = globalThis.LF;
@@ -172,6 +172,35 @@ function chatSender(sender, platform) {
 }
 ext.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg) return false;
+  const ownPair = sender.id === ext.runtime.id && sender.url?.split('#')[0] === ext.runtime.getURL('pair/pair.html');
+  const site = LF.pair?.siteSender(sender, ext.runtime.id);
+  const helper = sender.id === ext.runtime.id && sender.tab && sender.frameId === 0 && LF.pair?.parse(sender.url);
+  if (msg.type === 'lifenizer-open-pair') {
+    if (!site && !(helper && msg.link === sender.url)) return false;
+    ext.tabs.create({url:ext.runtime.getURL('pair/pair.html') + (helper ? '#' + encodeURIComponent(msg.link) : '')});
+    sendResponse({ok:true}); return false;
+  }
+  if (msg.type === 'lifenizer-discovery') {
+    if (!site) return false;
+    loadSettings().then(async s => {
+      try {
+        const r = await fetch(`http://127.0.0.1:${s.port}/v1/discovery`, {signal:AbortSignal.timeout(2000), redirect:'error'});
+        const d = await r.json();
+        if (!r.ok || d.app !== 'lifenizer' || d.version !== 1) throw Error();
+        sendResponse({installed:true, local:true, unlocked:d.unlocked === true, enabled:d.enabled === true});
+      } catch (_) { sendResponse({installed:true,local:false,unlocked:false,enabled:false}); }
+    }); return true;
+  }
+  if (msg.type === 'lifenizer-pair-save') {
+    if (!ownPair || !Number.isInteger(msg.connection?.port) || msg.connection.port < 1 || msg.connection.port > 65535 || typeof msg.connection.token !== 'string' || !msg.connection.token || msg.connection.token.length > 4096) return false;
+    if (running) { sendResponse({error:'sync-running'}); return false; }
+    running = true;
+    queueMessages(async () => {
+      const settings = (await get('settings')).settings || {};
+      await set({settings:{...settings,port:msg.connection.port,token:msg.connection.token}});
+    }).then(() => {running=false; sendResponse({ok:true});}, () => {running=false; sendResponse({error:'save-failed'});});
+    return true;
+  }
   if (msg.type === 'lifenizer-messages' || msg.type === 'lifenizer-message-status') {
     if (!chatSender(sender, msg.platform)) return false;
     const work = async () => {
