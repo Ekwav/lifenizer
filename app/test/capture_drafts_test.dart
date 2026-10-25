@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app/app_state.dart';
 import 'package:app/models.dart';
 import 'package:app/pages/capture_page.dart';
@@ -21,6 +23,7 @@ class _State extends LifenizerAppState {
   @override
   bool get isAuthenticated => session != null;
   bool fail = false;
+  Completer<void>? saveGate;
   List<String>? savedSegments;
   String? savedText;
   int fileImports = 0;
@@ -32,6 +35,7 @@ class _State extends LifenizerAppState {
     String source = 'manual-text',
     List<String> participantIds = const [],
   }) async {
+    await saveGate?.future;
     error = fail ? 'Disk full' : null;
     if (!fail) savedText = text;
   }
@@ -43,6 +47,7 @@ class _State extends LifenizerAppState {
     required List<String> segmentTexts,
     List<String> participantIds = const [],
   }) async {
+    await saveGate?.future;
     error = fail ? 'Disk full' : null;
     if (!fail) savedSegments = List.of(segmentTexts);
   }
@@ -133,6 +138,61 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });
+  }
+
+  for (final typed in [false, true]) {
+    for (final removeShell in [false, true]) {
+      testWidgets(
+        '${typed ? 'typed' : 'manual'} save completes after ${removeShell ? 'shell disposal' : 'page navigation'}',
+        (tester) async {
+          final state = _State();
+          addTearDown(state.dispose);
+          QuickActionService.instance.consume();
+          await tester.pumpWidget(MaterialApp(home: VaultShell(state: state)));
+          await click(tester, 'Capture');
+          final draft = tester
+              .widget<CapturePage>(find.byType(CapturePage))
+              .draft!;
+          if (typed) {
+            await click(tester, 'Start session');
+            draft.segmentController.text = 'Pending save';
+          } else {
+            draft.textController.text = 'Pending save';
+          }
+          state.saveGate = Completer<void>();
+          final button = find.widgetWithText(
+            FilledButton,
+            typed ? 'Stop session' : 'Encrypt import',
+          );
+          await tester.ensureVisible(button);
+          final save =
+              (tester.widget<FilledButton>(button).onPressed!
+                  as Future<void> Function())();
+          if (removeShell) {
+            await tester.pumpWidget(const SizedBox.shrink());
+          } else {
+            QuickActionService.instance.request(const QuickAction());
+            await tester.pumpAndSettle();
+            expect(find.byType(CapturePage), findsNothing);
+          }
+          state.saveGate!.complete();
+          await save;
+          await tester.pump();
+          if (typed) {
+            expect(state.savedSegments, ['Pending save']);
+          } else {
+            expect(state.savedText, 'Pending save');
+          }
+          if (!removeShell) {
+            expect(draft.textController.text, isEmpty);
+            expect(draft.segmentController.text, isEmpty);
+            expect(draft.recording, isFalse);
+          }
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox.shrink());
+        },
+      );
+    }
   }
 
   testWidgets(

@@ -31,8 +31,10 @@ class CaptureDraft {
   List<String> participantIds = [];
   List<String> recordingParticipantIds = [];
   bool recording = false;
+  bool _disposed = false;
 
   void dispose() {
+    _disposed = true;
     titleController.dispose();
     participantsController.dispose();
     textController.dispose();
@@ -124,7 +126,8 @@ class _CapturePageState extends State<CapturePage> {
                         participantIds: draft.participantIds,
                         text: draft.textController.text,
                       );
-                      if (identical(session, widget.state.session) &&
+                      if (!draft._disposed &&
+                          identical(session, widget.state.session) &&
                           widget.state.error == null) {
                         draft.titleController.clear();
                         draft.participantsController.clear();
@@ -184,7 +187,8 @@ class _CapturePageState extends State<CapturePage> {
                         participantIds: draft.recordingParticipantIds,
                         segmentTexts: segments,
                       );
-                      if (identical(session, widget.state.session) &&
+                      if (!draft._disposed &&
+                          identical(session, widget.state.session) &&
                           widget.state.error == null) {
                         draft.recording = false;
                         draft.segments.clear();
