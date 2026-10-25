@@ -54,6 +54,10 @@ async function collectIn(platform, url, settings, marker, cutoffMs) {
 }
 
 async function syncPlatform(platform, settings) {
+  if (!LF.sync.selection(settings[`${platform}Account`])) {
+    await setStatus({ [platform]: { state: 'error', message: LF.sync.message('account-unconfigured') } });
+    return;
+  }
   const data = await get(['visits', 'firstSync']);
   let store = data.visits || [];
   const mine = store.filter((v) => v.platform === platform && LF.sync.accountMatches(v, settings));
@@ -115,8 +119,8 @@ async function syncNow(platforms, quiet) {
   running = true;
   try {
     const settings = { ...(await loadSettings()), quiet: !!quiet };
-    await setStatus({ running: true, started: new Date().toISOString() });
-    for (const p of platforms || ['youtube', 'tiktok']) await syncPlatform(p, settings);
+    await setStatus({ running: true, fatal: null, started: new Date().toISOString() });
+    for (const p of platforms || ['youtube', 'tiktok'].filter(p => LF.sync.selection(settings[`${p}Account`]))) await syncPlatform(p, settings);
     await deliverAll(settings);
     await queueMessages(() => deliverMessages());
   } catch (e) {
@@ -191,12 +195,25 @@ ext.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (!extensionPage(sender)) return false;
+  if (msg.type === 'lifenizer-state') { sendResponse({ running }); return false; }
+  if (msg.type === 'lifenizer-clear') {
+    if (running) { sendResponse({ error: 'sync-running' }); return false; }
+    running = true;
+    queueMessages(() => set({ visits: [], messages: [], status: {} }))
+      .then(() => { running = false; sendResponse({ ok: true }); }, () => { running = false; sendResponse({ error: 'clear-failed' }); });
+    return true;
+  }
+  if (msg.type === 'lifenizer-retry') {
+    const started = !running; syncNow([], true); sendResponse({ started }); return false;
+  }
   if (msg.type === 'lifenizer-sync') {
     if (msg.platforms !== undefined && (!Array.isArray(msg.platforms) || msg.platforms.some(p => !['youtube', 'tiktok'].includes(p)))) return false;
     const started = !running; syncNow(msg.platforms); sendResponse({ started }); return false;
   }
   if (msg.type === 'lifenizer-ping') {
-    loadSettings().then((s) => LF.sync.ping(s, (u, o) => fetch(u, o))).then(sendResponse);
+    const connection = msg.connection;
+    if (connection && (!Number.isInteger(connection.port) || connection.port < 1 || connection.port > 65535 || typeof connection.token !== 'string')) return false;
+    loadSettings().then((s) => LF.sync.ping(connection || s, (u, o) => fetch(u, o))).then(sendResponse);
     return true;
   }
   return false;

@@ -117,7 +117,7 @@
     'app-busy': 'Lifenizer is busy or the import failed, the entries are kept and sent on the next sync',
     'not-paired': 'Not paired with the app, use "Download export" or enter port and token',
     'too-large': 'The app refused the request as too large',
-    'invalid-response': 'The app did not acknowledge all entries. Data stays queued; check the port and retry delivery.',
+    'invalid-response': 'Unexpected or incomplete app response. Check the port and retry; unacknowledged data stays queued.',
   };
   const message = (code) => MESSAGES[code] || `Error: ${code}`;
 

@@ -20,6 +20,7 @@
   async function deliver(store, settings, fetchImpl) {
     const pending = store.filter(m => !m.sent && settings[`${m.platform}Enabled`]);
     let sent = 0;
+    if (!pending.length) return { sent };
     if (!settings.token) return { sent, error: 'not-paired' };
     for (let i = 0; i < pending.length; i += MAX_BATCH) {
       const part = pending.slice(i, i + MAX_BATCH);

@@ -36,7 +36,8 @@ async function render() {
   const messages = $('messages');
   messages.replaceChildren();
   if (status.messages) line(messages, `${status.messages.sent || 0} messages delivered, ${status.messages.pending || 0} waiting. ${status.messages.message || ''}`, status.messages.state === 'error' ? 'err' : 'muted');
-  $('sync').disabled = !!status.running;
+  const state = await send({ type: 'lifenizer-state' });
+  $('sync').disabled = $('retry').disabled = !!state?.running;
   const d = status.delivery, el = $('delivery');
   el.replaceChildren();
   if (status.fatal) line(el, status.fatal, 'err');
@@ -48,10 +49,10 @@ async function render() {
 async function checkApp() {
   const r = await send({ type: 'lifenizer-ping' });
   const el = $('app');
-  if (!r) { el.textContent = 'App status unknown'; return; }
+  if (!r) { el.textContent = 'Extension unavailable. Reopen the popup or reload the extension.'; return; }
   if (r.ok) { el.className = r.unlocked ? 'ok' : 'err'; el.textContent = r.unlocked ? 'Lifenizer connected' : 'Lifenizer connected, vault locked'; return; }
   el.className = 'err';
-  el.textContent = r.error === 'bad-token' ? 'Token rejected, check Settings' : 'App not reachable. Use Download export or check Settings.';
+  el.textContent = globalThis.LF.sync.message(r.error);
 }
 
 function download(name, data) {
@@ -61,15 +62,17 @@ function download(name, data) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-$('sync').onclick = async () => { await send({ type: 'lifenizer-sync' }); render(); };
+$('sync').onclick = async () => { await send({ type: 'lifenizer-sync', ...($('platform').value ? { platforms: [$('platform').value] } : {}) }); render(); };
+$('retry').onclick = async () => { await send({ type: 'lifenizer-retry' }); render(); checkApp(); };
 $('options').onclick = (e) => { e.preventDefault(); ext.runtime.openOptionsPage(); };
 $('download').onclick = async () => {
-  const { visits = [] } = await get('visits');
+  const { visits = [], messages = [] } = await get(['visits', 'messages']);
   const P = globalThis.LF.payload;
   const yt = P.buildTakeoutYoutube(visits), tt = P.buildTiktokExport(visits);
   if (yt.length) download('watch-history.json', yt);
   if (tt.Activity['Video Browsing History'].VideoList.length) download('user_data.json', tt);
-  if (!yt.length && !tt.Activity['Video Browsing History'].VideoList.length) $('delivery').textContent = 'Nothing collected yet. Run Sync now first.';
+  if (messages.length) download('lifenizer-messages.json', { source: 'lifenizer-extension', version: 1, messages: messages.map(({ sent, ...m }) => m) });
+  if (!yt.length && !tt.Activity['Video Browsing History'].VideoList.length && !messages.length) $('delivery').textContent = 'Nothing collected yet. Sync configured history or enable message capture in Settings.';
 };
 ext.storage.onChanged.addListener(render);
 render(); checkApp();

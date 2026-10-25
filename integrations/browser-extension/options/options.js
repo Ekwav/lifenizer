@@ -20,14 +20,22 @@ function read() {
 }
 const say = (t) => { $('msg').textContent = t; };
 $('save').onclick = async () => {
+  if (FIELDS.some(f => !$(f).reportValidity())) return;
   const settings = read();
   if (settings.debugEnabled && (settings.debugToken.length < 32 || settings.debugToken.length > 256)) { say('Debug requires a separate 32–256 character secret'); return; }
   await set({ settings }); say('Saved');
 };
 $('test').onclick = async () => {
-  await set({ settings: read() });
-  const r = await send({ type: 'lifenizer-ping' });
-  say(!r ? 'No answer' : r.ok ? (r.unlocked ? 'Connected' : 'Connected, vault locked') : r.error === 'bad-token' ? 'Token rejected' : 'App not reachable');
+  if (!$('port').reportValidity()) return;
+  say('Testing connection…');
+  const r = await send({ type: 'lifenizer-ping', connection: { port: Number($('port').value), token: $('token').value.trim() } });
+  say(!r ? 'Extension unavailable. Reload the extension and retry.' : r.ok ? (r.unlocked ? 'Connected. Save to apply these settings.' : 'Connected, vault locked. Unlock Lifenizer, then save settings.') : globalThis.LF.sync.message(r.error));
 };
-$('clear').onclick = async () => { await set({ visits: [], messages: [], status: {} }); say('Collected data deleted'); };
+$('clear').onclick = async () => {
+  if (!confirm('Permanently delete all locally collected watch history and messages, including undelivered data? Download an export first if needed. Enabled message capture will continue.')) return;
+  $('clear').disabled = true;
+  const r = await send({ type: 'lifenizer-clear' });
+  $('clear').disabled = false;
+  say(r?.ok ? 'Collected data deleted' : r?.error === 'sync-running' ? 'Sync is running. Wait for it to finish, then retry deletion.' : 'Data could not be deleted. Reload the extension and retry.');
+};
 load();
