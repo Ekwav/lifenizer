@@ -74,11 +74,11 @@ def prepare(args):
         stage = Path(temporary)
         shutil.copyfile(apk, stage / ARTIFACTS[0])
         with tarfile.open(stage / ARTIFACTS[1], "w:gz") as archive:
-            archive.add(bundle, arcname="lifenizer/app/build/linux/x64/release/bundle")
+            archive.add(bundle, arcname="lifenizer")
             for name in ("install.sh", "lifenizer.desktop"):
                 archive.add(ROOT / "integrations/kde" / name, arcname=f"lifenizer/integrations/kde/{name}")
             instructions = stage / "README.txt"
-            instructions.write_text("Lifenizer for Linux x86-64\n\nExtract this archive and open a terminal in the lifenizer directory, then run:\n  bash integrations/kde/install.sh\nOpen Lifenizer from your applications menu. The installer also registers\nlifenizer:// pairing links and KDE KRunner integration for your user.\nRun without installation: ./app/build/linux/x64/release/bundle/lifenizer\nRequires a glibc Linux desktop with GTK 3, libsecret and an unlocked Secret\nService keyring (for example GNOME Keyring or a compatible KWallet service).\nMicrophone recording requires the record plugin runtime tools, including\nparecord (PulseAudio/PipeWire compatibility) and ffmpeg.\nIf launch fails, inspect missing libraries with:\n  ldd app/build/linux/x64/release/bundle/lifenizer\n")
+            instructions.write_text("Lifenizer for Linux x86-64\n\nExtract this archive and open a terminal in the lifenizer directory.\nRun directly:\n  ./lifenizer\nOr install for your user:\n  bash integrations/kde/install.sh .\nOpen Lifenizer from your applications menu. The installer also registers\nlifenizer:// pairing links and KDE KRunner integration for your user.\nRequires a glibc Linux desktop with GTK 3, libsecret and an unlocked Secret\nService keyring (for example GNOME Keyring or a compatible KWallet service).\nMicrophone recording requires the record plugin runtime tools, including\nparecord (PulseAudio/PipeWire compatibility) and ffmpeg.\nIf launch fails, inspect missing libraries with:\n  ldd ./lifenizer\n")
             archive.add(instructions, arcname="lifenizer/README.txt")
             instructions.unlink()
         for name in ARTIFACTS[2:]:
