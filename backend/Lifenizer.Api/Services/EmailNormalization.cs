@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Xml;
 using Lifenizer.Api.Services.Parsers;
 using Lifenizer.Core;
 using MimeKit;
@@ -15,6 +18,10 @@ public static class EmailNormalization
     {
         var participants = new Dictionary<string, NormalizedParticipant>(StringComparer.Ordinal);
         var conversations = new List<NormalizedConversation>();
+        var budget = Stopwatch.StartNew();
+        var attempts = 0;
+        var pdfAttempts = 0;
+        var indexedChars = 0;
         foreach (var (message, extraMetadata) in messages)
         {
             var addresses = message.From.Mailboxes.Concat(message.To.Mailboxes).Concat(message.Cc.Mailboxes).Concat(message.Bcc.Mailboxes);
@@ -28,7 +35,7 @@ public static class EmailNormalization
             }
 
             var sender = message.From.Mailboxes.FirstOrDefault() ?? message.Sender;
-            var text = message.TextBody ?? (message.HtmlBody is { } html ? CommonParsing.StripHtml(html) : "");
+            var text = !string.IsNullOrWhiteSpace(message.TextBody) ? message.TextBody : (message.HtmlBody is { } html ? CommonParsing.StripHtml(html) : "");
             var metadata = extraMetadata ?? new Dictionary<string, string>();
             foreach (var header in message.Headers.Where(header => header.Id is HeaderId.MessageId or HeaderId.InReplyTo or HeaderId.References or HeaderId.Date or HeaderId.From or HeaderId.To or HeaderId.Cc))
                 metadata[header.Field.ToLowerInvariant()] = header.Value;
@@ -39,20 +46,52 @@ public static class EmailNormalization
             var segments = new List<NormalizedSegment> { new(text.Trim(), sender is null ? null : Name(sender), 0,
                 message.Date == DateTimeOffset.MinValue ? null : message.Date, sender is null ? null : Identifier(sender), messageId) };
             var pdfIndex = 0;
-            foreach (var attachment in message.Attachments.OfType<MimePart>())
+            var indexedPdfs = 0;
+            var attachmentIndex = 0;
+            foreach (var attachment in message.Attachments)
             {
-                var name = attachment.FileName ?? attachment.ContentType.Name ?? "attachment.pdf";
-                if (!attachment.ContentType.IsMimeType("application", "pdf") && !name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) continue;
-                using var decoded = new BoundedAttachmentStream();
-                if (attachment.Content is null) throw new InvalidOperationException("Email PDF attachment has no content.");
-                attachment.Content.DecodeTo(decoded);
-                var attachmentText = PdfTextExtractor.Extract(decoded.ToArray());
-                segments.Add(new NormalizedSegment($"PDF attachment: {name}\n{attachmentText}", sender is null ? null : Name(sender), 0,
-                    message.Date == DateTimeOffset.MinValue ? null : message.Date, sender is null ? null : Identifier(sender),
-                    messageId is null ? null : $"{messageId}:pdf:{pdfIndex}"));
-                pdfIndex++;
+                var index = attachmentIndex++;
+                var key = $"attachment-{index}-indexing";
+                var name = attachment.ContentDisposition?.FileName ?? attachment.ContentType.Name ?? "attachment";
+                var kind = BoundedAttachmentText.Kind(name, attachment.ContentType.MimeType);
+                var pdfId = kind == "pdf" ? pdfIndex++ : -1;
+                if (kind is null || attachment is not MimePart part)
+                {
+                    metadata[key] = "skipped: unsupported attachment type";
+                    continue;
+                }
+                if (attempts >= 32 || (kind == "pdf" && pdfAttempts >= 4) || indexedChars >= 8 * 1024 * 1024 || budget.Elapsed >= TimeSpan.FromMinutes(2))
+                {
+                    metadata[key] = "skipped: email attachment indexing budget exceeded";
+                    continue;
+                }
+                attempts++;
+                if (kind == "pdf") pdfAttempts++;
+                try
+                {
+                    using var decoded = new BoundedAttachmentStream();
+                    if (part.Content is null) throw new InvalidDataException("Attachment has no content.");
+                    part.Content.DecodeTo(decoded);
+                    var bytes = decoded.ToArray();
+                    var remaining = TimeSpan.FromMinutes(2) - budget.Elapsed;
+                    if (remaining <= TimeSpan.Zero) throw new InvalidDataException("Email attachment indexing time budget exceeded.");
+                    var attachmentText = BoundedAttachmentText.Extract(bytes, kind, part.ContentType.Charset, remaining);
+                    if (attachmentText.Length > 8 * 1024 * 1024 - indexedChars)
+                        throw new InvalidDataException("Email attachment text exceeds the response indexing budget.");
+                    indexedChars += attachmentText.Length;
+                    var sourceId = messageId ?? "attachment-sha256:" + Convert.ToHexString(SHA256.HashData(bytes));
+                    segments.Add(new NormalizedSegment($"{(kind == "pdf" ? "PDF attachment" : "Attachment")}: {name}\n{attachmentText}", sender is null ? null : Name(sender), 0,
+                        message.Date == DateTimeOffset.MinValue ? null : message.Date, sender is null ? null : Identifier(sender),
+                        kind == "pdf" ? $"{sourceId}:pdf:{pdfId}" : $"{sourceId}:attachment:{index}"));
+                    metadata[key] = "indexed";
+                    if (kind == "pdf") indexedPdfs++;
+                }
+                catch (Exception exception) when (exception is InvalidDataException or IOException or InvalidOperationException or ArgumentException or XmlException or NotSupportedException or FormatException)
+                {
+                    metadata[key] = "failed: " + exception.Message;
+                }
             }
-            if (pdfIndex > 0) metadata["indexed-pdf-attachments"] = pdfIndex.ToString();
+            if (indexedPdfs > 0) metadata["indexed-pdf-attachments"] = indexedPdfs.ToString();
             conversations.Add(new NormalizedConversation(
                 message.Subject ?? request.Title ?? "Email message", source,
                 CommonParsing.ParticipantNames(request).Concat(identities.Select(Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
@@ -70,12 +109,12 @@ public static class EmailNormalization
     {
         public override void Write(byte[] buffer, int offset, int count)
         {
-            if (Length + count > PdfTextExtractor.MaxBytes) throw new InvalidOperationException("Email PDF attachment exceeds 25 MiB.");
+            if (Length + count > BoundedImportArchive.MaxBytes) throw new InvalidOperationException("Email attachment exceeds 25 MiB.");
             base.Write(buffer, offset, count);
         }
         public override void Write(ReadOnlySpan<byte> buffer)
         {
-            if (Length + buffer.Length > PdfTextExtractor.MaxBytes) throw new InvalidOperationException("Email PDF attachment exceeds 25 MiB.");
+            if (Length + buffer.Length > BoundedImportArchive.MaxBytes) throw new InvalidOperationException("Email attachment exceeds 25 MiB.");
             base.Write(buffer);
         }
     }

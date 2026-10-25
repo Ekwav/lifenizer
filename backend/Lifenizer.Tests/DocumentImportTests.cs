@@ -90,9 +90,12 @@ public sealed class DocumentImportTests
     }
 
     [Test]
-    public void BadAttachmentDoesNotSilentlyAdvanceEmailImport()
+    public void BadAttachmentPreservesEmailBodyAndReportsIndexingFailure()
     {
-        Assert.Throws<InvalidOperationException>(() => new MboxParser().Parse(new ImportRequest(Text: PdfEmail(Encoding.UTF8.GetBytes("corrupt")))));
+        var result = new MboxParser().Parse(new ImportRequest(Text: PdfEmail(Encoding.UTF8.GetBytes("corrupt"))));
+        var conversation = result.Conversations.Single();
+        Assert.That(conversation.Segments.Single().Text, Is.EqualTo("Body alone has no invoice text"));
+        Assert.That(conversation.Metadata!["attachment-0-indexing"], Does.StartWith("failed:").And.Contain("not a PDF"));
     }
 
     [Test]

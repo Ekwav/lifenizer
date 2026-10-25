@@ -17,10 +17,13 @@ public sealed class EmailImportTests
         Assert.Multiple(() =>
         {
             Assert.That(conversation.Title, Is.EqualTo("Résumé"));
-            Assert.That(conversation.Segments.Single().Text, Is.EqualTo("Café on a soft line."));
-            Assert.That(conversation.Segments.Single().ParticipantName, Is.EqualTo("José"));
-            Assert.That(conversation.Segments.Single().ParticipantIdentifier, Is.EqualTo("email:jose@example.test"));
-            Assert.That(conversation.Segments.Single().SourceMessageId, Is.EqualTo("reply@example.test"));
+            Assert.That(conversation.Segments[1].Text, Does.Contain("SECRET ATTACHMENT"));
+            Assert.That(conversation.Segments[1].SourceMessageId, Is.EqualTo("reply@example.test:attachment:0"));
+            Assert.That(conversation.Metadata!["attachment-0-indexing"], Is.EqualTo("indexed"));
+            Assert.That(conversation.Segments[0].Text, Is.EqualTo("Café on a soft line."));
+            Assert.That(conversation.Segments[0].ParticipantName, Is.EqualTo("José"));
+            Assert.That(conversation.Segments[0].ParticipantIdentifier, Is.EqualTo("email:jose@example.test"));
+            Assert.That(conversation.Segments[0].SourceMessageId, Is.EqualTo("reply@example.test"));
             Assert.That(conversation.SourceThreadId, Is.EqualTo("root@example.test"));
             Assert.That(conversation.ArtifactNames, Is.EqualTo(new[] { "private.txt" }));
             Assert.That(result.Participants.Where(person => person.DisplayName == "Sam").ToArray(), Has.Length.EqualTo(2));
