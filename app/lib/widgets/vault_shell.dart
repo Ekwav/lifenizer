@@ -80,6 +80,36 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
   }
 
   Future<void> _lock() async {
+    final identity = widget.state.recordingIdentity;
+    final draft = _captureDraft;
+    if (draft?.hasUnsavedChanges ?? false) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Discard drafts and lock?'),
+          content: const Text(
+            'Your unsaved text and typed session notes will be lost. Save them before locking to keep them.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep editing'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Discard drafts and lock'),
+            ),
+          ],
+        ),
+      );
+      if (discard != true ||
+          !mounted ||
+          widget.state.recordingIdentity != identity ||
+          !identical(_captureDraft, draft) ||
+          widget.state.busy) {
+        return;
+      }
+    }
     if (!widget.state.pairing.matchesVault(
           widget.state.apiBaseUrl,
           widget.state.rememberedEmail,
@@ -111,7 +141,11 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
         ],
       ),
     );
-    if (!mounted) return;
+    if (!mounted ||
+        widget.state.recordingIdentity != identity ||
+        !identical(_captureDraft, draft)) {
+      return;
+    }
     if (action == 'security') {
       await showDeviceSecurityDialog(context, widget.state);
     } else if (action == 'lock') {

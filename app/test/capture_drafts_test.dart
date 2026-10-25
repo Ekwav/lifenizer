@@ -140,6 +140,82 @@ void main() {
     });
   }
 
+  testWidgets('manual lock protects dirty drafts and clean lock stays direct', (
+    tester,
+  ) async {
+    final state = _State();
+    addTearDown(state.dispose);
+    var locks = 0;
+    state.stopRecording = () async {
+      locks++;
+    };
+    QuickActionService.instance.consume();
+    await tester.pumpWidget(MaterialApp(home: VaultShell(state: state)));
+    await click(tester, 'Capture');
+    final draft = tester.widget<CapturePage>(find.byType(CapturePage)).draft!;
+    expect(draft.hasUnsavedChanges, isFalse);
+    draft.textController.text = 'Keep my manual draft';
+    await click(tester, 'Start session');
+    draft.segmentController.text = 'Keep my typed draft';
+    // Drafts remain protected even after navigating away from Capture.
+    QuickActionService.instance.request(const QuickAction());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Lock vault'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard drafts and lock?'), findsOneWidget);
+    expect(locks, 0);
+    await tester.tap(find.text('Keep editing'));
+    await tester.pumpAndSettle();
+    expect(locks, 0);
+    expect(draft.textController.text, 'Keep my manual draft');
+    expect(draft.segmentController.text, 'Keep my typed draft');
+    await tester.tap(find.byTooltip('Lock vault'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Discard drafts and lock'));
+    await tester.pumpAndSettle();
+    expect(locks, 1);
+    expect(state.session, isNull);
+    // A clean unlocked library needs no draft confirmation.
+    state.session = _State._session('clean');
+    await tester.pumpWidget(MaterialApp(home: VaultShell(state: state)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Lock vault'));
+    await tester.pumpAndSettle();
+    expect(locks, 2);
+    expect(find.text('Discard drafts and lock?'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('dirty lock confirmation cannot lock a replacement library', (
+    tester,
+  ) async {
+    final state = _State();
+    addTearDown(state.dispose);
+    var locks = 0;
+    state.stopRecording = () async {
+      locks++;
+    };
+    QuickActionService.instance.consume();
+    await tester.pumpWidget(MaterialApp(home: VaultShell(state: state)));
+    await click(tester, 'Capture');
+    tester
+            .widget<CapturePage>(find.byType(CapturePage))
+            .draft!
+            .textController
+            .text =
+        'Original library draft';
+    await tester.tap(find.byTooltip('Lock vault'));
+    await tester.pumpAndSettle();
+    state.session = _State._session('replacement');
+    await tester.tap(find.text('Discard drafts and lock'));
+    await tester.pumpAndSettle();
+    expect(locks, 0);
+    expect(state.session!.vaultId, 'replacement');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   for (final typed in [false, true]) {
     for (final removeShell in [false, true]) {
       testWidgets(

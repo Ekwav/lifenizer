@@ -79,13 +79,15 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
     if (draft == null || !await confirmRecordingDiscard(context)) return;
     if (!mounted ||
         widget.state.recordingIdentity != identity ||
-        !identical(widget.state.audioDraft, draft))
+        !identical(widget.state.audioDraft, draft)) {
       return;
+    }
     try {
       await widget.state.discardAudioDraft();
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         widget.state.reportError('Could not discard the recording. Try again.');
+      }
     }
   }
 

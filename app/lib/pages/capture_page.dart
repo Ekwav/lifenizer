@@ -33,6 +33,20 @@ class CaptureDraft {
   bool recording = false;
   bool _disposed = false;
 
+  bool get hasUnsavedChanges =>
+      recording ||
+      segments.isNotEmpty ||
+      participantIds.isNotEmpty ||
+      recordingParticipantIds.isNotEmpty ||
+      recordingTitleController.text.trim() != 'Live session' ||
+      [
+        titleController,
+        participantsController,
+        textController,
+        recordingParticipantsController,
+        segmentController,
+      ].any((controller) => controller.text.trim().isNotEmpty);
+
   void dispose() {
     _disposed = true;
     titleController.dispose();
@@ -64,8 +78,9 @@ class _CapturePageState extends State<CapturePage> {
       final file = result?.files.single;
       if (file == null ||
           !mounted ||
-          widget.state.recordingIdentity != identity)
+          widget.state.recordingIdentity != identity) {
         return;
+      }
       final bytes = await readExportBytes(file);
       if (!mounted || widget.state.recordingIdentity != identity) return;
       if (widget.state.busy) {
