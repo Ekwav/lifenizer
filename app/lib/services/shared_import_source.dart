@@ -117,6 +117,33 @@ bool _isYouTubeHtml(String content) {
           lower.contains('youtube.com/watch'));
 }
 
+/// Recognizes a Paperless manifest or document ZIP without inflating entries.
+bool isPaperlessExportZip(List<int> bytes) {
+  try {
+    final directory = ZipDirectory()..read(InputMemoryStream(bytes));
+    var documents = false;
+    for (final entry in directory.fileHeaders) {
+      final name = entry.filename.replaceAll('\\', '/').toLowerCase();
+      final base = name.split('/').last;
+      if (sourceFromFileNameHints(base, defaultFileNameHints) != null ||
+          RegExp(
+            r'^(?:[^/]+/)?(?:messages|nachrichten)/[^/]+/messages\.json$',
+          ).hasMatch(name)) {
+        return false;
+      }
+      if (base == 'manifest.json' ||
+          base == 'documents.json' ||
+          base.endsWith('.pdf') ||
+          isPhotoFile(base)) {
+        documents = true;
+      }
+    }
+    return documents;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// A watch-history file chosen from inside a Takeout / TikTok ZIP.
 class ImportZipEntry {
   const ImportZipEntry({
@@ -136,38 +163,59 @@ ImportZipEntry? selectWatchHistoryZipEntry(
   Map<String, List<String>> fileNameHints = defaultFileNameHints,
   int maxEntryBytes = 64 * 1024 * 1024,
 }) {
-  final Archive archive;
   try {
-    archive = ZipDecoder().decodeBytes(zipBytes);
+    final directory = ZipDirectory()..read(InputMemoryStream(zipBytes));
+    ZipFileHeader? selected;
+    String? selectedSource;
+    var bestRank = 1 << 30;
+    for (final entry in directory.fileHeaders) {
+      if (entry.uncompressedSize > maxEntryBytes ||
+          entry.compressedSize > maxEntryBytes ||
+          (entry.generalPurposeBitFlag & 1) != 0 ||
+          ((entry.externalFileAttributes >> 16) & 0xf000) == 0xa000 ||
+          !const [0, 8].contains(entry.compressionMethod)) {
+        continue;
+      }
+      final base = entry.filename.split(RegExp(r'[\\/]')).last;
+      if (base.isEmpty) continue;
+      final source = sourceFromFileNameHints(base, fileNameHints);
+      if (source == null) continue;
+      // JSON beats HTML beats text; shallower paths beat deeper ones.
+      final lower = base.toLowerCase();
+      final rank =
+          (lower.endsWith('.json')
+                  ? 0
+                  : lower.endsWith('.html')
+                  ? 1
+                  : 2) *
+              100 +
+          entry.filename.split(RegExp(r'[\\/]')).length;
+      if (rank >= bestRank) continue;
+      selected = entry;
+      selectedSource = source;
+      bestRank = rank;
+    }
+    if (selected == null) return null;
+    final output = _BoundedZipOutput(maxEntryBytes);
+    final compressed = selected.file!.getStream(decompress: false);
+    if (selected.compressionMethod == 8) {
+      const ZLibDecoderWeb().decodeStream(compressed, output, raw: true);
+    } else {
+      output.writeStream(compressed);
+    }
+    final bytes = output.getBytes();
+    if (bytes.length != selected.uncompressedSize ||
+        getCrc32(bytes) != selected.crc32) {
+      return null;
+    }
+    return ImportZipEntry(
+      name: selected.filename.split(RegExp(r'[\\/]')).last,
+      bytes: bytes,
+      source: selectedSource!,
+    );
   } catch (_) {
     return null;
   }
-  ImportZipEntry? best;
-  var bestRank = 1 << 30;
-  for (final file in archive.files) {
-    if (!file.isFile || file.size > maxEntryBytes) continue;
-    final base = file.name.split(RegExp(r'[\\/]')).last;
-    final source = sourceFromFileNameHints(base, fileNameHints);
-    if (source == null) continue;
-    // JSON beats HTML beats text; shallower paths beat deeper ones.
-    final lower = base.toLowerCase();
-    final rank =
-        (lower.endsWith('.json')
-                ? 0
-                : lower.endsWith('.html')
-                ? 1
-                : 2) *
-            100 +
-        file.name.split(RegExp(r'[\\/]')).length;
-    if (rank >= bestRank) continue;
-    best = ImportZipEntry(
-      name: base,
-      bytes: file.readBytes() ?? const [],
-      source: source,
-    );
-    bestRank = rank;
-  }
-  return best;
 }
 
 /// Prefer the export's structure over provider filenames such as result.json.
@@ -270,4 +318,44 @@ String detectSharedImportSource({
     return 'browser-capture';
   }
   return 'manual-text';
+}
+
+/// Enforce the actual inflated size, including deflate back-references.
+class _BoundedZipOutput extends OutputMemoryStream {
+  _BoundedZipOutput(this.limit);
+  final int limit;
+  void _check(int count) {
+    if (length + count > limit) {
+      throw const FormatException('ZIP entry exceeds the import limit.');
+    }
+  }
+
+  @override
+  void writeByte(int value) {
+    _check(1);
+    super.writeByte(value);
+  }
+
+  @override
+  void writeBytes(List<int> bytes, {int? length}) {
+    _check(length ?? bytes.length);
+    super.writeBytes(bytes, length: length);
+  }
+
+  @override
+  void writeBackReference(int distance, int count) {
+    _check(count);
+    super.writeBackReference(distance, count);
+  }
+
+  @override
+  void writeStream(InputStream stream) {
+    while (!stream.isEOS) {
+      writeBytes(
+        stream
+            .readBytes(stream.length < 65536 ? stream.length : 65536)
+            .toUint8List(),
+      );
+    }
+  }
 }

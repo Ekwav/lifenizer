@@ -293,7 +293,7 @@ public static partial class CommonParsing
             return value;
         }
 
-        var stripped = HtmlTagRegex().Replace(value, " ");
+        var stripped = HtmlTagRegex().Replace(HtmlNonContentRegex().Replace(value, " "), " ");
         var decoded = System.Net.WebUtility.HtmlDecode(stripped);
         return WhitespaceRegex().Replace(decoded, " ").Trim();
     }
@@ -391,7 +391,10 @@ public static partial class CommonParsing
         yield return value.ToString();
     }
 
-    [GeneratedRegex("<[^>]+>")]
+    [GeneratedRegex(@"<(?:script|style)\b[^>]*>.*?</(?:script|style)\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.NonBacktracking)]
+    private static partial Regex HtmlNonContentRegex();
+
+    [GeneratedRegex("<[^>]+>", RegexOptions.NonBacktracking)]
     private static partial Regex HtmlTagRegex();
 
     [GeneratedRegex(@"\s+")]
