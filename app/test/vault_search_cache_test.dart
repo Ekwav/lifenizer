@@ -10,6 +10,7 @@ import 'package:app/services/local_vault_store.dart';
 import 'package:app/services/search_index_worker_io.dart' as native;
 import 'package:app/services/sync_progress.dart';
 import 'package:app/services/vault_chunks.dart';
+import 'package:app/services/vault_worker_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -134,7 +135,7 @@ void main() {
     expect(store.detailReads, isEmpty);
   }
 
-  setUp(() async {
+  Future<void> seed({int count = 256}) async {
     database = await databaseFactoryMemory.openDatabase(
       'search-cache-regression-${sequence++}',
     );
@@ -142,7 +143,7 @@ void main() {
     final original = await open(offline: false);
     original.conversations.addAll(
       List.generate(
-        256,
+        count,
         (i) => Conversation(
           id: 'thread-$i',
           title: 'Thread $i',
@@ -164,8 +165,52 @@ void main() {
     store.detailReads.clear();
     store.postingReads.clear();
     postingBucketCount = store.postingWrites.length;
-  });
+  }
+
+  setUp(seed);
   tearDown(() => database.close());
+
+  test(
+    'broad cold searches batch notifications across queued cache waves',
+    () async {
+      await database.close();
+      await seed(count: 1024);
+      final restored = await open();
+      var notifications = 0;
+      void renderSearch() {
+        notifications++;
+        restored.search('discord', maxResults: 8);
+      }
+
+      restored.addListener(renderSearch);
+      final results = await restored.searchAsync('discord', maxResults: 8);
+      expect(results, hasLength(8));
+      expect(postingBucketCount, greaterThan(vaultWorkerCount()));
+      expect(store.detailReads, hasLength(postingBucketCount));
+      expect(store.detailReads.toSet(), hasLength(postingBucketCount));
+      expect(store.postingReads, hasLength(1));
+      expect(
+        notifications,
+        2,
+        reason: 'one posting batch and one scoring batch',
+      );
+      final loadedNotifications = notifications;
+      expect(
+        (await restored.searchAsync('discord', maxResults: 8)).map((c) => c.id),
+        results.map((c) => c.id),
+      );
+      expect(
+        notifications,
+        loadedNotifications,
+        reason: 'cached queries must not notify again',
+      );
+      expect(store.detailReads, hasLength(postingBucketCount));
+      expect(restored.conversations.every((c) => !c.isLoaded), isTrue);
+      restored.removeListener(renderSearch);
+      await restored.lock();
+      restored.dispose();
+    },
+  );
 
   for (final corruption in ['missing', 'nonce', 'cipherText']) {
     test(

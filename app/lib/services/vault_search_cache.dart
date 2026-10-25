@@ -13,14 +13,12 @@ extension VaultSearchCache on LifenizerAppState {
         generation == _searchGeneration) {
       final index = _searchIndex;
       try {
-        await Future.wait([
-          ..._searchCacheLoads.values,
-          ?_searchBuild,
-        ]);
+        await Future.wait([..._searchCacheLoads.values, ?_searchBuild]);
       } catch (_) {
         await _rebuildSearchCache(index, generation);
       }
       if (generation != _searchGeneration || !isAuthenticated) return [];
+      if (_searchCacheLoads.isNotEmpty || _searchBuild != null) continue;
       results = search(query, maxResults: maxResults);
     }
     return results;
@@ -81,6 +79,7 @@ extension VaultSearchCache on LifenizerAppState {
             : index.documents[id]?.detailsLoaded == false)
           vaultChunkFor(id, count),
     }.toList();
+    if (buckets.isEmpty) return;
     var next = 0;
     Future<void> lane() async {
       while (next < buckets.length) {
@@ -92,10 +91,16 @@ extension VaultSearchCache on LifenizerAppState {
       }
     }
 
-    await Future.wait([
-      for (var n = 0; n < math.min(vaultWorkerCount(), buckets.length); n++)
-        lane(),
-    ]);
+    try {
+      await Future.wait([
+        for (var n = 0; n < math.min(vaultWorkerCount(), buckets.length); n++)
+          lane(),
+      ]);
+    } finally {
+      if (generation == _searchGeneration && identical(index, _searchIndex)) {
+        _notifyChanged();
+      }
+    }
   }
 
   Future<void> _loadSearchBucket(int bucket, {required bool postings}) async {
@@ -110,7 +115,6 @@ extension VaultSearchCache on LifenizerAppState {
       if (identical(_searchCacheLoads[key], operation)) {
         _searchCacheLoads.remove(key);
       }
-      _notifyChanged();
     }
   }
 
