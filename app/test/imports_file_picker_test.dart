@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:app/api_client.dart';
@@ -93,15 +94,37 @@ class _Fixture {
     }
   }
 
-  Future<void> choose(WidgetTester tester, {required bool audio}) async {
+  Future<void> choose(
+    WidgetTester tester, {
+    required bool audio,
+    bool expectImport = false,
+  }) async {
     final button = find.byKey(
       Key(audio ? 'import-audio-button' : 'imports-auto-file'),
     );
     await tester.ensureVisible(button);
     final action = tester.widget<FilledButton>(button).onPressed!;
-    await tester.runAsync(
-      () async => await (action as Future<void> Function())(),
-    );
+    await tester.runAsync(() async {
+      final finished = Completer<void>();
+      var started = false;
+      void observeImport() {
+        started = started || state.busy;
+        if (started && !state.busy && !finished.isCompleted) {
+          finished.complete();
+        }
+      }
+
+      if (expectImport) state.addListener(observeImport);
+      try {
+        action();
+        if (expectImport) {
+          await finished.future.timeout(const Duration(seconds: 30));
+        }
+        await Future<void>.delayed(Duration.zero);
+      } finally {
+        if (expectImport) state.removeListener(observeImport);
+      }
+    });
     await tester.pumpAndSettle();
   }
 
@@ -166,7 +189,7 @@ void main() {
       expect(tester.takeException(), isNull);
       f.picker.failure = null;
       f.picker.file = f.file(audio: true);
-      await f.choose(tester, audio: true);
+      await f.choose(tester, audio: true, expectImport: true);
       expect(f.imports, hasLength(1));
       expect(f.state.busy, isFalse);
       expect(f.state.error, isNull);
@@ -232,7 +255,7 @@ void main() {
         f.picker.beforeReturn = null;
         f.state.reportUnlockProgress(null);
         await tester.pumpAndSettle();
-        await f.choose(tester, audio: audio);
+        await f.choose(tester, audio: audio, expectImport: true);
         expect(f.imports, hasLength(1));
         expect(f.state.busy, isFalse);
         expect(f.state.error, isNull);
