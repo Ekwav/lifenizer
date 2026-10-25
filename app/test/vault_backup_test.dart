@@ -378,8 +378,36 @@ void main() {
       final source = await device(server, 'draft-source');
       final destination = await device(server, 'draft-target');
       final payload = [82, 73, 70, 70, 0, 1, 2, 3, 4, 5];
-      await source.saveAudioDraft(payload, DateTime.utc(2026, 10, 1));
-      await source.updateAudioDraftDetails(title: 'Pending private voice');
+      source.participants.addAll([
+        Participant(
+          id: 'alex-first',
+          displayName: 'Alex',
+          identifiers: ['email:first@example.test'],
+        ),
+        Participant(
+          id: 'alex-selected',
+          displayName: 'Alex',
+          identifiers: ['email:selected@example.test'],
+        ),
+      ]);
+      final location = RecordingLocation(
+        town: 'Berlin',
+        venue: 'North Atelier',
+        address: 'Main Street 4',
+        latitude: 52.52,
+        longitude: 13.4,
+      );
+      await source.saveAudioDraft(
+        payload,
+        DateTime.utc(2026, 10, 1),
+        location: location,
+      );
+      await source.updateAudioDraftDetails(
+        title: 'Pending private voice',
+        // Older draft metadata can retain a name alongside the exact selected ID.
+        participantNames: ['Alex'],
+        participantIds: ['alex-selected'],
+      );
       await destination.saveAudioDraft([9, 8, 7], DateTime.utc(2026, 10, 2));
       final target = _Target();
       await source.makeBackup(target: target, password: 'backup-password');
@@ -388,11 +416,31 @@ void main() {
           parts: target.parts,
           password: 'backup-password',
         ),
-        1,
+        3,
       );
       final recording = destination.conversations.single;
       expect(recording.title, 'Pending private voice');
       expect(recording.source, 'audio');
+      expect(recording.participantIds, ['alex-selected']);
+      expect(recording.participantIds, isNot(contains('alex-first')));
+      expect(
+        destination.participants.where(
+          (person) => person.displayName == 'Alex',
+        ),
+        hasLength(2),
+      );
+      expect(recording.location!.toJson(), location.toJson());
+      expect(
+        destination
+            .search('town:Berlin', participantId: 'alex-selected')
+            .single
+            .id,
+        recording.id,
+      );
+      expect(
+        destination.search('town:Berlin', participantId: 'alex-first'),
+        isEmpty,
+      );
       expect(recording.segments, isEmpty);
       expect(
         (await destination.loadRecordingAudio(recording.id)).bytes,
