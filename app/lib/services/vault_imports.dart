@@ -546,10 +546,11 @@ extension VaultImports on LifenizerAppState {
       throw StateError('The transcript does not match this recording.');
     }
     var changed = 0;
-    final receipts = conversations
-        .map((c) => c.importFingerprint)
-        .whereType<String>()
-        .toSet();
+    final receipts = {
+      for (var i = 0; i < conversations.length; i++)
+        if (conversations[i].importFingerprint != null)
+          conversations[i].importFingerprint!: i,
+    };
     final threads = <String, int>{
       for (var i = 0; i < conversations.length; i++)
         if (conversations[i].sourceThreadId != null)
@@ -598,7 +599,21 @@ extension VaultImports on LifenizerAppState {
     for (var index = 0; index < result.conversations.length; index++) {
       final normalized = result.conversations[index];
       final receipt = fingerprint == null ? null : '$fingerprint:$index';
-      if (receipt != null && receipts.contains(receipt)) continue;
+      final duplicateIndex = receipt == null ? null : receipts[receipt];
+      if (duplicateIndex != null) {
+        final existing = conversations[duplicateIndex];
+        if (selected.every(existing.participantIds.contains)) continue;
+        final current = await loadConversation(existing.id);
+        final updated = Conversation.fromJson({
+          ...current.toJson(),
+          'participantIds': {...current.participantIds, ...selected}.toList(),
+        });
+        conversations[duplicateIndex] = updated;
+        _markConversationChanged(updated.id);
+        await _pushEntity('conversation', updated.id, updated.toJson());
+        changed++;
+        continue;
+      }
       final threadKey = normalized.sourceThreadId == null
           ? null
           : '${normalized.source}\u0000${normalized.sourceThreadId}';
@@ -747,7 +762,9 @@ extension VaultImports on LifenizerAppState {
         conversations[previousIndex] = conversation;
       }
       _markConversationChanged(conversation.id);
-      if (receipt != null) receipts.add(receipt);
+      if (receipt != null) {
+        receipts[receipt] = previousIndex ?? conversations.length - 1;
+      }
       changed++;
       await _pushEntity('conversation', conversation.id, conversation.toJson());
     }

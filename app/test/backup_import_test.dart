@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:app/api_client.dart';
 import 'package:app/services/discord_bot_import_service.dart';
 import 'package:app/app_state.dart';
+import 'package:app/models.dart';
 import 'package:app/services/local_vault_store.dart';
 import 'package:app/services/shared_import_source.dart';
 import 'package:app/services/export_file_reader.dart';
@@ -497,6 +498,109 @@ void main() {
       other.dispose();
       await disk.close();
       await otherDisk.close();
+    },
+  );
+
+  test(
+    'receipt duplicate links the selected exact person without replacing lazy transcript contents',
+    () async {
+      final server = _ImportServer()
+        ..normalizedOverride = {
+          'source': 'lifenizer-backup',
+          'participants': [],
+          'conversations': [
+            {
+              'title': 'Atlas',
+              'source': 'lifenizer-backup',
+              'participantNames': [],
+              'segments': [
+                {'text': 'Atlas deadline', 'createdAt': '2025-06-15T09:00:00Z'},
+              ],
+            },
+          ],
+        };
+      final disk = LocalVaultStore(
+        await databaseFactoryMemory.openDatabase('receipt-selected-person'),
+      );
+      final state = LifenizerAppState(
+        localStore: disk,
+        apiFactory: (url) =>
+            LifenizerApiClient(baseUrl: url, client: MockClient(server.handle)),
+      );
+      addTearDown(() async {
+        state.dispose();
+        await disk.close();
+      });
+      Future<void> login({bool offline = false}) => state.login(
+        baseUrl: 'https://vault.example.test',
+        email: 'alice@example.test',
+        password: 'account password',
+        passphrase: 'private vault phrase',
+        offline: offline,
+      );
+      await login();
+      state.participants.addAll([
+        Participant(
+          id: 'alex-first',
+          displayName: 'Alex',
+          identifiers: ['email:first@example.test'],
+        ),
+        Participant(
+          id: 'alex-selected',
+          displayName: 'Alex',
+          identifiers: ['email:selected@example.test'],
+        ),
+      ]);
+      await state.importSource(source: 'lifenizer-backup', text: backupFixture);
+      expect(state.error, isNull);
+      final original = state.conversations.single;
+      final segments = original.segments
+          .map((segment) => segment.toJson())
+          .toList();
+      expect(original.participantIds, isEmpty);
+      await state.lock();
+      await login(offline: true);
+      expect(state.conversations.single.isLoaded, isFalse);
+      await state.importSource(
+        source: 'lifenizer-backup',
+        text: backupFixture,
+        participantNames: 'Alex',
+        participantIds: ['alex-selected'],
+      );
+      expect(state.error, isNull);
+      expect(state.conversations, hasLength(1));
+      final linked = await state.loadConversation(original.id);
+      expect(linked.participantIds, ['alex-selected']);
+      expect(linked.importFingerprint, original.importFingerprint);
+      expect(
+        linked.segments.map((segment) => segment.toJson()).toList(),
+        segments,
+      );
+      expect(state.participants.map((person) => person.id).toSet(), {
+        'alex-first',
+        'alex-selected',
+      });
+      expect(
+        state.search('atlas', participantId: 'alex-selected').single.id,
+        original.id,
+      );
+      expect(state.search('atlas', participantId: 'alex-first'), isEmpty);
+      await state.importSource(
+        source: 'lifenizer-backup',
+        text: backupFixture,
+        participantIds: ['alex-selected'],
+      );
+      expect(state.error, isNull);
+      expect(state.lastImportSummary!.added, 0);
+      await state.lock();
+      await login(offline: true);
+      final persisted = await state.loadConversation(original.id);
+      expect(persisted.participantIds, ['alex-selected']);
+      expect(
+        persisted.segments.map((segment) => segment.toJson()).toList(),
+        segments,
+      );
+      expect(state.conversations, hasLength(1));
     },
   );
 
