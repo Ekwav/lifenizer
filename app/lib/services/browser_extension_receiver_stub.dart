@@ -22,6 +22,9 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
   bool get listening => false;
   int get port => 47615;
   String? get token => null;
+  String? get pairingLink => null;
+  Future<String> createPairingLink({String? code, int? expectedPort}) async =>
+      throw UnsupportedError('Use the desktop app to connect the extension.');
   String? get error => null;
   DateTime? get lastSync => null;
   int get visitsAccepted => 0;

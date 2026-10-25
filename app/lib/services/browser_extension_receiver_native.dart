@@ -62,6 +62,9 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
   int _generation = 0;
   bool _started = false;
   bool _disposed = false;
+  String? _pairingCode;
+  DateTime? _pairingUntil;
+  Timer? _pairingExpiry;
   String? error;
   DateTime? lastSync;
   int visitsAccepted = 0;
@@ -74,6 +77,64 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
   /// The configured port, or the actual one once listening on an ephemeral port.
   int get port => _server?.port ?? _port;
   String? get token => _token;
+  String? get pairingLink =>
+      !_disposed &&
+          state.isAuthenticated &&
+          _enabled &&
+          listening &&
+          _pairingCode != null &&
+          _now().isBefore(_pairingUntil!)
+      ? Uri(
+          scheme: 'http',
+          host: '127.0.0.1',
+          port: port,
+          path: '/v1/pair',
+          fragment: 'code=$_pairingCode',
+        ).toString()
+      : null;
+
+  void _clearPairing() {
+    _pairingExpiry?.cancel();
+    _pairingExpiry = null;
+    _pairingCode = null;
+    _pairingUntil = null;
+  }
+
+  Future<String> createPairingLink({String? code, int? expectedPort}) async {
+    start();
+    final generation = _generation;
+    if (!_supported || !state.isAuthenticated || _identity == null) {
+      throw StateError('Unlock the desktop vault to connect the extension.');
+    }
+    if (code != null && !RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(code)) {
+      throw const FormatException('The browser connection code is invalid.');
+    }
+    await _lifecycle;
+    if (_disposed || generation != _generation || !state.isAuthenticated) {
+      throw StateError('The vault changed. Start connecting again.');
+    }
+    if (expectedPort != null && expectedPort != port) {
+      throw FormatException(
+        'This app uses port $port. Scan its QR code to connect instead.',
+      );
+    }
+    await setEnabled(true);
+    if (_disposed || generation != _generation || !state.isAuthenticated) {
+      throw StateError('The vault changed. Start connecting again.');
+    }
+    if (!listening || !_enabled) {
+      throw StateError(error ?? 'Could not start the browser connection.');
+    }
+    _clearPairing();
+    _pairingCode = code ?? _newToken();
+    _pairingUntil = _now().add(const Duration(minutes: 2));
+    _pairingExpiry = Timer(const Duration(minutes: 2), () {
+      _clearPairing();
+      _notify();
+    });
+    _notify();
+    return pairingLink!;
+  }
 
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -87,6 +148,10 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
   }
 
   void _stateChanged() {
+    if (!state.isAuthenticated && _pairingCode != null) {
+      _clearPairing();
+      _notify();
+    }
     final identity = state.isAuthenticated
         ? jsonEncode([
             state.apiBaseUrl,
@@ -101,6 +166,7 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
       return;
     }
     _generation++;
+    _clearPairing();
     _identity = identity;
     // Invalidate the previous vault's authorization before asynchronous restore.
     _enabled = false;
@@ -202,6 +268,7 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     return _lifecycle = _lifecycle.then((_) async {
       if (_disposed || generation != _generation) return;
       _enabled = value;
+      if (!value) _clearPairing();
       error = null;
       if (value) _token ??= _newToken();
       await _apply();
@@ -219,6 +286,7 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     return _lifecycle = _lifecycle.then((_) async {
       if (_disposed || generation != _generation) return;
       _port = value;
+      _clearPairing();
       error = null;
       await _apply();
       if (_disposed || generation != _generation) return;
@@ -237,6 +305,7 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     return _lifecycle = _lifecycle.then((_) async {
       if (_disposed || generation != _generation) return;
       _token = _newToken();
+      _clearPairing();
       await _save();
       _notify();
     });
@@ -305,6 +374,52 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
         return await _respond(request, 204, null, origin: allowedOrigin);
       }
 
+      final path = request.uri.path;
+      if (path == '/v1/discovery') {
+        request.response.headers.set('Cache-Control', 'no-store');
+        return await _respond(
+          request,
+          request.method == 'GET' ? 200 : 405,
+          request.method == 'GET'
+              ? {
+                  'app': 'lifenizer',
+                  'version': 1,
+                  'unlocked': state.isAuthenticated,
+                  'enabled': _enabled,
+                }
+              : {'error': 'method-not-allowed'},
+          origin: allowedOrigin,
+        );
+      }
+      if (path == '/v1/pair') {
+        if (request.method == 'GET') {
+          request.response
+            ..headers.contentType = ContentType.html
+            ..headers.set('Cache-Control', 'no-store')
+            ..headers.set('Referrer-Policy', 'no-referrer')
+            ..headers.set('X-Content-Type-Options', 'nosniff')
+            ..headers.set(
+              'Content-Security-Policy',
+              "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+            )
+            ..write(
+              '<!doctype html><html lang="en"><meta charset="utf-8">'
+              '<meta name="viewport" content="width=device-width,initial-scale=1">'
+              '<title>Connect Lifenizer</title><h1>Connect your browser</h1>'
+              '<p>Continue in the Lifenizer extension. If it did not open, '
+              '<a href="https://lifenizer.coflnet.com/#extensions" rel="noreferrer">'
+              'install the extension</a>, then choose Connect browser in the app again.</p></html>',
+            );
+          await request.response.close();
+          return;
+        }
+        if (request.method == 'POST') {
+          return await _pair(request, allowedOrigin);
+        }
+        return await _respond(request, 405, {
+          'error': 'method-not-allowed',
+        }, origin: allowedOrigin);
+      }
       final auth = request.headers.value('authorization') ?? '';
       final expected = _token;
       if (expected == null ||
@@ -315,7 +430,6 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
         }, origin: allowedOrigin);
       }
 
-      final path = request.uri.path;
       if (path == '/v1/ping') {
         if (request.method != 'GET') {
           return await _respond(request, 405, {
@@ -348,6 +462,66 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
           'error': 'internal',
         }, origin: allowedOrigin);
       } catch (_) {}
+    }
+  }
+
+  Future<void> _pair(HttpRequest request, String? origin) async {
+    final generation = _generation;
+    request.response.headers.set('Cache-Control', 'no-store');
+    if (origin == null) {
+      return _respond(request, 403, {'error': 'forbidden-origin'});
+    }
+    if (request.headers.contentType?.mimeType != 'application/json') {
+      return _respond(request, 415, {'error': 'json-only'}, origin: origin);
+    }
+    final bytes = BytesBuilder(copy: false);
+    try {
+      await for (final chunk in request.timeout(const Duration(seconds: 5))) {
+        if (bytes.length + chunk.length > 4096) {
+          return await _respond(
+            request,
+            413,
+            {'error': 'too-large'},
+            origin: origin,
+            close: true,
+          );
+        }
+        bytes.add(chunk);
+      }
+      final value = jsonDecode(utf8.decode(bytes.takeBytes()));
+      if (value is! Map || value['code'] is! String) {
+        throw const FormatException();
+      }
+      if (generation != _generation) {
+        return await _respond(request, 503, {
+          'error': 'vault-changed',
+        }, origin: origin);
+      }
+      if (!state.isAuthenticated || !_enabled || _token == null) {
+        return await _respond(request, 503, {
+          'error': 'locked',
+        }, origin: origin);
+      }
+      if (pairingLink == null ||
+          !_constantTimeEquals(value['code'] as String, _pairingCode!)) {
+        return await _respond(request, 401, {
+          'error': 'pairing-expired',
+        }, origin: origin);
+      }
+      // Consume before yielding: a code can authorize exactly one connection.
+      _clearPairing();
+      final connection = {
+        'app': 'lifenizer',
+        'version': 1,
+        'port': port,
+        'token': _token,
+      };
+      _notify();
+      await _respond(request, 200, connection, origin: origin);
+    } on FormatException {
+      await _respond(request, 400, {'error': 'bad-request'}, origin: origin);
+    } on TimeoutException {
+      await _respond(request, 400, {'error': 'timeout'}, origin: origin);
     }
   }
 
@@ -700,6 +874,7 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _clearPairing();
     _generation++;
     if (_started) state.removeListener(_stateChanged);
     unawaited(_stopServer());
