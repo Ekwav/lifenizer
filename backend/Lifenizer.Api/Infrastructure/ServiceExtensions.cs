@@ -180,6 +180,8 @@ public static class ServiceExtensions
     public static IServiceCollection AddPaymentServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<PremiumService>();
+        services.AddScoped<OnlineStorageRetention>();
+        services.AddHostedService<OnlineStorageRetentionWorker>();
 
         // Generated SDK clients own their HTTP transport; they do not accept HttpClient.
         var baseUrl = configuration["Payments:BaseUrl"];

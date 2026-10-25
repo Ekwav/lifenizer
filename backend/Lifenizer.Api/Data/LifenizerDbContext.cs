@@ -26,6 +26,7 @@ public sealed class LifenizerDbContext(DbContextOptions<LifenizerDbContext> opti
             entity.HasKey(user => user.Id);
             entity.HasIndex(user => user.AuthProviderId).IsUnique();
             entity.HasIndex(user => user.Email);
+            entity.HasIndex(user => user.OnlineStorageDeleteAtUnixSeconds);
             entity.Property(user => user.AuthProviderId).HasMaxLength(256);
             entity.Property(user => user.Email).HasMaxLength(320);
             entity.Property(user => user.VaultSalt).HasMaxLength(128);

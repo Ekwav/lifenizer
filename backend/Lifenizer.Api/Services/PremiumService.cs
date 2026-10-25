@@ -29,7 +29,8 @@ public sealed class PremiumService(
         long UsedBytes,
         long LimitBytes,
         DateTimeOffset? ExpiresAt,
-        DateTimeOffset? FreePremiumActivatedAt);
+        DateTimeOffset? FreePremiumActivatedAt,
+        DateTimeOffset? OnlineStorageDeleteAt);
 
     /// <summary>
     /// Returns the current quota status for <paramref name="userId"/>.
@@ -40,6 +41,18 @@ public sealed class PremiumService(
         var (plan, expiresAt) = await ResolvePlanAsync(userId, cancellationToken);
         var user = await accountService.GetByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException($"User {userId} not found.");
+        if (plan != SubscriptionPlan.Free && user.OnlineStorageDeleteAtUnixSeconds is { } scheduled)
+        {
+            // A cached or concurrently canceled demo grant must never erase a newer deadline.
+            (plan, expiresAt) = await ResolvePlanAsync(userId, cancellationToken, requireAvailable: true);
+            if (plan != SubscriptionPlan.Free)
+            {
+                await accountService.ClearOnlineStorageDeletionAsync(userId, scheduled, cancellationToken);
+                user = await accountService.GetByIdAsync(userId, cancellationToken)
+                    ?? throw new InvalidOperationException($"User {userId} not found.");
+            }
+        }
+
         if (FreePremiumEnabled && user.FreePremiumActivatedAt is not null && StorageQuota.ForPlan(plan) < StorageQuota.PremiumLimitBytes)
             (plan, expiresAt) = (SubscriptionPlan.Premium, null);
 
@@ -56,7 +69,8 @@ public sealed class PremiumService(
             user!.StorageUsedBytes,
             StorageQuota.ForPlan(plan),
             expiresAt,
-            user.FreePremiumActivatedAt);
+            user.FreePremiumActivatedAt,
+            user.OnlineStorageDeleteAtUnixSeconds is { } deadline ? DateTimeOffset.FromUnixTimeSeconds(deadline) : null);
     }
 
     public async Task<QuotaStatus> ActivateFreePremiumAsync(Guid userId, CancellationToken cancellationToken)
@@ -69,12 +83,12 @@ public sealed class PremiumService(
     public async Task<QuotaStatus> CancelFreePremiumAsync(Guid userId, CancellationToken cancellationToken)
     {
         // Verify paid entitlements before changing the demo grant; an outage must not look like paid cancellation.
-        await ResolvePlanAsync(userId, cancellationToken, requireAvailable: true);
-        await accountService.CancelFreePremiumAsync(userId, cancellationToken);
+        var (paidPlan, _) = await ResolvePlanAsync(userId, cancellationToken, requireAvailable: true);
+        await accountService.CancelFreePremiumAsync(userId, paidPlan != SubscriptionPlan.Free, cancellationToken);
         return await GetQuotaStatusAsync(userId, cancellationToken);
     }
 
-    private async Task<(SubscriptionPlan Plan, DateTimeOffset? ExpiresAt)> ResolvePlanAsync(
+    internal async Task<(SubscriptionPlan Plan, DateTimeOffset? ExpiresAt)> ResolvePlanAsync(
         Guid userId,
         CancellationToken cancellationToken,
         bool requireAvailable = false)
@@ -93,6 +107,7 @@ public sealed class PremiumService(
             var plusOwns = await userApi.UserUserIdOwnsUntilPostAsync(
                 userIdStr,
                 new List<string> { ProductSlugPremiumPlus }, cancellationToken: cancellationToken);
+            if (requireAvailable && plusOwns is null) throw new InvalidOperationException("Subscription provider returned no entitlement result.");
             if (plusOwns?.TryGetValue(ProductSlugPremiumPlus, out var plusExpiry) == true
                 && plusExpiry > DateTime.UtcNow)
             {
@@ -104,6 +119,7 @@ public sealed class PremiumService(
             var premiumOwns = await userApi.UserUserIdOwnsUntilPostAsync(
                 userIdStr,
                 new List<string> { ProductSlugPremium }, cancellationToken: cancellationToken);
+            if (requireAvailable && premiumOwns is null) throw new InvalidOperationException("Subscription provider returned no entitlement result.");
             if (premiumOwns?.TryGetValue(ProductSlugPremium, out var premiumExpiry) == true
                 && premiumExpiry > DateTime.UtcNow)
             {

@@ -99,25 +99,33 @@ public sealed class UserAccountService(LifenizerDbContext db, IPasswordHasher<Us
 
     public Task<UserAccount?> GetByIdAsync(Guid userId, CancellationToken cancellationToken)
     {
-        return db.Users.FirstOrDefaultAsync(user => user.Id == userId, cancellationToken);
+        return db.Users.AsNoTracking().FirstOrDefaultAsync(user => user.Id == userId, cancellationToken);
     }
 
     public async Task ActivateFreePremiumAsync(Guid userId, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
         var changed = await db.Users.Where(user => user.Id == userId).ExecuteUpdateAsync(
-            setters => setters.SetProperty(user => user.FreePremiumActivatedAt, user => user.FreePremiumActivatedAt ?? now),
+            setters => setters.SetProperty(user => user.FreePremiumActivatedAt, user => user.FreePremiumActivatedAt ?? now)
+                .SetProperty(user => user.OnlineStorageDeleteAtUnixSeconds, (long?)null),
             cancellationToken);
         if (changed == 0) throw new InvalidOperationException("Account not found.");
     }
 
-    public async Task CancelFreePremiumAsync(Guid userId, CancellationToken cancellationToken)
+    public async Task CancelFreePremiumAsync(Guid userId, bool paid, CancellationToken cancellationToken)
     {
+        var deadline = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
         var changed = await db.Users.Where(user => user.Id == userId).ExecuteUpdateAsync(
-            setters => setters.SetProperty(user => user.FreePremiumActivatedAt, (DateTimeOffset?)null),
+            setters => setters.SetProperty(user => user.OnlineStorageDeleteAtUnixSeconds,
+                user => paid ? null : user.FreePremiumActivatedAt != null ? user.OnlineStorageDeleteAtUnixSeconds ?? deadline : user.OnlineStorageDeleteAtUnixSeconds)
+                .SetProperty(user => user.FreePremiumActivatedAt, (DateTimeOffset?)null),
             cancellationToken);
         if (changed == 0) throw new InvalidOperationException("Account not found.");
     }
+
+    public Task ClearOnlineStorageDeletionAsync(Guid userId, long expectedDeadline, CancellationToken cancellationToken) =>
+        db.Users.Where(user => user.Id == userId && user.OnlineStorageDeleteAtUnixSeconds == expectedDeadline).ExecuteUpdateAsync(
+            setters => setters.SetProperty(user => user.OnlineStorageDeleteAtUnixSeconds, (long?)null), cancellationToken);
 
     /// <summary>
     /// Atomically adjusts <see cref="UserAccount.StorageUsedBytes"/> and returns the

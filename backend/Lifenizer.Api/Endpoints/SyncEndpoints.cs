@@ -49,7 +49,8 @@ public static class SyncEndpoints
                 {
                     // One immutable object per already-batched client push, never one per entity.
                     var payload = JsonSerializer.SerializeToUtf8Bytes(pending.ToDictionary(e => e.Id, e => e.CipherText));
-                    var reserved = await db.Users.Where(user => user.Id == account.Id && user.StorageUsedBytes <= quota.LimitBytes - payload.LongLength)
+                    var nowUnixSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    var reserved = await db.Users.Where(user => user.Id == account.Id && (user.OnlineStorageDeleteAtUnixSeconds == null || user.OnlineStorageDeleteAtUnixSeconds > nowUnixSeconds) && user.StorageUsedBytes <= quota.LimitBytes - payload.LongLength)
                         .ExecuteUpdateAsync(setters => setters.SetProperty(user => user.StorageUsedBytes, user => user.StorageUsedBytes + payload.LongLength), cancellationToken);
                     if (reserved == 0) return Results.Json(new { error = "quota_exceeded" }, statusCode: 402);
                     key = $"sync/{account.VaultId:N}/{Guid.NewGuid():N}.json";

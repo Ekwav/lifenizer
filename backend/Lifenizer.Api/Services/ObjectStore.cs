@@ -78,6 +78,29 @@ public sealed class ObjectStore : IDisposable
         if (File.Exists(path)) File.Delete(path);
     }
 
+    /// <summary>Delete exact owned keys in bounded S3 batches, including legacy local copies.</summary>
+    public async Task DeleteManyAsync(IEnumerable<string> keys, CancellationToken token)
+    {
+        foreach (var batch in keys.Distinct().Chunk(1000))
+        {
+            var paths = batch.Select(LocalPath).ToArray();
+            if (s3 is not null)
+            {
+                var response = await s3.DeleteObjectsAsync(new DeleteObjectsRequest
+                {
+                    BucketName = bucket, Objects = batch.Select(key => new KeyVersion { Key = RemoteKey(key) }).ToList(),
+                    Quiet = true
+                }, token);
+                if (response.DeleteErrors?.Count > 0) throw new IOException("Object storage rejected one or more deletions.");
+            }
+            foreach (var path in paths)
+            {
+                token.ThrowIfCancellationRequested();
+                if (File.Exists(path)) File.Delete(path);
+            }
+        }
+    }
+
     /// <summary>Cleanup after a transaction must survive a disconnected request and cannot mask its outcome.</summary>
     public async Task CleanupAsync(string key)
     {

@@ -148,7 +148,8 @@ public static class RecordingEndpoints
                 var owner = record?.UserId ?? user.Id;
                 var quota = await premium.GetQuotaStatusAsync(owner, token);
                 var delta = bytes.LongLength - (record?.SizeBytes ?? 0);
-                var reserved = await db.Users.Where(account => account.Id == owner && (delta <= 0 || account.StorageUsedBytes <= quota.LimitBytes - delta))
+                var nowUnixSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                var reserved = await db.Users.Where(account => account.Id == owner && (account.OnlineStorageDeleteAtUnixSeconds == null || account.OnlineStorageDeleteAtUnixSeconds > nowUnixSeconds) && (delta <= 0 || account.StorageUsedBytes <= quota.LimitBytes - delta))
                     .ExecuteUpdateAsync(setters => setters.SetProperty(account => account.StorageUsedBytes, account => account.StorageUsedBytes + delta), token);
                 if (reserved == 0) return Results.Json(new { error = "quota_exceeded" }, statusCode: 402);
                 var name = $"{Guid.NewGuid():N}.bin";

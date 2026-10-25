@@ -74,7 +74,8 @@ public static class ImageEndpoints
             // Quota check via payments service.
             var quota = await premium.GetQuotaStatusAsync(userId, cancellationToken);
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-            var reserved = await db.Users.Where(user => user.Id == userId && user.StorageUsedBytes <= quota.LimitBytes - file.Length)
+            var nowUnixSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var reserved = await db.Users.Where(user => user.Id == userId && (user.OnlineStorageDeleteAtUnixSeconds == null || user.OnlineStorageDeleteAtUnixSeconds > nowUnixSeconds) && user.StorageUsedBytes <= quota.LimitBytes - file.Length)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(user => user.StorageUsedBytes, user => user.StorageUsedBytes + file.Length), cancellationToken);
             if (reserved == 0)
             {

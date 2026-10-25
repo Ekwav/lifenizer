@@ -54,6 +54,34 @@ public sealed class ObjectStoreTests
         finally { Directory.Delete(root, true); }
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task BulkDeletionBatchesExactKeysAndRemovesLegacyLocalCopies(bool remote)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lifenizer-bulk-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var client = new FakeS3();
+            var config = remote ? Config(root) : new Dictionary<string, string?> { ["Artifacts:StorePath"] = root };
+            using var store = new ObjectStore(new ConfigurationBuilder().AddInMemoryCollection(config).Build(), NullLogger<ObjectStore>.Instance, remote ? client : null);
+            var keys = Enumerable.Range(0, 1001).Select(index => $"{index}.bin").ToArray();
+            foreach (var key in keys) client.Objects[$"lifenizer/{key}"] = [];
+            client.Objects["lifenizer/keep.bin"] = [];
+            await File.WriteAllTextAsync(Path.Combine(root, keys[0]), "legacy");
+            await File.WriteAllTextAsync(Path.Combine(root, "keep.bin"), "keep");
+            await store.DeleteManyAsync(keys.Concat([keys[0]]), default);
+            Assert.That(File.Exists(Path.Combine(root, keys[0])), Is.False);
+            Assert.That(File.Exists(Path.Combine(root, "keep.bin")), Is.True);
+            if (remote)
+            {
+                Assert.That(client.BatchSizes, Is.EqualTo(new[] { 1000, 1 }));
+                Assert.That(client.Objects.Keys, Is.EqualTo(new[] { "lifenizer/keep.bin" }));
+            }
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Test]
     public async Task RecordingS3UploadReplaceDownloadDeleteAndFailureRetainQuotaAndIsolation()
     {
@@ -105,6 +133,7 @@ public sealed class ObjectStoreTests
         public HttpStatusCode? Failure { get; set; }
         public int Writes { get; private set; }
         public int Reads { get; private set; }
+        public List<int> BatchSizes { get; } = [];
         private void Check() { if (Failure is { } status) throw new AmazonS3Exception("synthetic storage failure") { StatusCode = status }; }
         public override async Task<PutObjectResponse> PutObjectAsync(PutObjectRequest request, CancellationToken cancellationToken = default)
         {
@@ -125,6 +154,13 @@ public sealed class ObjectStoreTests
             Reads++;
             if (!Objects.TryGetValue(key, out var bytes)) throw new AmazonS3Exception("missing") { StatusCode = HttpStatusCode.NotFound, ErrorCode = "NoSuchKey" };
             return Task.FromResult(new GetObjectResponse { ResponseStream = new MemoryStream(bytes) });
+        }
+        public override Task<DeleteObjectsResponse> DeleteObjectsAsync(DeleteObjectsRequest request, CancellationToken cancellationToken = default)
+        {
+            Check();
+            BatchSizes.Add(request.Objects.Count);
+            foreach (var item in request.Objects) Objects.Remove(item.Key);
+            return Task.FromResult(new DeleteObjectsResponse());
         }
         public override Task<DeleteObjectResponse> DeleteObjectAsync(string bucketName, string key, CancellationToken cancellationToken = default)
         {

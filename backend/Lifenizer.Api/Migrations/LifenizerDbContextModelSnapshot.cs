@@ -323,6 +323,9 @@ namespace Lifenizer.Api.Migrations
                     b.Property<DateTimeOffset>("LastSeenAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("OnlineStorageDeleteAtUnixSeconds")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("PasswordHash")
                         .HasColumnType("TEXT");
 
@@ -346,6 +349,8 @@ namespace Lifenizer.Api.Migrations
                         .IsUnique();
 
                     b.HasIndex("Email");
+
+                    b.HasIndex("OnlineStorageDeleteAtUnixSeconds");
 
                     b.ToTable("Users");
                 });

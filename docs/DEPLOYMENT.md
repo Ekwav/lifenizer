@@ -291,14 +291,39 @@ data stays accessible if usage exceeds the restored limit, and further uploads
 are blocked. The flag is also supported by the Compose service-config flow.
 
 Authenticated users can opt out with `POST /api/premium/cancel-free`, including
-when the offer flag is disabled. This idempotently clears only their free-offer
-activation and returns the same quota status as activation. Without a paid
-entitlement, the quota immediately returns to 50 MB for new uploads; existing
-data is never deleted and remains readable even above that limit. Cancellation
-persists across restarts, and users may activate again while the offer is enabled.
-It does not cancel a provider-backed subscription or reduce its entitlement. If a
-configured payment provider cannot verify that entitlement, cancellation returns
-503 without changing the activation; retry when the provider is available.
+when the offer flag is disabled. Cancellation clears the free-offer activation;
+if the account becomes Free, it schedules online storage deletion 30 days later.
+The nullable ISO 8601 `onlineStorageDeleteAt` in every premium quota response
+persists across restarts; retries preserve the original deadline. Calls from an
+account that never activated the offer do not schedule deletion. Migration leaves
+existing accounts unscheduled, including cancellations made before this policy;
+it does not retroactively schedule deletion. The quota
+immediately returns to 50 MB, and stored data remains readable until cleanup.
+Back up or download online data before the displayed deadline.
+
+An hourly worker (also run at startup after schema migration) deletes due sync
+batch objects and legacy inline sync rows, image objects, encrypted recording
+objects and their metadata, and resets storage usage. It supports configured R2
+and local storage alike. The account, authentication, vault identity, pairing,
+usage events and feedback remain intact. No deletion tombstones are sent to
+local vaults: data already saved on devices is unaffected. Images may exist only
+online. Uploads remain blocked after the deadline until reactivation. Reactivating
+before cleanup clears the schedule; doing so after deletion enables uploads but
+cannot restore deleted online objects or automatically republish old sync history.
+
+Cancellation never modifies a provider-backed subscription. A fresh paid
+entitlement prevents scheduling and cancels any pending deletion. Cleanup freshly
+verifies payment entitlements while holding the SQLite write transaction that
+serializes activation, uploads and other cleanup replicas. Provider errors stop
+deletion; object deletion errors preserve all database references and the deadline
+for idempotent retry. A provider outage during cancellation returns 503 without
+changing the activation; retry when the provider is available.
+
+After successful cancellation, clients may optionally send authenticated
+`POST /api/premium/cancellation-feedback` with `{ "feedback": "..." }`. Feedback
+is trimmed, must contain 1–2000 characters, and is stored as a
+`premium_cancellation_feedback` usage event. Success returns 204; invalid input
+returns 400. Feedback is not sent to an external service.
 
 | Plan | Price | Storage |
 |---|---|---|
