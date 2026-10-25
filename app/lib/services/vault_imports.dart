@@ -32,6 +32,7 @@ extension VaultImports on LifenizerAppState {
     String? mimeType,
     Map<String, String> metadata = const {},
     String? payloadBase64,
+    List<String> participantIds = const [],
   }) async {
     await _run(() async {
       final api = _requireApi();
@@ -72,6 +73,7 @@ extension VaultImports on LifenizerAppState {
       final added = await _ingestNormalizedImport(
         normalized,
         fingerprint: fingerprint,
+        selectedParticipantIds: participantIds,
       );
       final skipped = normalized.conversations.length - added;
       lastImportSummary = ImportSummary(
@@ -298,6 +300,8 @@ extension VaultImports on LifenizerAppState {
     String? language,
     DateTime? recordedAt,
     String? recordingId,
+    List<String> participantIds = const [],
+    RecordingLocation? location,
   }) async {
     if (bytes.isEmpty) return;
     status = 'Transcribing audio… this can take a few minutes.';
@@ -334,7 +338,12 @@ extension VaultImports on LifenizerAppState {
       final previousIds = conversations
           .map((conversation) => conversation.id)
           .toSet();
-      await _ingestNormalizedImport(normalized, recordingId: recordingId);
+      await _ingestNormalizedImport(
+        normalized,
+        recordingId: recordingId,
+        selectedParticipantIds: participantIds,
+        location: location,
+      );
       for (final conversation in conversations) {
         if (conversation.source == 'audio' &&
             !previousIds.contains(conversation.id)) {
@@ -527,6 +536,8 @@ extension VaultImports on LifenizerAppState {
     NormalizedImportResult result, {
     String? fingerprint,
     String? recordingId,
+    List<String> selectedParticipantIds = const [],
+    RecordingLocation? location,
   }) => batchVaultChanges(() async {
     if (recordingId != null &&
         (result.conversations.length != 1 ||
@@ -547,7 +558,21 @@ extension VaultImports on LifenizerAppState {
     };
     final identities = <String, String>{};
     final names = <String, Set<String>>{};
+    final selected = await ensureParticipantSelection(
+      '',
+      selectedParticipantIds,
+    );
+    for (final id in selected) {
+      final person = participantById(id)!;
+      for (final name in [person.displayName, ...person.aliases]) {
+        names.putIfAbsent(name.toLowerCase(), () => {}).add(id);
+      }
+    }
     for (final person in result.participants) {
+      if (person.identifiers.isEmpty &&
+          names.containsKey(person.displayName.toLowerCase())) {
+        continue;
+      }
       final resolved = await ensureParticipantIdentity(
         person.displayName,
         identifiers: person.identifiers,
@@ -592,6 +617,7 @@ extension VaultImports on LifenizerAppState {
               : _uuid.v5(Namespace.url.value, 'lifenizer:thread:$threadKey'));
       final participantIds = <String>{
         ...?previous?.participantIds.map(resolveParticipantId),
+        ...selected,
       };
       for (final identifier in normalized.participantIdentifiers) {
         participantIds.add(await identity(identifier));
@@ -690,6 +716,7 @@ extension VaultImports on LifenizerAppState {
             ? 'Imported ${result.source}'
             : normalized.title.trim(),
         source: normalized.source,
+        location: location ?? previous?.location,
         participantIds: participantIds.toList(),
         artifactNames: {
           ...?previous?.artifactNames,
@@ -891,6 +918,7 @@ extension VaultTranscriptEnrichment on LifenizerAppState {
       importFingerprint: current.importFingerprint,
       title: current.title,
       source: current.source,
+      location: current.location,
       participantIds: current.participantIds,
       artifactNames: current.artifactNames,
       tags: current.tags,

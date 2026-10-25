@@ -455,6 +455,15 @@ class LifenizerAppState extends ChangeNotifier {
   Future<String> checkoutUrl(String plan) =>
       _requireApi().createCheckoutUrl(plan);
 
+  Future<void> activateFreePremium() async {
+    if (!isAuthenticated) throw StateError('Sign in to activate Premium.');
+    final api = _requireApi();
+    final quota = await api.activateFreePremium();
+    if (!identical(api, _api) || !isAuthenticated) return;
+    quotaStatus = quota;
+    _notifyChanged();
+  }
+
   /// Searches conversations based on query and optional filters.
   ///
   /// Supports temporal intent parsing (e.g., "today", "last week"), semantic
@@ -633,6 +642,7 @@ class LifenizerAppState extends ChangeNotifier {
         : _linearSearchLimit;
     final matches = <Conversation>[];
     for (final conversation in conversations) {
+      if (!criteria.matchesLocation(conversation.location)) continue;
       if (sourceFilter != null && conversation.source != sourceFilter) {
         continue;
       }
@@ -674,7 +684,8 @@ class LifenizerAppState extends ChangeNotifier {
   }
 
   bool _linearMatches(Conversation conversation, List<List<String>> words) {
-    final header = StringBuffer(conversation.title);
+    final header = StringBuffer(conversation.title)
+      ..write(' ${conversation.location?.searchableText ?? ''}');
     for (final id in conversation.participantIds) {
       header
         ..write(' ')
@@ -928,6 +939,34 @@ class LifenizerAppState extends ChangeNotifier {
 
   Future<List<String>> ensureParticipants(String input) =>
       ensureParticipantNames(input.split(','));
+
+  /// Explicit suggestions identify people by ID, even when names are shared.
+  Future<List<String>> ensureParticipantSelection(
+    String input,
+    List<String> selected,
+  ) async {
+    final ids = selected.map(resolveParticipantId).toSet();
+    if (ids.any((id) => participantById(id) == null)) {
+      throw StateError(
+        'A selected participant is no longer available. Select them again.',
+      );
+    }
+    final labels = ids
+        .expand((id) {
+          final person = participantById(id)!;
+          return [person.displayName, ...person.aliases];
+        })
+        .map((name) => name.toLowerCase())
+        .toSet();
+    return {
+      ...ids,
+      ...await ensureParticipantNames(
+        input
+            .split(',')
+            .where((name) => !labels.contains(name.trim().toLowerCase())),
+      ),
+    }.toList();
+  }
 
   Future<List<String>> ensureParticipantNames(Iterable<String> input) =>
       batchVaultChanges(() async {
@@ -1524,15 +1563,19 @@ class LifenizerAppState extends ChangeNotifier {
     required String participantNames,
     required String text,
     String source = 'manual-text',
+    List<String> participantIds = const [],
   }) async {
     if (text.trim().isEmpty) return;
     await _run(() async {
-      final participantIds = await ensureParticipants(participantNames);
+      final people = await ensureParticipantSelection(
+        participantNames,
+        participantIds,
+      );
       final conversation = Conversation(
         id: _uuid.v4(),
         title: title.trim().isEmpty ? 'Imported conversation' : title.trim(),
         source: source,
-        participantIds: participantIds,
+        participantIds: people,
         tags: _suggestTags(source: source, title: title, text: text),
         segments: [ConversationSegment(id: _uuid.v4(), text: text.trim())],
       );
@@ -1579,8 +1622,10 @@ class LifenizerAppState extends ChangeNotifier {
   Future<void> importPendingRecording(
     List<int> bytes,
     DateTime recordedAt,
-    String captureId,
-  ) => _importPendingRecording(bytes, recordedAt, captureId);
+    String captureId, {
+    RecordingLocation? location,
+  }) =>
+      _importPendingRecording(bytes, recordedAt, captureId, location: location);
 
   Future<void> transcribeRecording(String id) => _transcribeRecording(id);
 
@@ -1588,6 +1633,7 @@ class LifenizerAppState extends ChangeNotifier {
     required String title,
     required String participantNames,
     required List<String> segmentTexts,
+    List<String> participantIds = const [],
   }) async {
     final cleaned = segmentTexts
         .map((segment) => segment.trim())
@@ -1595,12 +1641,15 @@ class LifenizerAppState extends ChangeNotifier {
         .toList();
     if (cleaned.isEmpty) return;
     await _run(() async {
-      final participantIds = await ensureParticipants(participantNames);
+      final people = await ensureParticipantSelection(
+        participantNames,
+        participantIds,
+      );
       final conversation = Conversation(
         id: _uuid.v4(),
         title: title.trim().isEmpty ? 'Live recording session' : title.trim(),
         source: 'live-recording',
-        participantIds: participantIds,
+        participantIds: people,
         tags: _suggestTags(
           source: 'live-recording',
           title: title,

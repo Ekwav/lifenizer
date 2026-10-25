@@ -4,6 +4,7 @@ import '../app_state.dart';
 import '../models.dart';
 import '../services/recording_suggestions.dart';
 import '../services/storage_location.dart';
+import 'recording_location_fields.dart';
 
 enum RecordingDetailsResult { transcribe, saved, discarded }
 
@@ -86,9 +87,18 @@ Future<RecordingDetailsResult> showRecordingDetailsSheet(
     return RecordingDetailsResult.saved;
   }
   _recordingSheetOpen = true;
+  final identity = state.recordingIdentity;
   final model = _DetailsModel(
     title: (draft['title'] as String?) ?? '',
     people: draftPeople(draft),
+    selectedIds: (draft['participantIds'] as List? ?? const [])
+        .cast<String>()
+        .toList(),
+    location: draft['location'] is Map
+        ? RecordingLocation.fromJson(
+            Map<String, dynamic>.from(draft['location'] as Map),
+          )
+        : null,
   );
   try {
     final result = await showModalBottomSheet<RecordingDetailsResult>(
@@ -98,6 +108,17 @@ Future<RecordingDetailsResult> showRecordingDetailsSheet(
       useSafeArea: true,
       builder: (context) => _RecordingDetailsSheet(state: state, model: model),
     );
+    final current = state.audioDraft;
+    if (state.recordingIdentity != identity ||
+        identity == null ||
+        current == null ||
+        current['recordedAt'] != draft['recordedAt'] ||
+        current['payloadNonce'] != draft['payloadNonce']) {
+      state.reportError(
+        'The library or recording changed. Reopen the original recording to edit its details.',
+      );
+      return RecordingDetailsResult.saved;
+    }
     if (result == RecordingDetailsResult.discarded) {
       await state.discardAudioDraft();
       return RecordingDetailsResult.discarded;
@@ -106,6 +127,9 @@ Future<RecordingDetailsResult> showRecordingDetailsSheet(
       await state.updateAudioDraftDetails(
         title: model.title.text.trim(),
         participantNames: model.finalPeople(),
+        participantIds: model.selectedIds,
+        location: model.location,
+        clearLocation: model.location == null,
         detailsPrompted: true,
       );
     }
@@ -117,14 +141,26 @@ Future<RecordingDetailsResult> showRecordingDetailsSheet(
 }
 
 class _DetailsModel {
-  _DetailsModel({required String title, required this.people})
-    : title = TextEditingController(text: title);
+  _DetailsModel({
+    required String title,
+    required this.people,
+    required this.selectedIds,
+    this.location,
+  }) : title = TextEditingController(text: title);
   final TextEditingController title;
   final List<String> people;
+  final List<String> selectedIds;
+  RecordingLocation? location;
   final ValueNotifier<int> changes = ValueNotifier(0);
   final TextEditingController personField = TextEditingController();
 
-  bool addPerson(String raw) {
+  bool addPerson(String raw, {String? id}) {
+    if (id != null) {
+      if (selectedIds.contains(id)) return false;
+      selectedIds.add(id);
+      changes.value++;
+      return true;
+    }
     final name = raw.replaceAll(',', ' ').trim();
     if (name.isEmpty) return false;
     final key = RecordingSuggestionService.fold(name);
@@ -178,10 +214,13 @@ class _RecordingDetailsSheetState extends State<_RecordingDetailsSheet> {
   late final DateTime _recordedAt;
   late final List<PersonSuggestion> _peopleSuggestions;
   late final List<String> _titleSuggestions;
+  late final String? _identity;
 
   @override
   void initState() {
     super.initState();
+    _identity = widget.state.recordingIdentity;
+    widget.state.addListener(_libraryChanged);
     final draft = widget.state.audioDraft!;
     _recordedAt = DateTime.parse(draft['recordedAt'] as String);
     _peopleSuggestions = _suggestions.suggestPeople(
@@ -195,8 +234,16 @@ class _RecordingDetailsSheetState extends State<_RecordingDetailsSheet> {
     );
   }
 
+  void _libraryChanged() {
+    if (widget.state.recordingIdentity == _identity) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).removeRoute(ModalRoute.of(context)!);
+    });
+  }
+
   @override
   void dispose() {
+    widget.state.removeListener(_libraryChanged);
     _titleFocus.dispose();
     _personFocus.dispose();
     super.dispose();
@@ -267,10 +314,22 @@ class _RecordingDetailsSheetState extends State<_RecordingDetailsSheet> {
             builder: (context, _, _) => Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (model.people.isNotEmpty)
+                if (model.people.isNotEmpty || model.selectedIds.isNotEmpty)
                   Wrap(
                     spacing: 8,
                     children: [
+                      for (final id in model.selectedIds)
+                        InputChip(
+                          label: Text(widget.state.participantName(id)),
+                          tooltip: widget.state
+                              .participantById(id)
+                              ?.identifiers
+                              .join(' · '),
+                          onDeleted: () {
+                            model.selectedIds.remove(id);
+                            model.changes.value++;
+                          },
+                        ),
                       for (final name in model.people)
                         InputChip(
                           label: Text(name),
@@ -285,11 +344,13 @@ class _RecordingDetailsSheetState extends State<_RecordingDetailsSheet> {
                         .toSet();
                     final open = _peopleSuggestions
                         .where(
-                          (s) => !chosen.contains(
-                            RecordingSuggestionService.fold(
-                              s.participant.displayName,
-                            ),
-                          ),
+                          (s) =>
+                              !model.selectedIds.contains(s.participant.id) &&
+                              !chosen.contains(
+                                RecordingSuggestionService.fold(
+                                  s.participant.displayName,
+                                ),
+                              ),
                         )
                         .toList();
                     if (open.isEmpty) return const SizedBox.shrink();
@@ -303,8 +364,10 @@ class _RecordingDetailsSheetState extends State<_RecordingDetailsSheet> {
                             child: ActionChip(
                               avatar: const Icon(Icons.history, size: 16),
                               label: Text(s.participant.displayName),
-                              onPressed: () =>
-                                  model.addPerson(s.participant.displayName),
+                              onPressed: () => model.addPerson(
+                                s.participant.displayName,
+                                id: s.participant.id,
+                              ),
                             ),
                           ),
                       ],
@@ -315,6 +378,12 @@ class _RecordingDetailsSheetState extends State<_RecordingDetailsSheet> {
             ),
           ),
           _personField(model),
+          const SizedBox(height: 16),
+          Text('Location', style: theme.textTheme.titleSmall),
+          RecordingLocationFields(
+            location: model.location,
+            onChanged: (value) => model.location = value,
+          ),
           const SizedBox(height: 20),
           FilledButton.icon(
             onPressed: () {
@@ -372,6 +441,7 @@ class _RecordingDetailsSheetState extends State<_RecordingDetailsSheet> {
         text,
         widget.state.activeParticipants,
         exclude: model.people.toSet(),
+        excludeIds: model.selectedIds.toSet(),
       );
       final exact = matches.any(
         (p) =>
@@ -384,7 +454,7 @@ class _RecordingDetailsSheetState extends State<_RecordingDetailsSheet> {
       ];
     },
     onSelected: (option) {
-      model.addPerson(option.name);
+      model.addPerson(option.name, id: option.participant?.id);
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => model.personField.clear(),
       );
@@ -427,7 +497,17 @@ class _RecordingDetailsSheetState extends State<_RecordingDetailsSheet> {
           onSelected: onSelected,
           labelOf: (option) => option.isNew
               ? Text('Add "${option.name}" as new person')
-              : Text(option.name),
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(option.name),
+                    Text(
+                      option.participant!.identifiers.firstOrNull ??
+                          option.participant!.id,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
         ),
   );
 }

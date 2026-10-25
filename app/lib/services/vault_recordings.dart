@@ -137,8 +137,9 @@ extension VaultRecordings on LifenizerAppState {
   Future<void> _importPendingRecording(
     List<int> bytes,
     DateTime recordedAt,
-    String captureId,
-  ) async {
+    String captureId, {
+    RecordingLocation? location,
+  }) async {
     if (busy) throw StateError('Wait for the current vault operation.');
     if (bytes.isEmpty || captureId.isEmpty) {
       throw StateError('The recording is empty.');
@@ -160,6 +161,7 @@ extension VaultRecordings on LifenizerAppState {
               id: id,
               title: 'Voice recording',
               source: 'audio',
+              location: location,
               participantIds: [],
               segments: [],
               artifactNames: ['recording.wav'],
@@ -200,6 +202,8 @@ extension VaultRecordings on LifenizerAppState {
       participantNames: conversation.participantIds
           .map(participantName)
           .join(','),
+      participantIds: conversation.participantIds,
+      location: conversation.location,
       recordedAt: conversation.startedAt,
       recordingId: id,
     );
@@ -237,9 +241,15 @@ extension VaultRecordings on LifenizerAppState {
                   ? (draft['title'] as String).trim()
                   : 'Voice recording',
               source: 'audio',
-              participantIds: await ensureParticipants(
+              participantIds: await ensureParticipantSelection(
                 (draft['participantNames'] as List? ?? const []).join(','),
+                (draft['participantIds'] as List? ?? const []).cast<String>(),
               ),
+              location: draft['location'] is Map
+                  ? RecordingLocation.fromJson(
+                      Map<String, dynamic>.from(draft['location'] as Map),
+                    )
+                  : null,
               segments: [],
               artifactNames: ['recording.wav'],
               startedAt: recordedAt,
@@ -265,6 +275,48 @@ extension VaultRecordings on LifenizerAppState {
       status = 'Recording saved encrypted; transcription is optional.';
     });
     return retained;
+  }
+
+  /// Updates searchable context without changing the recording or transcript.
+  Future<bool> updateRecordingDetails(
+    String id, {
+    required String title,
+    required String participantNames,
+    required List<String> participantIds,
+    RecordingLocation? location,
+    String? expectedIdentity,
+  }) async {
+    var saved = false;
+    await _run(() async {
+      if (expectedIdentity != null && recordingIdentity != expectedIdentity) {
+        throw StateError(
+          'The library changed. Reopen the original recording to edit its details.',
+        );
+      }
+      final api = _requireApi();
+      final identity = recordingIdentity;
+      final current = await loadConversation(id);
+      _checkRecordingSession(api, identity);
+      if (current.source != 'audio') {
+        throw StateError('Choose an audio recording.');
+      }
+      final people = await ensureParticipantSelection(
+        participantNames,
+        participantIds,
+      );
+      _checkRecordingSession(api, identity);
+      final updated = Conversation.fromJson({
+        ...current.toJson(),
+        'title': title.trim().isEmpty ? current.title : title.trim(),
+        'participantIds': people,
+        'location': location?.toJson(),
+      });
+      conversations[conversations.indexWhere((c) => c.id == id)] = updated;
+      _markConversationChanged(id);
+      await _pushEntity('conversation', id, updated.toJson());
+      saved = true;
+    });
+    return saved;
   }
 
   /// A device-local request waiting for confirmed online storage or removal.

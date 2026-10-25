@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import 'recording_details_sheet.dart';
 import 'recording_audio_player.dart';
+import '../models.dart';
+import '../services/recording_location_service.dart';
 
 class MicrophonePanel extends StatefulWidget {
   const MicrophonePanel({required this.state, super.key});
@@ -17,11 +19,13 @@ class MicrophonePanel extends StatefulWidget {
 class _MicrophonePanelState extends State<MicrophonePanel> {
   bool _working = false;
   bool _disposing = false;
+  String? _locationError;
 
   @override
   void initState() {
     super.initState();
     widget.state.recording.addListener(_recordingChanged);
+    unawaited(RecordingLocationService.instance.load());
   }
 
   void _recordingChanged() {
@@ -87,6 +91,13 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
         mimeType: 'audio/wav',
         title: title.isEmpty ? 'Recorded conversation' : title,
         participantNames: draftPeople(draft).join(', '),
+        participantIds: (draft['participantIds'] as List? ?? const [])
+            .cast<String>(),
+        location: draft['location'] is Map
+            ? RecordingLocation.fromJson(
+                Map<String, dynamic>.from(draft['location'] as Map),
+              )
+            : null,
         recordedAt: DateTime.parse(draft['recordedAt'] as String),
       );
       if (widget.state.error == null) await widget.state.discardAudioDraft();
@@ -124,6 +135,45 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
             ),
             const SizedBox(height: 8),
             const RecordingStorageNote(),
+            if (RecordingLocationService.instance.supported)
+              AnimatedBuilder(
+                animation: RecordingLocationService.instance,
+                builder: (context, _) => SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Include recording location'),
+                  subtitle: Text(
+                    _locationError ??
+                        'Save one location snapshot when recording starts. Town and venue can be edited later.',
+                  ),
+                  value: RecordingLocationService.instance.enabled,
+                  onChanged: disabled || recording.recording
+                      ? null
+                      : (value) async {
+                          final locations = RecordingLocationService.instance;
+                          if (value && !await locations.requestPermission()) {
+                            if (mounted) {
+                              setState(
+                                () => _locationError =
+                                    'Location access was not granted. You can still enter a town and venue manually.',
+                              );
+                            }
+                            return;
+                          }
+                          try {
+                            await locations.setEnabled(value);
+                          } catch (_) {
+                            if (mounted) {
+                              setState(
+                                () => _locationError =
+                                    'Could not save the location preference. Try again.',
+                              );
+                            }
+                            return;
+                          }
+                          if (mounted) setState(() => _locationError = null);
+                        },
+                ),
+              ),
             const SizedBox(height: 12),
             if (recording.recording) ...[
               Text(
@@ -139,6 +189,7 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
                 'Recording saved encrypted on this device. Ready to transcribe.',
               ),
               _DraftDetails(
+                state: widget.state,
                 draft: draft,
                 onEdit: disabled ? null : _editDetails,
               ),
@@ -181,14 +232,29 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
 }
 
 class _DraftDetails extends StatelessWidget {
-  const _DraftDetails({required this.draft, required this.onEdit});
+  const _DraftDetails({
+    required this.state,
+    required this.draft,
+    required this.onEdit,
+  });
+  final LifenizerAppState state;
   final Map<String, dynamic> draft;
   final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
     final title = (draft['title'] as String? ?? '').trim();
-    final people = draftPeople(draft);
+    final people = [
+      ...(draft['participantIds'] as List? ?? const []).cast<String>().map(
+        state.participantName,
+      ),
+      ...draftPeople(draft),
+    ];
+    final location = draft['location'] is Map
+        ? RecordingLocation.fromJson(
+            Map<String, dynamic>.from(draft['location'] as Map),
+          )
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -204,6 +270,8 @@ class _DraftDetails extends StatelessWidget {
                 Chip(label: Text(name), visualDensity: VisualDensity.compact),
             ],
           ),
+        if (location?.displayName.isNotEmpty == true)
+          Text(location!.displayName),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(

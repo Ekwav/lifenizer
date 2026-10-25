@@ -103,6 +103,27 @@ extension VaultBackup on LifenizerAppState {
         'lifenizer:recording:${session!.vaultId}:${draft['recordedAt']}:${draft['payloadNonce']}',
       );
       final names = (draft['participantNames'] as List? ?? const []).toSet();
+      final selectedIds = (draft['participantIds'] as List? ?? const [])
+          .cast<String>()
+          .map(resolveParticipantId)
+          .toSet();
+      final selectedNames = selectedIds
+          .expand((id) {
+            final person = participantById(id);
+            return person == null
+                ? <String>[]
+                : [person.displayName, ...person.aliases];
+          })
+          .map((name) => name.toLowerCase())
+          .toSet();
+      final people = {...selectedIds};
+      for (final name in names) {
+        if (selectedNames.contains(name.toString().toLowerCase())) continue;
+        final matches = activeParticipants
+            .where((person) => person.displayName == name)
+            .toList();
+        if (matches.length == 1) people.add(matches.single.id);
+      }
       final at = DateTime.parse(draft['recordedAt'] as String);
       yield {
         'type': 'conversation',
@@ -110,10 +131,12 @@ extension VaultBackup on LifenizerAppState {
           id: id,
           title: draft['title'] as String? ?? 'Voice recording',
           source: 'audio',
-          participantIds: participants
-              .where((p) => names.contains(p.displayName))
-              .map((p) => p.id)
-              .toList(),
+          location: draft['location'] is Map
+              ? RecordingLocation.fromJson(
+                  Map<String, dynamic>.from(draft['location'] as Map),
+                )
+              : null,
+          participantIds: people.toList(),
           segments: [],
           artifactNames: ['recording.wav'],
           startedAt: at,

@@ -1284,12 +1284,17 @@ extension VaultSync on LifenizerAppState {
 
   static const _audioDraftBlob = 'audio-draft';
 
-  Future<void> saveAudioDraft(List<int> bytes, DateTime recordedAt) async {
+  Future<void> saveAudioDraft(
+    List<int> bytes,
+    DateTime recordedAt, {
+    RecordingLocation? location,
+  }) async {
     _pendingDraftPayload = bytes;
     _draftPayloadCache = bytes;
     audioDraft = {
       'recordedAt': recordedAt.toUtc().toIso8601String(),
       'payloadBytes': bytes.length,
+      if (location != null) 'location': location.toJson(),
     };
     await _persistLocal();
     _notifyChanged();
@@ -1342,6 +1347,9 @@ extension VaultSync on LifenizerAppState {
   Future<void> updateAudioDraftDetails({
     String? title,
     List<String>? participantNames,
+    List<String>? participantIds,
+    RecordingLocation? location,
+    bool clearLocation = false,
     bool? detailsPrompted,
   }) async {
     final draft = audioDraft;
@@ -1350,8 +1358,11 @@ extension VaultSync on LifenizerAppState {
       ...draft,
       'title': ?title,
       'participantNames': ?participantNames,
+      'participantIds': ?participantIds,
+      if (location != null) 'location': location.toJson(),
       'detailsPrompted': ?detailsPrompted,
     };
+    if (clearLocation) audioDraft!.remove('location');
     await _persistLocal();
     _notifyChanged();
   }

@@ -283,9 +283,11 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(vault.state.audioDraft!['title'], 'Standup');
-      expect(vault.state.audioDraft!['participantNames'], [
-        'Alice Müller',
-        'Bob',
+      expect(vault.state.audioDraft!['participantNames'], ['Bob']);
+      expect(vault.state.audioDraft!['participantIds'], [
+        vault.state.activeParticipants
+            .firstWhere((person) => person.displayName == 'Alice Müller')
+            .id,
       ]);
 
       await tester.pumpWidget(const SizedBox());
@@ -417,4 +419,25 @@ void main() {
     await tester.pumpAndSettle();
     await remove(tester, vault);
   }, variant: linux);
+
+  testWidgets(
+    'an open details sheet cannot overwrite a replacement recording',
+    (tester) async {
+      final vault = await mount(tester);
+      await stopRecording(tester, vault);
+      await tester.runAsync(() async {
+        await vault.state.saveAudioDraft([1, 2, 3], DateTime.utc(2026, 10, 25));
+        await vault.state.updateAudioDraftDetails(
+          title: 'Replacement recording',
+          detailsPrompted: true,
+        );
+      });
+      await tapVisible(tester, find.text('Save details'));
+      await until(tester, () => !recordingDetailsSheetOpen);
+      expect(vault.state.audioDraft!['title'], 'Replacement recording');
+      expect(vault.state.error, contains('recording changed'));
+      await remove(tester, vault);
+    },
+    variant: linux,
+  );
 }

@@ -41,6 +41,28 @@ requiring the date phrase to occur in their text. Ordinary words such as `time`,
 `year`, and `search` remain searchable topics. The explicit When filter requires
 a conversation's time span to overlap its inclusive calendar-date range.
 
+## Locations and participant links
+
+Recordings can carry a town, venue, address and optional position snapshot inside
+the encrypted conversation and its prepared search catalog. Town words receive
+extra ranking weight; venue and address words also match ordinary searches.
+The compact **Location** picker adds queries such as `town:"Dresden"` or
+`location:"Café North"`, combined with participant, source and date filters.
+These work immediately after unlock without loading transcript bodies.
+
+On Android, enable **Include recording location** before recording to grant
+optional location access and capture one start-position snapshot. This does not
+track your movements. Missing permission or an unavailable provider does not
+stop recording. Names are best-effort OS geocoding results and can be edited.
+Open a saved audio conversation and choose **Edit people and location** to add
+or correct its town, venue or address, including on desktop. Manual entry needs
+no location permission. Location metadata is not sent to transcription.
+
+Participant inputs search existing names, aliases and provider identifiers.
+Selecting a suggestion links its ID rather than resolving its label again;
+distinct people sharing a name stay separate. Unselected text can add new people.
+Selected IDs and context survive encrypted saves, transcription, sync and backups.
+
 ## Source categories and ranking weights
 
 Sources are grouped (`app/lib/services/source_categories.dart`):

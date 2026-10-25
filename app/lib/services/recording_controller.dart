@@ -9,6 +9,8 @@ import 'package:record/record.dart';
 
 import '../app_state.dart';
 import 'wav_audio.dart';
+import 'recording_location_service.dart';
+import '../models.dart';
 
 /// Owns the microphone independently of the Capture page.
 class RecordingController extends ChangeNotifier with WidgetsBindingObserver {
@@ -91,6 +93,11 @@ class RecordingController extends ChangeNotifier with WidgetsBindingObserver {
             encodeWav(pcm),
             DateTime.fromMillisecondsSinceEpoch(capture['startedAt'] as int),
             capture['id'] as String,
+            location: capture['location'] is Map
+                ? RecordingLocation.fromJson(
+                    Map<String, dynamic>.from(capture['location'] as Map),
+                  )
+                : null,
           );
           await _background.invokeMethod<void>('ack', arguments);
         } catch (failure) {
@@ -166,6 +173,7 @@ class RecordingController extends ChangeNotifier with WidgetsBindingObserver {
     try {
       if (supportsBackground) {
         await _reconciling;
+        await RecordingLocationService.instance.load();
         if (state.rememberedEmail.isEmpty) {
           throw StateError('Choose a library before recording.');
         }
@@ -178,6 +186,7 @@ class RecordingController extends ChangeNotifier with WidgetsBindingObserver {
         _nativeStatus(
           await _background.invokeMapMethod<Object?, Object?>('start', {
             'scope': _scope,
+            'captureLocation': RecordingLocationService.instance.enabled,
           }),
         );
         return;

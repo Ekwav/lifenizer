@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app/app_state.dart';
+import 'package:app/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,8 +17,9 @@ class _State extends LifenizerAppState {
   Future<void> importPendingRecording(
     List<int> bytes,
     DateTime recordedAt,
-    String id,
-  ) async {
+    String id, {
+    RecordingLocation? location,
+  }) async {
     if (failImport || failedIds.contains(id)) throw StateError('disk full');
     expect(bytes.sublist(44), [1, 2, 3, 4]);
     imported.add(id);
