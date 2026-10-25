@@ -38,6 +38,32 @@ Conversation _conversation(int index, {bool loaded = true}) => Conversation(
       : [],
 );
 
+Future<void> _openDetail(
+  WidgetTester tester,
+  _State state, {
+  Conversation? conversation,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => openConversationDetail(
+              context,
+              state,
+              conversation ?? _conversation(1, loaded: false),
+            ),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('Open'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 16));
+}
+
 void main() {
   testWidgets(
     'hundreds of results build only viewport cards and remain scrollable',
@@ -133,25 +159,7 @@ void main() {
   ) async {
     final state = _State();
     addTearDown(state.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => TextButton(
-              onPressed: () => openConversationDetail(
-                context,
-                state,
-                _conversation(1, loaded: false),
-              ),
-              child: const Text('Open'),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('Open'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 16));
+    await _openDetail(tester, state);
     expect(find.text('Thread 1'), findsOneWidget);
     expect(find.text('Cached summary 1'), findsOneWidget);
     expect(state.requests, isEmpty);
@@ -169,25 +177,7 @@ void main() {
   ) async {
     final state = _State();
     addTearDown(state.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => TextButton(
-              onPressed: () => openConversationDetail(
-                context,
-                state,
-                _conversation(1, loaded: false),
-              ),
-              child: const Text('Open'),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('Open'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 16));
+    await _openDetail(tester, state);
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pumpAndSettle();
     expect(state.requests, isEmpty);
@@ -207,22 +197,7 @@ void main() {
       segments: [],
       isLoaded: false,
     );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => TextButton(
-              onPressed: () =>
-                  openConversationDetail(context, state, recording),
-              child: const Text('Open'),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('Open'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 16));
+    await _openDetail(tester, state, conversation: recording);
     expect(find.byTooltip('Play recording'), findsOneWidget);
     expect(find.text('Edit people and location'), findsOneWidget);
     expect(state.requests, isEmpty);
@@ -234,25 +209,7 @@ void main() {
   ) async {
     final state = _State()..unlocked = true;
     addTearDown(state.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => TextButton(
-              onPressed: () => openConversationDetail(
-                context,
-                state,
-                _conversation(1, loaded: false),
-              ),
-              child: const Text('Open'),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('Open'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 16));
+    await _openDetail(tester, state);
     state.lockForTest();
     await tester.pump(const Duration(milliseconds: 300));
     expect(state.requests, isEmpty);
