@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../widgets/microphone_panel.dart';
+import '../widgets/participant_picker.dart';
 import 'page_frame.dart';
 
 class CapturePage extends StatefulWidget {
@@ -25,6 +26,8 @@ class _CapturePageState extends State<CapturePage> {
       TextEditingController();
   final TextEditingController _segmentController = TextEditingController();
   final List<String> _segments = [];
+  List<String> _participantIds = [];
+  List<String> _recordingParticipantIds = [];
   bool _recording = false;
 
   @override
@@ -49,20 +52,42 @@ class _CapturePageState extends State<CapturePage> {
             MicrophonePanel(state: widget.state),
             _ManualTextPanel(
               titleController: _titleController,
-              participantsController: _participantsController,
+              participantsField: ParticipantPicker(
+                state: widget.state,
+                controller: _participantsController,
+                selectedIds: _participantIds,
+                onChanged: (ids) => setState(() => _participantIds = ids),
+                enabled: !widget.state.busy,
+                decoration: const InputDecoration(
+                  labelText: 'Participants',
+                  border: OutlineInputBorder(),
+                ),
+              ),
               textController: _textController,
               onSubmit: widget.state.busy
                   ? null
                   : () => widget.state.addManualText(
                       title: _titleController.text,
                       participantNames: _participantsController.text,
+                      participantIds: _participantIds,
                       text: _textController.text,
                     ),
             ),
             _RecordingPanel(
               recording: _recording,
               titleController: _recordingTitleController,
-              participantsController: _recordingParticipantsController,
+              participantsField: ParticipantPicker(
+                state: widget.state,
+                controller: _recordingParticipantsController,
+                selectedIds: _recordingParticipantIds,
+                onChanged: (ids) =>
+                    setState(() => _recordingParticipantIds = ids),
+                enabled: !widget.state.busy,
+                decoration: const InputDecoration(
+                  labelText: 'Participants',
+                  border: OutlineInputBorder(),
+                ),
+              ),
               segmentController: _segmentController,
               segments: _segments,
               onStart: () => setState(() {
@@ -81,6 +106,7 @@ class _CapturePageState extends State<CapturePage> {
                       await widget.state.addRecordingConversation(
                         title: _recordingTitleController.text,
                         participantNames: _recordingParticipantsController.text,
+                        participantIds: _recordingParticipantIds,
                         segmentTexts: _segments,
                       );
                       if (mounted && widget.state.error == null) {
@@ -134,13 +160,13 @@ class _CapturePageState extends State<CapturePage> {
 class _ManualTextPanel extends StatelessWidget {
   const _ManualTextPanel({
     required this.titleController,
-    required this.participantsController,
+    required this.participantsField,
     required this.textController,
     required this.onSubmit,
   });
 
   final TextEditingController titleController;
-  final TextEditingController participantsController;
+  final Widget participantsField;
   final TextEditingController textController;
   final VoidCallback? onSubmit;
 
@@ -162,13 +188,7 @@ class _ManualTextPanel extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            TextField(
-              controller: participantsController,
-              decoration: const InputDecoration(
-                labelText: 'Participants',
-                border: OutlineInputBorder(),
-              ),
-            ),
+            participantsField,
             const SizedBox(height: 8),
             TextField(
               controller: textController,
@@ -197,7 +217,7 @@ class _RecordingPanel extends StatelessWidget {
   const _RecordingPanel({
     required this.recording,
     required this.titleController,
-    required this.participantsController,
+    required this.participantsField,
     required this.segmentController,
     required this.segments,
     required this.onStart,
@@ -207,7 +227,7 @@ class _RecordingPanel extends StatelessWidget {
 
   final bool recording;
   final TextEditingController titleController;
-  final TextEditingController participantsController;
+  final Widget participantsField;
   final TextEditingController segmentController;
   final List<String> segments;
   final VoidCallback onStart;
@@ -243,13 +263,7 @@ class _RecordingPanel extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            TextField(
-              controller: participantsController,
-              decoration: const InputDecoration(
-                labelText: 'Participants',
-                border: OutlineInputBorder(),
-              ),
-            ),
+            participantsField,
             const SizedBox(height: 8),
             if (recording) ...[
               TextField(

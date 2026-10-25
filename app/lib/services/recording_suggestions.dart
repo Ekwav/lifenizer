@@ -181,23 +181,28 @@ class RecordingSuggestionService {
     return result;
   }
 
-  /// People whose name or alias starts with (or has a word starting with) [prefix].
+  /// Matches name/alias prefixes and parts of contact identifiers.
   List<Participant> completePeople(
     String prefix,
     Iterable<Participant> people, {
     Set<String> exclude = const {},
+    Set<String> excludeIds = const {},
   }) {
     final query = fold(prefix);
     if (query.isEmpty) return const [];
     final excluded = exclude.map(fold).toSet();
     final scored = <(int, Participant)>[];
     for (final person in people) {
-      if (person.mergedInto != null) continue;
+      if (person.mergedInto != null || excludeIds.contains(person.id)) continue;
       if (excluded.contains(fold(person.displayName))) continue;
       var best = 99;
       for (final name in [person.displayName, ...person.aliases]) {
         final rank = _matchRank(fold(name), query);
         if (rank < best) best = rank;
+      }
+      if (best == 99 &&
+          person.identifiers.any((id) => fold(id).contains(query))) {
+        best = 2;
       }
       if (best < 99) scored.add((best, person));
     }

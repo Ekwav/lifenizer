@@ -16,6 +16,7 @@ import '../widgets/browser_extension_section.dart';
 import '../widgets/imap_import_panel.dart';
 import '../widgets/document_import_panel.dart';
 import '../widgets/paperless_import_panel.dart';
+import '../widgets/participant_picker.dart';
 import '../widgets/camera_photos_panel.dart';
 import '../widgets/viewing_history_panel.dart';
 import '../widgets/discord_bot_import_panel.dart';
@@ -36,6 +37,7 @@ class _ImportsPageState extends State<ImportsPage> {
   );
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _participantsController = TextEditingController();
+  final _participantIds = ValueNotifier<List<String>>([]);
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _fileController = TextEditingController();
   final TextEditingController _mimeController = TextEditingController();
@@ -70,6 +72,7 @@ class _ImportsPageState extends State<ImportsPage> {
     _sourceController.dispose();
     _titleController.dispose();
     _participantsController.dispose();
+    _participantIds.dispose();
     _textController.dispose();
     _fileController.dispose();
     _mimeController.dispose();
@@ -557,9 +560,18 @@ class _ImportsPageState extends State<ImportsPage> {
         controller: _titleController,
         decoration: const InputDecoration(labelText: 'Title (optional)'),
       ),
-      TextField(
-        controller: _participantsController,
-        decoration: const InputDecoration(labelText: 'Participants (optional)'),
+      ValueListenableBuilder<List<String>>(
+        valueListenable: _participantIds,
+        builder: (context, ids, _) => ParticipantPicker(
+          state: widget.state,
+          controller: _participantsController,
+          selectedIds: ids,
+          onChanged: (ids) => _participantIds.value = ids,
+          enabled: !widget.state.busy,
+          decoration: const InputDecoration(
+            labelText: 'Participants (optional)',
+          ),
+        ),
       ),
       const SizedBox(height: 12),
       TextField(
@@ -610,6 +622,7 @@ class _ImportsPageState extends State<ImportsPage> {
       source: _sourceController.text.trim(),
       title: _titleController.text,
       participantNames: _participantsController.text,
+      participantIds: _participantIds.value,
       text: _textController.text,
       originalFileName: _fileController.text.trim().isEmpty
           ? null
@@ -681,6 +694,7 @@ class _ImportsPageState extends State<ImportsPage> {
         source: _sourceController.text.trim(),
         title: _titleController.text,
         participantNames: _participantsController.text,
+        participantIds: _participantIds.value,
         originalFileName: file.name,
         payloadBase64: base64Encode(bytes),
       );
@@ -744,6 +758,7 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _participantsController = TextEditingController();
+  List<String> _participantIds = [];
   final TextEditingController _languageController = TextEditingController();
   String? _pickError;
   DateTime? _recordedAt;
@@ -777,6 +792,7 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
       fileName: file.name,
       title: _titleController.text,
       participantNames: _participantsController.text,
+      participantIds: _participantIds,
       language: _languageController.text,
       recordedAt: _recordedAt,
     );
@@ -847,8 +863,12 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
                 ),
                 SizedBox(
                   width: 260,
-                  child: TextField(
+                  child: ParticipantPicker(
+                    state: widget.state,
                     controller: _participantsController,
+                    selectedIds: _participantIds,
+                    onChanged: (ids) => setState(() => _participantIds = ids),
+                    enabled: !widget.state.busy,
                     decoration: const InputDecoration(
                       labelText: 'Participants (optional)',
                       border: OutlineInputBorder(),
