@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -15,13 +16,18 @@ class _Vault extends LifenizerAppState {
   bool unlocked = true;
   @override
   bool get isAuthenticated => unlocked;
+  void changed() => notifyListeners();
 }
 
 class _Store extends DocumentCredentialStore {
   final saved = <String, Map<String, dynamic>>{};
+  Completer<void>? readGate;
   @override
-  Future<Map<String, dynamic>?> read(String identity, String source) async =>
-      saved['$identity/$source'];
+  Future<Map<String, dynamic>?> read(String identity, String source) async {
+    await readGate?.future;
+    return saved['$identity/$source'];
+  }
+
   @override
   Future<void> write(
     String identity,
@@ -309,6 +315,64 @@ void main() {
       expect(service.enabled, isFalse);
       expect(service.error, contains('already in use'));
     });
+
+    test('configured port must remain stable across restarts', () async {
+      await create();
+      final port = service.port;
+      for (final invalid in [0, -1, 65536]) {
+        expect(() => service.setPort(invalid), throwsFormatException);
+      }
+      expect(service.port, port);
+      expect(service.listening, isTrue);
+    });
+
+    for (final failRestore in [false, true]) {
+      test(
+        'old vault token fails during another vault restore (failure: $failRestore)',
+        () async {
+          await create();
+          final oldToken = token;
+          final gate = Completer<void>();
+          store.readGate = gate;
+          state.session = AuthSession(
+            authToken: 'other-token',
+            userId: 'other-user',
+            vaultId: 'other-vault',
+            vaultSalt: 'other-salt',
+          );
+          state.changed();
+          expect(service.token, isNull);
+          expect(service.enabled, isFalse);
+          expect((await call('GET', '/v1/ping', bearer: oldToken)).$1, 401);
+          expect(
+            (await call(
+              'POST',
+              '/v1/watch-history',
+              bearer: oldToken,
+              body: payload([visit(yt)]),
+            )).$1,
+            401,
+          );
+          expect(sent, isEmpty);
+          if (failRestore) {
+            gate.completeError(StateError('Credential store unavailable'));
+            await Future<void>.delayed(Duration.zero);
+            expect(service.error, contains('Could not restore'));
+            expect(service.token, isNull);
+            expect((await call('GET', '/v1/ping', bearer: oldToken)).$1, 401);
+          } else {
+            gate.complete();
+            await service.setEnabled(true);
+            expect(service.token, isNot(oldToken));
+            expect((await call('GET', '/v1/ping', bearer: oldToken)).$1, 401);
+            expect(
+              (await call('GET', '/v1/ping', bearer: service.token)).$1,
+              200,
+            );
+          }
+        },
+      );
+    }
   });
 
   group('endpoints', () {

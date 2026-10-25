@@ -102,6 +102,13 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     }
     _generation++;
     _identity = identity;
+    // Invalidate the previous vault's authorization before asynchronous restore.
+    _enabled = false;
+    _token = null;
+    error = null;
+    lastSync = null;
+    visitsAccepted = 0;
+    videosImported = 0;
     final generation = _generation;
     _lifecycle = _lifecycle.then((_) => _restore(identity, generation));
   }
@@ -199,7 +206,7 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
   }
 
   Future<void> setPort(int value) {
-    if (value < 0 || value > 65535) {
+    if (value < 1 || value > 65535) {
       throw const FormatException('Enter a port between 1 and 65535.');
     }
     return _lifecycle = _lifecycle.then((_) async {
