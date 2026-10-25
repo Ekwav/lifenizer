@@ -7,6 +7,8 @@ using Coflnet.Payments.Client.Client;
 using Coflnet.Payments.Client.Model;
 using Lifenizer.Core;
 using Lifenizer.Api.Infrastructure;
+using Lifenizer.Api.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,7 +18,7 @@ namespace Lifenizer.Tests;
 public sealed class PremiumTests
 {
     [Test]
-    public async Task FreeActivationRequiresLoginAndSurvivesRestartWithoutChangingVaultIdentity()
+    public async Task FreeActivationAndCancellationSurviveRestartWithoutChangingVaultIdentity()
     {
         var path = Path.Combine(Path.GetTempPath(), $"lifenizer-premium-{Guid.NewGuid():N}.db");
         var config = new Dictionary<string, string?>
@@ -34,6 +36,7 @@ public sealed class PremiumTests
             {
                 using var client = factory.CreateClient();
                 Assert.That((await client.PostAsync("/api/premium/activate", null)).StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+                Assert.That((await client.PostAsync("/api/premium/cancel-free", null)).StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
                 var registration = await client.PostAsJsonAsync("/api/auth/register", new RegisterAccountRequest(email, password));
                 registration.EnsureSuccessStatusCode();
                 original = (await registration.Content.ReadFromJsonAsync<AuthResponse>())!;
@@ -74,6 +77,34 @@ public sealed class PremiumTests
                 var disabled = await client.GetFromJsonAsync<JsonElement>("/api/premium/status");
                 Assert.That(disabled.GetProperty("plan").GetString(), Is.EqualTo("Free"));
                 Assert.That(disabled.GetProperty("freePremiumActivatedAt").GetString(), Is.EqualTo(activatedAt));
+                // Opting out remains possible even after the server disables the offer.
+                for (var attempt = 0; attempt < 2; attempt++)
+                {
+                    var cancellation = await client.PostAsync("/api/premium/cancel-free", null);
+                    cancellation.EnsureSuccessStatusCode();
+                    var cancelled = await cancellation.Content.ReadFromJsonAsync<JsonElement>();
+                    Assert.That(cancelled.GetProperty("plan").GetString(), Is.EqualTo("Free"));
+                    Assert.That(cancelled.GetProperty("freePremiumActivatedAt").ValueKind, Is.EqualTo(JsonValueKind.Null));
+                    Assert.That(cancelled.GetProperty("usedBytes").GetInt64(), Is.EqualTo(status.GetProperty("usedBytes").GetInt64()));
+                }
+            }
+            await using (var restarted = new LifenizerApiFactory(config))
+            {
+                using var client = restarted.CreateClient();
+                var login = await client.PostAsJsonAsync("/api/auth/login", new AccountLoginRequest(email, password));
+                login.EnsureSuccessStatusCode();
+                var restored = (await login.Content.ReadFromJsonAsync<AuthResponse>())!;
+                Assert.That((restored.UserId, restored.VaultId, restored.VaultSalt), Is.EqualTo((original.UserId, original.VaultId, original.VaultSalt)));
+                client.DefaultRequestHeaders.Authorization = new("Bearer", restored.AuthToken);
+                var status = await client.GetFromJsonAsync<JsonElement>("/api/premium/status");
+                Assert.That(status.GetProperty("plan").GetString(), Is.EqualTo("Free"));
+                Assert.That(status.GetProperty("limitBytes").GetInt64(), Is.EqualTo(StorageQuota.FreeLimitBytes));
+                Assert.That(status.GetProperty("freePremiumActivatedAt").ValueKind, Is.EqualTo(JsonValueKind.Null));
+                var pull = await client.GetFromJsonAsync<PullSyncResponse>("/api/sync/pull?since=0");
+                Assert.That(pull!.Envelopes.Single().CipherText, Is.EqualTo("encrypted-before-upgrade"));
+                var reactivation = await client.PostAsync("/api/premium/activate", null);
+                reactivation.EnsureSuccessStatusCode();
+                Assert.That((await reactivation.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("plan").GetString(), Is.EqualTo("Premium"));
             }
         }
         finally
@@ -107,6 +138,11 @@ public sealed class PremiumTests
         Assert.That(status.GetProperty("plan").GetString(), Is.EqualTo("Free"));
         Assert.That((await client.PostAsync("/api/premium/checkout/premium", null)).StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
         Assert.That((await client.PostAsync("/api/premium/checkout/unknown", null)).StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        factory.Services.GetRequiredService<IConfiguration>()["Payments:FreePremiumEnabled"] = "true";
+        (await client.PostAsync("/api/premium/activate", null)).EnsureSuccessStatusCode();
+        var cancellation = await client.PostAsync("/api/premium/cancel-free", null);
+        cancellation.EnsureSuccessStatusCode();
+        Assert.That((await cancellation.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("plan").GetString(), Is.EqualTo("Free"));
     }
 
     [Test]
@@ -176,6 +212,57 @@ public sealed class PremiumTests
         var status = await client.GetFromJsonAsync<JsonElement>("/api/premium/status");
         Assert.That(status.GetProperty("plan").GetString(), Is.EqualTo("PremiumPlus"));
         Assert.That(status.GetProperty("limitBytes").GetInt64(), Is.EqualTo(StorageQuota.ForPlan(SubscriptionPlan.PremiumPlus)));
+    }
+
+    [TestCase("Premium")]
+    [TestCase("PremiumPlus")]
+    public async Task CancellingFreeGrantPreservesPaidEntitlementAndRetriesProviderFailure(string paidPlan)
+    {
+        var fail = false;
+        var calls = 0;
+        var expiry = DateTime.UtcNow.AddDays(1);
+        var paidProduct = paidPlan == "PremiumPlus" ? "lifenizer-premium-plus" : "lifenizer-premium";
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Payments:BaseUrl"] = "https://payments.example.test", ["Payments:FreePremiumEnabled"] = "true"
+        }).WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.AddSingleton(Proxy<IUserApi>((method, args) =>
+            {
+                Assert.That(method.Name, Is.EqualTo("UserUserIdOwnsUntilPostAsync"));
+                calls++;
+                if (fail) throw new ApiException(503, "synthetic provider outage");
+                var product = ((List<string>)args![1]!).Single();
+                return Task.FromResult(product == paidProduct
+                    ? new Dictionary<string, DateTime> { [product] = expiry }
+                    : new Dictionary<string, DateTime>());
+            }));
+            services.AddSingleton(Proxy<ITopUpApi>((_, _) => throw new AssertionException("Demo cancellation must not modify a paid subscription")));
+        }));
+        using var client = factory.CreateClient();
+        await Login(client);
+        var activation = await client.PostAsync("/api/premium/activate", null);
+        activation.EnsureSuccessStatusCode();
+        var before = await activation.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.That(before.GetProperty("plan").GetString(), Is.EqualTo(paidPlan));
+        var cachedCalls = calls;
+        fail = true;
+        Assert.That((await client.PostAsync("/api/premium/cancel-free", null)).StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
+        Assert.That(calls, Is.GreaterThan(cachedCalls), "Cancellation must freshly verify even a cached paid entitlement");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var user = await scope.ServiceProvider.GetRequiredService<LifenizerDbContext>().Users.SingleAsync();
+            Assert.That(user.FreePremiumActivatedAt, Is.EqualTo(DateTimeOffset.Parse(before.GetProperty("freePremiumActivatedAt").GetString()!)));
+            Assert.That(user.Plan.ToString(), Is.EqualTo(paidPlan));
+        }
+        fail = false;
+        var cancellation = await client.PostAsync("/api/premium/cancel-free", null);
+        cancellation.EnsureSuccessStatusCode();
+        var after = await cancellation.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.That(after.GetProperty("plan").GetString(), Is.EqualTo(paidPlan));
+        Assert.That(after.GetProperty("limitBytes").GetInt64(), Is.EqualTo(before.GetProperty("limitBytes").GetInt64()));
+        Assert.That(after.GetProperty("expiresAt").GetString(), Is.EqualTo(before.GetProperty("expiresAt").GetString()));
+        Assert.That(after.GetProperty("freePremiumActivatedAt").ValueKind, Is.EqualTo(JsonValueKind.Null));
     }
 
     private static T Proxy<T>(Func<MethodInfo, object?[]?, object?> invoke) where T : class

@@ -66,12 +66,21 @@ public sealed class PremiumService(
         return await GetQuotaStatusAsync(userId, cancellationToken);
     }
 
+    public async Task<QuotaStatus> CancelFreePremiumAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        // Verify paid entitlements before changing the demo grant; an outage must not look like paid cancellation.
+        await ResolvePlanAsync(userId, cancellationToken, requireAvailable: true);
+        await accountService.CancelFreePremiumAsync(userId, cancellationToken);
+        return await GetQuotaStatusAsync(userId, cancellationToken);
+    }
+
     private async Task<(SubscriptionPlan Plan, DateTimeOffset? ExpiresAt)> ResolvePlanAsync(
         Guid userId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool requireAvailable = false)
     {
         var cacheKey = $"premium:{userId}";
-        if (cache.TryGetValue(cacheKey, out (SubscriptionPlan, DateTimeOffset?) cached))
+        if (!requireAvailable && cache.TryGetValue(cacheKey, out (SubscriptionPlan, DateTimeOffset?) cached))
         {
             return cached;
         }
@@ -106,6 +115,7 @@ public sealed class PremiumService(
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
+            if (requireAvailable) throw new InvalidOperationException("Could not verify the subscription provider. Retry cancellation later.", ex);
             logger.LogWarning(ex, "Payments API unavailable for user {UserId}, defaulting to Free.", userId);
         }
 

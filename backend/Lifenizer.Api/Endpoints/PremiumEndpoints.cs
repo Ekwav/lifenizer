@@ -31,6 +31,22 @@ public static class PremiumEndpoints
             return QuotaResponse(premium, status);
         });
 
+        group.MapPost("/cancel-free", async (
+            ClaimsPrincipalUser currentUser,
+            PremiumService premium,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var status = await premium.CancelFreePremiumAsync(currentUser.UserId, cancellationToken);
+                return QuotaResponse(premium, status);
+            }
+            catch (InvalidOperationException)
+            {
+                return Results.Json(new { error = "free_premium_cancellation_unavailable" }, statusCode: 503);
+            }
+        });
+
         // POST /api/premium/checkout/{plan}
         // plan: "premium" or "premium-plus"
         group.MapPost("/checkout/{plan}", async (

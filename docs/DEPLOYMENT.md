@@ -290,6 +290,16 @@ timestamps remain stored and no account is automatically charged. Existing store
 data stays accessible if usage exceeds the restored limit, and further uploads
 are blocked. The flag is also supported by the Compose service-config flow.
 
+Authenticated users can opt out with `POST /api/premium/cancel-free`, including
+when the offer flag is disabled. This idempotently clears only their free-offer
+activation and returns the same quota status as activation. Without a paid
+entitlement, the quota immediately returns to 50 MB for new uploads; existing
+data is never deleted and remains readable even above that limit. Cancellation
+persists across restarts, and users may activate again while the offer is enabled.
+It does not cancel a provider-backed subscription or reduce its entitlement. If a
+configured payment provider cannot verify that entitlement, cancellation returns
+503 without changing the activation; retry when the provider is available.
+
 | Plan | Price | Storage |
 |---|---|---|
 | Free (default) | — | 50 MB |

@@ -86,6 +86,38 @@ public sealed class QuotaAndImageTests
     }
 
     [Test]
+    public async Task CancellingFreeGrantPreservesImagesButBlocksUploadsAboveFreeQuota()
+    {
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Payments:FreePremiumEnabled"] = "true", ["Payments:BaseUrl"] = "",
+            ["Artifacts:StorePath"] = Path.Combine(Path.GetTempPath(), "lifenizer-test-blobs", Guid.NewGuid().ToString("N"))
+        });
+        using var client = factory.CreateClient();
+        var auth = await LoginAsync(client, "downgrade@example.test");
+        client.DefaultRequestHeaders.Authorization = new("Bearer", auth.AuthToken);
+        (await client.PostAsync("/api/premium/activate", null)).EnsureSuccessStatusCode();
+        using (var scope = factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<LifenizerDbContext>().Users
+                .ExecuteUpdateAsync(update => update.SetProperty(user => user.StorageUsedBytes, StorageQuota.FreeLimitBytes));
+        using var image = ImageForm();
+        var upload = await client.PostAsync("/api/images", image);
+        upload.EnsureSuccessStatusCode();
+        var id = (await upload.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var cancellation = await client.PostAsync("/api/premium/cancel-free", null);
+        cancellation.EnsureSuccessStatusCode();
+        var status = await cancellation.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.That(status.GetProperty("limitBytes").GetInt64(), Is.EqualTo(StorageQuota.FreeLimitBytes));
+        Assert.That(status.GetProperty("usedBytes").GetInt64(), Is.EqualTo(StorageQuota.FreeLimitBytes + MinimalJpeg().Length));
+        Assert.That(await client.GetByteArrayAsync($"/api/images/{id}"), Is.EqualTo(MinimalJpeg()));
+        using var denied = ImageForm();
+        Assert.That((await client.PostAsync("/api/images", denied)).StatusCode, Is.EqualTo(HttpStatusCode.PaymentRequired));
+        (await client.PostAsync("/api/premium/activate", null)).EnsureSuccessStatusCode();
+        using var allowed = ImageForm();
+        Assert.That((await client.PostAsync("/api/images", allowed)).StatusCode, Is.EqualTo(HttpStatusCode.Created));
+    }
+
+    [Test]
     public async Task QuotaStatusRequiresAuthentication()
     {
         await using var factory = new LifenizerApiFactory();
