@@ -220,8 +220,8 @@ serves only the fixed APK filename.
 ## Building the container image
 
 ```bash
-cd backend/
-docker build -t lifenizer-api:latest .
+# From the repository root:
+docker build -f backend/Dockerfile -t lifenizer-api:latest .
 ```
 
 The multi-stage build produces a minimal Alpine-based runtime image that

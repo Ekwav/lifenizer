@@ -125,7 +125,7 @@ def main():
         raise SystemExit("Local pairing identity differs from server; refusing to replace it")
     revision = run("git", "rev-parse", "--short=12", "HEAD", cwd=REPO, capture_output=True).stdout.strip()
     tag = f"lifenizer-api:{revision}"
-    run("docker", "build", "--pull", "--tag", tag, str(REPO / "backend"))
+    run("docker", "build", "--pull", "--file", str(REPO / "backend/Dockerfile"), "--tag", tag, str(REPO))
     # Other applications may be scanning concurrently; Trivy locks its cache.
     scan_cache = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "lifenizer/trivy"
     run("trivy", "--cache-dir", str(scan_cache), "image", "--scanners", "vuln", "--severity", "HIGH,CRITICAL", "--ignore-unfixed", "--exit-code", "1", tag)
