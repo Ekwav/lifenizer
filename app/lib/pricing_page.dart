@@ -557,7 +557,7 @@ class _TierCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      'MOST POPULAR',
+                      freePremiumOffer ? 'PREVIEW' : 'MOST POPULAR',
                       style: tt.labelSmall?.copyWith(
                         color: Colors.white,
                         letterSpacing: 0.8,

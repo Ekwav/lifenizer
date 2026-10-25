@@ -490,6 +490,8 @@ void main() {
       expect(find.text('0 KB of 10.0 GB used'), findsOneWidget);
       expect(find.text('Premium+'), findsWidgets);
       expect(find.text('100 GB vault storage'), findsOneWidget);
+      expect(find.text('PREVIEW'), findsOneWidget);
+      expect(find.text('MOST POPULAR'), findsNothing);
       final paused = find.widgetWithText(FilledButton, 'Paid checkout paused');
       expect(tester.widget<FilledButton>(paused).onPressed, isNull);
       expect(state.quotaStatus!.toJson()['freePremiumEnabled'], isTrue);
