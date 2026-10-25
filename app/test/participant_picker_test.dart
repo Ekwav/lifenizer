@@ -144,6 +144,10 @@ void main() {
         home: Scaffold(body: CapturePage(state: state)),
       ),
     );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Text'),
+      'A note with selected participants.',
+    );
     final picker = find.byType(ParticipantPicker).first;
     final input = find.descendant(of: picker, matching: find.byType(TextField));
     await tester.ensureVisible(input);
