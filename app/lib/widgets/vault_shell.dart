@@ -122,6 +122,7 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
     final page = switch (action.action) {
       'capture' || 'record' => AppPage.capture,
       'imports' => AppPage.imports,
+      'pricing' => AppPage.pricing,
       _ => AppPage.search,
     };
     _selectedPageIndex = page.index;

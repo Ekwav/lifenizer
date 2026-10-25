@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_state.dart';
 import 'models.dart';
 import 'pages/login_page.dart';
+import 'services/quick_action_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Pricing data
@@ -178,11 +179,16 @@ class _PricingPageState extends State<PricingPage> {
               'Sign in to your Lifenizer account to view and activate upgrades.',
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => LoginPage(state: widget.state),
-                ),
-              ),
+              onPressed: () {
+                QuickActionService.instance.request(
+                  const QuickAction(action: 'pricing'),
+                );
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => LoginPage(state: widget.state),
+                  ),
+                );
+              },
               child: const Text('Sign in to upgrade'),
             ),
           ],

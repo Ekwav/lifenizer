@@ -7,6 +7,7 @@ import 'app_state.dart';
 import 'models.dart';
 import 'image_service.dart';
 import 'pages/login_page.dart';
+import 'services/quick_action_service.dart';
 
 // ============================================================================
 //  StorageQuotaBanner
@@ -145,11 +146,16 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
               if (!widget.state.isAuthenticated) ...[
                 const Text('Sign in to your Lifenizer account to upgrade.'),
                 FilledButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => LoginPage(state: widget.state),
-                    ),
-                  ),
+                  onPressed: () {
+                    QuickActionService.instance.request(
+                      const QuickAction(action: 'pricing'),
+                    );
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => LoginPage(state: widget.state),
+                      ),
+                    );
+                  },
                   child: const Text('Sign in to upgrade'),
                 ),
               ] else if (quota?.freePremiumEnabled == true) ...[

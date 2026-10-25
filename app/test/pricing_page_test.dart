@@ -3,10 +3,12 @@ import 'dart:convert';
 
 import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
+import 'package:app/main.dart';
 import 'package:app/models.dart';
 import 'package:app/pricing_page.dart';
 import 'package:app/image_widgets.dart';
 import 'package:app/pages/login_page.dart';
+import 'package:app/services/quick_action_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -18,6 +20,72 @@ class _SignedInState extends LifenizerAppState {
 }
 
 void main() {
+  setUp(() => QuickActionService.instance.consume());
+  tearDown(() => QuickActionService.instance.consume());
+
+  testWidgets(
+    'upgrade intent survives login navigator replacement without activating storage',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      var activations = 0;
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/premium/activate') activations++;
+        return http.Response(
+          jsonEncode({
+            'plan': 'Free',
+            'usedBytes': 0,
+            'limitBytes': 50 * 1024 * 1024,
+            'usedPercent': 0.0,
+            'freePremiumEnabled': true,
+          }),
+          200,
+        );
+      });
+      final state = LifenizerAppState();
+      addTearDown(state.dispose);
+      addTearDown(client.close);
+      await tester.pumpWidget(LifenizerApp(state: state));
+      Navigator.of(tester.element(find.byType(LoginPage))).push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(body: PricingPage(state: state)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sign in to upgrade'));
+      await tester.pumpAndSettle();
+      expect(QuickActionService.instance.pending?.action, 'pricing');
+      expect(find.byType(LoginPage), findsOneWidget);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.runAsync(
+        () => state.debugAuthenticateForTesting(
+          LifenizerApiClient(
+            baseUrl: 'https://vault.example.test',
+            client: client,
+          ),
+        ),
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      state.session = AuthSession(
+        authToken: 'same-account',
+        userId: 'owner',
+        vaultId: 'vault',
+        vaultSalt: 'salt',
+      );
+      state.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(find.byType(PricingPage), findsOneWidget);
+      expect(
+        Navigator.of(tester.element(find.byType(PricingPage))).canPop(),
+        isFalse,
+      );
+      expect(find.text('Activate free Premium'), findsOneWidget);
+      expect(state.quotaStatus!.plan, 'Free');
+      expect(activations, 0);
+      expect(QuickActionService.instance.pending, isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   testWidgets(
     'upgrade requires login and opens the account connection screen',
     (tester) async {
