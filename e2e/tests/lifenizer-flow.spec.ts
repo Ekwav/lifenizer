@@ -99,9 +99,9 @@ test('encrypted sync, search, relations, and user isolation across browser conte
   await otherUserContext.close();
 });
 
-test('static landing pages load', async ({ page }) => {
-  await page.goto(`file://${process.cwd()}/../landing/index.html`);
-  await expect(page.getByRole('heading', { name: 'Lifenizer' })).toBeVisible();
-  await page.getByRole('link', { name: 'Security', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Security' })).toBeVisible();
+test('API-served landing pages load', async ({ page }) => {
+  await page.goto(apiUrl);
+  await expect(page.getByRole('heading', { name: /Keep what matters/ })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Security', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Your archive, on your terms.' })).toBeVisible();
 });
