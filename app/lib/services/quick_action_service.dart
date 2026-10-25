@@ -25,6 +25,32 @@ class QuickAction {
     final action = uri.scheme == 'lifenizer'
         ? uri.host
         : uri.queryParameters['action'];
+    if (action == 'connect-extension') {
+      final code = uri.queryParameters['code'];
+      final port = int.tryParse(uri.queryParameters['port'] ?? '');
+      if (uri.scheme != 'lifenizer' ||
+          uri.userInfo.isNotEmpty ||
+          uri.hasPort ||
+          uri.path.isNotEmpty ||
+          uri.hasFragment ||
+          uri.queryParametersAll.entries.any(
+            (entry) =>
+                !['code', 'port'].contains(entry.key) ||
+                entry.value.length != 1,
+          ) ||
+          ((code != null || uri.queryParameters.containsKey('port')) &&
+              (code == null ||
+                  !RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(code) ||
+                  port == null ||
+                  port < 1 ||
+                  port > 65535))) {
+        return null;
+      }
+      return QuickAction(
+        action: 'connect-extension',
+        connectionUri: uri.toString(),
+      );
+    }
     if (!const [
       'search',
       'capture',
@@ -97,6 +123,12 @@ class QuickActionService extends ChangeNotifier {
   void _receive(Object? value) {
     if (value is! Map) return;
     final action = value['action'];
+    if (action == 'connect-extension') {
+      final uri = Uri.tryParse(value['uri'] as String? ?? '');
+      final parsed = uri == null ? null : QuickAction.fromUri(uri);
+      if (parsed != null) request(parsed);
+      return;
+    }
     if (!const [
       'search',
       'capture',

@@ -14,6 +14,8 @@ import '../pages/search_page.dart';
 import '../pages/sync_page.dart';
 import '../pricing_page.dart';
 import '../services/quick_action_service.dart';
+import '../services/source_links.dart';
+import 'browser_extension_section.dart';
 import 'device_security_dialog.dart';
 
 /// Refactored shell widget for the Lifenizer vault.
@@ -158,17 +160,99 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
     if (action == null) return;
     final page = switch (action.action) {
       'capture' || 'record' => AppPage.capture,
-      'imports' => AppPage.imports,
+      'imports' || 'connect-extension' => AppPage.imports,
       'pricing' => AppPage.pricing,
       _ => AppPage.search,
     };
     _selectedPageIndex = page.index;
+    if (action.action == 'connect-extension') {
+      _scheduleExtensionPairing(action);
+    }
     _recordRequested = action.action == 'record';
     if (_recordRequested) _scheduleRecording();
     if (page == AppPage.search) {
       _searchAction = action;
       _searchRevision++;
     }
+  }
+
+  void _scheduleExtensionPairing(QuickAction action) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !widget.state.isAuthenticated) return;
+      final service = widget.state.browserExtension;
+      if (!service.supported) {
+        widget.state.reportError(
+          'Connect the browser extension on a computer running the Lifenizer desktop app.',
+        );
+        return;
+      }
+      final identity = widget.state.recordingIdentity;
+      final allow = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Connect browser to this vault?'),
+          content: const Text(
+            'The extension will be able to import your selected browser history '
+            'and enabled messages into this vault. Only continue if you just '
+            'requested this connection in your browser.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Connect'),
+            ),
+          ],
+        ),
+      );
+      if (allow != true ||
+          !mounted ||
+          widget.state.recordingIdentity != identity) {
+        return;
+      }
+      try {
+        final uri = Uri.tryParse(action.connectionUri ?? '');
+        final code = uri?.queryParameters['code'];
+        final link = await service.createPairingLink(
+          code: code,
+          expectedPort: int.tryParse(uri?.queryParameters['port'] ?? ''),
+        );
+        if (!mounted || widget.state.recordingIdentity != identity) return;
+        if (code == null) await openExternalLink(link);
+        if (!mounted || widget.state.recordingIdentity != identity) return;
+        if (code != null) return;
+        unawaited(
+          showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Connect your browser'),
+              content: SizedBox(
+                width: 480,
+                child: SingleChildScrollView(
+                  child: BrowserExtensionSection(
+                    service: service,
+                    signedIn: widget.state.isAuthenticated,
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+          ),
+        );
+      } catch (failure) {
+        if (mounted && widget.state.recordingIdentity == identity) {
+          widget.state.reportError('Could not connect the extension: $failure');
+        }
+      }
+    });
   }
 
   @override

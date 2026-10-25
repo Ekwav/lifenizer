@@ -61,6 +61,7 @@
                 <data android:scheme="lifenizer" android:host="record" />
                 <data android:scheme="lifenizer" android:host="imports" />
                 <data android:scheme="lifenizer" android:host="connect" />
+                <data android:scheme="lifenizer" android:host="connect-extension" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
