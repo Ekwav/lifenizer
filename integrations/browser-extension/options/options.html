@@ -1,35 +1,43 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Lifenizer History Sync - Settings</title>
 <style>
-  body{font:14px system-ui,sans-serif;max-width:560px;margin:24px auto;padding:0 12px;color:#222}
+  :root{color-scheme:light dark}
+  body{font:14px system-ui,sans-serif;max-width:560px;margin:24px auto;padding:0 12px;background:#fff;color:#222}
   label{display:block;margin:12px 0 4px}input[type=text],input[type=number],input[type=password]{width:100%;padding:6px;box-sizing:border-box}
+  button{padding:6px 10px}
+  .actions{position:sticky;top:0;background:inherit;padding:8px 0;border-bottom:1px solid #ccc;z-index:1}
+  #msg{display:block;margin-top:6px}
+  details{margin:16px 0;padding:10px;border:1px solid #ccc;border-radius:6px}summary{cursor:pointer;font-weight:600}
   .muted{color:#666;font-size:12px}
-  @media (prefers-color-scheme:dark){body{background:#1e1e1e;color:#ddd}input{background:#2a2a2a;color:#ddd}.muted{color:#999}}
+  @media (prefers-color-scheme:dark){body{background:#1e1e1e;color:#ddd}input{background:#2a2a2a;color:#ddd}.muted{color:#aaa}details,.actions{border-color:#555}}
 </style></head><body>
 <h1>Lifenizer History Sync</h1>
 <p class="muted">Open Lifenizer → Imports → Browser extension, choose a provider and enable the receiver to get its port and token. Data only goes to 127.0.0.1. Test connection checks the entered port and token; Save applies your settings.</p>
 <label>Port <input id="port" type="number" min="1" max="65535" required></label>
 <label>Token <input id="token" type="password" autocomplete="off"></label>
+<div class="actions"><button id="save">Save</button> <button id="test">Test connection</button><span id="msg" class="muted" role="status" aria-live="polite"></span></div>
 <label><input id="periodic" type="checkbox"> Sync automatically once a day (browser must be running)</label>
-<label>Days to look back on first sync <input id="maxDays" type="number" min="1" max="400" required></label>
-<label>Maximum items per platform and sync <input id="maxItems" type="number" min="50" max="20000" required></label>
-<label>Wall time limit per platform (seconds) <input id="maxSeconds" type="number" min="15" max="600" required></label>
-<label><input id="foregroundTabs" type="checkbox"> Open history tabs in the foreground when syncing manually (background tabs usually stop loading older entries; the daily sync always runs in the background)</label>
-<label>YouTube history URL <input id="youtubeUrl" type="text"></label>
 <label>Expected YouTube account (channel ID or @handle) <input id="youtubeAccount" type="text" autocomplete="off"></label>
-<label>TikTok watch history URL <input id="tiktokUrl" type="text"></label>
 <label>Expected TikTok account (user ID or @handle) <input id="tiktokAccount" type="text" autocomplete="off"></label>
 <p class="muted">History imports require a matching signed-in account, checked before and after collection. Missing, unrecognized or different accounts block import. Use your YouTube channel ID (UC…) or @handle and your TikTok user ID or @handle. YouTube handle verification may require opening the account menu on the history page.</p>
 <label><input id="whatsappEnabled" type="checkbox"> Capture opened WhatsApp Web conversations</label>
 <label><input id="discordEnabled" type="checkbox"> Capture opened Discord conversations</label>
 <p class="muted">When enabled, captures newly rendered messages in conversations you open while signed in. It does not scrape older history, scroll conversations or send messages.</p>
-<fieldset><legend>Developer MCP bridge (optional)</legend>
+<details><summary>Advanced collection settings</summary>
+<label>Days to look back on first sync <input id="maxDays" type="number" min="1" max="400" required></label>
+<label>Maximum items per platform and sync <input id="maxItems" type="number" min="50" max="20000" required></label>
+<label>Wall time limit per platform (seconds) <input id="maxSeconds" type="number" min="15" max="600" required></label>
+<label><input id="foregroundTabs" type="checkbox"> Open history tabs in the foreground when syncing manually (background tabs usually stop loading older entries; the daily sync always runs in the background)</label>
+<label>YouTube history URL <input id="youtubeUrl" type="text"></label>
+<label>TikTok watch history URL <input id="tiktokUrl" type="text"></label>
+</details>
+<details><summary>Developer MCP bridge (optional)</summary>
 <label><input id="debugEnabled" type="checkbox"> Enable local MCP debugging</label>
 <label>Separate debug secret (32–256 characters) <input id="debugToken" type="password" autocomplete="off"></label>
 <label><input id="debugAllowContent" type="checkbox"> Allow explicit samples of private visible messages/video titles</label>
 <p class="muted">Connects to the separately started bridge on 127.0.0.1:47616. Diagnostics expose supported tabs, adapter counts and account identity. Content samples require the separate tool and checkbox. Clearing the secret or disabling closes the connection. See the extension README for setup. Persistent background debugging requires Chrome 116+ or Firefox 140+.</p>
-</fieldset>
-<p><button id="save">Save</button> <button id="test">Test connection</button> <button id="clear">Delete collected data</button> <span id="msg" class="muted" role="status" aria-live="polite"></span></p>
+</details>
+<p><button id="clear">Delete collected data</button></p>
 <script src="../src/lib/payload.js"></script>
 <script src="../src/lib/sync.js"></script>
 <script src="options.js"></script>

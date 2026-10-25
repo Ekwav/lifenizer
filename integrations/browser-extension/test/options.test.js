@@ -8,7 +8,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 function options() {
   const html = fs.readFileSync(require.resolve('../options/options.html'), 'utf8');
   const elements = Object.fromEntries([...html.matchAll(/<(?:input|button|span)\b([^>]*\bid="([^"]+)"[^>]*)>/g)].map(([, attrs, id]) => [id, {
-    type: /type="([^"]+)"/.exec(attrs)?.[1], value: '', checked: false, reportValidity() { return this.valid !== false; },
+    type: /type="([^"]+)"/.exec(attrs)?.[1], value: '', checked: false, checkValidity() { return this.valid !== false; }, reportValidity() { return this.valid !== false; }, closest() { return null; }, focus() {},
   }]));
   const store = { settings: { token: 'saved', discordEnabled: false } }, sent = [], writes = [];
   const context = { LF: { sync: S }, document: { getElementById: id => elements[id] }, confirm: () => false,
@@ -24,6 +24,8 @@ test('testing unsaved settings does not enable capture, and invalid settings can
   ui.elements.discordEnabled.checked = true;
   ui.elements.debugEnabled.checked = true;
   ui.elements.debugToken.value = 'short';
+  let debugRevealed = false;
+  ui.elements.debugToken.closest = () => ({ setAttribute: () => { debugRevealed = true; } });
   await ui.elements.test.onclick();
   assert.equal(ui.writes.length, 0);
   assert.equal(ui.sent[0].connection.token, 'new-token');
@@ -31,6 +33,7 @@ test('testing unsaved settings does not enable capture, and invalid settings can
   assert.match(ui.elements.msg.textContent, /Save to apply/);
   await ui.elements.save.onclick();
   assert.equal(ui.writes.length, 0);
+  assert.ok(debugRevealed);
   ui.elements.debugEnabled.checked = false;
   ui.elements.port.valid = false;
   await ui.elements.save.onclick();
@@ -49,4 +52,15 @@ test('deletion requires confirmation and goes through the background queue', asy
   assert.equal(ui.sent[0].type, 'lifenizer-clear');
   assert.equal(ui.writes.length, 0);
   assert.equal(ui.elements.clear.disabled, false);
+});
+
+test('save reveals an invalid advanced field before showing native validation', async () => {
+  const ui = options(); await tick();
+  let open = false;
+  ui.elements.maxDays.valid = false;
+  ui.elements.maxDays.closest = selector => { assert.equal(selector, 'details'); return { setAttribute: () => { open = true; } }; };
+  ui.elements.maxDays.reportValidity = () => { assert.ok(open); return false; };
+  await ui.elements.save.onclick();
+  assert.ok(open);
+  assert.equal(ui.writes.length, 0);
 });

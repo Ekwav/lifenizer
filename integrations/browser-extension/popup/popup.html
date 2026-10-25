@@ -1,12 +1,14 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Lifenizer History Sync</title>
 <style>
-  body{font:13px system-ui,sans-serif;width:340px;max-width:calc(100vw - 24px);margin:12px;color:#222;overflow-wrap:anywhere}
+  :root{color-scheme:light dark}
+  body{font:13px system-ui,sans-serif;width:340px;max-width:calc(100vw - 24px);margin:12px;background:#fff;color:#222;overflow-wrap:anywhere}
   h1{font-size:15px;margin:0 0 8px}
   button{padding:6px 10px;margin:2px 4px 2px 0}
   .card{border:1px solid #ccc;border-radius:6px;padding:8px;margin:8px 0}
   .err{color:#b00020}.ok{color:#1b7f3b}.muted{color:#666}
-  @media (prefers-color-scheme:dark){body{background:#1e1e1e;color:#ddd}.card{border-color:#444}.muted{color:#999}}
+  a{color:#1767ae}
+  @media (prefers-color-scheme:dark){body{background:#1e1e1e;color:#ddd}.card{border-color:#555}.muted{color:#aaa}.err{color:#ff9494}.ok{color:#8ddd9a}a{color:#8ab4f8}}
 </style></head><body>
 <h1>Lifenizer History Sync</h1>
 <div id="app" class="muted">Checking app...</div>

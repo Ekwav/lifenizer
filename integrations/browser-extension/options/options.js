@@ -20,9 +20,13 @@ function read() {
 }
 const say = (t) => { $('msg').textContent = t; };
 $('save').onclick = async () => {
-  if (FIELDS.some(f => !$(f).reportValidity())) return;
+  const invalid = FIELDS.map($).find(el => !el.checkValidity());
+  if (invalid) { invalid.closest('details')?.setAttribute('open', ''); invalid.reportValidity(); return; }
   const settings = read();
-  if (settings.debugEnabled && (settings.debugToken.length < 32 || settings.debugToken.length > 256)) { say('Debug requires a separate 32–256 character secret'); return; }
+  if (settings.debugEnabled && (settings.debugToken.length < 32 || settings.debugToken.length > 256)) {
+    $('debugToken').closest('details')?.setAttribute('open', '');
+    $('debugToken').focus(); say('Debug requires a separate 32–256 character secret'); return;
+  }
   await set({ settings }); say('Saved');
 };
 $('test').onclick = async () => {
