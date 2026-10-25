@@ -255,6 +255,116 @@ void main() {
   );
 
   test(
+    'selected duplicate-name IDs and draft context survive encryption, edits and transcription',
+    () async {
+      final state = await device();
+      state.participants.addAll([
+        Participant(
+          id: 'alex-first',
+          displayName: 'Alex',
+          identifiers: ['email:first@example.test'],
+        ),
+        Participant(
+          id: 'alex-selected',
+          displayName: 'Alex',
+          identifiers: ['email:selected@example.test'],
+        ),
+      ]);
+      final location = RecordingLocation(
+        town: 'Berlin',
+        venue: 'North Atelier',
+        address: 'Main Street 4',
+        latitude: 52.52,
+        longitude: 13.4,
+      );
+      await state.saveAudioDraft(
+        [1, 2, 3],
+        DateTime.utc(2026, 10, 20),
+        location: location,
+      );
+      await state.updateAudioDraftDetails(
+        title: 'Walk with Alex',
+        participantNames: ['Alex'],
+        participantIds: ['alex-selected'],
+      );
+      await state.lock();
+      expect(state.audioDraft, isNull);
+      await state.login(
+        baseUrl: _base,
+        email: _email,
+        passphrase: _phrase,
+        offline: true,
+      );
+      await state.waitForBackgroundSync();
+      expect(state.error, isNull);
+      expect(state.audioDraft!['title'], 'Walk with Alex');
+      expect(state.audioDraft!['participantIds'], ['alex-selected']);
+      expect(state.audioDraft!['location'], location.toJson());
+      expect(await state.loadAudioDraftPayload(), [1, 2, 3]);
+      expect(await state.retainAudioDraft(), true);
+      final id = state.conversations.single.id;
+      expect(state.conversations.single.title, 'Walk with Alex');
+      expect(state.conversations.single.participantIds, ['alex-selected']);
+      expect(state.conversations.single.location!.toJson(), location.toJson());
+      expect(state.participants.map((person) => person.id).toSet(), {
+        'alex-first',
+        'alex-selected',
+      });
+      expect(
+        state.search('town:Berlin', participantId: 'alex-selected').single.id,
+        id,
+      );
+      expect(state.search('town:Berlin', participantId: 'alex-first'), isEmpty);
+      final edited = RecordingLocation(
+        town: 'Hamburg',
+        venue: 'Harbour Studio',
+        address: 'Quay 7',
+      );
+      expect(
+        await state.updateRecordingDetails(
+          id,
+          title: 'Edited walk',
+          participantNames: 'Alex',
+          participantIds: ['alex-selected'],
+          location: edited,
+        ),
+        true,
+      );
+      expect(state.search('town:Berlin'), isEmpty);
+      expect(
+        state.search('town:Hamburg', participantId: 'alex-selected').single.id,
+        id,
+      );
+      await state.transcribeRecording(id);
+      final transcribed = await state.loadConversation(id);
+      expect(transcribed.title, 'Edited walk');
+      expect(transcribed.participantIds, ['alex-selected']);
+      expect(transcribed.location!.toJson(), edited.toJson());
+      expect(
+        state
+            .search('town:Hamburg telescope', participantId: 'alex-selected')
+            .single
+            .id,
+        id,
+      );
+      expect((await state.loadRecordingAudio(id)).bytes, [1, 2, 3]);
+      expect(state.participants, hasLength(2));
+      await state.lock();
+      await state.login(
+        baseUrl: _base,
+        email: _email,
+        passphrase: _phrase,
+        offline: true,
+      );
+      await state.waitForBackgroundSync();
+      expect(state.error, isNull);
+      expect(state.conversations.single.participantIds, ['alex-selected']);
+      expect(state.conversations.single.location!.toJson(), edited.toJson());
+      expect((await state.searchAsync('town:Hamburg telescope')).single.id, id);
+    },
+  );
+
+  test(
     'slow online upload returns after saving intent, leaves navigation unblocked and preserves a newer toggle',
     () async {
       final state = await device();
@@ -414,9 +524,19 @@ void main() {
       final state = await device();
       final recordedAt = DateTime.utc(2026, 10, 20);
       await state.saveAudioDraft([9, 8, 7], recordedAt);
-      await state.importPendingRecording([1, 2, 3], recordedAt, 'native-1');
+      final location = RecordingLocation(
+        town: 'Berlin',
+        venue: 'Native capture',
+      );
+      await state.importPendingRecording(
+        [1, 2, 3],
+        recordedAt,
+        'native-1',
+        location: location,
+      );
       final id = state.conversations.single.id;
       expect(state.search('Voice recording').single.id, id);
+      expect(state.conversations.single.location!.toJson(), location.toJson());
       expect(await state.loadAudioDraftPayload(), [9, 8, 7]);
       expect(online, isEmpty);
       expect(requests.where((r) => r.contains('/api/imports/audio')), isEmpty);
@@ -436,7 +556,30 @@ void main() {
       expect(state.error, isNull);
       expect(state.conversations.single.id, id);
       expect((await state.loadRecordingAudio(id)).bytes, [1, 2, 3]);
-      await state.importPendingRecording([1, 2, 3], recordedAt, 'native-1');
+      expect(state.conversations.single.location!.toJson(), location.toJson());
+      final edited = RecordingLocation(
+        town: 'Hamburg',
+        venue: 'Corrected location',
+      );
+      expect(
+        await state.updateRecordingDetails(
+          id,
+          title: 'Corrected capture',
+          participantNames: '',
+          participantIds: [],
+          location: edited,
+        ),
+        true,
+      );
+      await state.importPendingRecording(
+        [1, 2, 3],
+        recordedAt,
+        'native-1',
+        location: location,
+      );
+      expect(state.conversations.single.title, 'Corrected capture');
+      expect(state.conversations.single.location!.toJson(), edited.toJson());
+      expect(state.search('town:Hamburg').single.id, id);
       expect(state.conversations.single.id, id);
       expect(state.conversations.single.startedAt, recordedAt);
       expect(await state.loadAudioDraftPayload(), [9, 8, 7]);
