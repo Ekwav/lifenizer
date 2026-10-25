@@ -345,9 +345,14 @@ class LifenizerAppState extends ChangeNotifier {
 
   Future<void> refreshQuota() async {
     final api = _requireApi();
+    final previous = quotaStatus;
     try {
       final fetched = await api.getQuotaStatus();
-      if (!identical(api, _api) || !_crypto.isUnlocked) return;
+      if (!identical(api, _api) ||
+          !_crypto.isUnlocked ||
+          !identical(previous, quotaStatus)) {
+        return;
+      }
       quotaStatus = fetched;
       notifyListeners();
     } catch (_) {
