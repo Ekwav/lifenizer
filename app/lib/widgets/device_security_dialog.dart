@@ -99,8 +99,8 @@ class _DeviceSecurityDialogState extends State<DeviceSecurityDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'By default, this device unlocks from Android secure storage or KDE Wallet without an app password. Your vault is encrypted locally and during sync. Server imports and processing can read the content you submit; original source files keep their own protection.',
+              Text(
+                'By default, this device unlocks from ${pairing.secureStorageLabel} without an app password. Your vault is encrypted locally and during sync. Server imports and processing can read the content you submit; original source files keep their own protection.',
               ),
               const SizedBox(height: 16),
               SwitchListTile(

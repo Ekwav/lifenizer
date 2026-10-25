@@ -8,6 +8,9 @@ import '../app_state.dart';
 import '../models.dart';
 import 'pairing_crypto.dart';
 import 'pairing_store.dart';
+import 'device_environment_stub.dart'
+    if (dart.library.io) 'device_environment_io.dart'
+    as platform;
 
 class DevicePairingService extends ChangeNotifier {
   DevicePairingService(this.state, {PairingCredentialStore? store})
@@ -29,6 +32,16 @@ class DevicePairingService extends ChangeNotifier {
 
   bool get isPaired => _credentials?['email'] is String;
   bool get higherSecurity => _protection != DeviceProtection.keyring;
+  bool get _kde =>
+      !kIsWeb &&
+      defaultTargetPlatform == TargetPlatform.linux &&
+      platform.isKdeDesktop;
+  String get secureStorageLabel =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+      ? 'Android secure storage'
+      : _kde
+      ? 'KDE Wallet'
+      : "this device's secure storage";
   String get protectionMode => switch (_protection) {
     DeviceProtection.keyring => 'system',
     DeviceProtection.password => 'password',
@@ -96,7 +109,7 @@ class DevicePairingService extends ChangeNotifier {
       }
     } catch (_) {
       error =
-          'The device keyring is unavailable. Unlock KDE Wallet or Android secure storage and retry.';
+          'Could not access $secureStorageLabel. Unlock this device and retry.';
       notifyListeners();
     }
   }
@@ -291,7 +304,7 @@ class DevicePairingService extends ChangeNotifier {
 
   Future<void> connect(String connectionLink) async {
     if (kIsWeb) {
-      error = 'Open the connection link in the native Android or KDE app.';
+      error = 'Open the connection link in the native Lifenizer app.';
       notifyListeners();
       return;
     }
@@ -330,7 +343,9 @@ class DevicePairingService extends ChangeNotifier {
         link,
         defaultTargetPlatform == TargetPlatform.android
             ? 'Android phone'
-            : 'KDE computer',
+            : _kde
+            ? 'KDE computer'
+            : 'Lifenizer device',
       );
       final previous = saved?['pendingEnrollment'];
       final retrying =

@@ -89,8 +89,8 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Lock vault'),
-        content: const Text(
-          'This device unlocks from Android secure storage or KDE Wallet without an app password. Device security adds an optional unlock prompt.\n\nVault storage and sync are encrypted. Server processing can read submitted content; original source files keep their own protection.',
+        content: Text(
+          'This device unlocks from ${widget.state.pairing.secureStorageLabel} without an app password. Device security adds an optional unlock prompt.\n\nVault storage and sync are encrypted. Server processing can read submitted content; original source files keep their own protection.',
         ),
         actions: [
           TextButton(
