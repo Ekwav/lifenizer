@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Lifenizer.Api.Services;
@@ -9,6 +11,23 @@ namespace Lifenizer.Tests;
 
 public sealed class PaperlessExportTests
 {
+    [Test]
+    public async Task ZipSourceIsRegisteredAuthenticatedAndRejectsUnsafePayloads()
+    {
+        await using var factory = new LifenizerApiFactory();
+        using var client = await ImportIntegrationTests.AuthenticatedClientForTestsAsync(factory, "export@example.test");
+        var request = new ImportRequest(OriginalFileName: "export.zip", PayloadBase64: Convert.ToBase64String(Zip(("manifest.json",
+            """[{"model":"documents.document","pk":1,"fields":{"title":"Invoice","content":"OCR from export"}}]"""u8.ToArray()))));
+        using var anonymous = factory.CreateClient();
+        Assert.That((await anonymous.PostAsJsonAsync("/api/imports/paperless-export", request)).StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        var response = await client.PostAsJsonAsync("/api/imports/paperless-export", request);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await response.Content.ReadAsStringAsync());
+        var result = await response.Content.ReadFromJsonAsync<NormalizedImportResponse>();
+        Assert.That(result!.Conversations.Single().Segments.Single().Text, Is.EqualTo("OCR from export"));
+        var invalid = await client.PostAsJsonAsync("/api/imports/paperless-export", request with { PayloadBase64 = Convert.ToBase64String(Zip(("../bad", [1]))) });
+        Assert.That(invalid.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
     private static byte[] Zip(params (string Name, byte[] Bytes)[] files)
     {
         using var output = new MemoryStream();

@@ -354,6 +354,21 @@ picker; document ZIPs are detected automatically, while Discord and watch-histor
 exports retain their existing routes. ZIP entries remain compressed on the client
 and are parsed on the server. Imported text is encrypted into your vault.
 
+Exporter `manifest.json` and split `*-manifest.json` files preserve titles, OCR,
+correspondents, tags and dates; unrelated exported accounts and settings are
+ignored. Documents without OCR keep a searchable title. A document-only ZIP
+extracts PDF text or OCRs PNG/JPEG scans. Reimporting the same document uses its
+stable checksum identity. Export imports use their own identities and do not
+merge with existing API imports. Original document bytes are not kept or synced.
+See the [Paperless exporter documentation](https://docs.paperless-ngx.com/administration/#exporter).
+
+Use standard, unencrypted Deflate ZIPs. Imports reject unsafe/duplicate paths and
+symlinks, more than 2000 entries, entries over 25 MiB, total expansion over 100
+MiB, and compression ratios over 200 for entries larger than 1 MiB. Selected
+entries are read with an actual-output limit and CRC check; nested archives are
+never opened. Paperless imports also cap extracted text at 8 MiB, documents at
+1000, and processing at two minutes. Split larger selections and retry.
+
 Open **Imports → Paperless**. In the installed app, enter your Paperless address.
 Desktop setup defaults to `http://127.0.0.1:8002` when no server address is configured;
 change it if Paperless runs elsewhere. On a phone, enter the address reachable
