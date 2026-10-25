@@ -104,4 +104,23 @@ test('API-served landing pages load', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /Keep what matters/ })).toBeVisible();
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Security', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your archive, on your terms.' })).toBeVisible();
+
+  await page.route(`${apiUrl}/api/downloads`, route => route.fulfill({
+    json: ['chromium', 'firefox'].map(browser => ({
+      name: `lifenizer-history-sync-${browser}.zip`,
+      available: true,
+    })),
+  }));
+  await page.goto(`${apiUrl}/#extensions`);
+  await expect(page).toHaveURL(`${apiUrl}/extension`);
+  await expect(page.getByRole('heading', { name: 'Browser extension', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Chrome / Edge ZIP', exact: true })).toHaveAttribute('href', '/downloads/lifenizer-history-sync-chromium.zip');
+  await expect(page.getByRole('link', { name: 'Firefox ZIP', exact: true })).toHaveAttribute('href', '/downloads/lifenizer-history-sync-firefox.zip');
+  await expect(page.getByRole('heading', { name: '1. Install the extension' })).toBeVisible();
+  await expect(page.getByText('Load unpacked', { exact: true })).toBeVisible();
+  await expect(page.getByText('Load Temporary Add-on', { exact: true })).toBeVisible();
+  await expect(page.getByText(/This temporary installation lasts until Firefox restarts/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: '2. Connect to Lifenizer' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Connect installed extension', exact: true })).toHaveAttribute('href', 'lifenizer://connect-extension');
+  await expect(page.locator('[data-download="lifenizer.apk"], [data-download="lifenizer-linux-x64.tar.gz"]')).toHaveCount(0);
 });
