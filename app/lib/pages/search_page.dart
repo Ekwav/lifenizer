@@ -106,109 +106,102 @@ class _SearchPageState extends State<SearchPage> {
 
     return RefreshIndicator(
       onRefresh: widget.state.pullSync,
-      child: PageFrame(
+      child: PageFrame.slivers(
         title: 'Search',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (widget.state.syncProgress?.stage == SyncStage.indexing)
-              SyncProgressIndicator(progress: widget.state.syncProgress),
-            if (widget.state.searchIndexPreparing)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'Search index still preparing · showing quick matches',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            if (widget.state.searchDetailsLoading)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: LinearProgressIndicator(),
-              ),
-            // Search input field
-            SearchInputField(
-              viewModel: _viewModel,
-              focusNode: _searchFocus,
-              onChanged: () => setState(() => _resultLimit = 50),
-            ),
-            const SizedBox(height: 8),
-
-            // Filter controls and action buttons
-            SearchFilters(
-              viewModel: _viewModel,
-              availableSources: widget.state.availableSources,
-              availableParticipants: widget.state.activeParticipants
-                  .map((item) => item.id)
-                  .toList(),
-              availableTags: widget.state.allTags,
-              availableLocations: widget.state.conversations
-                  .map((conversation) => conversation.location)
-                  .whereType<RecordingLocation>()
-                  .toList(),
-              participantName: widget.state.participantName,
-              onFilterChanged: () => setState(() => _resultLimit = 50),
-              onClearFilters: () => setState(() {
-                _resultLimit = 50;
-                _viewModel.clearFilters();
-              }),
-              onSaveSearch: _saveCurrentSearch,
-              isBusy: widget.state.busy,
-            ),
-
-            // Saved searches chips
-            if (widget.state.savedSearches.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final savedSearch in widget.state.savedSearches)
-                    ActionChip(
-                      avatar: const Icon(Icons.bookmark_outline),
-                      label: Text(savedSearch.title),
-                      onPressed: () => setState(() {
-                        _resultLimit = 50;
-                        _viewModel.applySavedSearch(
-                          query: savedSearch.query,
-                          source: savedSearch.source,
-                          participantId: savedSearch.participantId,
-                          tag: savedSearch.tag,
-                          from: savedSearch.from,
-                          to: savedSearch.to,
-                          hideConsumed: savedSearch.hideConsumed,
-                        );
-                      }),
+        slivers: [
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (widget.state.syncProgress?.stage == SyncStage.indexing)
+                  SyncProgressIndicator(progress: widget.state.syncProgress),
+                if (widget.state.searchIndexPreparing)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Search index still preparing · showing quick matches',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 12),
+                  ),
+                if (widget.state.searchDetailsLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: LinearProgressIndicator(),
+                  ),
+                // Search input field
+                SearchInputField(
+                  viewModel: _viewModel,
+                  focusNode: _searchFocus,
+                  onChanged: () => setState(() => _resultLimit = 50),
+                ),
+                const SizedBox(height: 8),
 
-            // Search results.
-            //
-            // Deliberately not wrapped in Expanded: PageFrame renders this
-            // whole page inside a SingleChildScrollView, which gives its
-            // content unbounded height. Expanded requires a bounded height
-            // from its parent to make sense ("fill the remaining space"),
-            // so pairing it with an unbounded-height ancestor throws a
-            // RenderFlex layout assertion at runtime ("children have
-            // non-zero flex but incoming height constraints are
-            // unbounded") — the whole page fails to render. SearchResultsList
-            // is a plain Column, which sizes to its own content and scrolls
-            // naturally with the rest of the page.
-            SearchResultsList(
-              results: results.take(_resultLimit).toList(growable: false),
-              state: widget.state,
-              hasMore: results.length > _resultLimit,
+                // Filter controls and action buttons
+                SearchFilters(
+                  viewModel: _viewModel,
+                  availableSources: widget.state.availableSources,
+                  availableParticipants: widget.state.activeParticipants
+                      .map((item) => item.id)
+                      .toList(),
+                  availableTags: widget.state.allTags,
+                  availableLocations: widget.state.conversations
+                      .map((conversation) => conversation.location)
+                      .whereType<RecordingLocation>()
+                      .toList(),
+                  participantName: widget.state.participantName,
+                  onFilterChanged: () => setState(() => _resultLimit = 50),
+                  onClearFilters: () => setState(() {
+                    _resultLimit = 50;
+                    _viewModel.clearFilters();
+                  }),
+                  onSaveSearch: _saveCurrentSearch,
+                  isBusy: widget.state.busy,
+                ),
+
+                // Saved searches chips
+                if (widget.state.savedSearches.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final savedSearch in widget.state.savedSearches)
+                        ActionChip(
+                          avatar: const Icon(Icons.bookmark_outline),
+                          label: Text(savedSearch.title),
+                          onPressed: () => setState(() {
+                            _resultLimit = 50;
+                            _viewModel.applySavedSearch(
+                              query: savedSearch.query,
+                              source: savedSearch.source,
+                              participantId: savedSearch.participantId,
+                              tag: savedSearch.tag,
+                              from: savedSearch.from,
+                              to: savedSearch.to,
+                              hideConsumed: savedSearch.hideConsumed,
+                            );
+                          }),
+                        ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+              ],
             ),
-            if (results.length > _resultLimit)
-              OutlinedButton(
+          ),
+          SearchResultsList(
+            results: results.take(_resultLimit).toList(growable: false),
+            state: widget.state,
+            hasMore: results.length > _resultLimit,
+          ),
+          if (results.length > _resultLimit)
+            SliverToBoxAdapter(
+              child: OutlinedButton(
                 onPressed: () => setState(() => _resultLimit += 50),
                 child: const Text('Show more conversations'),
               ),
-          ],
-        ),
+            ),
+        ],
       ), // PageFrame
     ); // RefreshIndicator
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/recording_context_editor.dart';
 import '../../app_state.dart';
 import '../../image_widgets.dart';
 import '../../models.dart';
@@ -8,7 +9,7 @@ import '../../services/source_links.dart';
 import '../../widgets/transcription_correction_dialog.dart';
 import '../../widgets/recording_audio_player.dart';
 
-/// Displays the list of search results.
+/// Lazy sliver list of search results for the page's single scroll viewport.
 ///
 /// Handles empty states, result count display, and conversation cards.
 /// Each result can be clicked to show a detail sheet.
@@ -30,40 +31,50 @@ class SearchResultsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (results.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Center(
-          child: Text(
-            state.searchDetailsLoading
-                ? 'Searching…'
-                : state.conversations.isEmpty
-                ? 'No conversations yet. Capture or import something to get started.'
-                : 'No matches. Try a different query or clear the filters.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: Text(
+              state.searchDetailsLoading
+                  ? 'Searching…'
+                  : state.conversations.isEmpty
+                  ? 'No conversations yet. Capture or import something to get started.'
+                  : 'No matches. Try a different query or clear the filters.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
           ),
         ),
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            hasMore
-                ? 'Showing first ${results.length} results'
-                : '${results.length} result${results.length == 1 ? '' : 's'}',
-            style: Theme.of(context).textTheme.labelMedium,
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              hasMore
+                  ? 'Showing first ${results.length} results'
+                  : '${results.length} result${results.length == 1 ? '' : 's'}',
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
           ),
         ),
-        for (final conversation in results) ...[
-          ConversationCard(state: state, conversation: conversation),
-          const SizedBox(height: 12),
-        ],
+        SliverList.builder(
+          itemCount: results.length,
+          itemBuilder: (context, index) {
+            final conversation = results[index];
+            return Padding(
+              key: ValueKey(conversation.id),
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ConversationCard(state: state, conversation: conversation),
+            );
+          },
+        ),
       ],
     );
   }
@@ -374,7 +385,8 @@ class _ConversationDetailSheet extends StatefulWidget {
 }
 
 class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
-  late Future<Conversation> _conversation;
+  Future<Conversation>? _conversation;
+  Animation<double>? _entrance;
   late final bool _openedUnlocked;
   bool _locked = false;
 
@@ -384,7 +396,36 @@ class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
   void initState() {
     super.initState();
     _openedUnlocked = state.isAuthenticated;
-    _conversation = _load();
+    if (widget.conversation.isLoaded) _conversation = _load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_conversation != null || _entrance != null) return;
+    _entrance = ModalRoute.of(context)?.animation;
+    if (_entrance == null || _entrance!.isCompleted) {
+      _conversation = _load();
+    } else {
+      _entrance!.addStatusListener(_afterEntrance);
+    }
+  }
+
+  void _afterEntrance(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    _entrance?.removeStatusListener(_afterEntrance);
+    if (!mounted || _locked || (_openedUnlocked && !state.isAuthenticated)) {
+      return;
+    }
+    setState(() {
+      _conversation = _load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _entrance?.removeStatusListener(_afterEntrance);
+    super.dispose();
   }
 
   Future<Conversation> _load() => widget.conversation.isLoaded
@@ -401,36 +442,26 @@ class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
         future: _conversation,
         initialData: widget.conversation.isLoaded ? widget.conversation : null,
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return SizedBox(
-              height: 280,
-              child: Center(
-                child:
-                    snapshot.connectionState == ConnectionState.done &&
-                        snapshot.hasError
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Could not load this conversation.'),
-                          TextButton(
-                            onPressed: () => setState(() {
-                              _conversation = _load();
-                            }),
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      )
-                    : const CircularProgressIndicator(),
-              ),
-            );
-          }
-          return _buildDetail(context, snapshot.data!);
+          final failed =
+              snapshot.connectionState == ConnectionState.done &&
+              snapshot.hasError;
+          return _buildDetail(
+            context,
+            snapshot.data ?? widget.conversation,
+            loading: !snapshot.hasData && !failed,
+            failed: failed,
+          );
         },
       );
     },
   );
 
-  Widget _buildDetail(BuildContext context, Conversation loaded) {
+  Widget _buildDetail(
+    BuildContext context,
+    Conversation loaded, {
+    bool loading = false,
+    bool failed = false,
+  }) {
     final conversation =
         state.conversations
             .where((item) => item.id == loaded.id && item.isLoaded)
@@ -510,6 +541,30 @@ class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
                 ),
                 if (conversation.source == 'audio')
                   SliverToBoxAdapter(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: state.busy
+                            ? null
+                            : () => showDialog<void>(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (_) => RecordingContextEditor(
+                                  state: state,
+                                  conversation: conversation,
+                                ),
+                              ),
+                        icon: const Icon(Icons.edit_location_alt_outlined),
+                        label: Text(
+                          conversation.location?.displayName.isNotEmpty == true
+                              ? conversation.location!.displayName
+                              : 'Edit people and location',
+                        ),
+                      ),
+                    ),
+                  ),
+                if (conversation.source == 'audio')
+                  SliverToBoxAdapter(
                     child: RecordingAudioPlayer(
                       state: state,
                       conversationId: conversation.id,
@@ -560,22 +615,52 @@ class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
                       ),
                     ),
                   ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: ImageGallery(
-                      state: state,
-                      conversationId: conversation.id,
+                if (!loading && !failed)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: ImageGallery(
+                        state: state,
+                        conversationId: conversation.id,
+                      ),
                     ),
                   ),
-                ),
                 SliverToBoxAdapter(
                   child: Text(
                     'Transcript',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ),
-                if (conversation.segments.isEmpty)
+                if (failed)
+                  SliverToBoxAdapter(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Could not load this conversation.'),
+                        TextButton(
+                          onPressed: () => setState(() {
+                            _conversation = _load();
+                          }),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (loading)
+                  SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (conversation.previewText.isNotEmpty)
+                          Text(conversation.previewText),
+                        const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (conversation.segments.isEmpty)
                   const SliverToBoxAdapter(child: Text('No transcript.'))
                 else
                   SliverList(
