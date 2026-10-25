@@ -75,22 +75,27 @@
       }
       if (res.status === 413) return { sent, imported, error: 'too-large' };
       if (!res.ok) return { sent, imported, error: `http-${res.status}` };
-      let body = {};
+      let body;
       try { body = await res.json(); } catch (e) { /* ignore */ }
+      if (!body || body.accepted !== part.length || !Number.isInteger(body.imported) || body.imported < 0 || body.imported > part.length) {
+        return { sent, imported, error: 'invalid-response' };
+      }
       for (const v of part) v.sent = true;
       sent += part.length;
-      imported += Number(body.imported) || 0;
+      imported += body.imported;
     }
     return { sent, imported, ...(held ? { error: 'account-queue-held', held } : {}) };
   }
 
   async function ping(settings, fetchImpl) {
+    if (!settings.token) return { error: 'not-paired' };
     try {
-      const res = await fetchImpl(`http://127.0.0.1:${settings.port}/v1/ping`, { headers: { Authorization: `Bearer ${settings.token}` } });
+      const res = await fetchImpl(`http://127.0.0.1:${settings.port}/v1/ping`, { headers: { Authorization: `Bearer ${settings.token}` }, signal: AbortSignal.timeout(10000) });
       if (res.status === 401) return { error: 'bad-token' };
       if (!res.ok) return { error: `http-${res.status}` };
       const body = await res.json();
-      return { ok: true, unlocked: !!body.unlocked };
+      if (!body || body.app !== 'lifenizer' || typeof body.unlocked !== 'boolean') return { error: 'invalid-response' };
+      return { ok: true, unlocked: body.unlocked };
     } catch (e) {
       return { error: 'unreachable' };
     }
@@ -112,6 +117,7 @@
     'app-busy': 'Lifenizer is busy or the import failed, the entries are kept and sent on the next sync',
     'not-paired': 'Not paired with the app, use "Download export" or enter port and token',
     'too-large': 'The app refused the request as too large',
+    'invalid-response': 'The app did not acknowledge all entries. Data stays queued; check the port and retry delivery.',
   };
   const message = (code) => MESSAGES[code] || `Error: ${code}`;
 

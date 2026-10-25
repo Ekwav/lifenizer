@@ -72,3 +72,26 @@ test('merge dedupes and marks unsent; deliver chunks and maps errors', async () 
   assert.strictEqual((await S.deliver(more, settings, async () => { throw new Error('refused'); })).error, 'unreachable');
   assert.strictEqual((await S.deliver(more, S.withDefaults({}), ok)).error, 'not-paired');
 });
+
+test('history delivery retains entries until the whole batch is acknowledged', async () => {
+  const settings = S.withDefaults({ token: 'tok', youtubeAccount: 'account-1' });
+  for (const body of [null, {}, { accepted: 0, imported: 0 }, { accepted: 1, imported: -1 }, { accepted: 1, imported: 2 }]) {
+    const store = [{ ...yt('aaaaaaaaaaa', '2026-10-05T12:00:00.000Z'), account: { id: 'account-1' }, accountSelection: 'account-1', sent: false }];
+    const result = await S.deliver(store, settings, async () => ({ status: 200, ok: true, json: async () => body }));
+    assert.strictEqual(result.error, 'invalid-response');
+    assert.strictEqual(store[0].sent, false);
+    const retry = await S.deliver(store, settings, async () => ({ status: 200, ok: true, json: async () => ({ accepted: 1, imported: 0 }) }));
+    assert.strictEqual(retry.sent, 1); // Receiver deduplication may import nothing on retry.
+  }
+});
+
+test('ping verifies receiver identity and unlock state and bounds the request', async () => {
+  const settings = S.withDefaults({ token: 'tok' });
+  for (const body of [null, {}, { app: 'another-app', unlocked: true }, { app: 'lifenizer', unlocked: 'false' }]) {
+    assert.strictEqual((await S.ping(settings, async () => ({ ok: true, json: async () => body }))).error, 'invalid-response');
+  }
+  assert.deepStrictEqual(await S.ping(settings, async (_, opts) => {
+    assert.ok(opts.signal instanceof AbortSignal);
+    return { ok: true, json: async () => ({ app: 'lifenizer', unlocked: false }) };
+  }), { ok: true, unlocked: false });
+});

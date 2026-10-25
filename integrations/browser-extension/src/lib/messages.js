@@ -29,9 +29,12 @@
           method: 'POST', headers: { Authorization: `Bearer ${settings.token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ source: 'lifenizer-extension', version: 1, messages: part.map(({ sent, ...m }) => m) }),
         });
-        body = await response.json();
       } catch (_) { return { sent, error: 'unreachable' }; }
-      if (!response.ok || body.ok !== true || !Number.isInteger(body.imported)) return { sent, error: body.error || `http-${response.status}` };
+      try { body = await response.json(); } catch (_) { /* Preserve unacknowledged entries. */ }
+      if (response.status === 401) return { sent, error: 'bad-token' };
+      if (response.status === 503) return { sent, error: body?.error === 'locked' ? 'locked' : 'app-busy' };
+      if (!response.ok) return { sent, error: `http-${response.status}` };
+      if (!body || body.ok !== true || !Number.isInteger(body.imported) || body.imported < 0 || body.imported > part.length) return { sent, error: 'invalid-response' };
       part.forEach(m => { m.sent = true; });
       sent += part.length;
     }

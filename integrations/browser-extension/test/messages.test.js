@@ -51,3 +51,17 @@ test('history queue holds legacy, wrong-account and changed-selection records wi
   const r = await S.deliver(held, settings, () => { throw Error('must not send'); });
   assert.equal(r.error, 'account-queue-held'); assert.equal(r.held, 3); assert.ok(held.every(v => !v.sent));
 });
+
+test('message acknowledgments reject malformed counts and explain authentication and locked errors', async () => {
+  const settings = { port: 47615, token: 'secret', discordEnabled: true };
+  for (const body of [null, {}, { ok: true, imported: -1 }, { ok: true, imported: 2 }]) {
+    const store = [message(1)];
+    assert.equal((await M.deliver(store, settings, async () => ({ ok: true, status: 200, json: async () => body }))).error, 'invalid-response');
+    assert.ok(!store[0].sent);
+  }
+  for (const [status, error] of [[401, 'bad-token'], [503, 'locked']]) {
+    const store = [message(1)];
+    assert.equal((await M.deliver(store, settings, async () => ({ ok: false, status, json: async () => ({ error: 'locked' }) }))).error, error);
+    assert.ok(!store[0].sent);
+  }
+});
