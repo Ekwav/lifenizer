@@ -98,7 +98,10 @@ class _Fixture {
       Key(audio ? 'import-audio-button' : 'imports-auto-file'),
     );
     await tester.ensureVisible(button);
-    await tester.tap(button);
+    final action = tester.widget<FilledButton>(button).onPressed!;
+    await tester.runAsync(
+      () async => await (action as Future<void> Function())(),
+    );
     await tester.pumpAndSettle();
   }
 
@@ -165,6 +168,8 @@ void main() {
       f.picker.file = f.file(audio: true);
       await f.choose(tester, audio: true);
       expect(f.imports, hasLength(1));
+      expect(f.state.busy, isFalse);
+      expect(f.state.error, isNull);
       expect(f.imports.single['title'], 'Recording draft');
       expect(f.imports.single['payloadBase64'], base64Encode([1, 2, 3]));
       await tester.pumpWidget(const SizedBox.shrink());
@@ -229,6 +234,8 @@ void main() {
         await tester.pumpAndSettle();
         await f.choose(tester, audio: audio);
         expect(f.imports, hasLength(1));
+        expect(f.state.busy, isFalse);
+        expect(f.state.error, isNull);
         await tester.pumpWidget(const SizedBox.shrink());
       },
     );
