@@ -169,6 +169,7 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Current plan: Free'), findsOneWidget);
+        await tester.ensureVisible(find.text('Activate free Premium'));
         await tester.tap(find.text('Activate free Premium'));
         await tester.pumpAndSettle();
         expect(state.quotaStatus!.plan, 'Free');
@@ -176,6 +177,7 @@ void main() {
           find.textContaining(RegExp('retry', caseSensitive: false)),
           findsOneWidget,
         );
+        await tester.ensureVisible(find.text('Activate free Premium'));
         await tester.tap(find.text('Activate free Premium'));
         await tester.pumpAndSettle();
         expect(attempts, 2);
@@ -186,6 +188,161 @@ void main() {
         expect(find.text('Activate free Premium'), findsNothing);
         expect(find.text('Your storage plan is active.'), findsOneWidget);
         await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
+  for (final dialog in [false, true]) {
+    testWidgets(
+      'cancel demo confirms, retries and reactivates at 320px (dialog: $dialog)',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(320, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        var activated = true;
+        var cancellations = 0;
+        var activations = 0;
+        Map<String, dynamic> quota() => {
+          'plan': activated ? 'Premium' : 'Free',
+          'usedBytes': 60 * 1024 * 1024,
+          'limitBytes': activated ? 10 * 1024 * 1024 * 1024 : 50 * 1024 * 1024,
+          'usedPercent': activated ? 0.6 : 120.0,
+          'freePremiumEnabled': true,
+          if (activated) 'freePremiumActivatedAt': '2026-10-25T12:00:00Z',
+        };
+        final client = MockClient((request) async {
+          if (request.url.path == '/api/premium/cancel-free') {
+            expect(request.method, 'POST');
+            cancellations++;
+            if (cancellations == 1) return http.Response('unavailable', 503);
+            activated = false;
+          } else if (request.url.path == '/api/premium/activate') {
+            activations++;
+            activated = true;
+          } else {
+            expect(request.url.path, '/api/premium/status');
+          }
+          return http.Response(jsonEncode(quota()), 200);
+        });
+        final state = _SignedInState()
+          ..rememberedEmail = 'owner@example.test'
+          ..apiBaseUrl = 'https://vault.example.test';
+        await tester.runAsync(
+          () => state.debugAuthenticateForTesting(
+            LifenizerApiClient(
+              baseUrl: state.apiBaseUrl,
+              authToken: 'same-account',
+              client: client,
+            ),
+          ),
+        );
+        state.quotaStatus = QuotaStatus.fromJson(quota());
+        addTearDown(state.dispose);
+        addTearDown(client.close);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: dialog
+                  ? UpgradeDialog(state: state)
+                  : PricingPage(state: state),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Premium+'), findsWidgets);
+        expect(cancellations, 0);
+        Future<void> openConfirmation() async {
+          await tester.ensureVisible(find.text('Cancel Premium'));
+          await tester.tap(find.text('Cancel Premium'));
+          await tester.pumpAndSettle();
+        }
+
+        final freeCardAction = dialog
+            ? find.descendant(
+                of: find.ancestor(
+                  of: find.text('Free'),
+                  matching: find.byType(Card),
+                ),
+                matching: find.widgetWithText(FilledButton, 'Switch to Free'),
+              )
+            : find.text('Switch to Free');
+        await tester.ensureVisible(freeCardAction);
+        await tester.tap(freeCardAction);
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('immediately returns to 50 MB'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('remains readable'), findsOneWidget);
+        await tester.tap(find.text('Keep current plan'));
+        await tester.pumpAndSettle();
+        expect(cancellations, 0);
+        await openConfirmation();
+        await tester.tap(find.text('Confirm cancellation'));
+        await tester.pumpAndSettle();
+        expect(cancellations, 1);
+        expect(state.quotaStatus!.freePremiumActivatedAt, isNotNull);
+        expect(
+          find.textContaining('Check your connection and retry'),
+          findsOneWidget,
+        );
+        await openConfirmation();
+        await tester.tap(find.text('Confirm cancellation'));
+        await tester.pumpAndSettle();
+        expect(cancellations, 2);
+        expect(state.quotaStatus!.plan, 'Free');
+        expect(state.quotaStatus!.freePremiumActivatedAt, isNull);
+        expect(state.quotaStatus!.usedBytes, 60 * 1024 * 1024);
+        expect(state.quotaStatus!.isOverLimit, isTrue);
+        await tester.ensureVisible(find.text('Activate free Premium'));
+        await tester.tap(find.text('Activate free Premium'));
+        await tester.pumpAndSettle();
+        expect(activations, 1);
+        expect(state.quotaStatus!.plan, 'Premium');
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+
+    testWidgets(
+      'free activation can end with offer disabled without claiming paid cancellation (dialog: $dialog)',
+      (tester) async {
+        final state = _SignedInState()
+          ..quotaStatus = QuotaStatus.fromJson({
+            'plan': 'PremiumPlus',
+            'usedBytes': 0,
+            'limitBytes': 100 * 1024 * 1024 * 1024,
+            'usedPercent': 0.0,
+            'freePremiumEnabled': false,
+            'freePremiumActivatedAt': '2026-10-25T12:00:00Z',
+            'expiresAt': '2026-12-25T12:00:00Z',
+          });
+        addTearDown(state.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: dialog
+                  ? UpgradeDialog(state: state)
+                  : PricingPage(state: state),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Cancel Premium'), findsNothing);
+        await tester.ensureVisible(find.text('End free activation').first);
+        await tester.tap(find.text('End free activation').first);
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('does not cancel a paid subscription'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('paid entitlement'), findsOneWidget);
+        expect(
+          find.textContaining('immediately returns to 50 MB'),
+          findsNothing,
+        );
+        await tester.tap(find.text('Keep current plan'));
+        await tester.pumpAndSettle();
+        expect(state.quotaStatus!.plan, 'PremiumPlus');
       },
     );
   }
@@ -241,7 +398,7 @@ void main() {
   });
 
   testWidgets(
-    'temporary free Premium shows active storage without paid offers',
+    'temporary free Premium shows paid Plus preview with checkout paused',
     (tester) async {
       final state = _SignedInState()
         ..quotaStatus = QuotaStatus.fromJson({
@@ -260,7 +417,10 @@ void main() {
       expect(find.text('Premium is free for now'), findsOneWidget);
       expect(find.text('Current plan: Premium'), findsOneWidget);
       expect(find.text('0 KB of 10.0 GB used'), findsOneWidget);
-      expect(find.byType(FilledButton), findsNothing);
+      expect(find.text('Premium+'), findsWidgets);
+      expect(find.text('100 GB vault storage'), findsOneWidget);
+      final paused = find.widgetWithText(FilledButton, 'Paid checkout paused');
+      expect(tester.widget<FilledButton>(paused).onPressed, isNull);
       expect(state.quotaStatus!.toJson()['freePremiumEnabled'], isTrue);
     },
   );

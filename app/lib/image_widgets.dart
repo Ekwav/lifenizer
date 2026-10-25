@@ -7,6 +7,7 @@ import 'app_state.dart';
 import 'models.dart';
 import 'image_service.dart';
 import 'pages/login_page.dart';
+import 'pricing_page.dart';
 import 'services/quick_action_service.dart';
 
 // ============================================================================
@@ -109,6 +110,31 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
     }
   }
 
+  Future<void> _cancelFreePremium() async {
+    final quota = widget.state.quotaStatus;
+    if (quota?.freePremiumActivatedAt == null ||
+        !await confirmFreePremiumCancellation(context, quota!)) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await widget.state.cancelFreePremium();
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Could not cancel the free activation. Check your connection and retry.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final quota = widget.state.quotaStatus;
@@ -136,6 +162,12 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
                 ),
                 const SizedBox(height: 16),
               ],
+              if (widget.state.isAuthenticated) ...[
+                Text(
+                  'Account: ${widget.state.rememberedEmail}\nServer: ${widget.state.apiBaseUrl}',
+                ),
+                const SizedBox(height: 8),
+              ],
               if (_error != null) ...[
                 Text(
                   _error!,
@@ -162,9 +194,6 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
                 const Text(
                   'Premium is free for now. Activate 10 GB without a payment or card.',
                 ),
-                Text(
-                  'Account: ${widget.state.rememberedEmail}\nServer: ${widget.state.apiBaseUrl}',
-                ),
                 if (quota?.plan == 'Free')
                   FilledButton(
                     onPressed: _loading ? null : () => _upgrade('premium'),
@@ -172,6 +201,14 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
                   )
                 else
                   const Text('Your storage plan is active.'),
+                const SizedBox(height: 8),
+                const _PlanCard(
+                  title: 'Premium+',
+                  price: '€19.99 / month',
+                  actionLabel: 'Paid checkout paused',
+                  storage: '100 GB',
+                  highlighted: true,
+                ),
                 if (_loading) const LinearProgressIndicator(),
               ] else ...[
                 _PlanCard(
@@ -187,6 +224,22 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
                   storage: '100 GB',
                   highlighted: true,
                   onTap: _loading ? null : () => _upgrade('premium-plus'),
+                ),
+              ],
+              if (widget.state.isAuthenticated &&
+                  quota?.freePremiumActivatedAt != null) ...[
+                _PlanCard(
+                  title: 'Free',
+                  price: '€0',
+                  storage: '50 MB',
+                  actionLabel: quota?.expiresAt == null
+                      ? 'Switch to Free'
+                      : 'End free activation',
+                  onTap: _loading ? null : _cancelFreePremium,
+                ),
+                TextButton(
+                  onPressed: _loading ? null : _cancelFreePremium,
+                  child: Text(freePremiumCancellationLabel(quota!)),
                 ),
               ],
             ],
@@ -209,6 +262,7 @@ class _PlanCard extends StatelessWidget {
     required this.price,
     required this.storage,
     this.highlighted = false,
+    this.actionLabel = 'Select',
     this.onTap,
   });
 
@@ -216,6 +270,7 @@ class _PlanCard extends StatelessWidget {
   final String price;
   final String storage;
   final bool highlighted;
+  final String actionLabel;
   final VoidCallback? onTap;
 
   @override
@@ -224,10 +279,16 @@ class _PlanCard extends StatelessWidget {
       color: highlighted
           ? Theme.of(context).colorScheme.primaryContainer
           : null,
-      child: ListTile(
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('$storage · $price'),
-        trailing: FilledButton(onPressed: onTap, child: const Text('Select')),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text('$storage · $price'),
+            FilledButton(onPressed: onTap, child: Text(actionLabel)),
+          ],
+        ),
       ),
     );
   }

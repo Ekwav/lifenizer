@@ -6,6 +6,44 @@ import 'models.dart';
 import 'pages/login_page.dart';
 import 'services/quick_action_service.dart';
 
+String freePremiumCancellationLabel(QuotaStatus quota) =>
+    quota.expiresAt == null ? 'Cancel Premium' : 'End free activation';
+
+Future<bool> confirmFreePremiumCancellation(
+  BuildContext context,
+  QuotaStatus quota,
+) async =>
+    await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(freePremiumCancellationLabel(quota)),
+        content: SingleChildScrollView(
+          child: Text(
+            quota.expiresAt == null
+                ? 'Your storage limit immediately returns to 50 MB. Your data stays '
+                      'in your vault and remains readable. Further uploads are blocked '
+                      'if you are over the limit. You can reactivate free Premium '
+                      'while the offer is available.'
+                : 'Only your free Premium activation will end. Your paid entitlement '
+                      'and its storage limit remain in place until expiry. This does '
+                      'not cancel a paid subscription or stop its charges. Your data '
+                      'stays in your vault and remains readable.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep current plan'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirm cancellation'),
+          ),
+        ],
+      ),
+    ) ??
+    false;
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Pricing data
 // ─────────────────────────────────────────────────────────────────────────────
@@ -164,6 +202,31 @@ class _PricingPageState extends State<PricingPage> {
     }
   }
 
+  Future<void> _cancelFreePremium() async {
+    final quota = widget.state.quotaStatus;
+    if (quota?.freePremiumActivatedAt == null ||
+        !await confirmFreePremiumCancellation(context, quota!)) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await widget.state.cancelFreePremium();
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Could not cancel the free activation. Check your connection and retry.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -213,35 +276,6 @@ class _PricingPageState extends State<PricingPage> {
       );
     }
 
-    if (quota.freePremiumEnabled) {
-      return ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Text('Premium is free for now', style: tt.headlineMedium),
-          const SizedBox(height: 12),
-          const Text(
-            'Activate 10 GB of encrypted storage on this account. No payment or card required. '
-            'Paid checkout is paused during this offer.',
-          ),
-          const SizedBox(height: 16),
-          _CurrentPlanBadge(quota: quota),
-          const SizedBox(height: 12),
-          Text(
-            'Account: ${widget.state.rememberedEmail}\nServer: ${widget.state.apiBaseUrl}',
-          ),
-          if (_error != null) Text(_error!, style: TextStyle(color: cs.error)),
-          if (quota.plan == 'Free')
-            FilledButton(
-              onPressed: _loading ? null : () => _upgrade('premium'),
-              child: const Text('Activate free Premium'),
-            )
-          else
-            const Text('Your storage plan is active.'),
-          if (_loading) const LinearProgressIndicator(),
-        ],
-      );
-    }
-
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 80),
       child: Center(
@@ -254,13 +288,17 @@ class _PricingPageState extends State<PricingPage> {
               Icon(Icons.lock_outlined, size: 48, color: cs.primary),
               const SizedBox(height: 12),
               Text(
-                'Your vault, your data.',
+                quota.freePremiumEnabled
+                    ? 'Premium is free for now'
+                    : 'Your vault, your data.',
                 style: tt.headlineLarge?.copyWith(fontWeight: FontWeight.w700),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
-                'End-to-end encrypted. Pick the storage tier that fits you.',
+                quota.freePremiumEnabled
+                    ? 'Activate 10 GB of encrypted storage. No payment or card required. Paid checkout is paused during this offer.'
+                    : 'End-to-end encrypted. Pick the storage tier that fits you.',
                 style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
@@ -268,6 +306,19 @@ class _PricingPageState extends State<PricingPage> {
               // ── Current plan badge ─────────────────────────────────────────
               const SizedBox(height: 16),
               _CurrentPlanBadge(quota: quota),
+              const SizedBox(height: 12),
+              Text(
+                'Account: ${widget.state.rememberedEmail}\nServer: ${widget.state.apiBaseUrl}',
+                textAlign: TextAlign.center,
+              ),
+              if (quota.plan != 'Free')
+                const Text('Your storage plan is active.'),
+              if (quota.freePremiumActivatedAt != null)
+                TextButton(
+                  onPressed: _loading ? null : _cancelFreePremium,
+                  child: Text(freePremiumCancellationLabel(quota)),
+                ),
+              if (_loading) const LinearProgressIndicator(),
 
               if (_error != null) ...[
                 const SizedBox(height: 12),
@@ -295,6 +346,13 @@ class _PricingPageState extends State<PricingPage> {
                               tier: tier,
                               isCurrentPlan: _matchesPlan(tier),
                               loading: _loading,
+                              freePremiumOffer: quota.freePremiumEnabled,
+                              downgradeLabel: quota.expiresAt == null
+                                  ? 'Switch to Free'
+                                  : 'End free activation',
+                              onDowngrade: quota.freePremiumActivatedAt != null
+                                  ? _cancelFreePremium
+                                  : null,
                               onUpgrade: () => _upgrade(tier.slug),
                             ),
                           ),
@@ -310,6 +368,13 @@ class _PricingPageState extends State<PricingPage> {
                           tier: tier,
                           isCurrentPlan: _matchesPlan(tier),
                           loading: _loading,
+                          freePremiumOffer: quota.freePremiumEnabled,
+                          downgradeLabel: quota.expiresAt == null
+                              ? 'Switch to Free'
+                              : 'End free activation',
+                          onDowngrade: quota.freePremiumActivatedAt != null
+                              ? _cancelFreePremium
+                              : null,
                           onUpgrade: () => _upgrade(tier.slug),
                         ),
                       ],
@@ -421,12 +486,18 @@ class _TierCard extends StatelessWidget {
     required this.isCurrentPlan,
     required this.loading,
     required this.onUpgrade,
+    this.freePremiumOffer = false,
+    this.downgradeLabel = 'Switch to Free',
+    this.onDowngrade,
   });
 
   final _Tier tier;
   final bool isCurrentPlan;
   final bool loading;
   final VoidCallback onUpgrade;
+  final bool freePremiumOffer;
+  final String downgradeLabel;
+  final VoidCallback? onDowngrade;
 
   @override
   Widget build(BuildContext context) {
@@ -466,7 +537,7 @@ class _TierCard extends StatelessWidget {
               children: [
                 Icon(tier.icon, color: tier.color, size: 28),
                 const Spacer(),
-                if (highlight)
+                if (highlight && !isCurrentPlan)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -514,11 +585,13 @@ class _TierCard extends StatelessWidget {
               style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.end,
               children: [
                 Text(
-                  tier.price,
+                  freePremiumOffer && tier.slug == 'premium'
+                      ? '€0'
+                      : tier.price,
                   style: tt.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: tier.color,
@@ -528,7 +601,9 @@ class _TierCard extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text(
-                    tier.period,
+                    freePremiumOffer && tier.slug == 'premium'
+                        ? 'for now'
+                        : tier.period,
                     style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ),
@@ -543,9 +618,11 @@ class _TierCard extends StatelessWidget {
                   color: cs.onSurfaceVariant,
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  '${tier.storage} vault storage',
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                Flexible(
+                  child: Text(
+                    '${tier.storage} vault storage',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
                 ),
               ],
             ),
@@ -567,9 +644,13 @@ class _TierCard extends StatelessWidget {
               width: double.infinity,
               child: tier.isFree
                   ? OutlinedButton(
-                      onPressed: null,
+                      onPressed: loading ? null : onDowngrade,
                       child: Text(
-                        isCurrentPlan ? 'Your current plan' : 'Free forever',
+                        onDowngrade != null
+                            ? downgradeLabel
+                            : isCurrentPlan
+                            ? 'Your current plan'
+                            : 'Free forever',
                       ),
                     )
                   : isCurrentPlan
@@ -582,7 +663,11 @@ class _TierCard extends StatelessWidget {
                       child: const Text('Active'),
                     )
                   : FilledButton(
-                      onPressed: loading ? null : onUpgrade,
+                      onPressed:
+                          loading ||
+                              (freePremiumOffer && tier.slug == 'premium-plus')
+                          ? null
+                          : onUpgrade,
                       style: FilledButton.styleFrom(
                         backgroundColor: tier.color,
                         foregroundColor: Colors.white,
@@ -595,7 +680,13 @@ class _TierCard extends StatelessWidget {
                                 color: Colors.white,
                               ),
                             )
-                          : Text('Upgrade to ${tier.name}'),
+                          : Text(
+                              freePremiumOffer
+                                  ? (tier.slug == 'premium'
+                                        ? 'Activate free Premium'
+                                        : 'Paid checkout paused')
+                                  : 'Upgrade to ${tier.name}',
+                            ),
                     ),
             ),
           ],
@@ -778,7 +869,7 @@ class _FaqSection extends StatelessWidget {
     _FaqItem(
       question: 'Can I cancel at any time?',
       answer:
-          'Yes. Cancelling stops future charges immediately. Your data and vault remain accessible until the end of the paid period.',
+          'You can end a free Premium activation here. Your data remains readable. Paid subscriptions must be managed with your billing provider.',
     ),
     _FaqItem(
       question: 'Is my data safe?',
@@ -793,7 +884,7 @@ class _FaqSection extends StatelessWidget {
     _FaqItem(
       question: 'Can I switch between plans?',
       answer:
-          'Yes. Upgrades take effect immediately. Downgrades apply at the next renewal cycle.',
+          'Free Premium activation and cancellation take effect immediately. Paid entitlement remains in place until expiry.',
     ),
   ];
 
