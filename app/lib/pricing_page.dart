@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
 import 'models.dart';
+import 'pages/login_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Pricing data
@@ -119,6 +120,7 @@ class _PricingPageState extends State<PricingPage> {
   Future<void> _refreshQuota() async {
     setState(() => _loadingQuota = true);
     try {
+      if (!widget.state.isAuthenticated) return;
       await widget.state.refreshQuota();
     } catch (_) {
       // A disconnected account can retry after reconnecting.
@@ -127,13 +129,21 @@ class _PricingPageState extends State<PricingPage> {
     }
   }
 
-  Future<void> _checkout(String slug) async {
+  Future<void> _upgrade(String slug) async {
     if (slug.isEmpty) return;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
+      if (!widget.state.isAuthenticated) {
+        throw StateError('Sign in to upgrade.');
+      }
+      if (slug == 'premium' &&
+          widget.state.quotaStatus?.freePremiumEnabled == true) {
+        await widget.state.activateFreePremium();
+        return;
+      }
       final url = await widget.state.checkoutUrl(slug);
       final uri = Uri.parse(url);
       if (await canLaunchUrl(uri)) {
@@ -141,8 +151,13 @@ class _PricingPageState extends State<PricingPage> {
       } else {
         setState(() => _error = 'Could not open checkout URL.');
       }
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Could not confirm the upgrade. Check your connection and retry.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -153,6 +168,27 @@ class _PricingPageState extends State<PricingPage> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final quota = widget.state.quotaStatus;
+
+    if (!widget.state.isAuthenticated) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Sign in to your Lifenizer account to view and activate upgrades.',
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => LoginPage(state: widget.state),
+                ),
+              ),
+              child: const Text('Sign in to upgrade'),
+            ),
+          ],
+        ),
+      );
+    }
 
     if (quota == null) {
       return Center(
@@ -178,11 +214,24 @@ class _PricingPageState extends State<PricingPage> {
           Text('Premium is free for now', style: tt.headlineMedium),
           const SizedBox(height: 12),
           const Text(
-            '10 GB of encrypted storage is already active. No payment or card required. '
+            'Activate 10 GB of encrypted storage on this account. No payment or card required. '
             'Paid checkout is paused during this offer.',
           ),
           const SizedBox(height: 16),
           _CurrentPlanBadge(quota: quota),
+          const SizedBox(height: 12),
+          Text(
+            'Account: ${widget.state.rememberedEmail}\nServer: ${widget.state.apiBaseUrl}',
+          ),
+          if (_error != null) Text(_error!, style: TextStyle(color: cs.error)),
+          if (quota.plan == 'Free')
+            FilledButton(
+              onPressed: _loading ? null : () => _upgrade('premium'),
+              child: const Text('Activate free Premium'),
+            )
+          else
+            const Text('Your storage plan is active.'),
+          if (_loading) const LinearProgressIndicator(),
         ],
       );
     }
@@ -240,7 +289,7 @@ class _PricingPageState extends State<PricingPage> {
                               tier: tier,
                               isCurrentPlan: _matchesPlan(tier),
                               loading: _loading,
-                              onUpgrade: () => _checkout(tier.slug),
+                              onUpgrade: () => _upgrade(tier.slug),
                             ),
                           ),
                         ],
@@ -255,7 +304,7 @@ class _PricingPageState extends State<PricingPage> {
                           tier: tier,
                           isCurrentPlan: _matchesPlan(tier),
                           loading: _loading,
-                          onUpgrade: () => _checkout(tier.slug),
+                          onUpgrade: () => _upgrade(tier.slug),
                         ),
                       ],
                     ],

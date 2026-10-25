@@ -6,6 +6,7 @@ import 'api_client.dart';
 import 'app_state.dart';
 import 'models.dart';
 import 'image_service.dart';
+import 'pages/login_page.dart';
 
 // ============================================================================
 //  StorageQuotaBanner
@@ -73,12 +74,20 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
   bool _loading = false;
   String? _error;
 
-  Future<void> _checkout(String plan) async {
+  Future<void> _upgrade(String plan) async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
+      if (!widget.state.isAuthenticated) {
+        throw StateError('Sign in to upgrade.');
+      }
+      if (plan == 'premium' &&
+          widget.state.quotaStatus?.freePremiumEnabled == true) {
+        await widget.state.activateFreePremium();
+        return;
+      }
       final url = await widget.state.checkoutUrl(plan);
       final uri = Uri.parse(url);
       if (await canLaunchUrl(uri)) {
@@ -87,8 +96,13 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
       } else if (mounted) {
         setState(() => _error = 'Could not open browser. URL: $url');
       }
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () =>
+              _error = 'Could not complete the upgrade. Retry when connected.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -101,54 +115,76 @@ class _UpgradeDialogState extends State<UpgradeDialog> {
       title: const Text('Upgrade storage'),
       content: SizedBox(
         width: 320,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (quota != null) ...[
-              Text(
-                'Current plan: ${quota.plan}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 4),
-              LinearProgressIndicator(
-                value: (quota.usedPercent / 100).clamp(0.0, 1.0),
-              ),
-              Text(
-                '${quota.usedFormatted} of ${quota.limitFormatted} used',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (quota != null) ...[
+                Text(
+                  'Current plan: ${quota.plan}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 4),
+                LinearProgressIndicator(
+                  value: (quota.usedPercent / 100).clamp(0.0, 1.0),
+                ),
+                Text(
+                  '${quota.usedFormatted} of ${quota.limitFormatted} used',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (_error != null) ...[
+                Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (!widget.state.isAuthenticated) ...[
+                const Text('Sign in to your Lifenizer account to upgrade.'),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => LoginPage(state: widget.state),
+                    ),
+                  ),
+                  child: const Text('Sign in to upgrade'),
+                ),
+              ] else if (quota?.freePremiumEnabled == true) ...[
+                const Text(
+                  'Premium is free for now. Activate 10 GB without a payment or card.',
+                ),
+                Text(
+                  'Account: ${widget.state.rememberedEmail}\nServer: ${widget.state.apiBaseUrl}',
+                ),
+                if (quota?.plan == 'Free')
+                  FilledButton(
+                    onPressed: _loading ? null : () => _upgrade('premium'),
+                    child: const Text('Activate free Premium'),
+                  )
+                else
+                  const Text('Your storage plan is active.'),
+                if (_loading) const LinearProgressIndicator(),
+              ] else ...[
+                _PlanCard(
+                  title: 'Premium',
+                  price: '€4.99 / month',
+                  storage: '10 GB',
+                  onTap: _loading ? null : () => _upgrade('premium'),
+                ),
+                const SizedBox(height: 8),
+                _PlanCard(
+                  title: 'Premium+',
+                  price: '€19.99 / month',
+                  storage: '100 GB',
+                  highlighted: true,
+                  onTap: _loading ? null : () => _upgrade('premium-plus'),
+                ),
+              ],
             ],
-            if (_error != null) ...[
-              Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (quota?.freePremiumEnabled == true)
-              const Text(
-                'Premium is free for now: 10 GB is already active. '
-                'Paid checkout is paused. Remove stored files to free up space if your storage is full.',
-              )
-            else ...[
-              _PlanCard(
-                title: 'Premium',
-                price: '€4.99 / month',
-                storage: '10 GB',
-                onTap: _loading ? null : () => _checkout('premium'),
-              ),
-              const SizedBox(height: 8),
-              _PlanCard(
-                title: 'Premium+',
-                price: '€19.99 / month',
-                storage: '100 GB',
-                highlighted: true,
-                onTap: _loading ? null : () => _checkout('premium-plus'),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
       actions: [
