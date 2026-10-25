@@ -5,8 +5,13 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 
 class DocumentImportPanel extends StatefulWidget {
-  const DocumentImportPanel({required this.state, super.key});
+  const DocumentImportPanel({
+    required this.state,
+    required this.onPickFile,
+    super.key,
+  });
   final LifenizerAppState state;
+  final VoidCallback onPickFile;
   @override
   State<DocumentImportPanel> createState() => _DocumentImportPanelState();
 }
@@ -67,6 +72,11 @@ class _DocumentImportPanelState extends State<DocumentImportPanel> {
           const SizedBox(height: 8),
           const Text(
             'Import a PDF with the file picker, drag it here, or share it to Lifenizer. Searchable text and scanned pages are indexed and saved encrypted.',
+          ),
+          FilledButton.icon(
+            onPressed: enabled ? widget.onPickFile : null,
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Choose PDF or scan'),
           ),
           if (desktop) ...[
             const SizedBox(height: 8),

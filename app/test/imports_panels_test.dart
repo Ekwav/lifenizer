@@ -48,6 +48,10 @@ void main() {
         find.textContaining('Import a PDF with the file picker'),
         findsOneWidget,
       );
+      expect(
+        find.widgetWithText(FilledButton, 'Choose PDF or scan'),
+        findsOneWidget,
+      );
       expect(find.byKey(const Key('paperless-import-panel')), findsNothing);
       expect(find.text('Paperless API token'), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -100,6 +104,49 @@ void main() {
     expect(find.byKey(const Key('camera-photos-panel')), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets(
+    'invalid import metadata keeps the draft and gives a retryable error',
+    (tester) async {
+      final state = LifenizerAppState();
+      addTearDown(state.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ImportsPage(state: state)),
+        ),
+      );
+      await tester.enterText(find.byKey(const Key('imports-search')), 'pasted');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('import-adapter-manual')));
+      await tester.pumpAndSettle();
+      final payload = find.widgetWithText(TextField, 'Text or export payload');
+      await tester.enterText(payload, 'keep this draft');
+      final advanced = find.text('Advanced import settings');
+      await tester.ensureVisible(advanced);
+      await tester.tap(advanced);
+      await tester.pumpAndSettle();
+      final metadata = find.widgetWithText(TextField, 'Provider metadata JSON');
+      final submit = find.text('Send import and encrypt result');
+      for (final invalid in ['{broken', '[]']) {
+        await tester.ensureVisible(metadata);
+        await tester.enterText(metadata, invalid);
+        await tester.ensureVisible(submit);
+        await tester.tap(submit);
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Provider metadata must be a JSON object'),
+          findsOneWidget,
+        );
+        expect(
+          tester.widget<TextField>(payload).controller!.text,
+          'keep this draft',
+        );
+        expect(tester.widget<TextField>(metadata).controller!.text, invalid);
+        expect(tester.takeException(), isNull);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets('search finds export adapters and separate extension setups', (
     tester,

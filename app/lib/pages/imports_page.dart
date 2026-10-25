@@ -38,6 +38,7 @@ class _ImportsPageState extends State<ImportsPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _participantsController = TextEditingController();
   final _participantIds = ValueNotifier<List<String>>([]);
+  final _manualError = ValueNotifier<String?>(null);
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _fileController = TextEditingController();
   final TextEditingController _mimeController = TextEditingController();
@@ -73,6 +74,7 @@ class _ImportsPageState extends State<ImportsPage> {
     _titleController.dispose();
     _participantsController.dispose();
     _participantIds.dispose();
+    _manualError.dispose();
     _textController.dispose();
     _fileController.dispose();
     _mimeController.dispose();
@@ -117,7 +119,7 @@ class _ImportsPageState extends State<ImportsPage> {
       title: 'Documents & scans',
       description: 'Import PDFs and scans, or watch a folder.',
       steps: [
-        'Choose a PDF or scan using the file picker above.',
+        'Choose a PDF or scan using the file picker below.',
         'For automatic imports, select a folder below.',
       ],
     ),
@@ -437,6 +439,15 @@ class _ImportsPageState extends State<ImportsPage> {
                         ),
                       const SizedBox(height: 12),
                       panel(),
+                      if (widget.state.error != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.state.error!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -464,7 +475,10 @@ class _ImportsPageState extends State<ImportsPage> {
       service: widget.state.discordImport,
       ownUserId: _ownDiscordId,
     ),
-    'documents' => DocumentImportPanel(state: widget.state),
+    'documents' => DocumentImportPanel(
+      state: widget.state,
+      onPickFile: () => _pickExport(),
+    ),
     'paperless' => PaperlessImportPanel(state: widget.state),
     'photos' => CameraPhotosPanel(state: widget.state),
     'history' => ViewingHistoryPanel(state: widget.state),
@@ -610,13 +624,32 @@ class _ImportsPageState extends State<ImportsPage> {
         icon: const Icon(Icons.input),
         label: const Text('Send import and encrypt result'),
       ),
+      ValueListenableBuilder<String?>(
+        valueListenable: _manualError,
+        builder: (context, error, _) => error == null
+            ? const SizedBox.shrink()
+            : Text(
+                error,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+      ),
     ],
   );
 
   Future<void> _runImport() async {
-    final decoded = _metadataController.text.trim().isEmpty
-        ? <String, dynamic>{}
-        : decodeJsonMap(_metadataController.text);
+    _manualError.value = null;
+    late final Map<String, dynamic> decoded;
+    try {
+      final value = _metadataController.text.trim().isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(_metadataController.text);
+      if (value is! Map<String, dynamic>) throw const FormatException();
+      decoded = value;
+    } on FormatException {
+      _manualError.value =
+          'Provider metadata must be a JSON object, for example {}. Correct it and retry.';
+      return;
+    }
     final metadata = decoded.map((key, value) => MapEntry(key, '$value'));
     await widget.state.importSource(
       source: _sourceController.text.trim(),
@@ -773,29 +806,38 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
 
   Future<void> _pickAndImport() async {
     setState(() => _pickError = null);
-    final result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: _allowedExtensions,
-      withData: true,
-    );
-    final file = result?.files.single;
-    if (file == null) return;
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
-      setState(
-        () => _pickError = 'Could not read the selected file. Try again.',
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: _allowedExtensions,
+        withData: true,
       );
-      return;
+      final file = result?.files.single;
+      if (file == null || !mounted) return;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        setState(
+          () => _pickError = 'Could not read the selected file. Try again.',
+        );
+        return;
+      }
+      await widget.state.importAudioBytes(
+        bytes: bytes,
+        fileName: file.name,
+        title: _titleController.text,
+        participantNames: _participantsController.text,
+        participantIds: _participantIds,
+        language: _languageController.text,
+        recordedAt: _recordedAt,
+      );
+    } catch (exception) {
+      if (mounted) {
+        setState(
+          () => _pickError =
+              'Could not import this recording. Choose the file again to retry: $exception',
+        );
+      }
     }
-    await widget.state.importAudioBytes(
-      bytes: bytes,
-      fileName: file.name,
-      title: _titleController.text,
-      participantNames: _participantsController.text,
-      participantIds: _participantIds,
-      language: _languageController.text,
-      recordedAt: _recordedAt,
-    );
   }
 
   Future<void> _pickRecordedAt() async {
