@@ -729,25 +729,40 @@ class _ImportsPageState extends State<ImportsPage> {
   }
 
   Future<void> _pickExport({bool useSource = false}) async {
+    final identity = widget.state.recordingIdentity;
+    if (identity == null) return;
     try {
       final result = await FilePicker.pickFiles(
         withData: false,
         withReadStream: true,
       );
       final file = result?.files.single;
-      if (file == null || !mounted) return;
-      if (!widget.state.isAuthenticated || widget.state.busy) return;
-      await _importExport(file, useSource: useSource);
+      if (file == null) return;
+      await _importExport(file, identity: identity, useSource: useSource);
     } catch (exception) {
-      widget.state.reportError('Could not import this file: $exception');
+      if (mounted && widget.state.recordingIdentity == identity) {
+        widget.state.reportError('Could not import this file: $exception');
+      }
     }
+  }
+
+  bool _canImport(String identity) {
+    if (!mounted || widget.state.recordingIdentity != identity) return false;
+    if (widget.state.busy) {
+      widget.state.reportError(
+        'Wait for the current operation, then select the file again.',
+      );
+      return false;
+    }
+    return true;
   }
 
   Future<void> _importExport(
     PlatformFile file, {
+    required String identity,
     bool useSource = false,
   }) async {
-    if (!widget.state.isAuthenticated || widget.state.busy) return;
+    if (!_canImport(identity)) return;
     if (file.name.toLowerCase().endsWith('.lfb')) {
       throw const FormatException(
         'Open Sync → Restore backup and select all .lfb parts together.',
@@ -769,7 +784,7 @@ class _ImportsPageState extends State<ImportsPage> {
         file.path != null &&
         file.name.toLowerCase().endsWith('.zip') &&
         await isDiscordArchive(file.path!)) {
-      if (!widget.state.isAuthenticated || widget.state.busy) return;
+      if (!_canImport(identity)) return;
       if (_desktop && _watchExport) {
         await ExportWatchService.instance.watch(file.path!);
       } else {
@@ -778,11 +793,7 @@ class _ImportsPageState extends State<ImportsPage> {
       return;
     }
     final bytes = await readExportBytes(file);
-    if (!mounted) return;
-    if (!widget.state.isAuthenticated || widget.state.busy) {
-      widget.state.reportError('Unlock your vault before importing a file.');
-      return;
-    }
+    if (!_canImport(identity)) return;
     if (useSource) {
       await widget.state.importSource(
         source: _sourceController.text.trim(),
@@ -799,8 +810,11 @@ class _ImportsPageState extends State<ImportsPage> {
 
   Future<void> _dropExports(DropDoneDetails details) async {
     setState(() => _dragging = false);
+    final identity = widget.state.recordingIdentity;
+    if (identity == null) return;
     try {
       for (final item in details.files) {
+        if (!_canImport(identity)) return;
         if (item is DropItemDirectory) {
           await widget.state.documentImport.folders.addFolder(item.path);
           continue;
@@ -812,19 +826,22 @@ class _ImportsPageState extends State<ImportsPage> {
             path: item.path,
             readStream: item.openRead(),
           ),
+          identity: identity,
         );
         if (widget.state.error != null) break;
       }
     } catch (exception) {
-      widget.state.reportError('Could not import this file: $exception');
+      if (mounted && widget.state.recordingIdentity == identity) {
+        widget.state.reportError('Could not import this file: $exception');
+      }
     }
   }
 }
 
 /// Panel for importing a real audio recording for server-side transcription.
 ///
-/// Picks an audio file (mp3/m4a/wav/ogg/opus/flac/aac/webm) with bytes
-/// resolved eagerly so it works on web, then hands the bytes to
+/// Reads an audio file (mp3/m4a/wav/ogg/opus/flac/aac/webm) as a bounded
+/// stream on native and web, then hands the bytes to
 /// [LifenizerAppState.importAudioBytes]. That call can take several minutes
 /// (transcription runs server-side on CPU); progress is surfaced through the
 /// app-wide busy indicator and status/error banner (see VaultShell), same as
@@ -882,22 +899,20 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
   }
 
   Future<void> _pickAndImport() async {
+    final identity = widget.state.recordingIdentity;
+    if (identity == null) return;
     setState(() => _pickError = null);
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: _allowedExtensions,
-        withData: true,
+        withData: false,
+        withReadStream: true,
       );
       final file = result?.files.single;
-      if (file == null || !mounted) return;
-      final bytes = file.bytes;
-      if (bytes == null || bytes.isEmpty) {
-        setState(
-          () => _pickError = 'Could not read the selected file. Try again.',
-        );
-        return;
-      }
+      if (file == null || !_canImport(identity)) return;
+      final bytes = await readExportBytes(file, maxBytes: 128 * 1024 * 1024);
+      if (!_canImport(identity)) return;
       final submittedDraft = _draft;
       await widget.state.importAudioBytes(
         bytes: bytes,
@@ -908,15 +923,30 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
         language: _languageController.text,
         recordedAt: _recordedAt,
       );
-      if (mounted && widget.state.error == null) _savedDraft = submittedDraft;
+      if (mounted &&
+          widget.state.recordingIdentity == identity &&
+          widget.state.error == null)
+        _savedDraft = submittedDraft;
     } catch (exception) {
-      if (mounted) {
+      if (mounted && widget.state.recordingIdentity == identity) {
         setState(
           () => _pickError =
               'Could not import this recording. Choose the file again to retry: $exception',
         );
       }
     }
+  }
+
+  bool _canImport(String identity) {
+    if (!mounted || widget.state.recordingIdentity != identity) return false;
+    if (widget.state.busy) {
+      setState(
+        () => _pickError =
+            'Wait for the current operation, then choose the recording again.',
+      );
+      return false;
+    }
+    return true;
   }
 
   Future<void> _pickRecordedAt() async {
@@ -962,6 +992,7 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
             const SizedBox(height: 4),
             Text(
               'Upload a real audio file to transcribe it on the server. '
+              'Files can be up to 128 MiB. '
               'This can take a few minutes for longer recordings.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
