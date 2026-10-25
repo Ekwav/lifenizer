@@ -347,6 +347,77 @@ void main() {
     );
   }
 
+  for (final dialog in [false, true]) {
+    for (final changeServer in [false, true]) {
+      testWidgets(
+        'cancel confirmation is bound to the account and server (dialog: $dialog, server change: $changeServer)',
+        (tester) async {
+          var cancellations = 0;
+          final quota = {
+            'plan': 'Premium',
+            'usedBytes': 0,
+            'limitBytes': 10 * 1024 * 1024 * 1024,
+            'usedPercent': 0.0,
+            'freePremiumEnabled': true,
+            'freePremiumActivatedAt': '2026-10-25T12:00:00Z',
+          };
+          final client = MockClient((request) async {
+            if (request.url.path == '/api/premium/cancel-free') cancellations++;
+            return http.Response(jsonEncode(quota), 200);
+          });
+          final state = _SignedInState()
+            ..apiBaseUrl = 'https://first.example.test';
+          await tester.runAsync(
+            () => state.debugAuthenticateForTesting(
+              LifenizerApiClient(
+                baseUrl: state.apiBaseUrl,
+                authToken: 'first-account',
+                client: client,
+              ),
+            ),
+          );
+          state.session = AuthSession(
+            authToken: 'first-account',
+            userId: 'first',
+            vaultId: 'first-vault',
+            vaultSalt: 'first-salt',
+          );
+          state.quotaStatus = QuotaStatus.fromJson(quota);
+          addTearDown(state.dispose);
+          addTearDown(client.close);
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: dialog
+                    ? UpgradeDialog(state: state)
+                    : PricingPage(state: state),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.ensureVisible(find.text('Cancel Premium'));
+          await tester.tap(find.text('Cancel Premium'));
+          await tester.pumpAndSettle();
+          if (changeServer) {
+            state.apiBaseUrl = 'https://second.example.test';
+          } else {
+            state.session = AuthSession(
+              authToken: 'second-account',
+              userId: 'second',
+              vaultId: 'second-vault',
+              vaultSalt: 'second-salt',
+            );
+          }
+          await tester.tap(find.text('Confirm cancellation'));
+          await tester.pumpAndSettle();
+          expect(cancellations, 0);
+          expect(state.quotaStatus!.freePremiumActivatedAt, isNotNull);
+          await tester.pumpWidget(const SizedBox.shrink());
+        },
+      );
+    }
+  }
+
   testWidgets('entry loads actual quota and retries a failed request', (
     tester,
   ) async {

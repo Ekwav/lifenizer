@@ -203,18 +203,27 @@ class _PricingPageState extends State<PricingPage> {
   }
 
   Future<void> _cancelFreePremium() async {
-    final quota = widget.state.quotaStatus;
+    final state = widget.state;
+    final session = state.session;
+    final server = state.apiBaseUrl;
+    final quota = state.quotaStatus;
     if (quota?.freePremiumActivatedAt == null ||
         !await confirmFreePremiumCancellation(context, quota!)) {
       return;
     }
-    if (!mounted) return;
+    if (!mounted ||
+        !identical(widget.state, state) ||
+        !identical(state.session, session) ||
+        state.apiBaseUrl != server ||
+        !state.isAuthenticated) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      await widget.state.cancelFreePremium();
+      await state.cancelFreePremium();
     } catch (_) {
       if (mounted) {
         setState(
@@ -334,7 +343,7 @@ class _PricingPageState extends State<PricingPage> {
               // ── Tier cards ─────────────────────────────────────────────────
               LayoutBuilder(
                 builder: (ctx, constraints) {
-                  final wide = constraints.maxWidth >= 700;
+                  final wide = constraints.maxWidth >= 900;
                   if (wide) {
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
