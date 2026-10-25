@@ -22,6 +22,15 @@ const Set<String> photoExtensions = {
   'heif',
 };
 
+bool isEmailExport(String fileName, String mimeType) {
+  final name = fileName.toLowerCase();
+  final mime = mimeType.split(';').first.trim().toLowerCase();
+  return name.endsWith('.eml') ||
+      name.endsWith('.mbox') ||
+      mime == 'message/rfc822' ||
+      mime == 'application/mbox';
+}
+
 /// True for camera-style images that belong to the `photo` source.
 bool isPhotoFile(String fileName, [String mimeType = '']) {
   final name = fileName.toLowerCase();
@@ -226,6 +235,7 @@ String detectSharedImportSource({
   Map<String, List<String>> fileNameHints = defaultFileNameHints,
 }) {
   final name = fileName.toLowerCase();
+  if (isEmailExport(name, mimeType)) return 'mbox';
   if (name.endsWith('.pdf') || mimeType == 'application/pdf') {
     return 'scanned-pdf';
   }
@@ -293,7 +303,6 @@ String detectSharedImportSource({
       'This ZIP needs a source. Use the source file picker in Imports. WhatsApp ZIPs should contain one exported chat text file.',
     );
   }
-  if (name.endsWith('.mbox')) return 'mbox';
   if (name.endsWith('.patch') ||
       name.endsWith('.diff') ||
       name.contains('git')) {

@@ -1405,6 +1405,7 @@ class LifenizerAppState extends ChangeNotifier {
     }
     final lowerName = normalizedName.toLowerCase();
     final extension = lowerName.split('.').last;
+    final isEmail = isEmailExport(lowerName, normalizedMime);
     final isPhoto = isPhotoFile(lowerName, normalizedMime);
 
     final isScannedFile =
@@ -1437,14 +1438,17 @@ class LifenizerAppState extends ChangeNotifier {
               bytes.length >= 4 &&
               bytes[0] == 0x50 &&
               bytes[1] == 0x4b);
-      if (!isAudio &&
+      if (!isEmail &&
+          !isAudio &&
           !isZip &&
           !isScannedFile &&
           decodedText == null &&
           bytes != null) {
         decodedText = utf8.decode(bytes);
       }
-      source = isAudio
+      source = isEmail
+          ? 'mbox'
+          : isAudio
           ? 'audio'
           : isPhoto
           ? 'photo'

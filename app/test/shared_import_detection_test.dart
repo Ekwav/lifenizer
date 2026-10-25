@@ -53,6 +53,24 @@ void main() {
   );
 
   group('detectSharedImportSource', () {
+    test('email exports route before generic text or JSON inspection', () {
+      for (final (name, mime) in [
+        ('MESSAGE.EML', ''),
+        ('mailbox.mbox', ''),
+        ('download', 'message/rfc822'),
+        ('download', 'application/mbox; charset=windows-1252'),
+      ]) {
+        expect(
+          detectSharedImportSource(
+            fileName: name,
+            mimeType: mime,
+            text: '{not JSON: this is a MIME message body',
+          ),
+          'mbox',
+        );
+      }
+    });
+
     test('YouTube Takeout JSON, even with a generic file name', () {
       expect(
         detectSharedImportSource(

@@ -93,6 +93,45 @@ class _ImportServer {
 
 void main() {
   test(
+    'shared legacy email bytes reach MIME parsing without UTF-8 decoding',
+    () async {
+      final server = _ImportServer()
+        ..normalizedOverride = {
+          'source': 'mbox',
+          'participants': [],
+          'conversations': [],
+        };
+      final state = LifenizerAppState();
+      addTearDown(state.dispose);
+      await state.debugAuthenticateForTesting(
+        LifenizerApiClient(
+          baseUrl: 'https://vault.example.test',
+          client: MockClient(server.handle),
+        ),
+      );
+      final bytes = latin1.encode(
+        'From: sender@example.test\r\nContent-Type: text/plain; charset=iso-8859-1\r\nContent-Transfer-Encoding: 8bit\r\n\r\nGrüße',
+      );
+      for (final (name, mime) in [
+        ('message.eml', ''),
+        ('mailbox.mbox', ''),
+        ('download', 'message/rfc822'),
+        ('download', 'application/mbox'),
+      ]) {
+        await state.importSharedPayload(
+          fileName: name,
+          mimeType: mime,
+          bytes: bytes,
+        );
+        expect(state.error, isNull);
+        expect(server.importSources.last, 'mbox');
+        expect(server.lastImport!['payloadBase64'], base64Encode(bytes));
+        expect(server.lastImport!['text'], isNull);
+      }
+    },
+  );
+
+  test(
     'shared Paperless ZIPs send original bytes for server parsing',
     () async {
       final server = _ImportServer()
