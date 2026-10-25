@@ -12,6 +12,7 @@ public sealed class UserAccount
     public string? Email { get; set; }
     public string? DisplayName { get; set; }
     public SubscriptionPlan Plan { get; set; } = SubscriptionPlan.Free;
+    public DateTimeOffset? FreePremiumActivatedAt { get; set; }
     /// <summary>
     /// Running total of images, encrypted recordings and new sync batch objects. Legacy inline sync is not counted.
     /// Incremented on upload / push, decremented on delete.

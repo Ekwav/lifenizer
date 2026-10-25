@@ -28,7 +28,8 @@ public sealed class PremiumService(
         string PlanName,
         long UsedBytes,
         long LimitBytes,
-        DateTimeOffset? ExpiresAt);
+        DateTimeOffset? ExpiresAt,
+        DateTimeOffset? FreePremiumActivatedAt);
 
     /// <summary>
     /// Returns the current quota status for <paramref name="userId"/>.
@@ -37,10 +38,10 @@ public sealed class PremiumService(
     public async Task<QuotaStatus> GetQuotaStatusAsync(Guid userId, CancellationToken cancellationToken)
     {
         var (plan, expiresAt) = await ResolvePlanAsync(userId, cancellationToken);
-        if (FreePremiumEnabled && StorageQuota.ForPlan(plan) < StorageQuota.PremiumLimitBytes)
-            (plan, expiresAt) = (SubscriptionPlan.Premium, null);
         var user = await accountService.GetByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException($"User {userId} not found.");
+        if (FreePremiumEnabled && user.FreePremiumActivatedAt is not null && StorageQuota.ForPlan(plan) < StorageQuota.PremiumLimitBytes)
+            (plan, expiresAt) = (SubscriptionPlan.Premium, null);
 
         // Sync plan to db if it changed.
         if (user.Plan != plan)
@@ -54,7 +55,15 @@ public sealed class PremiumService(
             plan.ToString(),
             user!.StorageUsedBytes,
             StorageQuota.ForPlan(plan),
-            expiresAt);
+            expiresAt,
+            user.FreePremiumActivatedAt);
+    }
+
+    public async Task<QuotaStatus> ActivateFreePremiumAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        if (!FreePremiumEnabled) throw new InvalidOperationException("The free Premium offer is not available on this server.");
+        await accountService.ActivateFreePremiumAsync(userId, cancellationToken);
+        return await GetQuotaStatusAsync(userId, cancellationToken);
     }
 
     private async Task<(SubscriptionPlan Plan, DateTimeOffset? ExpiresAt)> ResolvePlanAsync(

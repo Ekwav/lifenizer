@@ -15,6 +15,74 @@ namespace Lifenizer.Tests;
 
 public sealed class PremiumTests
 {
+    [Test]
+    public async Task FreeActivationRequiresLoginAndSurvivesRestartWithoutChangingVaultIdentity()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"lifenizer-premium-{Guid.NewGuid():N}.db");
+        var config = new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Lifenizer"] = $"Data Source={path}",
+            ["Payments:FreePremiumEnabled"] = "true", ["Payments:BaseUrl"] = "",
+        };
+        const string email = "activation@example.test";
+        const string password = "private account password for test";
+        AuthResponse original;
+        string? activatedAt;
+        try
+        {
+            await using (var factory = new LifenizerApiFactory(config))
+            {
+                using var client = factory.CreateClient();
+                Assert.That((await client.PostAsync("/api/premium/activate", null)).StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+                var registration = await client.PostAsJsonAsync("/api/auth/register", new RegisterAccountRequest(email, password));
+                registration.EnsureSuccessStatusCode();
+                original = (await registration.Content.ReadFromJsonAsync<AuthResponse>())!;
+                client.DefaultRequestHeaders.Authorization = new("Bearer", original.AuthToken);
+                var envelope = new SyncEnvelopeDto(Guid.NewGuid(), "desktop", "conversation", "existing-memory", "upsert", 1,
+                    "encrypted-before-upgrade", "nonce", "vault-v1", DateTimeOffset.UtcNow);
+                (await client.PostAsJsonAsync("/api/sync/push", new PushSyncRequest([envelope]))).EnsureSuccessStatusCode();
+                var before = await client.GetFromJsonAsync<JsonElement>("/api/premium/status");
+                Assert.That(before.GetProperty("plan").GetString(), Is.EqualTo("Free"));
+                Assert.That(before.GetProperty("freePremiumActivatedAt").ValueKind, Is.EqualTo(JsonValueKind.Null));
+                var activation = await client.PostAsync("/api/premium/activate", null);
+                activation.EnsureSuccessStatusCode();
+                var status = await activation.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.That(status.GetProperty("plan").GetString(), Is.EqualTo("Premium"));
+                Assert.That(status.GetProperty("usedBytes").GetInt64(), Is.EqualTo(before.GetProperty("usedBytes").GetInt64()));
+                activatedAt = status.GetProperty("freePremiumActivatedAt").GetString();
+                Assert.That(activatedAt, Is.Not.Null);
+                var repeated = await client.PostAsync("/api/premium/activate", null);
+                repeated.EnsureSuccessStatusCode();
+                Assert.That((await repeated.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("freePremiumActivatedAt").GetString(), Is.EqualTo(activatedAt));
+            }
+            await using (var restarted = new LifenizerApiFactory(config))
+            {
+                using var client = restarted.CreateClient();
+                var login = await client.PostAsJsonAsync("/api/auth/login", new AccountLoginRequest(email, password));
+                login.EnsureSuccessStatusCode();
+                var restored = (await login.Content.ReadFromJsonAsync<AuthResponse>())!;
+                Assert.That((restored.UserId, restored.VaultId, restored.VaultSalt), Is.EqualTo((original.UserId, original.VaultId, original.VaultSalt)));
+                client.DefaultRequestHeaders.Authorization = new("Bearer", restored.AuthToken);
+                var pull = await client.GetFromJsonAsync<PullSyncResponse>("/api/sync/pull?since=0");
+                Assert.That(pull!.Envelopes.Single().CipherText, Is.EqualTo("encrypted-before-upgrade"));
+                var status = await client.GetFromJsonAsync<JsonElement>("/api/premium/status");
+                Assert.That(status.GetProperty("plan").GetString(), Is.EqualTo("Premium"));
+                Assert.That(status.GetProperty("limitBytes").GetInt64(), Is.EqualTo(StorageQuota.PremiumLimitBytes));
+                Assert.That(status.GetProperty("freePremiumActivatedAt").GetString(), Is.EqualTo(activatedAt));
+                restarted.Services.GetRequiredService<IConfiguration>()["Payments:FreePremiumEnabled"] = "false";
+                Assert.That((await client.PostAsync("/api/premium/activate", null)).StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+                var disabled = await client.GetFromJsonAsync<JsonElement>("/api/premium/status");
+                Assert.That(disabled.GetProperty("plan").GetString(), Is.EqualTo("Free"));
+                Assert.That(disabled.GetProperty("freePremiumActivatedAt").GetString(), Is.EqualTo(activatedAt));
+            }
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            File.Delete(path);
+        }
+    }
+
     private static async Task Login(HttpClient client)
     {
         var response = await client.PostAsJsonAsync("/api/auth/dev-login", new DevLoginRequest("premium-test@example.test", "Premium"));

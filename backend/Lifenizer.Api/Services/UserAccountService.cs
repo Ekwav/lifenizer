@@ -102,6 +102,15 @@ public sealed class UserAccountService(LifenizerDbContext db, IPasswordHasher<Us
         return db.Users.FirstOrDefaultAsync(user => user.Id == userId, cancellationToken);
     }
 
+    public async Task ActivateFreePremiumAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var changed = await db.Users.Where(user => user.Id == userId).ExecuteUpdateAsync(
+            setters => setters.SetProperty(user => user.FreePremiumActivatedAt, user => user.FreePremiumActivatedAt ?? now),
+            cancellationToken);
+        if (changed == 0) throw new InvalidOperationException("Account not found.");
+    }
+
     /// <summary>
     /// Atomically adjusts <see cref="UserAccount.StorageUsedBytes"/> and returns the
     /// updated value. Negative <paramref name="deltaBytes"/> decrements usage.

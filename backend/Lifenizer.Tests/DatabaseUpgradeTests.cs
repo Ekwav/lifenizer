@@ -27,6 +27,7 @@ public sealed class DatabaseUpgradeTests
                     db.Images.Add(new ImageRecord { Id = Guid.NewGuid(), UserId = userId, BlobPath = "existing-image", SizeBytes = 123 });
                 await db.SaveChangesAsync();
                 await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users DROP COLUMN PasswordHash");
+                await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users DROP COLUMN FreePremiumActivatedAt");
                 await db.Database.ExecuteSqlRawAsync("DROP TABLE PairingStates");
                 await db.Database.ExecuteSqlRawAsync("DROP TABLE PairingRequests");
                 await db.Database.ExecuteSqlRawAsync("DROP TABLE PairedDevices");
@@ -56,6 +57,7 @@ public sealed class DatabaseUpgradeTests
                     Assert.That(account.Id, Is.EqualTo(userId));
                     Assert.That(account.VaultId, Is.EqualTo(vaultId));
                     Assert.That(account.VaultSalt, Is.EqualTo("unchanged-salt"));
+                    Assert.That(account.FreePremiumActivatedAt, Is.Null);
                     Assert.That(account.StorageUsedBytes, Is.EqualTo(schema == "legacy" ? 0 : 123));
                 });
                 Assert.That((await db.SyncEnvelopes.SingleAsync()).CipherText, Is.EqualTo("original-ciphertext"));

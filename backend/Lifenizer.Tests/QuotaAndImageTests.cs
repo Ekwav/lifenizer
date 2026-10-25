@@ -47,7 +47,7 @@ public sealed class QuotaAndImageTests
     }
 
     [Test]
-    public async Task FreePremiumGrantsTenGbAndEnforcesItWithoutPaidCheckout()
+    public async Task ActivatedFreePremiumGrantsTenGbAndEnforcesItWithoutPaidCheckout()
     {
         await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
         {
@@ -59,6 +59,11 @@ public sealed class QuotaAndImageTests
         var auth = await LoginAsync(client, "free-premium@example.test");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AuthToken);
         var status = await client.GetFromJsonAsync<JsonElement>("/api/premium/status", JsonOptions);
+        Assert.That(status.GetProperty("plan").GetString(), Is.EqualTo("Free"));
+        Assert.That(status.GetProperty("limitBytes").GetInt64(), Is.EqualTo(StorageQuota.FreeLimitBytes));
+        var activation = await client.PostAsync("/api/premium/activate", null);
+        activation.EnsureSuccessStatusCode();
+        status = (await activation.Content.ReadFromJsonAsync<JsonElement>())!;
         Assert.That(status.GetProperty("plan").GetString(), Is.EqualTo("Premium"));
         Assert.That(status.GetProperty("limitBytes").GetInt64(), Is.EqualTo(StorageQuota.PremiumLimitBytes));
         Assert.That(status.GetProperty("freePremiumEnabled").GetBoolean(), Is.True);

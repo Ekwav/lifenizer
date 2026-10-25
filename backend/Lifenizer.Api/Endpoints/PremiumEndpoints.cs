@@ -17,17 +17,18 @@ public static class PremiumEndpoints
             CancellationToken cancellationToken) =>
         {
             var status = await premium.GetQuotaStatusAsync(currentUser.UserId, cancellationToken);
-            return Results.Ok(new
-            {
-                plan = status.Plan.ToString(),
-                usedBytes = status.UsedBytes,
-                limitBytes = status.LimitBytes,
-                expiresAt = status.ExpiresAt,
-                freePremiumEnabled = premium.FreePremiumEnabled,
-                usedPercent = status.LimitBytes > 0
-                    ? (double)status.UsedBytes / status.LimitBytes * 100.0
-                    : 0,
-            });
+            return QuotaResponse(premium, status);
+        });
+
+        group.MapPost("/activate", async (
+            ClaimsPrincipalUser currentUser,
+            PremiumService premium,
+            CancellationToken cancellationToken) =>
+        {
+            if (!premium.FreePremiumEnabled)
+                return Results.Conflict(new { error = "free_premium_unavailable" });
+            var status = await premium.ActivateFreePremiumAsync(currentUser.UserId, cancellationToken);
+            return QuotaResponse(premium, status);
         });
 
         // POST /api/premium/checkout/{plan}
@@ -54,4 +55,15 @@ public static class PremiumEndpoints
 
         return app;
     }
+
+    private static IResult QuotaResponse(PremiumService premium, PremiumService.QuotaStatus status) => Results.Ok(new
+    {
+        plan = status.PlanName,
+        usedBytes = status.UsedBytes,
+        limitBytes = status.LimitBytes,
+        expiresAt = status.ExpiresAt,
+        freePremiumEnabled = premium.FreePremiumEnabled,
+        freePremiumActivatedAt = status.FreePremiumActivatedAt,
+        usedPercent = status.LimitBytes > 0 ? (double)status.UsedBytes / status.LimitBytes * 100.0 : 0,
+    });
 }

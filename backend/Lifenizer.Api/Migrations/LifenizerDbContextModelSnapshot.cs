@@ -317,6 +317,9 @@ namespace Lifenizer.Api.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("FreePremiumActivatedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("LastSeenAt")
                         .HasColumnType("TEXT");
 

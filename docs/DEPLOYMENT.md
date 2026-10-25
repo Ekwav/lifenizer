@@ -239,7 +239,7 @@ runs as a **non-root user** (uid 1001) with no unnecessary capabilities.
 | `Auth__EnableFirebase` | Optional Google authentication, disabled by default | `false` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Credential file only used when Firebase is explicitly enabled | `/run/secrets/firebase.json` |
 | `Payments__BaseUrl` | Base URL of the Coflnet payments service | `https://payments.example.com` |
-| `Payments__FreePremiumEnabled` | Temporary free Premium: 10 GB minimum for every account, paid checkout paused; existing paid entitlements still resolve | `false` |
+| `Payments__FreePremiumEnabled` | Offer explicit free 10 GB Premium activation to signed-in accounts; disabled by default, paid checkout paused while enabled | `false` |
 | `Products__Premium` | Slug for the Premium product in the payments service | `lifenizer-premium` |
 | `Products__PremiumPlus` | Slug for the Premium+ product in the payments service | `lifenizer-premium-plus` |
 | `Artifacts__StorePath` | Persistent local object/legacy artifact directory | `/data/artifacts` |
@@ -274,12 +274,21 @@ runs as a **non-root user** (uid 1001) with no unnecessary capabilities.
 ## Subscription tiers
 
 For the temporary free Premium rollout, set `Payments__FreePremiumEnabled=true`.
-Every account immediately receives at least 10 GB through the same quota service
-used by uploads and sync. The app shows the offer and no payment is taken.
+The flag offers an upgrade; it does not automatically grant storage. Signed-in
+users open **Plans** or **Sync → Upgrade for more storage**, confirm the displayed
+account/server and choose **Activate free Premium**. The authenticated
+`POST /api/premium/activate` saves an idempotent activation timestamp on that
+existing account; its user ID, vault ID, vault salt and stored data stay unchanged.
+After activation, the same quota service used by uploads and sync grants 10 GB.
+The activation survives server restarts and is visible through
+`GET /api/premium/status` as `freePremiumActivatedAt`. No payment service or card
+is required for this self-hostable offer. With the flag disabled (the default),
+activation is unavailable and accounts retain normal configured payment tiers.
 Configured paid subscriptions (including Premium+ with 100 GB) retain their
-entitlements. Disable the flag to return to normal payment-based tiers; existing
-stored data stays accessible if usage exceeds the restored limit, and further
-uploads are blocked. The flag is also supported by the Compose service-config flow.
+entitlements. Disable the flag to return to normal payment-based tiers; activation
+timestamps remain stored and no account is automatically charged. Existing stored
+data stays accessible if usage exceeds the restored limit, and further uploads
+are blocked. The flag is also supported by the Compose service-config flow.
 
 | Plan | Price | Storage |
 |---|---|---|
