@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Download and connect the Lifenizer browser extension for Chrome, Edge, Chromium and Firefox.">
+  <title>Lifenizer · Browser extension</title>
+  <link rel="stylesheet" href="/styles.css?v=extension">
+  <script src="/landing.js?v=extension" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="logo" href="/" aria-label="Lifenizer home"><span class="logo-mark" aria-hidden="true">L</span> Lifenizer</a>
+    <nav class="nav" aria-label="Main navigation"><a href="/#downloads">Get the app</a><a href="/security.html">Security</a><a href="/privacy.html">Privacy</a></nav>
+  </header>
+  <main>
+    <section class="section article-intro">
+      <p class="eyebrow">LIFENIZER FOR YOUR BROWSER</p>
+      <h1>Browser extension</h1>
+      <p class="lede">Import browser history and new WhatsApp Web or Discord Web messages into the Lifenizer desktop app on this computer.</p>
+      <div class="actions">
+        <a class="button primary download" data-download="lifenizer-history-sync-chromium.zip" aria-disabled="true">Checking…</a>
+        <a class="button primary download" data-download="lifenizer-history-sync-firefox.zip" aria-disabled="true">Checking…</a>
+      </div>
+      <p class="download-status" id="download-status" role="status">Checking download availability…</p>
+      <a class="button" href="lifenizer://connect-extension" data-lifenizer-connect>Connect installed extension</a>
+      <p class="connection" id="connection-status" role="status">Already installed? Open and unlock Lifenizer, then connect. <a href="/#downloads">Need the desktop app?</a></p>
+      <noscript><p>Enable JavaScript and reload to check download availability and detect your extension.</p></noscript>
+    </section>
+    <section class="section extension-setup">
+      <h2>1. Install the extension</h2>
+      <div class="band">
+        <article class="card">
+          <h3>Chrome / Edge / Chromium</h3>
+          <ol>
+            <li>Download the Chrome / Edge ZIP above and extract it.</li>
+            <li>Open <code>chrome://extensions</code> in Chrome or Chromium, or <code>edge://extensions</code> in Edge.</li>
+            <li>Enable <strong>Developer mode</strong>, choose <strong>Load unpacked</strong> and select the extracted folder.</li>
+          </ol>
+        </article>
+        <article class="card">
+          <h3>Firefox</h3>
+          <ol>
+            <li>Download the Firefox ZIP above and extract it.</li>
+            <li>Open <code>about:debugging#/runtime/this-firefox</code>.</li>
+            <li>Choose <strong>Load Temporary Add-on</strong> and select <code>manifest.json</code> in the extracted folder.</li>
+          </ol>
+          <p>This temporary installation lasts until Firefox restarts. Load it again after restarting.</p>
+        </article>
+      </div>
+      <h2>2. Connect to Lifenizer</h2>
+      <ol>
+        <li>Open the desktop app and unlock the vault you want to use.</li>
+        <li>Choose <strong>Connect installed extension</strong> above, then <strong>Open Lifenizer and connect</strong> on the extension page.</li>
+        <li>Confirm <strong>Connect</strong> in the desktop app. If your browser asks to access local device apps and services, choose <strong>Allow</strong>.</li>
+      </ol>
+      <p>Prefer a QR code? In the desktop app, open <strong>Imports → Browser extension → Show QR code</strong>. In the extension popup choose <strong>Connect / Pair with QR</strong>, scan the app window or a QR image, then confirm. No port or token copying is needed.</p>
+      <p>Keep the app open and unlocked while importing. Choose your YouTube or TikTok account, or enable WhatsApp Web or Discord Web capture, in extension Settings.</p>
+    </section>
+  </main>
+  <footer class="footer"><a class="logo" href="/">Lifenizer</a><nav aria-label="More information"><a href="/imports.html">Imports</a><a href="/security.html">Security</a><a href="/privacy.html">Privacy</a></nav></footer>
+</body>
+</html>

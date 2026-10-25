@@ -396,3 +396,11 @@
                                                                                                                                                                                                     color:var(--brand)}
                                                                                                                                                                                                     .information-grid{
                                                                                                                                                                                                       grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+
+.extension-setup{max-width:1000px}
+.extension-setup .band{margin-bottom:36px}
+.extension-setup ol{padding-left:22px}
+.extension-setup li{margin-bottom:12px}
+.extension-setup p,.extension-setup li{font-size:14px;color:var(--muted)}
+.extension-setup code{overflow-wrap:anywhere}
+.article-intro .download-status{margin-top:12px}

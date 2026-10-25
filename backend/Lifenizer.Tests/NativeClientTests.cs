@@ -14,10 +14,11 @@ public sealed class NativeClientTests
     {
         await using var factory = new LifenizerApiFactory();
         using var client = factory.CreateClient();
-        foreach (var path in new[] { "/", "/index.html", "/security.html", "/privacy.html", "/imports.html", "/hosted.html", "/styles.css", "/landing.js" })
+        foreach (var path in new[] { "/", "/index.html", "/extension", "/extension.html", "/security.html", "/privacy.html", "/imports.html", "/hosted.html", "/styles.css", "/landing.js" })
         {
             using var response = await client.GetAsync(path);
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), path);
+            Assert.That(response.Headers.CacheControl?.NoCache, Is.True, path);
             Assert.That(response.Headers.GetValues("X-Content-Type-Options"), Contains.Item("nosniff"));
             var content = await response.Content.ReadAsStringAsync();
             Assert.That(content, Does.Not.Contain("unsplash.com"));
@@ -27,6 +28,12 @@ public sealed class NativeClientTests
                 Assert.That(content, Does.Contain("lifenizer://connect-extension"));
                 Assert.That(content, Does.Not.Contain("build/web"));
                 Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("text/html"));
+            }
+            if (path == "/extension")
+            {
+                Assert.That(content, Does.Contain("<h1>Browser extension</h1>"));
+                Assert.That(content, Does.Contain("data-lifenizer-connect"));
+                Assert.That(content, Does.Not.Contain("data-download=\"lifenizer.apk\""));
             }
         }
         foreach (var path in new[] { "/appsettings.json", "/Program.cs", "/landing/../appsettings.json", "/downloads/../appsettings.json", "/downloads/private.txt" })

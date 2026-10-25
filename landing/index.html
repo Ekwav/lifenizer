@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="A private place for your recordings, documents, conversations and browser history. Download Lifenizer for Android and Linux.">
   <title>Lifenizer · Keep the context</title>
-  <link rel="stylesheet" href="/styles.css">
-  <script src="/landing.js" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=extension">
+  <script src="/landing.js?v=extension" defer></script>
 </head>
 <body>
   <header class="site-header">
     <a class="logo" href="/" aria-label="Lifenizer home"><span class="logo-mark" aria-hidden="true">L</span> Lifenizer</a>
-    <nav class="nav" aria-label="Main navigation"><a href="#downloads">Downloads</a><a href="/security.html">Security</a><a href="/privacy.html">Privacy</a></nav>
+    <nav class="nav" aria-label="Main navigation"><a href="#downloads">Downloads</a><a href="/extension">Extension</a><a href="/security.html">Security</a></nav>
   </header>
   <main>
     <section class="hero">
@@ -41,7 +41,7 @@
       <div class="grid">
         <article class="card"><span class="platform" aria-hidden="true">↓</span><h3>Android</h3><p>Download the APK to your Android device, open it and allow installation from your browser when Android asks.</p><a class="button download" data-download="lifenizer.apk" aria-disabled="true">Checking…</a><span class="format">APK · direct installation</span></article>
         <article class="card"><span class="platform" aria-hidden="true">›_</span><h3>Linux</h3><p>Extract the archive, then run <code>./lifenizer</code> from the extracted folder on a Linux desktop.</p><a class="button download" data-download="lifenizer-linux-x64.tar.gz" aria-disabled="true">Checking…</a><span class="format">tar.gz · x64</span><details><summary>Enable app links</summary><p>From the extracted folder, run <code>bash integrations/kde/install.sh .</code> to install for your user and register <code>lifenizer://</code> links. Then open Lifenizer and unlock your vault.</p></details></article>
-        <article class="card extension-card" id="extensions"><span class="platform" aria-hidden="true">↗</span><h3>Browser companion</h3><p>Bring browsing context into Lifenizer. Install the extension, then open its popup to connect the app.</p><div class="extension-links"><a class="button download" data-download="lifenizer-history-sync-chromium.zip" aria-disabled="true">Checking…</a><a class="button download" data-download="lifenizer-history-sync-firefox.zip" aria-disabled="true">Checking…</a></div><details><summary>Extension installation</summary><p><strong>Chrome / Chromium:</strong> extract the ZIP, open <code>chrome://extensions</code>, enable Developer mode, choose Load unpacked and select the extracted folder.</p><p><strong>Firefox:</strong> extract the ZIP, open <code>about:debugging#/runtime/this-firefox</code>, choose Load Temporary Add-on and select <code>manifest.json</code>. This temporary installation lasts until Firefox restarts.</p></details></article>
+        <article class="card extension-card" id="extensions"><span class="platform" aria-hidden="true">↗</span><h3>Browser extension</h3><p>Bring browsing context into Lifenizer. Install the extension, then open its popup to connect the app.</p><div class="extension-links"><a class="button download" data-download="lifenizer-history-sync-chromium.zip" aria-disabled="true">Checking…</a><a class="button download" data-download="lifenizer-history-sync-firefox.zip" aria-disabled="true">Checking…</a></div><p class="download-note"><a href="/extension">Install and connect the extension →</a></p></article>
       </div>
       <noscript><p>JavaScript is needed to check which packages are available. Enable it and reload this page to download.</p></noscript>
       <p class="download-note">Early software, still evolving. Keep a separate copy of important originals. <a href="/hosted.html">About hosted services</a></p>

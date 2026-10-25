@@ -1,7 +1,10 @@
+// Keep links in already-installed apps pointed at the focused setup page.
+if (location.hash === '#extensions' && location.pathname !== '/extension') location.replace('/extension');
+
 const labels = {
   'lifenizer.apk': 'Download Android APK',
   'lifenizer-linux-x64.tar.gz': 'Download Linux x64',
-  'lifenizer-history-sync-chromium.zip': 'Chromium ZIP',
+  'lifenizer-history-sync-chromium.zip': 'Chrome / Edge ZIP',
   'lifenizer-history-sync-firefox.zip': 'Firefox ZIP',
 };
 async function refreshDownloads() {
@@ -18,7 +21,7 @@ async function refreshDownloads() {
       if (available) link.href = `/downloads/${name}`;
       else link.removeAttribute('href');
     }
-    status.textContent = files.some(file => file.available === true)
+    status.textContent = document.querySelector('[data-download][aria-disabled="false"]')
       ? 'Direct downloads · no app store account needed'
       : 'Downloads are not available yet. Please try again later.';
   } catch {
@@ -45,7 +48,7 @@ window.addEventListener('lifenizer-extension-state', event => {
 });
 window.addEventListener('focus', () => window.dispatchEvent(new CustomEvent('lifenizer-extension-check')));
 document.querySelector('[data-lifenizer-connect]').addEventListener('click', () => {
-  document.querySelector('#connection-status').textContent = 'Continue in Lifenizer or the browser companion. Need the app? Downloads are below.';
+  document.querySelector('#connection-status').textContent = 'Continue in Lifenizer or the browser companion. If the app is missing, choose Get the app.';
 });
 window.dispatchEvent(new CustomEvent('lifenizer-extension-check'));
 refreshDownloads();
