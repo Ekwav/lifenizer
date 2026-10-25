@@ -64,7 +64,7 @@
       try {
         res = await fetchImpl(`${base}/v1/watch-history`, { method: 'POST', headers, body: JSON.stringify(P.buildPayload(part)) });
       } catch (e) {
-        return { sent, imported, error: 'unreachable' };
+        return { sent, imported, error: e?.name === 'TimeoutError' ? 'timeout' : 'unreachable' };
       }
       if (res.status === 401) return { sent, imported, error: 'bad-token' };
       if (res.status === 503) {
@@ -112,6 +112,7 @@
     layout: 'Page layout not recognized (the site may have changed)',
     'tab-timeout': 'The page did not finish loading',
     unreachable: 'Lifenizer app not reachable (is it running? check the port)',
+    timeout: 'Lifenizer did not respond in time. Data stays queued; check the app and retry delivery.',
     'bad-token': 'Lifenizer rejected the token (re-pair on the options page)',
     locked: 'Vault is locked, unlock Lifenizer and sync again',
     'app-busy': 'Lifenizer is busy or the import failed, the entries are kept and sent on the next sync',

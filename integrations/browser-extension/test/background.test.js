@@ -13,7 +13,7 @@ function background(options = {}) {
   const event = { addListener() {} };
   const runtime = { id: 'extension-id', getURL: path => `chrome-extension://extension-id/${path}`, onMessage: { addListener: fn => { handler = fn; } }, onInstalled: event, onStartup: event };
   const ext = { runtime, tabs: { create: async opts => { tabs.push(opts); throw Error('unexpected collection'); } }, storage: { local: { get: async keys => { const result = typeof keys === 'string' ? { [keys]: store[keys] } : Object.fromEntries(keys.map(k => [k, store[k]])); return result; }, set: async values => { Object.assign(store, values); if (values.status?.running === false) finish(); } }, onChanged: event }, alarms: { onAlarm: event, clear: async () => {}, create() {} } };
-  const context = { chrome: ext, LF: { sync: S, messages: M, payload: P }, URL, Date, Promise, Set, AbortSignal, setTimeout, clearTimeout, fetch: async (url, opts) => { requests.push([url, opts]); if (options.fetch) return options.fetch(url, opts); throw Error('app offline'); } };
+  const context = { chrome: ext, LF: { sync: S, messages: M, payload: P }, URL, Date, Promise, Set, AbortSignal: options.AbortSignal || AbortSignal, setTimeout, clearTimeout, fetch: async (url, opts) => { requests.push([url, opts]); if (options.fetch) return options.fetch(url, opts); throw Error('app offline'); } };
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/background.js'), 'utf8'), context);
   return { store, requests, tabs, finished, send: (message, sender) => new Promise(resolve => { if (!handler(message, sender, resolve)) resolve(undefined); }) };
 }
@@ -96,4 +96,25 @@ test('deletion is blocked during history sync and content pages cannot request i
   await bg.send({ type: 'lifenizer-sync', platforms: [] }, popup);
   assert.equal((await bg.send({ type: 'lifenizer-clear' }, popup)).error, 'sync-running');
   await bg.finished;
+});
+
+test('stalled history and message requests use deadlines, preserve the queues and release retry', async () => {
+  const deadlines = [];
+  const bg = background({ settings: { youtubeAccount: '@mine' },
+    AbortSignal: { timeout: ms => {
+      deadlines.push(ms);
+      const controller = new AbortController();
+      setImmediate(() => controller.abort(new DOMException('Test deadline elapsed', 'TimeoutError')));
+      return controller.signal;
+    } },
+    fetch: (_, { signal }) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })),
+  });
+  bg.store.visits = [{ platform: 'youtube', id: 'aaaaaaaaaaa', url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa', time: '2026-10-23T12:00:00Z', account: { handle: '@mine' }, accountSelection: '@mine', sent: false }];
+  bg.store.messages = [{ ...message, sent: false }];
+  await bg.send({ type: 'lifenizer-retry' }, popup);
+  await bg.finished;
+  assert.deepEqual(deadlines, [10000, 10000]);
+  assert.equal(bg.store.visits[0].sent, false); assert.equal(bg.store.messages[0].sent, false);
+  assert.equal(bg.store.status.delivery.error, 'timeout'); assert.equal(bg.store.status.messages.error, 'timeout');
+  assert.equal((await bg.send({ type: 'lifenizer-state' }, popup)).running, false);
 });

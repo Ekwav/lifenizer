@@ -30,7 +30,7 @@
           method: 'POST', headers: { Authorization: `Bearer ${settings.token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ source: 'lifenizer-extension', version: 1, messages: part.map(({ sent, ...m }) => m) }),
         });
-      } catch (_) { return { sent, error: 'unreachable' }; }
+      } catch (error) { return { sent, error: error?.name === 'TimeoutError' ? 'timeout' : 'unreachable' }; }
       try { body = await response.json(); } catch (_) { /* Preserve unacknowledged entries. */ }
       if (response.status === 401) return { sent, error: 'bad-token' };
       if (response.status === 503) return { sent, error: body?.error === 'locked' ? 'locked' : 'app-busy' };
