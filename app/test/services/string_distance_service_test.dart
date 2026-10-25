@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:app/services/string_distance_service.dart';
 
@@ -6,6 +8,34 @@ void main() {
     expect(StringDistance.levenshtein('hello😀', 'hello', 1), 1);
     expect(StringDistance.levenshtein('😀', 'a', 1), 1);
   });
+
+  test(
+    'bounded distance matches a full Unicode oracle around every threshold',
+    () {
+      const alphabet = ['a', 'é', '😀', '𐐀'];
+      final words = [''];
+      var level = [''];
+      for (var depth = 0; depth < 3; depth++) {
+        level = [
+          for (final prefix in level)
+            for (final letter in alphabet) '$prefix$letter',
+        ];
+        words.addAll(level);
+      }
+      for (final left in words) {
+        for (final right in words) {
+          final exact = _fullDistance(left, right);
+          for (var limit = 0; limit <= 4; limit++) {
+            expect(
+              StringDistance.levenshtein(left, right, limit),
+              math.min(exact, limit + 1),
+              reason: '$left → $right, limit $limit',
+            );
+          }
+        }
+      }
+    },
+  );
 
   group('StringDistance.levenshtein', () {
     group('exact matches', () {
@@ -241,4 +271,22 @@ void main() {
       });
     });
   });
+}
+
+int _fullDistance(String left, String right) {
+  final rightRunes = right.runes.toList();
+  var row = List.generate(rightRunes.length + 1, (index) => index);
+  for (final rune in left.runes) {
+    final next = [row.first + 1];
+    for (var j = 0; j < rightRunes.length; j++) {
+      next.add(
+        math.min(
+          math.min(row[j + 1] + 1, next[j] + 1),
+          row[j] + (rune == rightRunes[j] ? 0 : 1),
+        ),
+      );
+    }
+    row = next;
+  }
+  return row.last;
 }

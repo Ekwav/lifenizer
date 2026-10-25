@@ -29,6 +29,9 @@ class StringDistance {
       return 1;
     }
 
+    // One Unicode-codepoint edit changes UTF-16 length by at most two units.
+    if ((left.length - right.length).abs() > 2 * limit) return limit + 1;
+
     final leftUnits = left.runes.toList(growable: false);
     final rightUnits = right.runes.toList(growable: false);
     final leftLength = leftUnits.length;
