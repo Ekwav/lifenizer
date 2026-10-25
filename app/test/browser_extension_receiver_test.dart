@@ -62,6 +62,7 @@ void main() {
   Future<void> create({
     bool realMessages = false,
     ViewingBatchImporter? importer,
+    DateTime Function()? now,
   }) async {
     state = _Vault()
       ..session = AuthSession(
@@ -86,6 +87,7 @@ void main() {
       store: store,
       supportedOverride: true,
       defaultPort: 0,
+      now: now,
       importer:
           importer ??
           (batch) async {
@@ -173,6 +175,226 @@ void main() {
   };
 
   const yt = 'https://www.youtube.com/watch?v=$_id';
+
+  String pairingCode(String link) =>
+      Uri.splitQueryString(Uri.parse(link).fragment)['code']!;
+
+  Future<(int, Map<String, dynamic>?, HttpHeaders)> pair(String code) => call(
+    'POST',
+    '/v1/pair',
+    auth: false,
+    headers: {'origin': _ext},
+    body: {'code': code},
+  );
+
+  group('extension pairing', () {
+    test(
+      'public discovery and landing page never reveal credentials',
+      () async {
+        await create();
+        final link = await service.createPairingLink();
+        final uri = Uri.parse(link);
+        final code = pairingCode(link);
+        expect(uri.scheme, 'http');
+        expect(uri.host, '127.0.0.1');
+        expect(uri.port, service.port);
+        expect(uri.path, '/v1/pair');
+        expect(uri.hasQuery, isFalse);
+        expect(base64Url.decode(base64Url.normalize(code)), hasLength(32));
+        expect(link, isNot(contains(token)));
+        final discovery = await call('GET', '/v1/discovery', auth: false);
+        expect(discovery.$2, {
+          'app': 'lifenizer',
+          'version': 1,
+          'enabled': true,
+          'unlocked': true,
+        });
+        expect(discovery.$3.value('cache-control'), 'no-store');
+        final request = await client.getUrl(uri.replace(fragment: ''));
+        final response = await request.close();
+        final html = await utf8.decodeStream(response);
+        expect(response.statusCode, 200);
+        expect(response.headers.contentType?.mimeType, 'text/html');
+        expect(response.headers.value('cache-control'), 'no-store');
+        expect(html, allOf(isNot(contains(token)), isNot(contains(code))));
+        expect(service.pairingLink, link);
+      },
+    );
+
+    test(
+      'a code exchanges once without bearer and returns uncached credentials',
+      () async {
+        await create();
+        final code = pairingCode(await service.createPairingLink());
+        final result = await pair(code);
+        expect(result.$1, 200);
+        expect(result.$2, {
+          'app': 'lifenizer',
+          'version': 1,
+          'port': service.port,
+          'token': token,
+        });
+        expect(result.$3.value('cache-control'), 'no-store');
+        expect(result.$3.value('access-control-allow-origin'), _ext);
+        expect(service.pairingLink, isNull);
+        expect((await pair(code)).$1, 401);
+        expect(
+          (await call(
+            'GET',
+            '/v1/ping',
+            bearer: result.$2!['token'] as String,
+          )).$1,
+          200,
+        );
+      },
+    );
+
+    test('rejected attempts preserve the valid pairing code', () async {
+      await create();
+      final link = await service.createPairingLink();
+      final code = pairingCode(link);
+      expect((await pair('wrong-code')).$1, 401);
+      for (final origin in [
+        null,
+        'https://evil.test',
+        'null',
+        'http://localhost',
+      ]) {
+        final result = await call(
+          'POST',
+          '/v1/pair',
+          auth: false,
+          headers: {'origin': ?origin},
+          body: {'code': code},
+        );
+        expect(result.$1, 403, reason: 'origin: $origin');
+        expect(service.pairingLink, link);
+      }
+      final foreign = await call(
+        'POST',
+        '/v1/pair',
+        auth: false,
+        headers: {'origin': _ext},
+        host: 'evil.test:${service.port}',
+        body: {'code': code},
+      );
+      expect(foreign.$1, 403);
+      expect((await pair(code)).$1, 200);
+    });
+
+    test(
+      'cold pairing restores the custom port before checking the link',
+      () async {
+        await create();
+        final customPort = service.port;
+        await service.setEnabled(false);
+        await service.setPort(customPort);
+        final restored = BrowserExtensionReceiverService(
+          state,
+          store: store,
+          supportedOverride: true,
+          defaultPort: 0,
+        );
+        addTearDown(restored.dispose);
+        final link = await restored.createPairingLink(expectedPort: customPort);
+        expect(Uri.parse(link).port, customPort);
+        expect(restored.enabled, isTrue);
+        expect(restored.listening, isTrue);
+      },
+    );
+
+    test('expiry and replacement make previous codes unusable', () async {
+      var now = DateTime.utc(2026, 10, 25);
+      await create(now: () => now);
+      final first = pairingCode(await service.createPairingLink());
+      now = now.add(const Duration(minutes: 2));
+      expect(service.pairingLink, isNull);
+      expect((await pair(first)).$1, 401);
+      final second = pairingCode(await service.createPairingLink());
+      final third = pairingCode(await service.createPairingLink());
+      expect((await pair(second)).$1, 401);
+      expect((await pair(third)).$1, 200);
+    });
+
+    test('concurrent exchanges release the credential at most once', () async {
+      await create();
+      final code = pairingCode(await service.createPairingLink());
+      final results = await Future.wait([pair(code), pair(code)]);
+      expect(results.map((result) => result.$1), unorderedEquals([200, 401]));
+      expect(
+        results.where((result) => result.$2?.containsKey('token') ?? false),
+        hasLength(1),
+      );
+    });
+
+    test(
+      'a slow exchange cannot consume the next vault pairing code',
+      () async {
+        await create();
+        final code = pairingCode(await service.createPairingLink());
+        final body = jsonEncode({'code': code});
+        final request = await client.postUrl(
+          Uri.parse('http://127.0.0.1:${service.port}/v1/pair'),
+        );
+        request.headers
+          ..contentType = ContentType.json
+          ..set('origin', _ext);
+        request.contentLength = utf8.encode(body).length;
+        request.write(body.substring(0, body.length - 1));
+        await request.flush();
+        // Allow the receiver to capture the first vault before completing JSON.
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        final next = AuthSession(
+          authToken: 'other',
+          userId: 'other-user',
+          vaultId: 'other-vault',
+          vaultSalt: 'other-salt',
+        );
+        final identity = jsonEncode([
+          state.apiBaseUrl,
+          state.rememberedEmail,
+          next.userId,
+          next.vaultId,
+        ]);
+        store.saved['$identity/browser-extension'] = {
+          'enabled': true,
+          'token': 'next-vault-token',
+          'port': service.port,
+        };
+        state.session = next;
+        state.changed();
+        await service.createPairingLink(code: code);
+        request.write(body.substring(body.length - 1));
+        final response = await request.close();
+        final result = jsonDecode(await utf8.decodeStream(response));
+        expect(response.statusCode, 503);
+        expect(result, {'error': 'vault-changed'});
+        expect(service.pairingLink, isNotNull);
+        expect((await pair(code)).$1, 200);
+      },
+    );
+
+    for (final change in ['lock', 'disable', 'token']) {
+      test('$change invalidates pending pairing permanently', () async {
+        await create();
+        final code = pairingCode(await service.createPairingLink());
+        switch (change) {
+          case 'lock':
+            state.unlocked = false;
+            state.changed();
+            state.unlocked = true;
+            state.changed();
+          case 'disable':
+            await service.setEnabled(false);
+            await service.setEnabled(true);
+          case 'token':
+            await service.regenerateToken();
+        }
+        expect(service.pairingLink, isNull);
+        expect((await pair(code)).$1, 401);
+      });
+    }
+  });
 
   group('security', () {
     test('disabled by default and token is 32 random bytes', () async {

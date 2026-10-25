@@ -32,6 +32,52 @@ void main() {
     );
   });
 
+  test('extension connection links accept only local pairing parameters', () {
+    final code = List.filled(43, 'a').join();
+    for (final link in [
+      'lifenizer://connect-extension',
+      'lifenizer://connect-extension?code=$code&port=1',
+      'lifenizer://connect-extension?port=65535&code=$code',
+    ]) {
+      final action = QuickAction.fromUri(Uri.parse(link));
+      expect(action?.action, 'connect-extension', reason: link);
+      expect(action?.connectionUri, link);
+    }
+    for (final link in [
+      'https://evil.test/?action=connect-extension',
+      'http://connect-extension?code=$code&port=1',
+      'lifenizer://user@connect-extension?code=$code&port=1',
+      'lifenizer://connect-extension:8080?code=$code&port=1',
+      'lifenizer://connect-extension/?code=$code&port=1',
+      'lifenizer://connect-extension#code=$code',
+      'lifenizer://connect-extension?code=$code',
+      'lifenizer://connect-extension?port=1',
+      'lifenizer://connect-extension?code=short&port=1',
+      'lifenizer://connect-extension?code=${code}x&port=1',
+      'lifenizer://connect-extension?code=$code&port=0',
+      'lifenizer://connect-extension?code=$code&port=65536',
+      'lifenizer://connect-extension?code=$code&port=-1',
+      'lifenizer://connect-extension?code=$code&port=abc',
+      'lifenizer://connect-extension?code=$code&port=1&port=2',
+      'lifenizer://connect-extension?code=$code&code=$code&port=1',
+      'lifenizer://connect-extension?code=$code&port=1&token=secret',
+    ]) {
+      expect(QuickAction.fromUri(Uri.parse(link)), isNull, reason: link);
+    }
+  });
+
+  test('extension pairing stays pending while the vault is locked', () {
+    final service = QuickActionService();
+    addTearDown(service.dispose);
+    final link =
+        'lifenizer://connect-extension?code=${List.filled(43, 'a').join()}&port=5076';
+    final action = QuickAction.fromUri(Uri.parse(link))!;
+    service.request(action);
+    expect(service.pending?.connectionUri, link);
+    expect(service.consume(), same(action));
+    expect(service.consume(), isNull);
+  });
+
   test('links decode query and retain only known navigation actions', () {
     final action = QuickAction.fromUri(
       Uri.parse('lifenizer://search?q=Alice%20caf%C3%A9&conversation=a'),
