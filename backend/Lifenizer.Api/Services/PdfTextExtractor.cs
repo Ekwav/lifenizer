@@ -13,12 +13,14 @@ public static partial class PdfTextExtractor
 
     /// <param name="allowEmpty">Return an empty string instead of throwing when no text was found (photos without text).</param>
     /// <param name="validateSize">Skip the built-in PNG/JPEG dimension check when the caller validated the image itself (WebP).</param>
-    public static string Extract(byte[] bytes, bool image = false, bool allowEmpty = false, bool validateSize = true)
+    public static string Extract(byte[] bytes, bool image = false, bool allowEmpty = false, bool validateSize = true, TimeSpan? timeout = null)
     {
         if (bytes.Length is 0 or > MaxBytes) throw new InvalidOperationException("Document must be between 1 byte and 25 MiB.");
         if (image && validateSize) ValidateImageSize(bytes);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-        try { return ExtractAsync(bytes, image, allowEmpty, timeout.Token).GetAwaiter().GetResult(); }
+        var budget = timeout is { } requested && requested < TimeSpan.FromMinutes(2) ? requested : TimeSpan.FromMinutes(2);
+        if (budget <= TimeSpan.Zero) throw new InvalidOperationException("Document extraction time limit reached.");
+        using var cancellation = new CancellationTokenSource(budget);
+        try { return ExtractAsync(bytes, image, allowEmpty, cancellation.Token).GetAwaiter().GetResult(); }
         catch (OperationCanceledException) { throw new InvalidOperationException("Document extraction exceeded the two minute limit. Split the document and retry."); }
     }
 
@@ -42,9 +44,7 @@ public static partial class PdfTextExtractor
                 var match = PageCount().Match(info);
                 if (!match.Success || !int.TryParse(match.Groups[1].Value, out var pages) || pages is < 1 or > 100)
                     throw new InvalidOperationException("PDF must contain between 1 and 100 pages; split larger documents before importing.");
-                var output = Path.Combine(directory, "text.txt");
-                await RunAsync("pdftotext", ["-layout", "-enc", "UTF-8", input, output], cancellationToken);
-                var extracted = (await ReadTextAsync(output, cancellationToken)).Split('\f');
+                var extracted = (await RunAsync("pdftotext", ["-layout", "-enc", "UTF-8", input, "-"], cancellationToken)).Split('\f');
                 for (var page = 1; page <= pages; page++)
                 {
                     var text = page <= extracted.Length ? extracted[page - 1].Trim() : "";
@@ -126,16 +126,33 @@ public static partial class PdfTextExtractor
         process.StartInfo.Environment["OMP_THREAD_LIMIT"] = "1";
         try { process.Start(); }
         catch (System.ComponentModel.Win32Exception) { throw new InvalidOperationException("PDF/OCR tools are unavailable. Install poppler-utils, tesseract and German OCR language data on the API server."); }
-        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var stdout = ReadOutputAsync(process.StandardOutput);
+        var stderr = ReadOutputAsync(process.StandardError);
         try
         {
-            await process.WaitForExitAsync(cancellationToken);
-            await stderr;
+            await Task.WhenAll(stdout, stderr, process.WaitForExitAsync(bounded.Token));
             if (process.ExitCode != 0) throw new InvalidOperationException($"Document extraction failed in {executable}; the document may be invalid, encrypted or unreadable.");
             return await stdout;
         }
         finally { if (!process.HasExited) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); } }
+
+        async Task<string> ReadOutputAsync(StreamReader reader)
+        {
+            var output = new System.Text.StringBuilder();
+            var buffer = new char[8192];
+            try
+            {
+                int count;
+                while ((count = await reader.ReadAsync(buffer.AsMemory(), bounded.Token)) > 0)
+                {
+                    if (output.Length + count > MaxTextBytes) throw new InvalidOperationException("Document tool output exceeds 4 MiB.");
+                    output.Append(buffer, 0, count);
+                }
+                return output.ToString();
+            }
+            catch { bounded.Cancel(); throw; }
+        }
     }
 
     [GeneratedRegex(@"^Pages:\s+(\d+)", RegexOptions.Multiline)]

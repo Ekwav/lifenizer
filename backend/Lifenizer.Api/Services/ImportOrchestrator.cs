@@ -14,6 +14,7 @@ public sealed class ImportOrchestrator(
         {
             "email" => imapImportClient.ImportAsync(request, cancellationToken),
             "paperless" => providerHttpImportClient.ImportPaperlessAsync(request, cancellationToken),
+            "paperless-export" => Task.FromResult(parserRegistry.Parse(source, request)),
             "youtube-transcript" => providerHttpImportClient.ImportYouTubeTranscriptAsync(request, cancellationToken),
             "discord" when ImportTextParsers.Metadata(request, "channelId") is not null || ImportTextParsers.Metadata(request, "baseUrl") is not null => providerHttpImportClient.ImportDiscordApiAsync(request, cancellationToken),
             "audio" when string.IsNullOrWhiteSpace(request.Text) => providerHttpImportClient.ImportAudioTranscriptionAsync(request, cancellationToken),

@@ -164,6 +164,8 @@ public static partial class CommonParsing
             return fallback;
         }
 
+        if (request.PayloadBase64.Length > (BoundedImportArchive.MaxBytes + 2L) / 3 * 4)
+            throw new InvalidOperationException("Import payload exceeds 25 MiB. Split the export and retry.");
         byte[] bytes;
         try
         {
@@ -179,7 +181,8 @@ public static partial class CommonParsing
         var isZip = mimeType == "application/zip" || fileName?.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) == true;
         if (isZip)
         {
-            return ExtractTextFromZip(bytes) ?? fallback;
+            try { return ExtractTextFromZip(bytes) ?? fallback; }
+            catch (InvalidDataException) { throw new InvalidOperationException("ZIP import is invalid or exceeds safe extraction limits. Use an unencrypted ZIP with smaller files."); }
         }
 
         var decoded = Encoding.UTF8.GetString(bytes).Trim();
@@ -315,10 +318,9 @@ public static partial class CommonParsing
 
     private static string? ExtractTextFromZip(byte[] bytes)
     {
-        using var stream = new MemoryStream(bytes, writable: false);
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var archive = BoundedImportArchive.Open(bytes);
         var preferredEntries = archive.Entries
-            .Where(entry => entry.Length > 0)
+            .Where(entry => entry.Length > 0 && RankEntry(entry.FullName) < 10)
             .OrderBy(entry => RankEntry(entry.FullName))
             .ThenBy(entry => entry.FullName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -330,7 +332,7 @@ public static partial class CommonParsing
 
         foreach (var entry in preferredEntries)
         {
-            using var entryStream = entry.Open();
+            using var entryStream = new MemoryStream(BoundedImportArchive.Read(entry));
             using var reader = new StreamReader(entryStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: false);
             var content = reader.ReadToEnd().Trim();
             if (content.Length == 0)

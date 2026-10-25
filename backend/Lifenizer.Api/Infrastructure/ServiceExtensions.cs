@@ -132,6 +132,7 @@ public static class ServiceExtensions
         // Simple text parsers
         registry.Register(new ManualTextParser());
         registry.Register(new ScannedPdfParser());
+        registry.Register(new PaperlessExportParser());
         registry.Register(new RecordingTranscriptParser());
 
         // Chat line parsers
