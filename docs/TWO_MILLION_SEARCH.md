@@ -68,3 +68,18 @@ Commit `ed1681a` reuses bounded numeric-page scratch buffers within each query, 
 | Broad | 407.400 | 545.356 |
 
 Broad warm p95 fell from 691.590 to 545.356 ms in this comparison, while ordinary/name/prefix tails regressed. These single before/after runs use a shared machine with uncontrolled OS page cache, so they do not isolate the change from other timing variation. The strict 500 ms gate remains unmet, and the run does not establish a universal 583 ms limit. Cgroup peak was 1,973,964,800 bytes, with zero `memory.max` events, OOMs and swap; the run took 494.737 seconds. The earlier 583 ms pilot acceptance remains a separate measurement.
+
+
+## Reader-only numeric preparation
+
+Commit `6d7ecff` keeps writer migrations and metadata preparation, but avoids hydrating the writer’s numeric cache immediately before discarding it for parallel readers. Serial preparation still hydrates normally. All 74 focused checks, clean analysis and the compiled smoke passed. The [full 2M comparison](benchmarks/two-million-writer-prepare-query-2026-10-30.json) preserved all 120 ordered top-100 lists and all 32 authored relevance results against the scratch-only run; the catalog and restored bodies were preserved.
+
+| Query family | Preparation p95 (ms) | Prepared-first p95 (ms) | Warm p95 (ms) |
+| --- | ---: | ---: | ---: |
+| Ordinary | 645.878 | 332.076 | 545.194 |
+| Names | 594.682 | 214.833 | 165.470 |
+| Prefix | 619.948 | 190.858 | 142.441 |
+| Fuzzy | 579.791 | 202.757 | 449.264 |
+| Broad | 433.386 | 680.921 | 624.723 |
+
+Preparation p95 roughly halved across all families, and total run time fell from 494.737 to 316.773 seconds. Cgroup peak fell from 1,973,964,800 to 1,908,953,088 bytes, with no limit events, OOMs or swap. Broad query tails were worse than the scratch-only run, and the strict 500 ms query gate still failed. The before/after runs do not isolate shared-machine timing variation; preparation improvements must not be presented as proof of the query-latency target.
