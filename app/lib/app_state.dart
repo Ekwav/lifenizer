@@ -646,7 +646,6 @@ class LifenizerAppState extends ChangeNotifier {
         if (word.isNotEmpty)
           {word, ...ConversationSearchIndex.tokenize(word)}.toList(),
     ];
-    final sourceFilter = criteria.normalizedSource;
     final participantFilter = criteria.normalizedParticipantId;
     final tagFilter = criteria.normalizedTag;
     final fromFilter = criteria.normalizedFrom;
@@ -657,7 +656,7 @@ class LifenizerAppState extends ChangeNotifier {
     final matches = <Conversation>[];
     for (final conversation in conversations) {
       if (!criteria.matchesLocation(conversation.location)) continue;
-      if (sourceFilter != null && conversation.source != sourceFilter) {
+      if (!criteria.matchesSource(conversation.source)) {
         continue;
       }
       if (participantFilter != null &&

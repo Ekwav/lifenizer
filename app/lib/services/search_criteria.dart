@@ -1,5 +1,6 @@
 import '../models.dart';
 import 'conversation_search_index.dart';
+import 'search_source_groups.dart';
 
 /// Encapsulates search parameters and provides computed properties.
 ///
@@ -81,6 +82,9 @@ class SearchCriteria {
 
   /// Returns the normalized source filter, or null if empty/invalid.
   String? get normalizedSource => _cleanFilter(source);
+
+  bool matchesSource(String actualSource) =>
+      matchesSourceFilter(normalizedSource, actualSource);
 
   /// Returns the normalized participant ID filter, or null if empty/invalid.
   String? get normalizedParticipantId => _cleanFilter(participantId);

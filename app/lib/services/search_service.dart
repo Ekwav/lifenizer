@@ -73,7 +73,6 @@ class SearchService {
     final scoringStopwatch = Stopwatch()..start();
     final scored = <_ScoredItem>[];
 
-    final sourceFilter = criteria.normalizedSource;
     final participantFilter = criteria.normalizedParticipantId;
     final tagFilter = criteria.normalizedTag;
     final fromFilter = criteria.normalizedFrom;
@@ -89,7 +88,7 @@ class SearchService {
       if (!criteria.matchesLocation(conversation.location)) continue;
 
       // Apply filters
-      if (sourceFilter != null && conversation.source != sourceFilter) {
+      if (!criteria.matchesSource(conversation.source)) {
         continue;
       }
       if (participantFilter != null &&
