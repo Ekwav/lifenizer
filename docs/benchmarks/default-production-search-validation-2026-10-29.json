@@ -94,5 +94,14 @@
       "logSha256": "f685950fc295fb09b099cf3e5ec02ccc3e0c513b6a0d208762c885c086c5ecb5"
     },
     "buildScope": "Linux/web builds above preceded the two app-state recovery fixes; follow-up analysis and tests cover the fixes. The running performance gate uses its separate frozen source archive."
+  },
+  "fullDefaultProductionGate": {
+    "proof": "two-million-default-production-query-2026-10-29.json",
+    "invocationId": "ca232d7312e74288b0c9103578150370",
+    "correctnessPassed": true,
+    "semanticJudgmentsPassed": 32,
+    "latency500msPassed": false,
+    "broadWarmP95Ms": 691.59,
+    "accepted583msPilotIsSeparateMeasurement": true
   }
 }

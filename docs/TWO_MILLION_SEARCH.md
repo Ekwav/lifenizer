@@ -1,4 +1,4 @@
-The actual 2,000,000-conversation search gate completed on 2026-10-29, but the original 500 ms p95 target remains unmet. All 120 query cases and 32 authored relevance judgments completed. On 2026-10-29, the user accepted the later eight-worker pilot’s approximately 583 ms warm p95 for now, so the strict 500 ms target no longer blocks delivery. That acceptance applies to the measured pilot; the full default-production gate remains separate verification.
+The actual 2,000,000-conversation search gate completed on 2026-10-29, but the original 500 ms p95 target remains unmet. All 120 query cases and 32 authored relevance judgments completed. On 2026-10-29, the user accepted the later eight-worker pilot’s approximately 583 ms warm p95 for now, so the strict 500 ms target no longer blocks delivery. That acceptance applies to the measured pilot; the full default-production gate below reports its own measurements.
 
 Each conversation has 200 words and 10 segments. The gate used frozen executable `1dce43b6…`, five query families with 24 cases each, and a fresh prepared worker per case. Preparation is reported separately in the [complete raw proof](benchmarks/two-million-dense-query-2026-10-29.json). The OS page cache was uncontrolled.
 
@@ -33,6 +33,23 @@ The [packed-catalog/native-batch follow-up](benchmarks/two-million-packed-native
 
 Each row covers 40 warm samples after 20 warmup queries, with the same worker pool reused. CPU values exclude catalog hashing, preparation, and other work outside query timers. Stages ran sequentially with a fixed query clock of 2026-10-28; the OS page cache was uncontrolled. Eight workers had the best p95 in this pilot. Twelve reduced aggregate warm wall time only 1.3% further, while using 23.8% more query CPU. This 20-criterion prototype pilot does not replace the full 120-case/32-judgment gate.
 
-Production now automatically selects up to eight readers from 250,000 conversations, capped by the available CPU count. A later query-only native inflater preserves the existing managed ingestion and storage format. These changes still require the full 2M default-path gate; the earlier pilot does not establish their combined latency or memory use, and the 500 ms target remains unmet.
+Production now automatically selects up to eight readers from 250,000 conversations, capped by the available CPU count. A later query-only native inflater preserves the existing managed ingestion and storage format. The full default-path gate below now measures their combined latency and memory use; the earlier pilot remains a separate workload.
 
 The delivery review also fixed repeated body fallback after cache corruption and the reopened 999-to-1,000 conversation transition. Both regressions failed without their fixes; the corrected tree passed all 879 tests (two opt-in load tests skipped), clean analysis, eight supervisor tests, and the 1,000-item backend sync fixture. The [validation record](benchmarks/default-production-search-validation-2026-10-29.json) preserves the earlier build evidence and the follow-up checks separately.
+
+
+## Full default-production gate
+
+The recovered gate completed on 2026-10-29 using the frozen default production executable, with automatic eight-reader selection and no worker override. All 120 latency cases returned 100 results, all 32 authored relevance judgments passed, and all 20 temporary original bodies were restored. The retained catalog checksum was unchanged. The [complete result](benchmarks/two-million-default-production-query-2026-10-29.json) preserves every latency case’s 100 result IDs and its invocation-bound completion.
+
+| Query family | Prepared-first p95 (ms) | Warm p95 (ms) |
+| --- | ---: | ---: |
+| Ordinary | 533.820 | 375.861 |
+| Names | 296.808 | 463.692 |
+| Prefix | 566.965 | 139.173 |
+| Fuzzy | 627.901 | 438.004 |
+| Broad | 619.934 | 691.590 |
+
+The run took 418.830 seconds. Peak process RSS was 1,905,676,288 bytes; cgroup memory reached its 1,999,998,976-byte cap, with no OOM events or swap. First-query timings exclude initialization; preparation p95 ranged from 878 to 1,025 ms by family. The OS page cache was uncontrolled. Native AES and posting inflation were active, and the mapped zlib 1.3.2 library was captured and hashed.
+
+The strict 500 ms gate correctly exited with `latency-target-missed`. The accepted 583 ms pilot result remains valid for that earlier pilot; this full gate’s broad warm p95 is higher at 692 ms. Correctness and relevance passed, while neither the original 500 ms target nor a universal 583 ms limit is established by this full run. Whole Flutter/GTK memory and actual 2M wire synchronization remain unmeasured. The executable preceded the two app-state recovery fixes, which have separate 879-test follow-up evidence above.
