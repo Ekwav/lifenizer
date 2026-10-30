@@ -1,0 +1,523 @@
+{
+  "measuredDate": "2026-10-28",
+  "syntheticOnly": true,
+  "scope": "Native LifenizerAppState with encrypted disk search, real encryption/SQLite/fsynced chunks, in-process HTTP mock; no WAN/S3 timing. Shared machine also running million-item benchmark and verification. This is not a million-item end-to-end sync measurement.",
+  "records": [
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "seed-encrypted-server",
+      "elapsedMs": 623.04,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 201793536,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "idle": 622.832
+      }
+    },
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "initial-pull-and-persist",
+      "elapsedMs": 2931.407,
+      "pullRequests": 3,
+      "pushBatches": [],
+      "requestBodyBytes": 66,
+      "responseBodyBytes": 4841550,
+      "processRssBytes": 257667072,
+      "fullSearchBuilds": 2,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "idle": 7.109,
+        "readingLocal": 5.163,
+        "authenticating": 17.141,
+        "derivingKey": 4.568,
+        "downloading": 145.15099999999998,
+        "decrypting": 566.495,
+        "applying": 146.308,
+        "saving": 844.363,
+        "indexing": 1183.458,
+        "complete": 11.306
+      }
+    },
+    {
+      "conversations": 1000,
+      "operation": "initial-persisted-vault-size",
+      "bytes": 5218112
+    },
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "search-after-initial-sync",
+      "elapsedMs": 19.586,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 257765376,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "complete": 19.578
+      }
+    },
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "incremental-101-updates",
+      "elapsedMs": 998.685,
+      "pullRequests": 1,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 489425,
+      "processRssBytes": 255647744,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 1,
+      "stageMs": {
+        "complete": 0.68,
+        "downloading": 11.789,
+        "decrypting": 45.817,
+        "applying": 11.557,
+        "saving": 246.847,
+        "indexing": 681.988
+      }
+    },
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "no-op-sync",
+      "elapsedMs": 3.309,
+      "pullRequests": 1,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 30,
+      "processRssBytes": 255651840,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "complete": 0.257,
+        "downloading": 0.806,
+        "decrypting": 0.915,
+        "applying": 1.32
+      }
+    },
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "queue-601-conversations",
+      "elapsedMs": 2529.171,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 270233600,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 1,
+      "stageMs": {
+        "complete": 721.3149999999991,
+        "indexing": 1807.834
+      }
+    },
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "upload-601-and-pull-echo",
+      "elapsedMs": 3235.647,
+      "pullRequests": 2,
+      "pushBatches": [
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        1
+      ],
+      "requestBodyBytes": 2240462,
+      "responseBodyBytes": 2242323,
+      "processRssBytes": 256745472,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 2,
+      "stageMs": {
+        "indexing": 2256.319,
+        "uploading": 71.42899999999999,
+        "downloading": 45.651,
+        "decrypting": 209.54600000000002,
+        "applying": 14.456,
+        "saving": 638.185,
+        "complete": 0.053000000000000005
+      }
+    },
+    {
+      "conversations": 1601,
+      "operation": "after-upload-persisted-vault-size",
+      "bytes": 11498492
+    },
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "queue-100-edits-same-participant",
+      "elapsedMs": 1324.126,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 259219456,
+      "fullSearchBuilds": 1,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "complete": 909.976,
+        "indexing": 414.137
+      }
+    },
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "automatic-sync-before-window",
+      "elapsedMs": 8.15,
+      "pullRequests": 1,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 30,
+      "processRssBytes": 260751360,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "indexing": 0.234,
+        "downloading": 3.296,
+        "decrypting": 0.014,
+        "applying": 0.172,
+        "saving": 4.420999999999999,
+        "complete": 0.005
+      }
+    },
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "automatic-sync-after-20-seconds",
+      "elapsedMs": 1132.274,
+      "pullRequests": 1,
+      "pushBatches": [
+        1
+      ],
+      "requestBodyBytes": 2527,
+      "responseBodyBytes": 2559,
+      "processRssBytes": 254300160,
+      "fullSearchBuilds": 1,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "complete": 4.378,
+        "uploading": 1.027,
+        "downloading": 0.636,
+        "decrypting": 0.271,
+        "applying": 1.678,
+        "saving": 817.529,
+        "indexing": 306.746
+      }
+    },
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "offline-unlock-persisted-vault",
+      "elapsedMs": 34.922,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 254377984,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "idle": 0.318,
+        "readingLocal": 1.251,
+        "derivingKey": 2.063,
+        "decryptingLocal": 30.356,
+        "saving": 0.856,
+        "complete": 0.07
+      }
+    },
+    {
+      "conversations": 1000,
+      "wordsPerConversation": 200,
+      "operation": "search-after-offline-unlock",
+      "elapsedMs": 8.604,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 254808064,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "complete": 8.596
+      }
+    },
+    {
+      "conversations": 1601,
+      "operation": "final-persisted-vault-size",
+      "bytes": 11498492
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "seed-encrypted-server",
+      "elapsedMs": 4448.499,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 281923584,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "idle": 4448.493
+      }
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "initial-pull-and-persist",
+      "elapsedMs": 97628.651,
+      "pullRequests": 21,
+      "pushBatches": [],
+      "requestBodyBytes": 66,
+      "responseBodyBytes": 48621347,
+      "processRssBytes": 382947328,
+      "fullSearchBuilds": 2,
+      "incrementalSearchUpdates": 18,
+      "stageMs": {
+        "idle": 0.16999999999999998,
+        "readingLocal": 0.665,
+        "authenticating": 0.58,
+        "derivingKey": 0.197,
+        "downloading": 880.408,
+        "decrypting": 3536.911999999999,
+        "applying": 428.10799999999995,
+        "saving": 6271.624000000001,
+        "indexing": 86508.95599999999,
+        "complete": 1.022
+      }
+    },
+    {
+      "conversations": 10000,
+      "operation": "initial-persisted-vault-size",
+      "bytes": 50496632
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "search-after-initial-sync",
+      "elapsedMs": 29.153,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 357322752,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "complete": 29.142999999999997
+      }
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "incremental-101-updates",
+      "elapsedMs": 10554.69,
+      "pullRequests": 1,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 489527,
+      "processRssBytes": 373587968,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 1,
+      "stageMs": {
+        "complete": 0.15200000000000002,
+        "downloading": 7.547,
+        "decrypting": 28.032,
+        "applying": 4.922,
+        "saving": 265.844,
+        "indexing": 10248.184000000001
+      }
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "no-op-sync",
+      "elapsedMs": 0.697,
+      "pullRequests": 1,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 31,
+      "processRssBytes": 373587968,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "complete": 0.1,
+        "downloading": 0.538,
+        "decrypting": 0.004,
+        "applying": 0.05
+      }
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "queue-601-conversations",
+      "elapsedMs": 10035.46,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 370401280,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 1,
+      "stageMs": {
+        "complete": 510.82799999999855,
+        "indexing": 9524.619000000002
+      }
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "upload-601-and-pull-echo",
+      "elapsedMs": 17113.365,
+      "pullRequests": 2,
+      "pushBatches": [
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        1
+      ],
+      "requestBodyBytes": 2240438,
+      "responseBodyBytes": 2242909,
+      "processRssBytes": 372023296,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 2,
+      "stageMs": {
+        "indexing": 16441.535000000003,
+        "uploading": 40.614,
+        "downloading": 40.690999999999995,
+        "decrypting": 130.234,
+        "applying": 12.779,
+        "saving": 447.46799999999996,
+        "complete": 0.037000000000000005
+      }
+    },
+    {
+      "conversations": 10601,
+      "operation": "after-upload-persisted-vault-size",
+      "bytes": 56760604
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "queue-100-edits-same-participant",
+      "elapsedMs": 5878.451,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 381984768,
+      "fullSearchBuilds": 1,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "complete": 551.984,
+        "indexing": 5326.454000000001
+      }
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "automatic-sync-before-window",
+      "elapsedMs": 5.461,
+      "pullRequests": 1,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 31,
+      "processRssBytes": 381984768,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "indexing": 0.035,
+        "downloading": 0.48,
+        "decrypting": 0.003,
+        "applying": 0.023,
+        "saving": 4.909,
+        "complete": 0.003
+      }
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "automatic-sync-after-20-seconds",
+      "elapsedMs": 6165.015,
+      "pullRequests": 1,
+      "pushBatches": [
+        1
+      ],
+      "requestBodyBytes": 2527,
+      "responseBodyBytes": 2562,
+      "processRssBytes": 376516608,
+      "fullSearchBuilds": 1,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "complete": 5.457,
+        "uploading": 0.661,
+        "downloading": 0.507,
+        "decrypting": 0.241,
+        "applying": 0.293,
+        "saving": 582.988,
+        "indexing": 5574.861000000001
+      }
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "offline-unlock-persisted-vault",
+      "elapsedMs": 120.126,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 371544064,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "idle": 0.236,
+        "readingLocal": 0.445,
+        "derivingKey": 0.119,
+        "decryptingLocal": 118.8,
+        "saving": 0.483,
+        "complete": 0.036
+      }
+    },
+    {
+      "conversations": 10000,
+      "wordsPerConversation": 200,
+      "operation": "search-after-offline-unlock",
+      "elapsedMs": 10.942,
+      "pullRequests": 0,
+      "pushBatches": [],
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 0,
+      "processRssBytes": 381915136,
+      "fullSearchBuilds": 0,
+      "incrementalSearchUpdates": 0,
+      "stageMs": {
+        "complete": 10.933
+      }
+    },
+    {
+      "conversations": 10601,
+      "operation": "final-persisted-vault-size",
+      "bytes": 56760604
+    }
+  ]
+}

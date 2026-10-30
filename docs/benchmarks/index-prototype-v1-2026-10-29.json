@@ -1,0 +1,328 @@
+{
+  "measuredDate": "2026-10-29",
+  "scope": "Intermediate native v1 indexed-search prototype at 1M with full compact summary catalog; not the final2M target or v3 score-tile implementation. Original1M fixtures preserved separately. Timing includes worker RPC; one-time migrations reported separately.",
+  "unit": "lifenizer-search-index-probe-20261028.service",
+  "invocationId": "f7ec2014e7e54b1686c07c6a4234dd79",
+  "requestedMemoryMaxBytes": 2000000000,
+  "requestedMemorySwapMaxBytes": 0,
+  "exitCode": 0,
+  "runtimeSeconds": 2323.011,
+  "cpuSeconds": 567.445,
+  "benchmark": {
+    "count": 1000000,
+    "peakRss": 901787648,
+    "samples": [
+      {
+        "event": "query-complete",
+        "stage": "migration",
+        "query": "zzqxnonexistent",
+        "ms": 2240855.303,
+        "returned": 0,
+        "profile": {
+          "docpagesReads": 7813,
+          "summarypagesReads": 7813,
+          "vocabularyReads": 16124,
+          "prepareMs": 1861216
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "built",
+        "query": "insurance renewal",
+        "ms": 1852.538,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 122,
+          "postingReads": 200,
+          "candidateMs": 14,
+          "boundMs": 5,
+          "candidateBlocks": 100,
+          "summarypagesReads": 100,
+          "docpagesReads": 100,
+          "scoreMs": 1832,
+          "scoredBlocks": 100,
+          "scoredDocuments": 100
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "built",
+        "query": "insuranc alice",
+        "ms": 1804.141,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 122,
+          "postingReads": 200,
+          "candidateMs": 14,
+          "boundMs": 4,
+          "candidateBlocks": 100,
+          "summarypagesReads": 100,
+          "docpagesReads": 100,
+          "scoreMs": 1785,
+          "scoredBlocks": 100,
+          "scoredDocuments": 100
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "built",
+        "query": "ali muell",
+        "ms": 2131.562,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 121,
+          "postingReads": 11924,
+          "candidateMs": 380,
+          "boundMs": 6,
+          "candidateBlocks": 100,
+          "summarypagesReads": 100,
+          "docpagesReads": 100,
+          "scoreMs": 1744,
+          "scoredBlocks": 100,
+          "scoredDocuments": 100
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "built",
+        "query": "M\u00dcLLER",
+        "ms": 1576.173,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 115,
+          "postingReads": 100,
+          "candidateMs": 8,
+          "boundMs": 9,
+          "candidateBlocks": 100,
+          "summarypagesReads": 100,
+          "docpagesReads": 100,
+          "scoreMs": 1558,
+          "scoredBlocks": 100,
+          "scoredDocuments": 100
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "built",
+        "query": "insurance zxqvbnm",
+        "ms": 7.628,
+        "returned": 0,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 7,
+          "postingReads": 100
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "built",
+        "query": "grocery shopping",
+        "ms": 164.998,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 24,
+          "postingReads": 2931,
+          "candidateMs": 111,
+          "boundMs": 14,
+          "candidateBlocks": 7813,
+          "summarypagesReads": 2,
+          "docpagesReads": 2,
+          "scoreMs": 38,
+          "scoredBlocks": 2,
+          "scoredDocuments": 191
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "built",
+        "query": "archive",
+        "ms": 170.263,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 17,
+          "postingReads": 3908,
+          "candidateMs": 122,
+          "boundMs": 12,
+          "candidateBlocks": 7813,
+          "summarypagesReads": 2,
+          "docpagesReads": 2,
+          "scoreMs": 34,
+          "scoredBlocks": 2,
+          "scoredDocuments": 192
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "built",
+        "query": "",
+        "ms": 18661.76,
+        "returned": 100,
+        "profile": {
+          "summarypagesReads": 7817,
+          "prepareMs": 18655,
+          "candidateMs": 0,
+          "boundMs": 0,
+          "candidateBlocks": 4,
+          "scoreMs": 6,
+          "scoredBlocks": 4,
+          "scoredDocuments": 300
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "reopened",
+        "query": "insurance renewal",
+        "ms": 1876.733,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 122,
+          "postingReads": 200,
+          "candidateMs": 79,
+          "boundMs": 4,
+          "candidateBlocks": 100,
+          "summarypagesReads": 100,
+          "docpagesReads": 100,
+          "scoreMs": 1792,
+          "scoredBlocks": 100,
+          "scoredDocuments": 100
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "reopened",
+        "query": "insuranc alice",
+        "ms": 1585.09,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 122,
+          "postingReads": 200,
+          "candidateMs": 11,
+          "boundMs": 3,
+          "candidateBlocks": 100,
+          "summarypagesReads": 100,
+          "docpagesReads": 100,
+          "scoreMs": 1569,
+          "scoredBlocks": 100,
+          "scoredDocuments": 100
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "reopened",
+        "query": "ali muell",
+        "ms": 2036.638,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 121,
+          "postingReads": 11924,
+          "candidateMs": 346,
+          "boundMs": 4,
+          "candidateBlocks": 100,
+          "summarypagesReads": 100,
+          "docpagesReads": 100,
+          "scoreMs": 1685,
+          "scoredBlocks": 100,
+          "scoredDocuments": 100
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "reopened",
+        "query": "M\u00dcLLER",
+        "ms": 1545.055,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 115,
+          "postingReads": 100,
+          "candidateMs": 5,
+          "boundMs": 5,
+          "candidateBlocks": 100,
+          "summarypagesReads": 100,
+          "docpagesReads": 100,
+          "scoreMs": 1534,
+          "scoredBlocks": 100,
+          "scoredDocuments": 100
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "reopened",
+        "query": "insurance zxqvbnm",
+        "ms": 6.542,
+        "returned": 0,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 7,
+          "postingReads": 100
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "reopened",
+        "query": "grocery shopping",
+        "ms": 138.009,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 24,
+          "postingReads": 2931,
+          "candidateMs": 88,
+          "boundMs": 14,
+          "candidateBlocks": 7813,
+          "summarypagesReads": 2,
+          "docpagesReads": 2,
+          "scoreMs": 35,
+          "scoredBlocks": 2,
+          "scoredDocuments": 191
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "reopened",
+        "query": "archive",
+        "ms": 164.444,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "vocabularyReads": 17,
+          "postingReads": 3908,
+          "candidateMs": 119,
+          "boundMs": 13,
+          "candidateBlocks": 7813,
+          "summarypagesReads": 2,
+          "docpagesReads": 2,
+          "scoreMs": 31,
+          "scoredBlocks": 2,
+          "scoredDocuments": 192
+        }
+      },
+      {
+        "event": "query-complete",
+        "stage": "reopened",
+        "query": "",
+        "ms": 6.142,
+        "returned": 100,
+        "profile": {
+          "prepareMs": 0,
+          "candidateMs": 0,
+          "boundMs": 0,
+          "candidateBlocks": 4,
+          "summarypagesReads": 4,
+          "scoreMs": 5,
+          "scoredBlocks": 4,
+          "scoredDocuments": 300
+        }
+      }
+    ]
+  }
+}

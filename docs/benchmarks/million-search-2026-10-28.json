@@ -1,0 +1,258 @@
+{
+  "schemaVersion": 1,
+  "measuredDate": "2026-10-28",
+  "environment": {
+    "cpu": "AMD Ryzen 5 3600XT, 6 cores / 12 threads",
+    "os": "Linux x86_64",
+    "dart": "3.12.2 AOT",
+    "sharedMachineUnderConcurrentLoad": true,
+    "memoryMaxRequestedBytes": 2000000000,
+    "memorySwapMaxBytes": 0
+  },
+  "scope": "Production native search engine with full real summary catalog; not whole Flutter/GTK application. Synthetic 200-word conversations, 180-character previews, 1723-word filler vocabulary plus distinct numeric titles. Result timings have two samples per ordinary query, not percentile estimates. Final run resumed 724480 committed records; buildMs is not a fresh million-item build time.",
+  "benchmark": {
+    "conversations": 1000000,
+    "wordsPerConversation": 200,
+    "segmentsPerConversation": 10,
+    "previewCharacters": 180,
+    "fillerVocabulary": 1723,
+    "database": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/million-search-20261028/search.sqlite",
+    "actualFileSystemType": "ext4",
+    "invocationId": "339c5474aac1452cbc00ae6bb8c8cb53",
+    "fixtureSourceStart": 507904,
+    "fixtureSourceLayout": "source-runs-128-v1",
+    "resumedConversations": 724480,
+    "buildMs": 840386,
+    "newPlaintextConversationBytes": 844868575,
+    "builtCatalogChecksum": 492870208,
+    "builtRssBytes": 1353637888,
+    "sourcePartitionCounts": {
+      "consumed": 98432,
+      "documents": 98432,
+      "email": 98432,
+      "chat": 98432,
+      "other": 606272
+    },
+    "reopenAndCatalogMs": 34930,
+    "reopenedRssBytes": 1381167104,
+    "update100Ms": 2319,
+    "finalCatalogChecksum": 492871408,
+    "catalogLength": 1000000,
+    "databaseBytes": 2442194944,
+    "peakRssBytes": 1564905472,
+    "cgroupMemoryMax": "1999998976",
+    "cgroupMemoryPeakBytes": 1999998976,
+    "cgroupMemoryEvents": "low 0\nhigh 0\nmax 14097\noom 0\noom_kill 0\noom_group_kill 0",
+    "queries": {
+      "built:insurance renewal": {
+        "samplesMs": [
+          3719.18,
+          3157.427
+        ],
+        "returned": 100,
+        "rssBytes": 1333153792
+      },
+      "built:insuranc alice": {
+        "samplesMs": [
+          3106.225,
+          3127.613
+        ],
+        "returned": 100,
+        "rssBytes": 1489690624
+      },
+      "built:ali muell": {
+        "samplesMs": [
+          3091.176,
+          2731.481
+        ],
+        "returned": 100,
+        "rssBytes": 1363005440
+      },
+      "built:M\u00dcLLER": {
+        "samplesMs": [
+          1972.883,
+          2262.459
+        ],
+        "returned": 100,
+        "rssBytes": 1268183040
+      },
+      "built:insurance zxqvbnm": {
+        "samplesMs": [
+          1651.386,
+          1678.58
+        ],
+        "returned": 0,
+        "rssBytes": 1271328768
+      },
+      "built:archive": {
+        "samplesMs": [
+          146147.455,
+          194471.627
+        ],
+        "returned": 100,
+        "rssBytes": 1421537280
+      },
+      "built:(recent)": {
+        "samplesMs": [
+          15938.112,
+          6.22
+        ],
+        "returned": 100,
+        "rssBytes": 1421537280
+      },
+      "built:group:consumed": {
+        "elapsedMs": 83531.243,
+        "matchedInCatalog": 98432,
+        "returned": 100
+      },
+      "built:group:documents": {
+        "elapsedMs": 16006.187,
+        "matchedInCatalog": 98432,
+        "returned": 100
+      },
+      "built:group:email": {
+        "elapsedMs": 19505.547,
+        "matchedInCatalog": 98432,
+        "returned": 100
+      },
+      "built:group:chat": {
+        "elapsedMs": 21197.334,
+        "matchedInCatalog": 98432,
+        "returned": 100
+      },
+      "built:group:other": {
+        "elapsedMs": 87881.648,
+        "matchedInCatalog": 606272,
+        "returned": 100
+      },
+      "reopened:insurance renewal": {
+        "samplesMs": [
+          3110.839,
+          3088.002
+        ],
+        "returned": 100,
+        "rssBytes": 1540313088
+      },
+      "reopened:insuranc alice": {
+        "samplesMs": [
+          3365.431,
+          3099.077
+        ],
+        "returned": 100,
+        "rssBytes": 1398300672
+      },
+      "reopened:ali muell": {
+        "samplesMs": [
+          2748.909,
+          3010.351
+        ],
+        "returned": 100,
+        "rssBytes": 1252839424
+      },
+      "reopened:M\u00dcLLER": {
+        "samplesMs": [
+          1982.877,
+          1954.495
+        ],
+        "returned": 100,
+        "rssBytes": 1443889152
+      },
+      "reopened:insurance zxqvbnm": {
+        "samplesMs": [
+          1603.7,
+          1582.947
+        ],
+        "returned": 0,
+        "rssBytes": 1462091776
+      },
+      "reopened:archive": {
+        "samplesMs": [
+          139596.983,
+          140427.638
+        ],
+        "returned": 100,
+        "rssBytes": 1417211904
+      },
+      "reopened:(recent)": {
+        "samplesMs": [
+          5.23,
+          5.309
+        ],
+        "returned": 100,
+        "rssBytes": 1417216000
+      },
+      "reopened:group:consumed": {
+        "elapsedMs": 16044.349,
+        "matchedInCatalog": 98432,
+        "returned": 100
+      },
+      "reopened:group:documents": {
+        "elapsedMs": 15398.876,
+        "matchedInCatalog": 98432,
+        "returned": 100
+      },
+      "reopened:group:email": {
+        "elapsedMs": 16085.946,
+        "matchedInCatalog": 98432,
+        "returned": 100
+      },
+      "reopened:group:chat": {
+        "elapsedMs": 15206.686,
+        "matchedInCatalog": 98432,
+        "returned": 100
+      },
+      "reopened:group:other": {
+        "elapsedMs": 87007.711,
+        "matchedInCatalog": 606272,
+        "returned": 100
+      }
+    },
+    "passed": true
+  },
+  "completion": {
+    "unit": "lifenizer-search-million-final-20261028.service",
+    "invocationId": "339c5474aac1452cbc00ae6bb8c8cb53",
+    "result": "success",
+    "exitCode": 0,
+    "memoryPeakBytes": 1999998976,
+    "benchmarkPassed": true,
+    "elapsedSeconds": 1967.62
+  },
+  "earlierAttempts": {
+    "discardedTmpfsSetup": {
+      "outcome": "oom-kill",
+      "committedConversations": 507904,
+      "terms": 509634,
+      "databaseBytes": 1240993792,
+      "runtimeSeconds": 1028.411,
+      "serviceResult": "oom-kill",
+      "serviceExecMainCode": 2,
+      "serviceExecMainStatus": 9,
+      "serviceMemoryPeakBytes": 1999998976,
+      "serviceMemoryMaxRequestedBytes": 2000000000,
+      "serviceMemorySwapMaxBytes": 0,
+      "originalFileSystemType": "tmpfs",
+      "newFileSystemType": "ext4",
+      "databaseSha256": "e9a2ba5d995d990d7a7326f71e36e36d495347c331fcf5cc79493cfaae775459",
+      "verifiedCopiedCount": 507904,
+      "resumedDatabase": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/million-search-20261028/search.sqlite"
+    },
+    "controlledStopBeforeBatchTuning": {
+      "reason": "Authorized controlled interruption for SQLite cache comparison; not a capacity failure",
+      "committedConversations": 724480,
+      "terms": 726211,
+      "databaseBytes": 1769832448,
+      "unit": "lifenizer-search-million-resume-20261028.service",
+      "invocationId": "aa14bef93842496e83e51530a2eddece",
+      "runtimeReportedSeconds": 2507.778,
+      "cpuReportedSeconds": 505.572,
+      "memoryPeakBytesObservedBeforeStop": 1451229184,
+      "memoryCurrentBytesObservedBeforeStop": 1371062272,
+      "cpuUsageNSecObservedBeforeStop": 504766321000,
+      "activeEnterTimestampMonotonic": 564808045668,
+      "execMainStartTimestampMonotonic": 564808007263,
+      "signal": 15,
+      "benchmarkPassed": false
+    }
+  }
+}
