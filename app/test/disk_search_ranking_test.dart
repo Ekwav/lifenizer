@@ -217,6 +217,45 @@ void main() {
   });
 
   test(
+    'posting score memo includes TF and length but keeps boosts per doc',
+    () async {
+      await disk.clear();
+      const variants = [
+        ('Witness', 'archive filler'),
+        ('archive', 'Witness filler'),
+        ('Witness', 'archive filler extra padding'),
+        ('Witness', 'archive archive filler'),
+        ('Witness', 'archive archive filler extra padding'),
+        ('archive', 'archive filler'),
+      ];
+      docs = [
+        for (var n = 0; n < 72; n++)
+          Conversation(
+            id: 'memo-${n.toString().padLeft(2, '0')}',
+            title: variants[n % variants.length].$1,
+            source: 'manual',
+            participantIds: const [],
+            startedAt: now,
+            endedAt: now,
+            segments: [
+              ConversationSegment(
+                id: 'segment-$n',
+                text: variants[n % variants.length].$2,
+              ),
+            ],
+          ),
+      ];
+      await upsert(docs);
+      for (final vector in [false, true]) {
+        for (var repeat = 0; repeat < 2; repeat++) {
+          await check(SearchCriteria(query: 'archive', useVector: vector));
+          expect((await disk.searchProfile)['scoredDocuments'], 72);
+        }
+      }
+    },
+  );
+
+  test(
     'DF propagation, replacements, removals and reopen preserve exact boundaries',
     () async {
       // The existing rare numeric witnesses become frequent in other blocks.
