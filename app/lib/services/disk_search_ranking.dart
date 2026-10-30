@@ -462,6 +462,11 @@ class _NumericResult {
   String? id;
 }
 
+final class _PostingScoreMemo {
+  int tf = 0;
+  double length = 0, base = 0, vector = 0;
+}
+
 class _RankingQuery {
   _RankingQuery(
     this.store,
@@ -911,31 +916,28 @@ class _RankingQuery {
           final data = _DiskRanking.postingData(payload, queryNative: true);
           // Repeated TF/length share arithmetic; boosts stay per document.
           final exactVector = criteria.useVector && exactAt >= 0;
-          var lastTf = 0;
-          var lastLength = 0.0;
-          var baseScore = 0.0;
-          var vectorScore = 0.0;
+          final memo = _PostingScoreMemo();
           void score(int doc, int tf, int boost) {
             final length = numeric.getFloat64(doc * _DiskRanking.numericBytes);
-            if (tf != lastTf || length != lastLength) {
+            if (tf != memo.tf || length != memo.length) {
               final bm25 =
                   info.idf *
                   tf *
                   2.2 /
                   (tf + 1.2 * (.25 + .75 * length / average));
-              baseScore = 4 + math.log(1 + bm25);
-              if (exactVector && tf != lastTf) {
-                vectorScore = info.idf * (1 + math.log(tf));
+              memo.base = 4 + math.log(1 + bm25);
+              if (exactVector && tf != memo.tf) {
+                memo.vector = info.idf * (1 + math.log(tf));
               }
-              lastTf = tf;
-              lastLength = length;
+              memo.tf = tf;
+              memo.length = length;
             }
-            final value = baseScore + boost;
+            final value = memo.base + boost;
             for (var t = 0; t < tokens.length; t++) {
               best[t][doc] = math.max(best[t][doc], info.matches[t] * value);
             }
             if (exactVector) {
-              vector[exactAt][doc] = vectorScore;
+              vector[exactAt][doc] = memo.vector;
             }
             if (coveredPhrase && !positionsNeeded && info.phrase.isNotEmpty) {
               phrase[doc] = 1;
