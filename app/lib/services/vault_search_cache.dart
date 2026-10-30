@@ -9,16 +9,26 @@ extension VaultSearchCache on LifenizerAppState {
   }) async {
     final generation = _searchGeneration;
     var results = search(query, maxResults: maxResults);
-    while ((_searchCacheLoads.isNotEmpty || _searchBuild != null) &&
+    while ((_searchCacheLoads.isNotEmpty ||
+            _searchBuild != null ||
+            _diskQuery != null) &&
         generation == _searchGeneration) {
       final index = _searchIndex;
       try {
-        await Future.wait([..._searchCacheLoads.values, ?_searchBuild]);
+        await Future.wait([
+          ..._searchCacheLoads.values,
+          ?_searchBuild,
+          ?_diskQuery,
+        ]);
       } catch (_) {
         await _rebuildSearchCache(index, generation);
       }
       if (generation != _searchGeneration || !isAuthenticated) return [];
-      if (_searchCacheLoads.isNotEmpty || _searchBuild != null) continue;
+      if (_searchCacheLoads.isNotEmpty ||
+          _searchBuild != null ||
+          _diskQuery != null) {
+        continue;
+      }
       results = search(query, maxResults: maxResults);
     }
     return results;
@@ -162,6 +172,10 @@ extension VaultSearchCache on LifenizerAppState {
   }
 
   Future<void> _writeSearchCache(String key) async {
+    if (_diskSearch != null) {
+      await _writeDiskSearchCache(key);
+      return;
+    }
     final index = _searchIndex!;
     final generation = _searchGeneration;
     final revision = _searchRevision;

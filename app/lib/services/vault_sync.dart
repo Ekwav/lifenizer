@@ -264,8 +264,10 @@ extension VaultSync on LifenizerAppState {
   Future<void> lock() async {
     if (busy) return;
     busy = true;
+    _locking = true;
     _notifyChanged();
     try {
+      await _diskSearch?.cancelSearch();
       await stopRecording?.call();
       // A failed network request must not prevent the vault from locking.
       try {
@@ -275,6 +277,9 @@ extension VaultSync on LifenizerAppState {
       // Preserve the latest outbox and recording even if sync failed. A storage
       // failure leaves the unlocked data available so the user can retry.
       await _persistLocal();
+      _searchGeneration++;
+      await _diskSearch?.close();
+      _diskSearch = null;
       _crypto.lock();
       _api = null;
       session = null;
@@ -282,14 +287,28 @@ extension VaultSync on LifenizerAppState {
       pairing.onLocked();
       status = 'Vault locked';
     } catch (exception) {
+      _diskQueryKey = null;
       error = 'Could not save and lock the vault: $exception';
     } finally {
+      _locking = false;
       busy = false;
       _notifyChanged();
     }
   }
 
   void _clearVault() {
+    final disk = _diskSearch;
+    _diskSearch = null;
+    _diskQuery = null;
+    _diskQueryKey = null;
+    _diskResults = const [];
+    _filterFacetRevision = null;
+    _filterSources = const [];
+    _filterTags = const [];
+    _filterLocations = const [];
+    _filterLocationOptions = (towns: const [], places: const []);
+    searchError = null;
+    unawaited(disk?.close());
     participants.clear();
     _invalidateParticipantLookup();
     conversations.clear();
@@ -325,6 +344,8 @@ extension VaultSync on LifenizerAppState {
     _markSearchIndexDirty();
     _chunkMigrationFrom = null;
     _chunkCount = 0;
+    _obsoleteChunkLayouts = [];
+    _chunkGeneration = null;
     _chunkNonces = <String?>[];
     _chunkConversationCounts = <int>[];
     _chunkMessageCounts = <int>[];
@@ -345,7 +366,10 @@ extension VaultSync on LifenizerAppState {
     _syncProgressTicker = null;
   }
 
-  Future<void> pullSync() => _run(() => _synchronize(forceUpload: true));
+  Future<void> pullSync() => _run(() {
+    _diskQueryKey = null;
+    return _synchronize(forceUpload: true);
+  });
 
   Future<void> syncQuietly() async {
     if (!isAuthenticated || busy) return;
@@ -489,6 +513,7 @@ extension VaultSync on LifenizerAppState {
       final acknowledged = batch.map((e) => e.id).toSet();
       _pendingSync.removeWhere((e) => acknowledged.contains(e.id));
     }
+    Map<String, int>? conversationPositions;
     while (true) {
       page++;
       _setSyncProgress(
@@ -529,6 +554,15 @@ extension VaultSync on LifenizerAppState {
         }
       }
       _setSyncProgress(SyncStage.applying, total: pulled.envelopes.length);
+      if (_diskSearch != null &&
+          conversationPositions == null &&
+          pulled.envelopes.any(
+            (envelope) => envelope.entityType == 'conversation',
+          )) {
+        conversationPositions = {
+          for (var n = 0; n < conversations.length; n++) conversations[n].id: n,
+        };
+      }
       for (var i = 0; i < pulled.envelopes.length; i++) {
         final envelope = pulled.envelopes[i];
         final pending = _pendingSync.any(
@@ -546,6 +580,7 @@ extension VaultSync on LifenizerAppState {
           envelope.entityType,
           decoded[i],
           preserveLocalChanges: pending,
+          conversationPositions: conversationPositions,
         );
         _setSyncProgress(
           SyncStage.applying,
@@ -716,6 +751,24 @@ extension VaultSync on LifenizerAppState {
     }
     final key = _localVaultKey!;
     final count = local['chunkCount'] as int? ?? 0;
+    _chunkGeneration = local['chunkGeneration'] as String?;
+    final chunkKey = _conversationStorageKey;
+    _obsoleteChunkLayouts = [
+      for (final layout in local['obsoleteChunkLayouts'] as List? ?? const [])
+        Map<String, dynamic>.from(layout as Map),
+    ];
+    await _cleanupObsoleteChunkLayouts(key, local);
+    final pendingLayout = local['pendingChunkGeneration'] as String?;
+    if (pendingLayout != null && pendingLayout != _chunkGeneration) {
+      try {
+        await _chunks.deleteAll('$key:chunks:$pendingLayout');
+      } catch (_) {}
+    }
+    final expectedCount =
+        ((core['conversationBuckets'] as Map?)?['conversations'] as List? ??
+                const [])
+            .fold<int>(0, (sum, n) => sum + (n as int));
+    await _openDiskSearch(conversationCount: expectedCount);
     final nonces = [
       for (final nonce in local['chunkNonces'] as List? ?? const [])
         nonce as String?,
@@ -743,10 +796,29 @@ extension VaultSync on LifenizerAppState {
     }
     try {
       ConversationSearchIndex? cachedIndex;
+      var diskCached = false;
       var catalogInDatabase = false;
       var currentCatalog = false;
       final cacheNonce = core['searchIndexNonce'] as String?;
+      if (_diskSearch != null) {
+        try {
+          diskCached =
+              cacheNonce != null &&
+              pending.isEmpty &&
+              source.kind == _chunks.kind &&
+              await _diskSearch!.readMetadata('snapshotNonce') == cacheNonce &&
+              await _diskSearch!.count == expectedCount;
+          if (diskCached) {
+            _setSyncProgress(SyncStage.indexing, total: expectedCount);
+            await _diskSearch!.prepare();
+          }
+        } catch (_) {
+          diskCached = false;
+        }
+        if (!diskCached) await _diskSearch!.clear();
+      }
       if (cacheNonce != null &&
+          _diskSearch == null &&
           pending.isEmpty &&
           source.kind == _chunks.kind) {
         try {
@@ -834,23 +906,26 @@ extension VaultSync on LifenizerAppState {
           _searchPostingNonces = [];
         }
       }
-      if (cachedIndex != null) {
+      if (cachedIndex != null || diskCached) {
         // Check file headers without decrypting their contents. Body integrity
         // is authenticated when a chunk is actually opened.
         final actual = await Future.wait([
-          for (var n = 0; n < count; n++) source.chunkNonce(key, n),
+          for (var n = 0; n < count; n++) source.chunkNonce(chunkKey, n),
         ]);
         if (!listEquals(actual, nonces)) throw const _IncompleteChunks();
         markUnlock('chunkHeaders');
       }
       final repaired = await _restoreSnapshot(
         core,
-        chunks: cachedIndex == null ? (source, key, nonces, pending) : null,
+        chunks: cachedIndex == null
+            ? (source, chunkKey, nonces, pending)
+            : null,
         cachedIndex: cachedIndex,
+        diskCached: diskCached,
       );
       for (final n in pending.keys) {
         // Remember which nonce the file really carries.
-        final actual = n < count ? await source.chunkNonce(key, n) : null;
+        final actual = n < count ? await source.chunkNonce(chunkKey, n) : null;
         if (actual == null) throw const _IncompleteChunks();
         nonces[n] = actual;
       }
@@ -872,13 +947,14 @@ extension VaultSync on LifenizerAppState {
       ];
       final migrating = source.kind != _chunks.kind;
       if (migrating) _chunkMigrationFrom = count;
-      if (cachedIndex != null) {
+      if (cachedIndex != null || diskCached) {
         _unloadedChunks.addAll(Iterable.generate(count));
         _searchSnapshotNonce = cacheNonce;
         _savedSearchRevision =
-            catalogInDatabase &&
-                currentCatalog &&
-                _searchPostingNonces.isNotEmpty
+            diskCached ||
+                (catalogInDatabase &&
+                    currentCatalog &&
+                    _searchPostingNonces.isNotEmpty)
             ? _searchRevision
             : -1;
       }
@@ -887,10 +963,11 @@ extension VaultSync on LifenizerAppState {
             repaired ||
             migrating ||
             pending.isNotEmpty ||
-            cachedIndex == null ||
-            !catalogInDatabase ||
-            !currentCatalog ||
-            _searchPostingNonces.isEmpty,
+            (!diskCached &&
+                (cachedIndex == null ||
+                    !catalogInDatabase ||
+                    !currentCatalog ||
+                    _searchPostingNonces.isEmpty)),
         resyncRequired: false,
       );
     } on _IncompleteChunks {
@@ -934,7 +1011,7 @@ extension VaultSync on LifenizerAppState {
         'chunkCount': 0,
         'chunkNonces': const <String>[],
       });
-      await _chunks.deleteAll(key);
+      await _chunks.deleteAll(_conversationStorageKey);
       await _chunks.deleteBlob(key, 'search-index');
       await SembastVaultChunkStore(
         _localStore!,
@@ -951,6 +1028,7 @@ extension VaultSync on LifenizerAppState {
     Map<String, dynamic> json, {
     (VaultChunkStore, String, List<String?>, Map<int, List<String>>)? chunks,
     ConversationSearchIndex? cachedIndex,
+    bool diskCached = false,
   }) async {
     audioDraft = json['audioDraft'] == null
         ? null
@@ -969,7 +1047,33 @@ extension VaultSync on LifenizerAppState {
       json.parseObjectList('participants', Participant.fromJson),
     );
     _invalidateParticipantLookup();
-    if (cachedIndex != null) {
+    if (diskCached) {
+      try {
+        final count = await _diskSearch!.count;
+        String? catalogAfterId;
+        for (var offset = 0; offset < count; offset += 1000) {
+          final page = await _diskSearch!.summaries(afterId: catalogAfterId);
+          if (page.length != math.min(1000, count - offset)) {
+            throw StateError('Incomplete native search catalog.');
+          }
+          conversations.addAll(page);
+          catalogAfterId = page.last.id;
+          _setSyncProgress(
+            SyncStage.restoring,
+            completed: conversations.length,
+            total: count,
+            force: false,
+          );
+        }
+      } catch (_) {
+        // The index is disposable. Authenticate the original vault chunks and
+        // rebuild it in bounded batches rather than making the vault unreadable.
+        conversations.clear();
+        await _diskSearch!.clear();
+        await _restoreConversationChunks(json, chunks!);
+        diskCached = false;
+      }
+    } else if (cachedIndex != null) {
       conversations.addAll(
         cachedIndex.documents.values.map((d) => d.conversation),
       );
@@ -1000,7 +1104,7 @@ extension VaultSync on LifenizerAppState {
     );
     var repaired = legacyDraft;
     _people;
-    if (_hasParticipantRedirects && cachedIndex == null) {
+    if (_hasParticipantRedirects && cachedIndex == null && !diskCached) {
       for (var i = 0; i < conversations.length; i++) {
         final canonical = _canonicalConversation(conversations[i]);
         if (!identical(canonical, conversations[i])) {
@@ -1020,7 +1124,10 @@ extension VaultSync on LifenizerAppState {
         }
       }
     }
-    if (cachedIndex == null) {
+    if (_diskSearch != null &&
+        (diskCached || (relations.isEmpty && !_hasParticipantRedirects))) {
+      _diskIndexReady();
+    } else if (cachedIndex == null) {
       _markSearchIndexDirty();
     } else {
       _installSearchIndex(
@@ -1041,8 +1148,38 @@ extension VaultSync on LifenizerAppState {
         conversations.where((c) => c.id == id).firstOrNull;
     final existing = current();
     if (existing == null) throw StateError('Conversation no longer exists.');
-    if (existing.isLoaded) return existing;
+    if (existing.isLoaded) {
+      return _diskSearch == null ? existing : _canonicalConversation(existing);
+    }
     if (!_crypto.isUnlocked) throw StateError('Unlock the vault first.');
+    if (_diskSearch != null) {
+      final generation = _searchGeneration;
+      try {
+        final loaded = (await _diskSearch!.loadConversations([id])).single;
+        if (generation != _searchGeneration || !_crypto.isUnlocked) {
+          throw StateError('Vault was locked while loading.');
+        }
+        return _canonicalConversation(loaded);
+      } catch (_) {
+        if (generation != _searchGeneration || !_crypto.isUnlocked) rethrow;
+        await _loadConversationChunk(vaultChunkFor(id, _chunkCount));
+        final loaded = current();
+        if (loaded == null || !loaded.isLoaded) rethrow;
+        for (var i = 0; i < conversations.length; i++) {
+          final doc = conversations[i];
+          if (doc.isLoaded && !_dirtyConversations.containsKey(doc.id)) {
+            _unloadedChunks.add(vaultChunkFor(doc.id, _chunkCount));
+            conversations[i] = Conversation.fromSummaryJson(
+              doc.toSummaryJson(previewLength: 180),
+            );
+          }
+        }
+        searchError =
+            'Search needs rebuilding. Your saved conversations are available.';
+        _notifyChanged();
+        return _canonicalConversation(loaded);
+      }
+    }
     await _loadConversationChunk(vaultChunkFor(id, _chunkCount));
     final loaded = current();
     if (loaded == null || !loaded.isLoaded) {
@@ -1068,7 +1205,7 @@ extension VaultSync on LifenizerAppState {
     final generation = _searchGeneration;
     final decoded = await _chunks.decryptChunk(
       _crypto,
-      _localVaultKey!,
+      _conversationStorageKey,
       n,
       _chunkNonces[n]!,
     );
@@ -1130,6 +1267,10 @@ extension VaultSync on LifenizerAppState {
     List rawConversations,
     _RestoreProgress progress,
   ) async {
+    if (_diskSearch != null) {
+      await _restoreDiskConversations(rawConversations, progress);
+      return;
+    }
     for (final raw in rawConversations) {
       final item = Map<String, dynamic>.from(raw as Map);
       final conversation = Conversation.fromJson({
@@ -1213,13 +1354,22 @@ extension VaultSync on LifenizerAppState {
         parsed = parsed.then((_) {
           return _restoreConversationList(raw, progress);
         });
+        await parsed;
       }
     }
 
     Object? failure;
     try {
       await Future.wait([
-        for (var i = 0; i < math.min(vaultWorkerCount(), chunkTotal); i++)
+        for (
+          var i = 0;
+          i <
+              math.min(
+                _diskSearch == null ? vaultWorkerCount() : 1,
+                chunkTotal,
+              );
+          i++
+        )
           lane(),
       ]);
     } catch (exception) {
@@ -1409,6 +1559,10 @@ extension VaultSync on LifenizerAppState {
         audioDraft = {...audioDraft!, 'payloadNonce': sealed.nonce};
         _pendingDraftPayload = null;
       }
+    }
+    if (_diskSearch != null) {
+      await _writeDiskVault(key, auth);
+      return;
     }
     final captured = _dirtyRevision;
     var chunkCount = _chunkCount;

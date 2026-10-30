@@ -49,11 +49,14 @@ import 'services/vault_worker_io.dart'
     show vaultWorkerCount;
 
 import 'services/conversation_search_index.dart';
+import 'services/conversation_catalog.dart';
 import 'services/search_index_worker_io.dart'
     if (dart.library.js_interop) 'services/search_index_worker_web.dart';
 import 'services/temporal_intent.dart';
 import 'services/search_scorer.dart';
 import 'services/search_service.dart';
+import 'services/disk_search_index_io.dart'
+    if (dart.library.js_interop) 'services/disk_search_index_web.dart';
 
 part 'services/vault_sync.dart';
 part 'services/vault_imports.dart';
@@ -61,6 +64,7 @@ part 'services/vault_email.dart';
 part 'services/vault_training.dart';
 part 'services/vault_recordings.dart';
 part 'services/vault_search_cache.dart';
+part 'services/vault_disk_search.dart';
 part 'services/vault_backup.dart';
 
 class LifenizerAppState extends ChangeNotifier {
@@ -125,6 +129,7 @@ class LifenizerAppState extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    unawaited(_diskSearch?.close());
     recording.dispose();
     recordingRelay.dispose();
     _syncProgressTicker?.cancel();
@@ -233,12 +238,36 @@ class LifenizerAppState extends ChangeNotifier {
   }
 
   final List<Participant> participants = [];
-  final List<Conversation> conversations = [];
+  final List<Conversation> conversations = ConversationCatalog();
   final List<RelationEdge> relations = [];
   final List<SavedSearch> savedSearches = [];
   final List<ImportCapability> importCapabilities = [];
 
   ConversationSearchIndex? _searchIndex;
+  DiskSearchIndex? _diskSearch;
+  Future<void>? _diskQuery;
+  String? _diskQueryKey;
+  List<Conversation> _diskResults = const [];
+  (int, int, int)? _filterFacetRevision;
+  List<String> _filterSources = const [];
+  List<String> _filterTags = const [];
+  List<RecordingLocation> _filterLocations = const [];
+  ({List<String> towns, List<String> places}) _filterLocationOptions = (
+    towns: const [],
+    places: const [],
+  );
+  bool _locking = false;
+  String? searchError;
+
+  Future<void> retrySearch() => _run(() async {
+    try {
+      await _recoverDiskSearch();
+    } catch (_) {
+      searchError =
+          'Search could not be rebuilt. Retry when storage is available.';
+      rethrow;
+    }
+  });
   List<String> _searchDetailNonces = [];
   List<String> _searchPostingNonces = [];
   final Map<(bool, int), Future<void>> _searchCacheLoads = {};
@@ -256,6 +285,11 @@ class LifenizerAppState extends ChangeNotifier {
   // stableHash(id) % _chunkCount; only chunks containing a conversation that
   // changed since the last successful save are re-encrypted and rewritten.
   int _chunkCount = 0;
+  List<Map<String, dynamic>> _obsoleteChunkLayouts = [];
+  String? _chunkGeneration;
+  String get _conversationStorageKey => _chunkGeneration == null
+      ? _localVaultKey!
+      : '$_localVaultKey:chunks:$_chunkGeneration';
   List<String?> _chunkNonces = <String?>[];
   List<int> _chunkConversationCounts = <int>[];
   List<int> _chunkMessageCounts = <int>[];
@@ -271,9 +305,11 @@ class LifenizerAppState extends ChangeNotifier {
 
   /// True while no search index exists yet (for example during the first
   /// background build after unlocking) and results come from a plain scan.
-  bool get searchIndexPreparing => _searchIndex == null && isAuthenticated;
+  bool get searchIndexPreparing =>
+      _searchIndex == null && _diskSearch == null && isAuthenticated;
 
-  bool get searchDetailsLoading => _searchCacheLoads.isNotEmpty;
+  bool get searchDetailsLoading =>
+      _searchCacheLoads.isNotEmpty || _diskQuery != null;
 
   String? _lastSearchQuery;
   DateTime? _lastSearchAt;
@@ -508,9 +544,10 @@ class LifenizerAppState extends ChangeNotifier {
     bool includeConsumed = true,
     int? maxResults,
   }) {
+    maxResults = (maxResults ?? 100).clamp(1, 100);
     _ensureSearchIndex();
     final index = _searchIndex;
-    if (index == null) {
+    if (index == null && _diskSearch == null) {
       return _linearSearch(
         query,
         source: source,
@@ -575,9 +612,22 @@ class LifenizerAppState extends ChangeNotifier {
       if (carryPrevious) ...previousTokens,
     }.toList(growable: false);
 
+    if (_diskSearch != null) {
+      return _searchDisk(
+        criteria,
+        scorer,
+        effectiveTokens,
+        semanticQuery,
+        maxResults: maxResults,
+        contextQuery: carryPrevious
+            ? effectiveTokens.join(' ')
+            : criteria.normalized,
+      );
+    }
+
     // Execute search using service
     final searchService = SearchService(
-      index,
+      index!,
       onTerms: queryTokens.isEmpty ? null : _requestSearchPostings,
       onCandidates: queryTokens.isEmpty ? null : _requestSearchDetails,
     );
@@ -774,22 +824,53 @@ class LifenizerAppState extends ChangeNotifier {
     );
   }
 
+  void _refreshFilterFacets() {
+    if (busy || syncProgress?.active == true) return;
+    final revision = (conversations.length, _dirtyRevision, _searchRevision);
+    if (_filterFacetRevision == revision) return;
+    final sources = <String>{}, tags = <String>{};
+    final locations = <String, RecordingLocation>{};
+    final towns = <String>{}, places = <String>{};
+    for (final conversation in conversations) {
+      sources.add(conversation.source);
+      tags.addAll(conversation.tags);
+      final location = conversation.location;
+      if (location == null) continue;
+      final text = location.searchableText;
+      locations[text] = location;
+      if (location.town.isNotEmpty) towns.add(location.town);
+      if (location.venue.isNotEmpty || location.address.isNotEmpty) {
+        places.add(text);
+      }
+    }
+    _filterSources = List.unmodifiable(sources.toList()..sort());
+    _filterTags = List.unmodifiable(tags.toList()..sort());
+    _filterLocations = List.unmodifiable(locations.values);
+    _filterLocationOptions = (
+      towns: List.unmodifiable(towns.toList()..sort()),
+      places: List.unmodifiable(places.toList()..sort()),
+    );
+    _filterFacetRevision = revision;
+  }
+
   List<String> get availableSources {
-    final sources = conversations
-        .map((conversation) => conversation.source)
-        .toSet()
-        .toList();
-    sources.sort();
-    return sources;
+    _refreshFilterFacets();
+    return _filterSources;
   }
 
   List<String> get allTags {
-    final tags = conversations
-        .expand((conversation) => conversation.tags)
-        .toSet()
-        .toList();
-    tags.sort();
-    return tags;
+    _refreshFilterFacets();
+    return _filterTags;
+  }
+
+  List<RecordingLocation> get availableLocations {
+    _refreshFilterFacets();
+    return _filterLocations;
+  }
+
+  ({List<String> towns, List<String> places}) get locationFilterOptions {
+    _refreshFilterFacets();
+    return _filterLocationOptions;
   }
 
   VaultInsights get insights {
@@ -1135,7 +1216,9 @@ class LifenizerAppState extends ChangeNotifier {
     if (source == null || target == null) {
       throw ArgumentError('Choose two existing people.');
     }
-    if (rewriteReferences) await _loadAllConversations();
+    if (rewriteReferences && _diskSearch == null) {
+      await _loadAllConversations();
+    }
     final combined = Participant(
       id: target.id,
       displayName: target.displayName,
@@ -1201,7 +1284,7 @@ class LifenizerAppState extends ChangeNotifier {
         }
       }
       if (changed) {
-        await _loadAllConversations();
+        if (_diskSearch == null) await _loadAllConversations();
         for (final conversation in _rewriteParticipantReferences()) {
           await _pushEntity(
             'conversation',
@@ -1379,6 +1462,15 @@ class LifenizerAppState extends ChangeNotifier {
         .map(resolveParticipantId)
         .toSet()
         .toList();
+    if (!conversation.isLoaded) {
+      if (listEquals(ids, conversation.participantIds)) return conversation;
+      return Conversation.fromSummaryJson({
+        ...conversation.toSummaryJson(
+          previewLength: conversation.previewText.length,
+        ),
+        'participantIds': ids,
+      });
+    }
     final segments = conversation.segments.map((segment) {
       final id = segment.participantId;
       if (id == null || resolveParticipantId(id) == id) return segment;
@@ -1406,8 +1498,12 @@ class LifenizerAppState extends ChangeNotifier {
       final canonical = _canonicalConversation(conversations[i]);
       if (!identical(canonical, conversations[i])) {
         conversations[i] = canonical;
-        _markConversationChanged(canonical.id);
-        changed.add(canonical);
+        // Native bodies resolve through the authoritative participant redirect;
+        // only the bounded search rebuild needs to rewrite their cached form.
+        if (_diskSearch == null) {
+          _markConversationChanged(canonical.id);
+          changed.add(canonical);
+        }
       }
     }
     return changed;
@@ -1741,11 +1837,14 @@ class LifenizerAppState extends ChangeNotifier {
     String entityType,
     Map<String, dynamic> json, {
     bool preserveLocalChanges = false,
+    Map<String, int>? conversationPositions,
   }) async {
     switch (entityType) {
       case 'participant':
         final incoming = Participant.fromJson(json);
-        if (incoming.mergedInto != null) await _loadAllConversations();
+        if (incoming.mergedInto != null && _diskSearch == null) {
+          await _loadAllConversations();
+        }
         final previous = _people[incoming.id];
         final participant = Participant(
           id: incoming.id,
@@ -1796,13 +1895,38 @@ class LifenizerAppState extends ChangeNotifier {
         break;
       case 'conversation':
         final incoming = _canonicalConversation(Conversation.fromJson(json));
-        if (incoming.sourceThreadId != null &&
-            conversations.any((c) => c.id == incoming.id && !c.isLoaded)) {
-          await loadConversation(incoming.id);
+        int? slot() {
+          if (conversationPositions == null) {
+            final n = conversations.indexWhere((c) => c.id == incoming.id);
+            return n < 0 ? null : n;
+          }
+          final positions = conversationPositions;
+          if (positions.length != conversations.length) {
+            positions.clear();
+            for (var n = 0; n < conversations.length; n++) {
+              positions[conversations[n].id] = n;
+            }
+          }
+          final n = positions[incoming.id];
+          if (n == null ||
+              (n < conversations.length &&
+                  conversations[n].id == incoming.id)) {
+            return n;
+          }
+          final found = conversations.indexWhere((c) => c.id == incoming.id);
+          if (found < 0) return null;
+          positions[incoming.id] = found;
+          return found;
         }
-        final previous = conversations
-            .where((item) => item.id == incoming.id)
-            .firstOrNull;
+        final previousSlot = slot();
+        var previous = previousSlot == null
+            ? null
+            : conversations[previousSlot];
+        if (incoming.sourceThreadId != null &&
+            previous != null &&
+            !previous.isLoaded) {
+          previous = await loadConversation(incoming.id);
+        }
         final importedThread =
             previous != null &&
             incoming.sourceThreadId != null &&
@@ -1823,8 +1947,18 @@ class LifenizerAppState extends ChangeNotifier {
         } else {
           _importedConversationRepairs.remove(conversation.id);
         }
-        conversations.removeWhere((item) => item.id == conversation.id);
-        conversations.add(conversation);
+        if (conversationPositions == null) {
+          conversations.removeWhere((item) => item.id == conversation.id);
+          conversations.add(conversation);
+        } else {
+          final n = slot();
+          if (n == null) {
+            conversationPositions[conversation.id] = conversations.length;
+            conversations.add(conversation);
+          } else {
+            conversations[n] = conversation;
+          }
+        }
         _markConversationChanged(conversation.id);
         break;
       case 'relation':
@@ -1936,7 +2070,7 @@ class LifenizerAppState extends ChangeNotifier {
   }
 
   bool get _needsSearchIndex =>
-      _searchIndex == null ||
+      (_searchIndex == null && _diskSearch == null) ||
       _searchFullRebuildNeeded ||
       _searchDirtyIds.isNotEmpty ||
       _indexedConversationCount != conversations.length ||
@@ -2071,6 +2205,7 @@ class LifenizerAppState extends ChangeNotifier {
   }
 
   void _ensureSearchIndex() {
+    if (_diskSearch != null) return;
     // Progress rebuilds keep the previous results while an import changes the
     // vault. The final index is prepared off the UI isolate before busy clears.
     if (!_needsSearchIndex) return;
@@ -2152,6 +2287,13 @@ class LifenizerAppState extends ChangeNotifier {
   }
 
   Future<void> _prepareSearchIndexNow({required bool complete}) async {
+    if (await _openDiskSearch()) {
+      await _diskSearch!.prepare();
+      for (var pass = 0; pass < 3 && _needsSearchIndex; pass++) {
+        await _prepareDiskSearch();
+      }
+      return;
+    }
     var worked = false;
     for (var pass = 0; pass < 3 && _needsSearchIndex; pass++) {
       if (!_crypto.isUnlocked) return;
@@ -2238,7 +2380,7 @@ class LifenizerAppState extends ChangeNotifier {
       error = exception.toString();
     } finally {
       try {
-        if (prepareIndex) await _prepareSearchIndex();
+        if (prepareIndex && _vaultBatchDepth == 0) await _prepareSearchIndex();
       } catch (exception) {
         error ??= 'Could not prepare search: $exception';
       }
