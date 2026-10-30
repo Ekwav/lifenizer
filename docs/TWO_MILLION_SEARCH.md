@@ -53,3 +53,18 @@ The recovered gate completed on 2026-10-29 using the frozen default production e
 The run took 418.830 seconds. Peak process RSS was 1,905,676,288 bytes; cgroup memory reached its 1,999,998,976-byte cap, with no OOM events or swap. First-query timings exclude initialization; preparation p95 ranged from 878 to 1,025 ms by family. The OS page cache was uncontrolled. Native AES and posting inflation were active, and the mapped zlib 1.3.2 library was captured and hashed.
 
 The strict 500 ms gate correctly exited with `latency-target-missed`. The accepted 583 ms pilot result remains valid for that earlier pilot; this full gate’s broad warm p95 is higher at 692 ms. Correctness and relevance passed, while neither the original 500 ms target nor a universal 583 ms limit is established by this full run. Whole Flutter/GTK memory and actual 2M wire synchronization remain unmeasured. The executable preceded the two app-state recovery fixes, which have separate 879-test follow-up evidence above.
+
+
+## Query-local scratch reuse
+
+Commit `ed1681a` reuses bounded numeric-page scratch buffers within each query, clearing them between pages. All 58 focused tests, clean analysis and the compiled 1,000-item smoke passed. The [full 2M comparison](benchmarks/two-million-scratch-reuse-query-2026-10-29.json) retained the same ordered 100 IDs for all 120 latency cases and the same ordered results for all 32 authored relevance judgments. The catalog checksum and all restored bodies were preserved.
+
+| Query family | Prepared-first p95 (ms) | Warm p95 (ms) |
+| --- | ---: | ---: |
+| Ordinary | 882.206 | 536.495 |
+| Names | 1046.931 | 426.723 |
+| Prefix | 795.732 | 803.048 |
+| Fuzzy | 285.598 | 214.807 |
+| Broad | 407.400 | 545.356 |
+
+Broad warm p95 fell from 691.590 to 545.356 ms in this comparison, while ordinary/name/prefix tails regressed. These single before/after runs use a shared machine with uncontrolled OS page cache, so they do not isolate the change from other timing variation. The strict 500 ms gate remains unmet, and the run does not establish a universal 583 ms limit. Cgroup peak was 1,973,964,800 bytes, with zero `memory.max` events, OOMs and swap; the run took 494.737 seconds. The earlier 583 ms pilot acceptance remains a separate measurement.
