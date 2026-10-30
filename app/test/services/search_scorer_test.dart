@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:app/services/search_scorer.dart';
 import 'package:app/services/temporal_intent.dart';
@@ -66,6 +68,57 @@ void main() {
       score(scorer, now, 'new'),
       greaterThan(score(scorer, DateTime(2020), 'old')),
     );
+  });
+  test('packed timestamps retain hour boundaries and clamp future dates', () {
+    for (final query in ['', 'insurance']) {
+      final scorer = SearchScorer(
+        temporalIntent: null,
+        normalizedQuery: query,
+        now: now,
+      );
+      final scale = query.isEmpty ? 2 : 1;
+      for (final (age, freshness) in [
+        (const Duration(days: -1), 1.0),
+        (const Duration(microseconds: -1), 1.0),
+        (const Duration(minutes: 59, seconds: 59, microseconds: 999999), 1.0),
+        (const Duration(hours: 1), math.exp(-1 / (24 * 180))),
+        (const Duration(days: 180), math.exp(-1)),
+      ]) {
+        final date = now.subtract(age);
+        expect(
+          scorer.scoreTimestamp(
+            utcMicroseconds: date.microsecondsSinceEpoch,
+            previousResult: true,
+          ),
+          scale * freshness,
+        );
+        expect(score(scorer, date.toUtc(), 'old'), scale * freshness);
+      }
+    }
+  });
+  test('packed scoring retains temporal and explicit continuation boosts', () {
+    final query = 'same as before today morning';
+    final intent = TemporalIntent.tryParse(query, now)!;
+    final scorer = SearchScorer(
+      temporalIntent: intent,
+      normalizedQuery: query,
+      now: now,
+      lastSearchTopIds: ['old'],
+    );
+    for (final date in [now, now.toUtc()]) {
+      final expected = 1 + intent.alignmentScore(date);
+      expect(score(scorer, date, 'new'), expected);
+      expect(score(scorer, date, 'old'), expected + 1);
+      for (final previous in [false, true]) {
+        expect(
+          scorer.scoreTimestamp(
+            utcMicroseconds: date.microsecondsSinceEpoch,
+            previousResult: previous,
+          ),
+          expected + (previous ? 1 : 0),
+        );
+      }
+    }
   });
   test('today and German heute span the local calendar day', () {
     for (final query in ['today', 'heute']) {

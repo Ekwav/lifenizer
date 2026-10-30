@@ -90,7 +90,7 @@ class ConversationSearchIndex {
         for (var i = 0; i < ids.length; i++) ids[i]: i,
     };
     return {
-      'version': 1,
+      'version': 2, // Version 1 stored IDF-weighted document norms.
       if (!includeDetails) 'detailsLoaded': false,
       'terms': terms,
       'idf': [for (final term in terms) idf[term]],
@@ -177,7 +177,7 @@ class ConversationSearchIndex {
 
   /// Restores the prepared index without tokenizing text or recomputing scores.
   static ConversationSearchIndex fromJson(Map<String, dynamic> json) {
-    if (json['version'] != 1) {
+    if (json['version'] != 2) {
       throw const FormatException('Unsupported search index version');
     }
     final terms = (json['terms'] as List).cast<String>();
@@ -285,7 +285,7 @@ class ConversationSearchIndex {
     final docs = <String, IndexedConversation>{};
     final inverted = <String, Set<String>>{};
     for (final conversation in conversations) {
-      docs[conversation.id] = _analyze(
+      docs[conversation.id] = analyze(
         conversation,
         participantById,
         relationTextByConversation,
@@ -308,10 +308,6 @@ class ConversationSearchIndex {
     for (final entry in docs.entries) {
       final doc = entry.value;
       totalLength += doc.length;
-      final norm = doc.termFrequency.entries.fold(0.0, (sum, term) {
-        final weight = (1 + math.log(term.value)) * idf[term.key]!;
-        return sum + weight * weight;
-      });
       withNorm[entry.key] = IndexedConversation(
         conversation: doc.conversation,
         haystack: doc.haystack,
@@ -319,7 +315,7 @@ class ConversationSearchIndex {
         personTokens: doc.personTokens,
         tagSet: doc.tagSet,
         termFrequency: doc.termFrequency,
-        vectorNorm: math.sqrt(norm),
+        vectorNorm: _norm(doc),
         length: doc.length,
       );
       report(withNorm.length, finalizing: true);
@@ -333,12 +329,13 @@ class ConversationSearchIndex {
     );
   }
 
-  static IndexedConversation _analyze(
+  /// Analyze one document without retaining corpus-wide postings or scores.
+  static IndexedConversation analyze(
     Conversation conversation,
     Map<String, String> participantById,
-    Map<String, String> relationTextByConversation,
-    Map<String, Set<String>> inverted,
-  ) {
+    Map<String, String> relationTextByConversation, [
+    Map<String, Set<String>>? inverted,
+  ]) {
     final participantText = {
       ...conversation.participantIds,
       ...conversation.segments
@@ -353,8 +350,10 @@ class ConversationSearchIndex {
     for (final token in tokens) {
       frequency.update(token, (count) => count + 1, ifAbsent: () => 1);
     }
-    for (final token in frequency.keys) {
-      inverted.putIfAbsent(token, () => <String>{}).add(conversation.id);
+    if (inverted != null) {
+      for (final token in frequency.keys) {
+        inverted.putIfAbsent(token, () => <String>{}).add(conversation.id);
+      }
     }
     return IndexedConversation(
       conversation: conversation,
@@ -368,9 +367,9 @@ class ConversationSearchIndex {
     );
   }
 
-  static double _norm(IndexedConversation doc, Map<String, double> idf) {
-    final sum = doc.termFrequency.entries.fold(0.0, (sum, term) {
-      final weight = (1 + math.log(term.value)) * (idf[term.key] ?? 0);
+  static double _norm(IndexedConversation doc) {
+    final sum = doc.termFrequency.values.fold(0.0, (sum, frequency) {
+      final weight = 1 + math.log(frequency);
       return sum + weight * weight;
     });
     return math.sqrt(sum);
@@ -389,9 +388,8 @@ class ConversationSearchIndex {
   };
 
   /// Insert or replace one conversation without rebuilding the corpus. IDF and
-  /// the average length are recomputed (O(vocabulary)) and only this document's
-  /// vector norm is refreshed; other norms stay slightly stale until the next
-  /// full build, which affects only the vector-similarity tie-breaking.
+  /// the average length are recomputed (O(vocabulary)); only changed documents
+  /// need new log-TF norms, which are independent of corpus frequencies.
   /// Pass `refresh: false` when applying a batch and call [refreshStatistics].
   void upsert(
     Conversation conversation, {
@@ -400,7 +398,7 @@ class ConversationSearchIndex {
     bool refresh = true,
   }) {
     _detach(conversation.id);
-    final document = _analyze(
+    final document = analyze(
       conversation,
       participantById,
       relationTextByConversation,
@@ -459,7 +457,7 @@ class ConversationSearchIndex {
         personTokens: doc.personTokens,
         tagSet: doc.tagSet,
         termFrequency: doc.termFrequency,
-        vectorNorm: _norm(doc, idf),
+        vectorNorm: _norm(doc),
         length: doc.length,
       );
     }
@@ -552,7 +550,12 @@ class ConversationSearchIndex {
             (document.tagSet.contains(entry.key) ? 2.0 : 0.0) +
             (townTokens.contains(entry.key) ? 5.0 : 0.0) +
             (placeTokens.contains(entry.key) ? 2.0 : 0.0);
-        best = math.max(best, entry.value * (4 + bm25 + fieldBoost));
+        // Compress rarity monotonically so a rare body prefix does not swamp
+        // an exact title or participant match through corpus size alone.
+        best = math.max(
+          best,
+          entry.value * (4 + math.log(1 + bm25) + fieldBoost),
+        );
       }
       score += best;
     }
@@ -560,6 +563,10 @@ class ConversationSearchIndex {
     return score;
   }
 
+  /// lnc.ltc-style cosine: document weights are 1 + ln(tf), query weights use
+  /// our existing IDF over distinct terms. Query repetitions remain ignored.
+  /// Unlike symmetric TF-IDF, cached document norms never become stale when
+  /// another conversation changes a term's document frequency.
   double vectorScore(IndexedConversation document, List<String> queryTokens) {
     if (queryTokens.isEmpty || document.vectorNorm <= 0) return 0;
     var norm = 0.0;
@@ -568,7 +575,7 @@ class ConversationSearchIndex {
       final weight = idf[token] ?? 0;
       norm += weight * weight;
       final frequency = document.termFrequency[token] ?? 0;
-      if (frequency > 0) dot += weight * weight * (1 + math.log(frequency));
+      if (frequency > 0) dot += weight * (1 + math.log(frequency));
     }
     return norm > 0 ? dot / (math.sqrt(norm) * document.vectorNorm) : 0;
   }

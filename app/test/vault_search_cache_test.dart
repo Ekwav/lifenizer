@@ -249,81 +249,108 @@ void main() {
     );
   }
 
-  test(
-    'version 3 catalog opens lazily and migrates to authenticated shards',
-    () async {
-      final records = stringMapStoreFactory.store('vaults');
-      final all = await records.find(database);
-      final root = all.singleWhere((record) => record.value['format'] == 2);
-      final key = root.key;
-      final crypto = VaultCrypto();
-      addTearDown(crypto.lock);
-      await crypto.unlock(
-        email: 'person@test.invalid',
-        passphrase: 'vault passphrase',
-        vaultSalt: 'salt',
-      );
-      final manifestRecord = (await store.read('$key:search-index'))!;
-      final manifest = await crypto.decryptJson(
-        cipherText: manifestRecord['cipherText'] as String,
-        nonce: manifestRecord['nonce'] as String,
-      );
-      final shards = [
-        for (var n = 0; n < (manifest['catalogNonces'] as List).length; n++)
-          (await store.read('$key:search-catalog:$n'))!,
-      ];
-      final index = await native.decryptSearchCatalogShards(crypto, shards);
-      final legacy = await crypto.encryptJson({
-        'gzip': base64Encode(
-          gzip.encode(
-            utf8.encode(
-              jsonEncode(
-                index.toJson(includeDetails: false, includePostings: false),
-              ),
+  for (final oldNorms in [false, true]) {
+    test(
+      oldNorms
+          ? 'old IDF norms rebuild without losing unsent conversations'
+          : 'version 3 catalog opens lazily and migrates to authenticated shards',
+      () async {
+        var pending = 0;
+        if (oldNorms) {
+          final original = await open();
+          await original.addManualText(
+            title: 'Unsent norm migration',
+            participantNames: '',
+            text: 'private saved draft',
+          );
+          pending = original.pendingSyncCount;
+          expect(pending, greaterThan(0));
+          await original.lock();
+          original.dispose();
+        }
+        final records = stringMapStoreFactory.store('vaults');
+        final all = await records.find(database);
+        final root = all.singleWhere((record) => record.value['format'] == 2);
+        final key = root.key;
+        final crypto = VaultCrypto();
+        addTearDown(crypto.lock);
+        await crypto.unlock(
+          email: 'person@test.invalid',
+          passphrase: 'vault passphrase',
+          vaultSalt: 'salt',
+        );
+        final manifestRecord = (await store.read('$key:search-index'))!;
+        final manifest = await crypto.decryptJson(
+          cipherText: manifestRecord['cipherText'] as String,
+          nonce: manifestRecord['nonce'] as String,
+        );
+        final shards = [
+          for (var n = 0; n < (manifest['catalogNonces'] as List).length; n++)
+            (await store.read('$key:search-catalog:$n'))!,
+        ];
+        final index = await native.decryptSearchCatalogShards(crypto, shards);
+        final snapshot = index.toJson(
+          includeDetails: false,
+          includePostings: false,
+        );
+        if (oldNorms) snapshot['version'] = 1;
+        final legacy = await crypto.encryptJson({
+          'gzip': base64Encode(gzip.encode(utf8.encode(jsonEncode(snapshot)))),
+          'cacheVersion': 3,
+          'detailNonces': manifest['detailNonces'],
+          'postingNonces': manifest['postingNonces'],
+        });
+        final core = await crypto.decryptJson(
+          cipherText: root.value['cipherText'] as String,
+          nonce: root.value['nonce'] as String,
+        );
+        core['searchIndexNonce'] = legacy.nonce;
+        final sealedCore = await crypto.encryptJson(core);
+        await store.write('$key:search-index', {
+          'cipherText': legacy.cipherText,
+          'nonce': legacy.nonce,
+        });
+        await store.write(key, {
+          ...root.value,
+          'cipherText': sealedCore.cipherText,
+          'nonce': sealedCore.nonce,
+        });
+        final restored = await open();
+        if (oldNorms) {
+          expect(restored.error, isNull);
+          expect(restored.fullSearchBuilds, greaterThan(0));
+          expect(restored.conversations, hasLength(257));
+          expect(restored.pendingSyncCount, pending);
+          expect(
+            (await restored.searchAsync('private saved draft')).single.title,
+            'Unsent norm migration',
+          );
+        } else {
+          expect(restored.fullSearchBuilds, 0);
+          expect(
+            restored.conversations.every(
+              (conversation) => !conversation.isLoaded,
             ),
-          ),
-        ),
-        'cacheVersion': 3,
-        'detailNonces': manifest['detailNonces'],
-        'postingNonces': manifest['postingNonces'],
-      });
-      final core = await crypto.decryptJson(
-        cipherText: root.value['cipherText'] as String,
-        nonce: root.value['nonce'] as String,
-      );
-      core['searchIndexNonce'] = legacy.nonce;
-      final sealedCore = await crypto.encryptJson(core);
-      await store.write('$key:search-index', {
-        'cipherText': legacy.cipherText,
-        'nonce': legacy.nonce,
-      });
-      await store.write(key, {
-        ...root.value,
-        'cipherText': sealedCore.cipherText,
-        'nonce': sealedCore.nonce,
-      });
-      final restored = await open();
-      expect(restored.fullSearchBuilds, 0);
-      expect(
-        restored.conversations.every((conversation) => !conversation.isLoaded),
-        isTrue,
-      );
-      final migratedRecord = (await store.read('$key:search-index'))!;
-      expect(migratedRecord['cacheVersion'], 4);
-      final migrated = await crypto.decryptJson(
-        cipherText: migratedRecord['cipherText'] as String,
-        nonce: migratedRecord['nonce'] as String,
-      );
-      expect(migrated['cacheVersion'], 4);
-      expect(migrated['catalogNonces'], isNotEmpty);
-      expect(
-        (await restored.searchAsync('zebralantern')).single.id,
-        'thread-7',
-      );
-      await restored.lock();
-      restored.dispose();
-    },
-  );
+            isTrue,
+          );
+        }
+        final migratedRecord = (await store.read('$key:search-index'))!;
+        expect(migratedRecord['cacheVersion'], 4);
+        final migrated = await crypto.decryptJson(
+          cipherText: migratedRecord['cipherText'] as String,
+          nonce: migratedRecord['nonce'] as String,
+        );
+        expect(migrated['cacheVersion'], 4);
+        expect(migrated['catalogNonces'], isNotEmpty);
+        expect(
+          (await restored.searchAsync('zebralantern')).single.id,
+          'thread-7',
+        );
+        await restored.lock();
+        restored.dispose();
+      },
+    );
+  }
 
   test(
     'duplicate queries share detail reads and lock does not wait for them',

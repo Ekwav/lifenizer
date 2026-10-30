@@ -22,6 +22,10 @@ class SearchScorer {
   final DateTime? lastSearchAt;
   final List<String> lastSearchTopIds;
   final Map<String, int> sessionQueryFrequency;
+  late final _nowMicroseconds = now.microsecondsSinceEpoch;
+  late final _referencesPrevious = TemporalIntent.referencesPrevious(
+    normalizedQuery,
+  );
 
   double score({
     required DateTime documentTime,
@@ -29,17 +33,28 @@ class SearchScorer {
     bool Function(String)? haystackContains,
     bool? haystackHasNormalizedQuery,
     required bool useVector,
+  }) => scoreTimestamp(
+    utcMicroseconds: documentTime.microsecondsSinceEpoch,
+    previousResult:
+        _referencesPrevious && lastSearchTopIds.contains(conversationId),
+  );
+
+  /// Scores packed disk-index timestamps without allocating a date per match.
+  double scoreTimestamp({
+    required int utcMicroseconds,
+    required bool previousResult,
   }) {
-    final age = math.max(0.0, now.difference(documentTime).inHours / 24);
+    final hours =
+        (_nowMicroseconds - utcMicroseconds) ~/ Duration.microsecondsPerHour;
+    final age = math.max(0.0, hours / 24);
     final freshness = math.exp(-age / 180);
     if (normalizedQuery.isEmpty) return freshness * 2;
-    final continuation =
-        TemporalIntent.referencesPrevious(normalizedQuery) &&
-            lastSearchTopIds.contains(conversationId)
-        ? 1.0
-        : 0.0;
+    final continuation = _referencesPrevious && previousResult ? 1.0 : 0.0;
     return freshness +
-        (temporalIntent?.alignmentScore(documentTime) ?? 0) +
+        (temporalIntent?.alignmentScore(
+              DateTime.fromMicrosecondsSinceEpoch(utcMicroseconds, isUtc: true),
+            ) ??
+            0) +
         continuation;
   }
 
@@ -47,7 +62,6 @@ class SearchScorer {
     List<String> previousTokens,
     List<String> currentTokens,
   ) {
-    return previousTokens.isNotEmpty &&
-        TemporalIntent.referencesPrevious(normalizedQuery);
+    return previousTokens.isNotEmpty && _referencesPrevious;
   }
 }
