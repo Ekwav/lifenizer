@@ -203,6 +203,8 @@ def notify_completion(args, directory, unit, started, outcome):
     finally:
         os.close(descriptor)
     status = ("passed" if outcome.get("benchmarkPassed") else
+              "completed with correctness checks passed; latency target missed"
+              if outcome["result"] == "latency-target-missed" else
               outcome["result"] if outcome["result"] in {"stopped", "cancelled", "supervisor-error"} else
               "cancelled" if outcome["result"] == "canceled" else "failed")
     phase = ("build phase" if args.build_only else "query phase" if args.query_only else

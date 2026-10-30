@@ -125,12 +125,14 @@ class ReportingTest(unittest.TestCase):
         self.assertFalse(outcome["targetMet"])
 
     def test_latency_failure_still_returns_failure_when_wrapper_returns_zero(self):
-        code, outcome, _ = self.run_fixture(
+        code, outcome, message = self.run_fixture(
             "Finished with result: success\n",
             report={"invocationId": CURRENT, "passed": False,
                     "correctnessPassed": True, "latencyTargetPassed": False},
         )
         self.assertEqual((code, outcome["result"]), (1, "latency-target-missed"))
+        self.assertIn("correctness checks passed; latency target missed", message)
+        self.assertNotIn("full run failed", message)
 
     def test_exit_status_and_cancellation_survive_zero_wrapper_status(self):
         code, outcome, _ = self.run_fixture(
