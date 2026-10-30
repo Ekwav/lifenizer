@@ -17,7 +17,7 @@ int stableStringHash(String value) {
 int vaultChunkFor(String conversationId, int chunkCount) =>
     chunkCount <= 1 ? 0 : stableStringHash(conversationId) % chunkCount;
 
-/// Chosen once at the first v2 write: one chunk for small vaults, otherwise
-/// roughly 250 conversations per chunk within 4..128 chunks.
+/// One chunk for small vaults, otherwise roughly 250 conversations per chunk,
+/// with room for million-item vaults.
 int vaultChunkCountFor(int conversationCount) =>
-    conversationCount < 200 ? 1 : (conversationCount ~/ 250).clamp(4, 128);
+    conversationCount < 200 ? 1 : (conversationCount ~/ 250).clamp(4, 4096);

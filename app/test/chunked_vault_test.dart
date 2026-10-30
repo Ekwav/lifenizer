@@ -182,7 +182,7 @@ void main() {
     expect(vaultChunkCountFor(10), 1);
     expect(vaultChunkCountFor(1000), 4);
     expect(vaultChunkCountFor(10833), 43);
-    expect(vaultChunkCountFor(1000000), 128);
+    expect(vaultChunkCountFor(1000000), 4000);
   });
 
   test(
