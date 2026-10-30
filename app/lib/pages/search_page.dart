@@ -67,9 +67,11 @@ class _SearchPageState extends State<SearchPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final id = widget.action?.conversationId;
-      final conversation = widget.state.conversations
-          .where((item) => item.id == id)
-          .firstOrNull;
+      final conversation = id == null
+          ? null
+          : widget.state.conversations
+                .where((item) => item.id == id)
+                .firstOrNull;
       if (conversation != null) {
         openConversationDetail(context, widget.state, conversation);
       } else {
@@ -128,6 +130,21 @@ class _SearchPageState extends State<SearchPage> {
                     padding: EdgeInsets.only(bottom: 8),
                     child: LinearProgressIndicator(),
                   ),
+                if (widget.state.searchError case final String message)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(message)),
+                        TextButton(
+                          onPressed: widget.state.busy
+                              ? null
+                              : widget.state.retrySearch,
+                          child: const Text('Rebuild search'),
+                        ),
+                      ],
+                    ),
+                  ),
                 // Search input field
                 SearchInputField(
                   viewModel: _viewModel,
@@ -144,10 +161,8 @@ class _SearchPageState extends State<SearchPage> {
                       .map((item) => item.id)
                       .toList(),
                   availableTags: widget.state.allTags,
-                  availableLocations: widget.state.conversations
-                      .map((conversation) => conversation.location)
-                      .whereType<RecordingLocation>()
-                      .toList(),
+                  availableLocations: widget.state.availableLocations,
+                  locationOptions: widget.state.locationFilterOptions,
                   participantName: widget.state.participantName,
                   onFilterChanged: () => setState(() => _resultLimit = 50),
                   onClearFilters: () => setState(() {
@@ -197,7 +212,9 @@ class _SearchPageState extends State<SearchPage> {
           if (results.length > _resultLimit)
             SliverToBoxAdapter(
               child: OutlinedButton(
-                onPressed: () => setState(() => _resultLimit += 50),
+                onPressed: () => setState(
+                  () => _resultLimit = (_resultLimit + 50).clamp(50, 100),
+                ),
                 child: const Text('Show more conversations'),
               ),
             ),

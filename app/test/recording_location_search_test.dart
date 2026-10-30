@@ -178,32 +178,26 @@ void main() {
       );
     },
   );
-  test(
-    'prepared catalog retains location filtering and ranking without format change',
-    () {
-      final original = build([
-        conversation('town', location: RecordingLocation(town: 'Berlin')),
-        conversation('venue', location: RecordingLocation(venue: 'Berlin')),
-      ]);
-      final full = ConversationSearchIndex.fromJson(
-        jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>,
-      );
-      final catalogJson = original.toJson(includeDetails: false);
-      expect(catalogJson['version'], 1);
-      final catalog = ConversationSearchIndex.fromJson(
-        jsonDecode(jsonEncode(catalogJson)) as Map<String, dynamic>,
-      );
-      for (final index in [original, full, catalog]) {
-        expect(search(index, 'berlin').first, 'town');
-        expect(search(index, 'town:Berlin'), ['town']);
-        expect(
-          search(index, 'location:Berlin'),
-          containsAll(['town', 'venue']),
-        );
-      }
-      expect(catalog.documents['town']!.detailsLoaded, isFalse);
-      expect(catalog.documents['town']!.conversation.isLoaded, isFalse);
-      expect(catalog.documents['town']!.conversation.location!.town, 'Berlin');
-    },
-  );
+  test('prepared catalog retains location filtering and ranking', () {
+    final original = build([
+      conversation('town', location: RecordingLocation(town: 'Berlin')),
+      conversation('venue', location: RecordingLocation(venue: 'Berlin')),
+    ]);
+    final full = ConversationSearchIndex.fromJson(
+      jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>,
+    );
+    final catalogJson = original.toJson(includeDetails: false);
+    expect(catalogJson['version'], 2);
+    final catalog = ConversationSearchIndex.fromJson(
+      jsonDecode(jsonEncode(catalogJson)) as Map<String, dynamic>,
+    );
+    for (final index in [original, full, catalog]) {
+      expect(search(index, 'berlin').first, 'town');
+      expect(search(index, 'town:Berlin'), ['town']);
+      expect(search(index, 'location:Berlin'), containsAll(['town', 'venue']));
+    }
+    expect(catalog.documents['town']!.detailsLoaded, isFalse);
+    expect(catalog.documents['town']!.conversation.isLoaded, isFalse);
+    expect(catalog.documents['town']!.conversation.location!.town, 'Berlin');
+  });
 }

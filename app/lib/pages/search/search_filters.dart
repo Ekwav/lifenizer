@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models.dart';
 import '../../services/search_criteria.dart';
+import '../../services/search_source_groups.dart';
 import 'search_input_field.dart';
 
 /// Compact search filters with searchable participant and tag pickers.
@@ -11,6 +12,7 @@ class SearchFilters extends StatelessWidget {
     required this.availableParticipants,
     required this.availableTags,
     this.availableLocations = const [],
+    this.locationOptions,
     required this.participantName,
     required this.onFilterChanged,
     required this.onClearFilters,
@@ -31,6 +33,7 @@ class SearchFilters extends StatelessWidget {
   /// List of available tags for filtering.
   final List<String> availableTags;
   final List<RecordingLocation> availableLocations;
+  final ({List<String> towns, List<String> places})? locationOptions;
 
   /// Function to resolve participant ID to display name.
   final String Function(String id) participantName;
@@ -50,14 +53,16 @@ class SearchFilters extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final towns =
-        availableLocations
+        locationOptions?.towns ??
+        (availableLocations
             .map((location) => location.town)
             .where((town) => town.isNotEmpty)
             .toSet()
             .toList()
-          ..sort();
+          ..sort());
     final places =
-        availableLocations
+        locationOptions?.places ??
+        (availableLocations
             .where(
               (location) =>
                   location.venue.isNotEmpty || location.address.isNotEmpty,
@@ -65,8 +70,9 @@ class SearchFilters extends StatelessWidget {
             .map((location) => location.searchableText)
             .toSet()
             .toList()
-          ..sort();
+          ..sort());
     final criteria = SearchCriteria(query: viewModel.queryController.text);
+    final groups = availableSources.map(groupForSource).toSet();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -76,7 +82,12 @@ class SearchFilters extends StatelessWidget {
               child: _FilterDropdown(
                 label: 'Source',
                 value: viewModel.sourceFilter,
-                items: availableSources,
+                items: [
+                  for (final group in SearchSourceGroup.values)
+                    if (groups.contains(group)) sourceGroupFilter(group),
+                  ...availableSources,
+                ],
+                itemLabel: sourceFilterLabel,
                 onChanged: (value) {
                   viewModel.sourceFilter = value;
                   onFilterChanged();
