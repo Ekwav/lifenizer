@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-30",
+  "status": "accepted-delivery-validation-passed",
+  "codeCommit": "e830e8d",
+  "benchmarkEvidenceCommit": "ed650bd",
+  "checks": {
+    "analyze": {
+      "command": "flutter analyze --no-pub",
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-final-analyze.log",
+      "logSha256": "60c7c170fd8357d5de277734fd862d2e1c54321edea7d4fc19ac2f23a401c1eb"
+    },
+    "tests": {
+      "command": "flutter test --no-pub --reporter expanded",
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-final-tests.log",
+      "logSha256": "0e7d3651535a2f3a79111d903315d22d161d533c91678ce9a2a33c28f99938f1",
+      "passed": 882,
+      "optInSkipped": 2
+    },
+    "linux-build": {
+      "command": "flutter build linux --release --no-pub",
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-final-linux-build.log",
+      "logSha256": "a767723607a3af0de7a365af25538c29c7b6a485c0fd062d2602043eccf5e85b"
+    },
+    "web-build": {
+      "command": "flutter build web --release --no-pub",
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-final-web-build.log",
+      "logSha256": "b2d27f094d33a3e77e43545024c123e2e3aa14032b83823f6064711817f13451"
+    },
+    "supervisor-tests": {
+      "command": "python -m unittest discover -s app/tool -p test_run_million_search_benchmark.py",
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-final-supervisor-tests.log",
+      "logSha256": "f41dcd6bb4c47a8cfd051c6146cc5c4ce810845249725ce89362bfcb2b60bb01"
+    }
+  },
+  "buildArtifacts": {
+    "linuxExecutable": {
+      "path": "app/build/linux/x64/release/bundle/lifenizer",
+      "bytes": 25056,
+      "sha256": "0821ecc3b834f61a18ea9853282addf816615b42db23a09f1b9fbede6197ae16"
+    },
+    "linuxDartAotLibrary": {
+      "path": "app/build/linux/x64/release/bundle/lib/libapp.so",
+      "bytes": 10683280,
+      "sha256": "e98f37febd36fc8e8d35fa817705e8fd9124c036ad685c36f295f07adb0430d4"
+    },
+    "webJavascript": {
+      "path": "app/build/web/main.dart.js",
+      "bytes": 3959716,
+      "sha256": "fb19a3bc42c002969fa6eacac02e7463d2949f9fb627aac681aa03a977812024"
+    }
+  },
+  "frozenProductionSourcesStillMatchFinalTree": true,
+  "benchmarkProof": "two-million-score-memo-query-2026-10-30.json",
+  "deliveryAcceptance": {
+    "acceptedApproximatePilotWarmP95Ms": 583,
+    "latestHighestFamilyWarmP95Ms": 544.517,
+    "latestHighestFamilyPreparedFirstP95Ms": 539.65,
+    "originalStrict500msTargetPassed": false
+  },
+  "correctness": {
+    "conversations": 2000000,
+    "orderedTop100Comparisons": 120,
+    "authoredRelevanceJudgments": 32,
+    "originalBodiesRestored": 20,
+    "catalogChecksumUnchanged": true
+  },
+  "backendFixture": {
+    "proof": "default-production-search-validation-2026-10-29.json",
+    "conversations": 1000,
+    "passed": 1,
+    "scope": "Previously verified; backend fixture unchanged since that check."
+  },
+  "diffWhitespaceCheck": "passed",
+  "limits": [
+    "Two opt-in Flutter load tests were skipped; separate compiled benchmark evidence covers the measured 2M search workload.",
+    "Release builds do not measure whole Flutter/GTK runtime memory or actual 2M wire synchronization.",
+    "Single shared-machine benchmark with uncontrolled OS page cache; no universal latency guarantee or independent golden ordering for every top-100."
+  ]
+}
