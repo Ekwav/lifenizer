@@ -8,7 +8,7 @@ import 'conversation_search_index.dart';
 class SearchCriteria {
   /// Creates a [SearchCriteria] with the given search parameters.
   SearchCriteria({
-    required String query,
+    required this._query,
     this.source,
     this.participantId,
     this.tag,
@@ -18,7 +18,7 @@ class SearchCriteria {
     this.from,
     this.to,
     this.includeConsumed = true,
-  }) : _query = query;
+  });
 
   final String _query;
   final String? source;

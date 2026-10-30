@@ -28,14 +28,13 @@ class BrowserExtensionReceiverService extends ChangeNotifier {
     DocumentCredentialStore? store,
     ViewingBatchImporter? importer,
     Future<int?> Function(NormalizedImportResult)? messageImporter,
-    Future<void> Function(int imported)? onImported,
+    this._onImported,
     DateTime Function()? now,
     int? defaultPort,
     bool? supportedOverride,
   }) : _store = store ?? const DocumentCredentialStore(),
        _now = now ?? DateTime.now,
        _port = defaultPort ?? defaultBrowserExtensionPort,
-       _onImported = onImported,
        _supported = supportedOverride ?? _desktop {
     _importer = importer ?? _importBatch;
     _messageImporter = messageImporter ?? state.importBrowserMessages;

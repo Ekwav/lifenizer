@@ -12,9 +12,8 @@ class DocumentFolderWatchService extends ChangeNotifier {
   DocumentFolderWatchService(
     this.state, {
     DocumentCredentialStore? store,
-    Future<bool> Function(String)? importFile,
-  }) : _importFile = importFile,
-       _store = store ?? const DocumentCredentialStore();
+    this._importFile,
+  }) : _store = store ?? const DocumentCredentialStore();
   final LifenizerAppState state;
   final Future<bool> Function(String)? _importFile;
   final DocumentCredentialStore _store;

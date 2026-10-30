@@ -17,7 +17,7 @@ class PaperlessException implements Exception {
 
 /// Reads extracted text directly from a user's Paperless instance.
 class PaperlessClient {
-  PaperlessClient({http.Client? client}) : _client = client;
+  PaperlessClient({this._client});
 
   final http.Client? _client;
   static const _maxBytes = 25 * 1024 * 1024;

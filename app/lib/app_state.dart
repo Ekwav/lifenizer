@@ -65,8 +65,8 @@ part 'services/vault_backup.dart';
 
 class LifenizerAppState extends ChangeNotifier {
   LifenizerAppState({
-    LocalVaultStore? localStore,
-    VaultChunkStore? chunkStore,
+    this._localStore,
+    this._chunkStore,
     this.apiFactory,
     PairingCredentialStore? pairingStore,
     ImapCredentialStore? imapStore,
@@ -74,9 +74,7 @@ class LifenizerAppState extends ChangeNotifier {
     PaperlessClient? paperlessClient,
     DiscordBotCredentialStore? discordStore,
     DateTime Function()? syncClock,
-  }) : _localStore = localStore,
-       _chunkStore = chunkStore,
-       _syncClock = syncClock ?? DateTime.now {
+  }) : _syncClock = syncClock ?? DateTime.now {
     recording = RecordingController(this);
     recordingRelay = RecordingRelayService(this);
     stopRecording = recording.stop;

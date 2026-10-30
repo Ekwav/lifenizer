@@ -25,9 +25,9 @@ class SyncProgress {
     this.uploaded = 0,
     this.batch = 0,
     this.detail,
-    Duration elapsed = Duration.zero,
+    this._elapsed = Duration.zero,
     this.stageClock,
-  }) : _elapsed = elapsed;
+  });
 
   final SyncStage stage;
   final int completed;

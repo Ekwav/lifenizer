@@ -9,8 +9,7 @@ import '../app_state.dart';
 
 /// Watches only a file selected by the user; vault keys never leave app state.
 class ExportWatchService extends ChangeNotifier {
-  ExportWatchService({Future<void> Function(String)? importFile})
-    : _importFile = importFile;
+  ExportWatchService({this._importFile});
   static final instance = ExportWatchService();
   final Future<void> Function(String)? _importFile;
   final _storage = const FlutterSecureStorage();
