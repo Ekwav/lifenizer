@@ -44,11 +44,11 @@ class _DiskSearchPool {
       if (_closed || !identical(writes, _writes)) {
         throw StateError('Search pool preparation was cancelled.');
       }
-      await writer.prepare();
-      if (limit == 1) return;
       final next = await writer._request('documentCapacity', null) as int;
       final pages = (next + 1023) ~/ 1024;
       final count = math.min(limit, pages);
+      // Only the query readers need hydrated numeric pages after migrations.
+      await writer._request('prepare', count < 2);
       if (count < 2) return;
       if (await writer._request('releaseQueryBuffers', null) != 0) {
         throw StateError('Primary numeric query buffers were not released.');

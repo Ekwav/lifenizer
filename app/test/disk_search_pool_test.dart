@@ -179,6 +179,38 @@ void main() {
   );
 
   test(
+    'parallel preparation migrates ranking before opening readers',
+    () async {
+      await index.writeMetadata('_rankingVersion', null);
+      await index.close();
+      final database = sql.sqlite3.open(getPath());
+      try {
+        for (final table in ['rankdocuments', 'rankingpages', 'scoretiles']) {
+          database.execute('DELETE FROM $table');
+        }
+      } finally {
+        database.close();
+      }
+      index = await DiskSearchIndex.open(
+        path: getPath(),
+        vaultKey: key,
+        searchWorkers: 4,
+      );
+      await index.prepare();
+      expect(await index.readMetadata('_rankingVersion'), 6);
+      expect(await index.readMetadata('_rankingCursor'), isNull);
+      for (final criteria in [
+        SearchCriteria(query: 'archive import'),
+        SearchCriteria(query: ''),
+        SearchCriteria(query: 'grocery shopping'),
+      ]) {
+        expect(await search(criteria), canonical(criteria));
+      }
+      expect((await index.searchProfile)['searchWorkers'], 4);
+    },
+  );
+
+  test(
     'exact word absent from a local range retains the global vector query norm',
     () async {
       for (final c in [
@@ -261,8 +293,7 @@ void main() {
     'cancel and mutation during initialization leave no stale reader snapshot',
     () async {
       final preparing = index.prepare();
-      await index
-          .count; // Ordered after primary preparation, before reader startup.
+      await index.count; // Interleave a mutation with pool initialization.
       await index.cancelSearch();
       final write = index.writeMetadata('during-init', 9);
       await Future.wait([expectLater(preparing, throwsStateError), write]);
@@ -278,8 +309,7 @@ void main() {
     'failed partial reader initialization does not poison clear and rebuild',
     () async {
       final preparing = index.prepare();
-      await index
-          .count; // Primary warmed every numeric page; readers have not opened.
+      await index.count; // Interleave corruption with pool initialization.
       final database = sql.sqlite3.open(getPath());
       try {
         database.execute('PRAGMA busy_timeout=1000');

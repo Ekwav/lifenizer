@@ -583,7 +583,10 @@ class _DiskStore {
         if (generation != searchGeneration ||
             !await ensureLexiconRoutes(generation) ||
             !await ensureSourcePartitions(generation) ||
-            !await ranking.ensure(generation) ||
+            !await ranking.ensure(
+              generation,
+              warmNumericCache: value != false,
+            ) ||
             !await filters.ensure(generation) ||
             await ensureRecent(generation) == null ||
             generation != searchGeneration) {

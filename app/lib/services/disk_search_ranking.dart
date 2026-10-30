@@ -370,11 +370,13 @@ class _DiskRanking {
     }
   }
 
-  Future<bool> ensure(int? generation) async {
-    if (_ready == true) return warmNumeric(generation);
+  Future<bool> ensure(int? generation, {bool warmNumericCache = true}) async {
+    if (_ready == true) {
+      return !warmNumericCache || await warmNumeric(generation);
+    }
     final previousVersion = await store.readMetadata('_rankingVersion');
     _ready = previousVersion == version;
-    if (_ready!) return warmNumeric(generation);
+    if (_ready!) return !warmNumericCache || await warmNumeric(generation);
     final migration = await store.readMetadata('_rankingMigrationVersion');
     var block = migration == version
         ? (await store.readMetadata('_rankingCursor') as int?) ?? 0
@@ -448,7 +450,7 @@ class _DiskRanking {
       rethrow;
     }
     _ready = true;
-    return warmNumeric(generation);
+    return !warmNumericCache || await warmNumeric(generation);
   }
 }
 
@@ -802,9 +804,7 @@ class _RankingQuery {
             (_) => List<List<int>?>.filled(_DiskStore.postingPageSize, null),
           )
         : const <List<List<int>?>>[];
-    final cursors = positionsNeeded
-        ? Uint32List(starts.length)
-        : Uint32List(0);
+    final cursors = positionsNeeded ? Uint32List(starts.length) : Uint32List(0);
     final boosts = Uint8List(_DiskStore.postingPageSize);
     var boundedOut = 0;
     final groups = <int>{};
