@@ -1,0 +1,1867 @@
+{
+  "experiment": "Bounded native AES-GCM key-guard batching, candidate posting path only",
+  "date": "2026-10-29",
+  "status": "Private proposal; unapplied patches for primary-agent review",
+  "productionEditsByThisTask": false,
+  "api": {
+    "method": "NativeSidecarAead.decryptMany",
+    "synchronous": true,
+    "maxPayloads": 512,
+    "maxTotalPackedBytes": 4194304,
+    "maxReturnedPlaintextBytes": 4194304,
+    "wireFormatUnchanged": "12-byte nonce +16-byte tag +ciphertext",
+    "aadUnchanged": true,
+    "ownedInputReferencesAndAadBeforeKeyReadOnly": true,
+    "inputCallbacksExecuteWhileKeyNoAccess": true,
+    "oneKeyReadOnlyNoAccessPairPerBatch": true,
+    "noPersistentBatchState": true,
+    "nativeScratchAllocationWipeFreeEachRow": true,
+    "completedOutputsZeroedOnAnyRowFailure": true,
+    "noPartialOutputsReturnedOnFailure": true,
+    "noAuthenticationFallback": true,
+    "singleEncryptDecryptGuardTimingUnchanged": true
+  },
+  "postingIntegration": {
+    "onlyCandidatePostingSQLPathChanged": true,
+    "sqlWindowRowsUnchanged": 32,
+    "chunkCountBound": 512,
+    "chunkPackedByteBound": 4194304,
+    "consumeAndReleaseEachBoundedChunk": true,
+    "nativeUnavailableUsesExistingSequentialDartUnseal": true,
+    "oversizedSingleUsesExistingNativeUnseal": true,
+    "sourceEligibilityPreserved": true,
+    "cachedRowsReused": true,
+    "lrucaveat": "Cached lookups occur in a prepass within the existing32-row window, so eviction timing may differ; consumer order and16MiB bound preserved. No cache eviction occurred in this100k fixture.",
+    "rankingPostingFormatsAndStrictDecodeUnchanged": true,
+    "numericScoreCacheBatchingNotImplemented": true,
+    "profileCounters": [
+      "postingBatchCalls",
+      "postingBatchPayloads",
+      "postingBatchPeakPackedBytes"
+    ]
+  },
+  "focusedCorrectness": {
+    "finalInstrumentedChecks": {
+      "event": "aead-batch-correctness-complete",
+      "wireChecks": 54,
+      "batchChecks": 18,
+      "authChecks": 8,
+      "nativeScratchAllocations": 2654,
+      "nativeScratchWipesBeforeFree": 2654,
+      "nativeScratchFrees": 2654,
+      "partialOutputWipes": 10,
+      "partialOutputBytesWiped": 308000,
+      "keyWipes": 1,
+      "actualProcMapsKeyProtectionVerified": true,
+      "countBound": 512,
+      "packedByteBound": 4194304,
+      "result": "pass"
+    },
+    "actualProcSelfMapsReadOnlyNoAccessReadWriteVerified": true,
+    "customListBaseCiphertextAndAadCallbacksObserveNoAccess": true,
+    "nativeBufferZeroVerifiedImmediatelyBeforeFree": true,
+    "ownedKeyZeroVerifiedBeforeDispose": true,
+    "partialHeapOutputsZeroVerifiedBeforeRethrow": true,
+    "permanentTests": {
+      "existingUnchanged": 6,
+      "newCases": 3,
+      "existingDisposalTestExtended": true,
+      "totalPassed": 9,
+      "logSHA256": "fefd945987e9407ac1706779dd6d83c4bc178c0bfc378ef371a64d476d78404e"
+    },
+    "canonical1024": {
+      "referenceChecks": 24,
+      "mergedFourReaderOrders": 24,
+      "sameGlobalStatisticsAndExactScores": true
+    },
+    "forcedOptionalBackendUnavailableDart": {
+      "referenceChecks": 24,
+      "mergedFourReaderOrders": 24,
+      "allNativeProfilesZero": true,
+      "testOnlyForcedNullBackend": true
+    },
+    "midBatchFailureAndOversizedIntegration": {
+      "event": "posting-batch-failure-proof-complete",
+      "middlePostingIndex": 2,
+      "postingRowsInTerm": 5,
+      "authFailureThrows": true,
+      "noEmptyOrPartialSuccess": true,
+      "nativeUsableAfterAuthFailure": true,
+      "oversizedPackedBytes": 4194647,
+      "oversizedOldNativeOneCallKeepsFull100Ids": true,
+      "gzipPositionsIdentical": true,
+      "profile": {
+        "nativeAead": 1,
+        "prepareMs": 0,
+        "vocabularyReads": 1,
+        "postingBatchCalls": 2,
+        "postingBatchPayloads": 4,
+        "postingBatchPeakPackedBytes": 690,
+        "postingReads": 5,
+        "candidateMs": 38,
+        "boundMs": 0,
+        "candidateBlocks": 10,
+        "blockBoundExcludedDocuments": 0,
+        "postingCachePeakBytes": 4195868,
+        "postingCacheEntries": 5,
+        "postingCacheHits": 3,
+        "scorePostingSqlReads": 0,
+        "numericMs": 9,
+        "scorePostingReads": 3,
+        "positionReads": 0,
+        "scoredDocuments": 615,
+        "numericPostingPages": 3,
+        "scoredBlocks": 24,
+        "fallbackDocuments": 0,
+        "scoretilesReads": 49,
+        "scoreMs": 18
+      }
+    },
+    "canonicalSeedSourceIntegrity": {
+      "seed": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/parallel-query-proof-20261029/seed.sqlite",
+      "sourceSHA256Unchanged": "fdeb259966c58c03f5a2377a80f42ae970a38190f53a472fd61cae141ae39b4d"
+    }
+  },
+  "microbenchmark": {
+    "sameTotalDecryptsPerCell": 32768,
+    "workerCounts": [
+      1,
+      4,
+      8,
+      12
+    ],
+    "rotatedSamplesPerWorkerMode": 4,
+    "totalTimedDecryptions": 1048576,
+    "allCountsAndChecksumsPass": true,
+    "fixtureCount": 452,
+    "packedByteRange": [
+      232,
+      1017
+    ],
+    "everyFixtureByteVerifiedManagedSingleBatch": true,
+    "startupAndGenerationOutsideTiming": true,
+    "warmupPerWorkerOutsideTiming": 32,
+    "cpuMeasurement": "/proc/self/stat process user+system ticks at100Hz;10ms resolution",
+    "sourceVersionCaveat": "This micro run predates the owned-input/AAD snapshot hardening. Its measured helper source hash is recorded below; the final hardened helper was independently revalidated and used for all accepted real-query runs. No full micro repetition was performed.",
+    "measuredHelperSHA256": "e1a9575784fb4c4bc79a067a42322dc3bdfdb1e5b5bc46079688994498a5f809",
+    "binarySHA256": "2fffd26244a6cd8d21bedf686b324fe246f70a64bb46e9d419c4f4edfd974cf8",
+    "rows": [
+      {
+        "workers": 1,
+        "single": {
+          "ms": 101.4105,
+          "processCpuMs": 105.0,
+          "summedWorkerMs": 101.261,
+          "batches": 0.0,
+          "expectedMprotectTransitions": 65536.0,
+          "setupMs": 0.41000000000000003,
+          "maxRss": 53940224.0,
+          "wallSamplesMs": [
+            103.452,
+            99.369,
+            112.862,
+            94.91
+          ]
+        },
+        "batch": {
+          "ms": 39.213499999999996,
+          "processCpuMs": 40.0,
+          "summedWorkerMs": 39.0895,
+          "batches": 64.0,
+          "expectedMprotectTransitions": 128.0,
+          "setupMs": 0.405,
+          "maxRss": 53940224.0,
+          "wallSamplesMs": [
+            39.06,
+            38.896,
+            39.592,
+            39.367
+          ]
+        },
+        "wallReductionPercent": 61.33191336202859,
+        "cpuReductionPercent": 61.904761904761905
+      },
+      {
+        "workers": 4,
+        "single": {
+          "ms": 151.8315,
+          "processCpuMs": 450.0,
+          "summedWorkerMs": 591.3645,
+          "batches": 0.0,
+          "expectedMprotectTransitions": 65536.0,
+          "setupMs": 1.036,
+          "maxRss": 53940224.0,
+          "wallSamplesMs": [
+            158.967,
+            128.327,
+            156.895,
+            146.768
+          ]
+        },
+        "batch": {
+          "ms": 16.592,
+          "processCpuMs": 55.0,
+          "summedWorkerMs": 57.095,
+          "batches": 64.0,
+          "expectedMprotectTransitions": 128.0,
+          "setupMs": 1.0514999999999999,
+          "maxRss": 53940224.0,
+          "wallSamplesMs": [
+            19.25,
+            13.934,
+            13.912,
+            24.286
+          ]
+        },
+        "wallReductionPercent": 89.0720963699891,
+        "cpuReductionPercent": 87.77777777777777
+      },
+      {
+        "workers": 8,
+        "single": {
+          "ms": 168.77749999999997,
+          "processCpuMs": 610.0,
+          "summedWorkerMs": 1250.0555,
+          "batches": 0.0,
+          "expectedMprotectTransitions": 65536.0,
+          "setupMs": 3.5225,
+          "maxRss": 53940224.0,
+          "wallSamplesMs": [
+            165.784,
+            171.771,
+            181.442,
+            157.064
+          ]
+        },
+        "batch": {
+          "ms": 15.281500000000001,
+          "processCpuMs": 50.0,
+          "summedWorkerMs": 89.22550000000001,
+          "batches": 64.0,
+          "expectedMprotectTransitions": 128.0,
+          "setupMs": 2.327,
+          "maxRss": 55982080.0,
+          "wallSamplesMs": [
+            10.566,
+            20.858,
+            16.908,
+            13.655
+          ]
+        },
+        "wallReductionPercent": 90.94577180015109,
+        "cpuReductionPercent": 91.80327868852459
+      },
+      {
+        "workers": 12,
+        "single": {
+          "ms": 166.305,
+          "processCpuMs": 610.0,
+          "summedWorkerMs": 1784.045,
+          "batches": 0.0,
+          "expectedMprotectTransitions": 65536.0,
+          "setupMs": 2.8865,
+          "maxRss": 56178688.0,
+          "wallSamplesMs": [
+            160.354,
+            170.37,
+            171.003,
+            162.24
+          ]
+        },
+        "batch": {
+          "ms": 14.003499999999999,
+          "processCpuMs": 65.0,
+          "summedWorkerMs": 94.777,
+          "batches": 72.0,
+          "expectedMprotectTransitions": 144.0,
+          "setupMs": 3.4314999999999998,
+          "maxRss": 58279936.0,
+          "wallSamplesMs": [
+            12.144,
+            12.658,
+            18.48,
+            15.349
+          ]
+        },
+        "wallReductionPercent": 91.57962779230931,
+        "cpuReductionPercent": 89.34426229508196
+      }
+    ],
+    "processPeakRssBytes": 62619648,
+    "systemdReportedCgroupPeak": "56.7M",
+    "systemdReportedSwap": "0B",
+    "serviceWallSeconds": 2.896,
+    "serviceCpuSeconds": 7.995,
+    "expectedGuardTransitionCountsNotStraceCounts": true,
+    "sourceFixtureSHA256": "d34baff3e6cd5b0826116b7d90abea27be1889947f0199d9fb612e07dbc2d21c",
+    "invocationId": "dc062d02b6bb45279f7d79e69216a91a"
+  },
+  "real100kReadonlyQueryProof": {
+    "count": 100000,
+    "averageFixtureWordsPerConversation": 200,
+    "readers": [
+      1,
+      4
+    ],
+    "schedule": [
+      {
+        "variant": "original",
+        "readers": 1
+      },
+      {
+        "variant": "batch",
+        "readers": 1
+      },
+      {
+        "variant": "batch",
+        "readers": 4
+      },
+      {
+        "variant": "original",
+        "readers": 4
+      },
+      {
+        "variant": "original",
+        "readers": 4
+      },
+      {
+        "variant": "batch",
+        "readers": 4
+      },
+      {
+        "variant": "batch",
+        "readers": 1
+      },
+      {
+        "variant": "original",
+        "readers": 1
+      }
+    ],
+    "queryFilterCases": 18,
+    "nonemptyCases": 18,
+    "emptyCases": 0,
+    "roundsPerCasePerRun": 3,
+    "warmRoundsPerRun": 2,
+    "warmSamplesPerVariantPerQueryFilter": 4,
+    "correctness": {
+      "allFull100IdsAndExactScoresEqual": true,
+      "sampleChecks": 432,
+      "orderedIdsCompared": 43200,
+      "uniqueNonemptyQueryFilters": 18,
+      "allNativeAead": true,
+      "cacheAndBatchBoundsPass": true,
+      "batchPayloadsObserved": 186984,
+      "sourceFixture": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/score-prefix-100k-private-20261029/baseline.sqlite",
+      "sourceSHA256Unchanged": "330683ef3027a592a31c2d8fa5c211f4a783f45738716bc20c272d3a086f5d61",
+      "sourceBytes": 354340864
+    },
+    "exactFull100IdScoreProofs": [
+      {
+        "query": "search",
+        "source": null,
+        "full100IdsAndScoresSHA256": "fcec250dbd162f9309c918c31a2d910264264f05c9db40596158911eb4aac21b",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "search",
+        "source": "group:email",
+        "full100IdsAndScoresSHA256": "eee5212322cce1a19f543da2b7a2ba668d99e8a6e2e7491ffce9442376c7437f",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "search",
+        "source": "imap",
+        "full100IdsAndScoresSHA256": "eee5212322cce1a19f543da2b7a2ba668d99e8a6e2e7491ffce9442376c7437f",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "metadata",
+        "source": null,
+        "full100IdsAndScoresSHA256": "5fdce096300fd74ac8c4cd65664700490aa59ea95549239dc6c96e0fe7089906",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "metadata",
+        "source": "group:email",
+        "full100IdsAndScoresSHA256": "03efb98d5c973b3edf565042f75bd9c344333547be1732475a83ec425256930d",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "metadata",
+        "source": "imap",
+        "full100IdsAndScoresSHA256": "03efb98d5c973b3edf565042f75bd9c344333547be1732475a83ec425256930d",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "create",
+        "source": null,
+        "full100IdsAndScoresSHA256": "f12afbc0edcf35c803a92fe662cc4079bd5d4f5914e1152e00415a4c581c2bb0",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "create",
+        "source": "group:email",
+        "full100IdsAndScoresSHA256": "77986f5a670bb29e9a234e4a0b4cf917322533f1010c999b57deb65b247d5e1a",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "create",
+        "source": "imap",
+        "full100IdsAndScoresSHA256": "77986f5a670bb29e9a234e4a0b4cf917322533f1010c999b57deb65b247d5e1a",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "archive import",
+        "source": null,
+        "full100IdsAndScoresSHA256": "80d42f10e00c25b8c042db43d7d3514fa25945efd88533ae0355983caf0e1138",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "archive import",
+        "source": "group:email",
+        "full100IdsAndScoresSHA256": "09d03c0da26a7661e77e5dbad75157ec3b912cfddc661b4d157fb5a38c081c9c",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "archive import",
+        "source": "imap",
+        "full100IdsAndScoresSHA256": "09d03c0da26a7661e77e5dbad75157ec3b912cfddc661b4d157fb5a38c081c9c",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "archive export",
+        "source": null,
+        "full100IdsAndScoresSHA256": "3294885a8d24b36075913c59d66a7494632498943a6bd9cccc7ca01f04b5e5e4",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "archive export",
+        "source": "group:email",
+        "full100IdsAndScoresSHA256": "57e4c1f8b13c82172c9eac2ebfdf75fae7798c8578ebe9d3719a29ce0ec07964",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "archive export",
+        "source": "imap",
+        "full100IdsAndScoresSHA256": "57e4c1f8b13c82172c9eac2ebfdf75fae7798c8578ebe9d3719a29ce0ec07964",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "archive",
+        "source": null,
+        "full100IdsAndScoresSHA256": "57ca5d80a1386eb37792e17ec11a9946a7c3ac6cb427f2f5020539f76e5fe306",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "archive",
+        "source": "group:email",
+        "full100IdsAndScoresSHA256": "5a90c4e10856bd479e13a148926f84d3c6ebbc342b7bc79647b08d5d7603a3fd",
+        "exactFull100Checks": 24
+      },
+      {
+        "query": "archive",
+        "source": "imap",
+        "full100IdsAndScoresSHA256": "5a90c4e10856bd479e13a148926f84d3c6ebbc342b7bc79647b08d5d7603a3fd",
+        "exactFull100Checks": 24
+      }
+    ],
+    "sourceSHA256": "330683ef3027a592a31c2d8fa5c211f4a783f45738716bc20c272d3a086f5d61",
+    "sourceUnchanged": true,
+    "allRunsReadonly": true,
+    "allNativeProfilesOne": true,
+    "allCacheAndBatchBoundsPass": true,
+    "warmMeasurements": [
+      {
+        "workers": 1,
+        "query": "search",
+        "source": "group:email",
+        "original": {
+          "wallMedianMs": 42.815,
+          "processCpuMedianMs": 40.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 11.5,
+          "numericMaxMedianMs": 17.5,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 300725,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 37.09,
+          "processCpuMedianMs": 35.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 8.5,
+          "numericMaxMedianMs": 16.5,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 28.0,
+          "totalBatchPayloadsMedian": 686.0,
+          "batchPeakPackedBytes": 15239,
+          "postingCachePeakBytes": 300725,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -13.371481957257958
+      },
+      {
+        "workers": 1,
+        "query": "search",
+        "source": "imap",
+        "original": {
+          "wallMedianMs": 42.117000000000004,
+          "processCpuMedianMs": 40.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 11.5,
+          "numericMaxMedianMs": 17.0,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 300725,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 39.0235,
+          "processCpuMedianMs": 35.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.5,
+          "numericMaxMedianMs": 16.0,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 28.0,
+          "totalBatchPayloadsMedian": 686.0,
+          "batchPeakPackedBytes": 15239,
+          "postingCachePeakBytes": 300725,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -7.3450150770472895
+      },
+      {
+        "workers": 1,
+        "query": "metadata",
+        "source": null,
+        "original": {
+          "wallMedianMs": 30.6505,
+          "processCpuMedianMs": 35.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 7.5,
+          "numericMaxMedianMs": 9.0,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 86111,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 30.0925,
+          "processCpuMedianMs": 30.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 5.5,
+          "numericMaxMedianMs": 9.0,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 8.0,
+          "totalBatchPayloadsMedian": 196.0,
+          "batchPeakPackedBytes": 15170,
+          "postingCachePeakBytes": 86111,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -1.820524950653335
+      },
+      {
+        "workers": 1,
+        "query": "metadata",
+        "source": "group:email",
+        "original": {
+          "wallMedianMs": 26.311999999999998,
+          "processCpuMedianMs": 20.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 7.5,
+          "numericMaxMedianMs": 6.0,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 86111,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 25.9845,
+          "processCpuMedianMs": 20.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 7.0,
+          "numericMaxMedianMs": 5.5,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 8.0,
+          "totalBatchPayloadsMedian": 196.0,
+          "batchPeakPackedBytes": 15170,
+          "postingCachePeakBytes": 86111,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -1.2446792338096535
+      },
+      {
+        "workers": 1,
+        "query": "metadata",
+        "source": "imap",
+        "original": {
+          "wallMedianMs": 25.8335,
+          "processCpuMedianMs": 30.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 6.5,
+          "numericMaxMedianMs": 6.0,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 86111,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 25.781,
+          "processCpuMedianMs": 25.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 7.0,
+          "numericMaxMedianMs": 6.5,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 8.0,
+          "totalBatchPayloadsMedian": 196.0,
+          "batchPeakPackedBytes": 15170,
+          "postingCachePeakBytes": 86111,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -0.20322449532584885
+      },
+      {
+        "workers": 1,
+        "query": "create",
+        "source": null,
+        "original": {
+          "wallMedianMs": 52.6945,
+          "processCpuMedianMs": 55.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 10.0,
+          "numericMaxMedianMs": 28.5,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 343459,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 53.7655,
+          "processCpuMedianMs": 50.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 8.0,
+          "numericMaxMedianMs": 29.5,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 32.0,
+          "totalBatchPayloadsMedian": 784.0,
+          "batchPeakPackedBytes": 15274,
+          "postingCachePeakBytes": 343459,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": 2.032470181897561
+      },
+      {
+        "workers": 1,
+        "query": "create",
+        "source": "group:email",
+        "original": {
+          "wallMedianMs": 44.290499999999994,
+          "processCpuMedianMs": 45.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 11.0,
+          "numericMaxMedianMs": 19.5,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 343459,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 41.9845,
+          "processCpuMedianMs": 40.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.5,
+          "numericMaxMedianMs": 20.0,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 32.0,
+          "totalBatchPayloadsMedian": 784.0,
+          "batchPeakPackedBytes": 15274,
+          "postingCachePeakBytes": 343459,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -5.206534132601792
+      },
+      {
+        "workers": 1,
+        "query": "create",
+        "source": "imap",
+        "original": {
+          "wallMedianMs": 47.182500000000005,
+          "processCpuMedianMs": 50.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 13.0,
+          "numericMaxMedianMs": 19.5,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 343459,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 42.691500000000005,
+          "processCpuMedianMs": 50.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.0,
+          "numericMaxMedianMs": 20.5,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 32.0,
+          "totalBatchPayloadsMedian": 784.0,
+          "batchPeakPackedBytes": 15274,
+          "postingCachePeakBytes": 343459,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -9.518359561278011
+      },
+      {
+        "workers": 1,
+        "query": "archive import",
+        "source": null,
+        "original": {
+          "wallMedianMs": 115.31299999999999,
+          "processCpuMedianMs": 115.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 24.0,
+          "numericMaxMedianMs": 77.0,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 746141,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 112.69900000000001,
+          "processCpuMedianMs": 110.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 19.0,
+          "numericMaxMedianMs": 81.0,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 68.0,
+          "totalBatchPayloadsMedian": 1666.0,
+          "batchPeakPackedBytes": 20736,
+          "postingCachePeakBytes": 746141,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -2.2668736395722755
+      },
+      {
+        "workers": 1,
+        "query": "archive import",
+        "source": "group:email",
+        "original": {
+          "wallMedianMs": 95.39349999999999,
+          "processCpuMedianMs": 100.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 25.5,
+          "numericMaxMedianMs": 57.0,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 746141,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 88.659,
+          "processCpuMedianMs": 90.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 20.0,
+          "numericMaxMedianMs": 56.0,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 68.0,
+          "totalBatchPayloadsMedian": 1666.0,
+          "batchPeakPackedBytes": 20736,
+          "postingCachePeakBytes": 746141,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -7.059705325834553
+      },
+      {
+        "workers": 1,
+        "query": "archive import",
+        "source": "imap",
+        "original": {
+          "wallMedianMs": 103.8825,
+          "processCpuMedianMs": 105.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 24.0,
+          "numericMaxMedianMs": 63.5,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 746141,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 91.5985,
+          "processCpuMedianMs": 95.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 19.5,
+          "numericMaxMedianMs": 58.0,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 68.0,
+          "totalBatchPayloadsMedian": 1666.0,
+          "batchPeakPackedBytes": 20736,
+          "postingCachePeakBytes": 746141,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -11.824898322624112
+      },
+      {
+        "workers": 1,
+        "query": "archive export",
+        "source": null,
+        "original": {
+          "wallMedianMs": 104.9075,
+          "processCpuMedianMs": 105.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 21.5,
+          "numericMaxMedianMs": 68.0,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 660677,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 95.35300000000001,
+          "processCpuMedianMs": 90.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 16.5,
+          "numericMaxMedianMs": 66.0,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 60.0,
+          "totalBatchPayloadsMedian": 1470.0,
+          "batchPeakPackedBytes": 20736,
+          "postingCachePeakBytes": 660677,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -9.10754712484807
+      },
+      {
+        "workers": 1,
+        "query": "archive export",
+        "source": "group:email",
+        "original": {
+          "wallMedianMs": 90.2035,
+          "processCpuMedianMs": 100.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 26.0,
+          "numericMaxMedianMs": 51.5,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 660677,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 79.1645,
+          "processCpuMedianMs": 85.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 17.5,
+          "numericMaxMedianMs": 49.5,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 60.0,
+          "totalBatchPayloadsMedian": 1470.0,
+          "batchPeakPackedBytes": 20736,
+          "postingCachePeakBytes": 660677,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -12.237884339299477
+      },
+      {
+        "workers": 1,
+        "query": "archive export",
+        "source": "imap",
+        "original": {
+          "wallMedianMs": 91.162,
+          "processCpuMedianMs": 90.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 25.0,
+          "numericMaxMedianMs": 51.5,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 660677,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 83.6545,
+          "processCpuMedianMs": 85.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 18.0,
+          "numericMaxMedianMs": 52.5,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 60.0,
+          "totalBatchPayloadsMedian": 1470.0,
+          "batchPeakPackedBytes": 20736,
+          "postingCachePeakBytes": 660677,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -8.235339286106058
+      },
+      {
+        "workers": 1,
+        "query": "archive",
+        "source": null,
+        "original": {
+          "wallMedianMs": 51.778999999999996,
+          "processCpuMedianMs": 45.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 7.5,
+          "numericMaxMedianMs": 29.5,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 188415,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 42.199,
+          "processCpuMedianMs": 40.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 5.0,
+          "numericMaxMedianMs": 23.5,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 16.0,
+          "totalBatchPayloadsMedian": 392.0,
+          "batchPeakPackedBytes": 20736,
+          "postingCachePeakBytes": 188415,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -18.501709187122195
+      },
+      {
+        "workers": 1,
+        "query": "archive",
+        "source": "group:email",
+        "original": {
+          "wallMedianMs": 40.973,
+          "processCpuMedianMs": 40.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 8.0,
+          "numericMaxMedianMs": 19.0,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 188415,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 37.6265,
+          "processCpuMedianMs": 30.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 6.5,
+          "numericMaxMedianMs": 17.0,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 16.0,
+          "totalBatchPayloadsMedian": 392.0,
+          "batchPeakPackedBytes": 20736,
+          "postingCachePeakBytes": 188415,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -8.167573768091174
+      },
+      {
+        "workers": 1,
+        "query": "archive",
+        "source": "imap",
+        "original": {
+          "wallMedianMs": 40.834,
+          "processCpuMedianMs": 50.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.0,
+          "numericMaxMedianMs": 18.5,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 188415,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 35.6875,
+          "processCpuMedianMs": 35.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 7.0,
+          "numericMaxMedianMs": 16.0,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 16.0,
+          "totalBatchPayloadsMedian": 392.0,
+          "batchPeakPackedBytes": 20736,
+          "postingCachePeakBytes": 188415,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -12.60346769848656
+      },
+      {
+        "workers": 1,
+        "query": "search",
+        "source": null,
+        "original": {
+          "wallMedianMs": 56.194500000000005,
+          "processCpuMedianMs": 55.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.5,
+          "numericMaxMedianMs": 30.0,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 300725,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "batch": {
+          "wallMedianMs": 44.6915,
+          "processCpuMedianMs": 50.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 7.5,
+          "numericMaxMedianMs": 24.5,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 28.0,
+          "totalBatchPayloadsMedian": 686.0,
+          "batchPeakPackedBytes": 15239,
+          "postingCachePeakBytes": 300725,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -20.46997481959979
+      },
+      {
+        "workers": 4,
+        "query": "search",
+        "source": "group:email",
+        "batch": {
+          "wallMedianMs": 34.178,
+          "processCpuMedianMs": 110.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.5,
+          "numericMaxMedianMs": 7.5,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 28.0,
+          "totalBatchPayloadsMedian": 686.0,
+          "batchPeakPackedBytes": 11916,
+          "postingCachePeakBytes": 77105,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 37.7745,
+          "processCpuMedianMs": 130.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 12.0,
+          "numericMaxMedianMs": 9.5,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 77105,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -9.520973143258038
+      },
+      {
+        "workers": 4,
+        "query": "search",
+        "source": "imap",
+        "batch": {
+          "wallMedianMs": 32.753,
+          "processCpuMedianMs": 110.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.0,
+          "numericMaxMedianMs": 9.0,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 28.0,
+          "totalBatchPayloadsMedian": 686.0,
+          "batchPeakPackedBytes": 11916,
+          "postingCachePeakBytes": 77105,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 36.332499999999996,
+          "processCpuMedianMs": 120.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 12.0,
+          "numericMaxMedianMs": 7.0,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 77105,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -9.852060827083175
+      },
+      {
+        "workers": 4,
+        "query": "metadata",
+        "source": null,
+        "batch": {
+          "wallMedianMs": 26.272,
+          "processCpuMedianMs": 95.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 6.5,
+          "numericMaxMedianMs": 3.0,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 8.0,
+          "totalBatchPayloadsMedian": 196.0,
+          "batchPeakPackedBytes": 11831,
+          "postingCachePeakBytes": 22062,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 26.287,
+          "processCpuMedianMs": 90.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 6.5,
+          "numericMaxMedianMs": 3.0,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 22062,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -0.05706242629436309
+      },
+      {
+        "workers": 4,
+        "query": "metadata",
+        "source": "group:email",
+        "batch": {
+          "wallMedianMs": 25.146,
+          "processCpuMedianMs": 90.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 7.0,
+          "numericMaxMedianMs": 3.0,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 8.0,
+          "totalBatchPayloadsMedian": 196.0,
+          "batchPeakPackedBytes": 11831,
+          "postingCachePeakBytes": 22062,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 26.4315,
+          "processCpuMedianMs": 95.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 8.5,
+          "numericMaxMedianMs": 4.5,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 22062,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -4.863515123999774
+      },
+      {
+        "workers": 4,
+        "query": "metadata",
+        "source": "imap",
+        "batch": {
+          "wallMedianMs": 28.541,
+          "processCpuMedianMs": 90.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 8.0,
+          "numericMaxMedianMs": 3.0,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 8.0,
+          "totalBatchPayloadsMedian": 196.0,
+          "batchPeakPackedBytes": 11831,
+          "postingCachePeakBytes": 22062,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 24.3655,
+          "processCpuMedianMs": 85.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.0,
+          "numericMaxMedianMs": 2.0,
+          "totalPostingReadsMedian": 196.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 22062,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": 17.136935420984578
+      },
+      {
+        "workers": 4,
+        "query": "create",
+        "source": null,
+        "batch": {
+          "wallMedianMs": 31.4715,
+          "processCpuMedianMs": 110.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 7.0,
+          "numericMaxMedianMs": 9.0,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 32.0,
+          "totalBatchPayloadsMedian": 784.0,
+          "batchPeakPackedBytes": 11859,
+          "postingCachePeakBytes": 87618,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 36.117999999999995,
+          "processCpuMedianMs": 125.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 8.5,
+          "numericMaxMedianMs": 10.0,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 87618,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -12.864776565701309
+      },
+      {
+        "workers": 4,
+        "query": "create",
+        "source": "group:email",
+        "batch": {
+          "wallMedianMs": 32.0005,
+          "processCpuMedianMs": 120.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.0,
+          "numericMaxMedianMs": 8.0,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 32.0,
+          "totalBatchPayloadsMedian": 784.0,
+          "batchPeakPackedBytes": 11859,
+          "postingCachePeakBytes": 87618,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 32.5125,
+          "processCpuMedianMs": 125.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 11.0,
+          "numericMaxMedianMs": 8.0,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 87618,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -1.5747789311803206
+      },
+      {
+        "workers": 4,
+        "query": "create",
+        "source": "imap",
+        "batch": {
+          "wallMedianMs": 32.726,
+          "processCpuMedianMs": 110.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 8.5,
+          "numericMaxMedianMs": 9.5,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 32.0,
+          "totalBatchPayloadsMedian": 784.0,
+          "batchPeakPackedBytes": 11859,
+          "postingCachePeakBytes": 87618,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 32.7665,
+          "processCpuMedianMs": 115.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 12.5,
+          "numericMaxMedianMs": 7.0,
+          "totalPostingReadsMedian": 784.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 87618,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -0.12360184944989472
+      },
+      {
+        "workers": 4,
+        "query": "archive import",
+        "source": null,
+        "batch": {
+          "wallMedianMs": 58.334,
+          "processCpuMedianMs": 195.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 15.0,
+          "numericMaxMedianMs": 27.0,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 68.0,
+          "totalBatchPayloadsMedian": 1666.0,
+          "batchPeakPackedBytes": 16168,
+          "postingCachePeakBytes": 190575,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 57.575,
+          "processCpuMedianMs": 205.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 17.5,
+          "numericMaxMedianMs": 25.5,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 190575,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": 1.3182805036908496
+      },
+      {
+        "workers": 4,
+        "query": "archive import",
+        "source": "group:email",
+        "batch": {
+          "wallMedianMs": 51.084999999999994,
+          "processCpuMedianMs": 185.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 19.5,
+          "numericMaxMedianMs": 20.0,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 68.0,
+          "totalBatchPayloadsMedian": 1666.0,
+          "batchPeakPackedBytes": 16168,
+          "postingCachePeakBytes": 190575,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 57.010000000000005,
+          "processCpuMedianMs": 195.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 23.0,
+          "numericMaxMedianMs": 19.5,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 190575,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -10.392913523943182
+      },
+      {
+        "workers": 4,
+        "query": "archive import",
+        "source": "imap",
+        "batch": {
+          "wallMedianMs": 54.6085,
+          "processCpuMedianMs": 185.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 18.5,
+          "numericMaxMedianMs": 20.5,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 68.0,
+          "totalBatchPayloadsMedian": 1666.0,
+          "batchPeakPackedBytes": 16168,
+          "postingCachePeakBytes": 190575,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 52.486000000000004,
+          "processCpuMedianMs": 185.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 21.5,
+          "numericMaxMedianMs": 18.0,
+          "totalPostingReadsMedian": 1666.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 190575,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": 4.0439355256639775
+      },
+      {
+        "workers": 4,
+        "query": "archive export",
+        "source": null,
+        "batch": {
+          "wallMedianMs": 53.4045,
+          "processCpuMedianMs": 185.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 16.0,
+          "numericMaxMedianMs": 25.5,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 60.0,
+          "totalBatchPayloadsMedian": 1470.0,
+          "batchPeakPackedBytes": 16168,
+          "postingCachePeakBytes": 168622,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 54.949,
+          "processCpuMedianMs": 190.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 19.0,
+          "numericMaxMedianMs": 20.0,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 168622,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -2.810788185408286
+      },
+      {
+        "workers": 4,
+        "query": "archive export",
+        "source": "group:email",
+        "batch": {
+          "wallMedianMs": 45.507000000000005,
+          "processCpuMedianMs": 165.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 17.0,
+          "numericMaxMedianMs": 17.5,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 60.0,
+          "totalBatchPayloadsMedian": 1470.0,
+          "batchPeakPackedBytes": 16168,
+          "postingCachePeakBytes": 168622,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 47.465,
+          "processCpuMedianMs": 175.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 19.5,
+          "numericMaxMedianMs": 15.0,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 168622,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -4.12514484356894
+      },
+      {
+        "workers": 4,
+        "query": "archive export",
+        "source": "imap",
+        "batch": {
+          "wallMedianMs": 49.362,
+          "processCpuMedianMs": 170.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 17.0,
+          "numericMaxMedianMs": 16.5,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 60.0,
+          "totalBatchPayloadsMedian": 1470.0,
+          "batchPeakPackedBytes": 16168,
+          "postingCachePeakBytes": 168622,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 50.3155,
+          "processCpuMedianMs": 180.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 21.5,
+          "numericMaxMedianMs": 14.5,
+          "totalPostingReadsMedian": 1470.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 168622,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -1.8950422831930491
+      },
+      {
+        "workers": 4,
+        "query": "archive",
+        "source": null,
+        "batch": {
+          "wallMedianMs": 32.344,
+          "processCpuMedianMs": 110.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 7.0,
+          "numericMaxMedianMs": 8.0,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 16.0,
+          "totalBatchPayloadsMedian": 392.0,
+          "batchPeakPackedBytes": 16168,
+          "postingCachePeakBytes": 48303,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 28.9035,
+          "processCpuMedianMs": 105.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 6.5,
+          "numericMaxMedianMs": 7.0,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 48303,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": 11.903402702094912
+      },
+      {
+        "workers": 4,
+        "query": "archive",
+        "source": "group:email",
+        "batch": {
+          "wallMedianMs": 33.295,
+          "processCpuMedianMs": 105.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.0,
+          "numericMaxMedianMs": 6.0,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 16.0,
+          "totalBatchPayloadsMedian": 392.0,
+          "batchPeakPackedBytes": 16168,
+          "postingCachePeakBytes": 48303,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 33.989000000000004,
+          "processCpuMedianMs": 105.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 10.5,
+          "numericMaxMedianMs": 5.0,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 48303,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -2.0418370649327833
+      },
+      {
+        "workers": 4,
+        "query": "archive",
+        "source": "imap",
+        "batch": {
+          "wallMedianMs": 32.096000000000004,
+          "processCpuMedianMs": 110.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.0,
+          "numericMaxMedianMs": 6.5,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 16.0,
+          "totalBatchPayloadsMedian": 392.0,
+          "batchPeakPackedBytes": 16168,
+          "postingCachePeakBytes": 48303,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 31.584,
+          "processCpuMedianMs": 105.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 9.0,
+          "numericMaxMedianMs": 6.5,
+          "totalPostingReadsMedian": 392.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 48303,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": 1.6210739614995084
+      },
+      {
+        "workers": 4,
+        "query": "search",
+        "source": null,
+        "batch": {
+          "wallMedianMs": 31.2755,
+          "processCpuMedianMs": 105.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 6.0,
+          "numericMaxMedianMs": 10.0,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 28.0,
+          "totalBatchPayloadsMedian": 686.0,
+          "batchPeakPackedBytes": 11916,
+          "postingCachePeakBytes": 77105,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "original": {
+          "wallMedianMs": 33.416,
+          "processCpuMedianMs": 115.0,
+          "physicalReadBytes": 0,
+          "candidateMaxMedianMs": 8.5,
+          "numericMaxMedianMs": 10.0,
+          "totalPostingReadsMedian": 686.0,
+          "totalBatchCallsMedian": 0.0,
+          "totalBatchPayloadsMedian": 0.0,
+          "batchPeakPackedBytes": 0,
+          "postingCachePeakBytes": 77105,
+          "scorePostingSqlReadsMedian": 0.0
+        },
+        "wallChangePercent": -6.405614077088806
+      }
+    ],
+    "resourceReports": {
+      "0-original-1": {
+        "maxRss": 72167424,
+        "memoryMax": "1999998976",
+        "memorySwapMax": "0",
+        "memoryPeak": "64634880",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "a077c90e7aa74f1596a53396e6127c5d"
+      },
+      "1-batch-1": {
+        "maxRss": 72232960,
+        "memoryMax": "1999998976",
+        "memorySwapMax": "0",
+        "memoryPeak": "64376832",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "baa43b3bb9fd442bafbf9d8dd8d597f9"
+      },
+      "2-batch-4": {
+        "maxRss": 102461440,
+        "memoryMax": "1999998976",
+        "memorySwapMax": "0",
+        "memoryPeak": "95625216",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "23c35f936f87427f90b655134512b458"
+      },
+      "3-original-4": {
+        "maxRss": 102371328,
+        "memoryMax": "1999998976",
+        "memorySwapMax": "0",
+        "memoryPeak": "95686656",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "00380a0f27dd40efae15798f34f4755f"
+      },
+      "4-original-4": {
+        "maxRss": 106446848,
+        "memoryMax": "1999998976",
+        "memorySwapMax": "0",
+        "memoryPeak": "99508224",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "2e782aab517545d4983e74b64461b7b0"
+      },
+      "5-batch-4": {
+        "maxRss": 101969920,
+        "memoryMax": "1999998976",
+        "memorySwapMax": "0",
+        "memoryPeak": "95469568",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "fbdb7d915ff34006bab58be263af2942"
+      },
+      "6-batch-1": {
+        "maxRss": 71974912,
+        "memoryMax": "1999998976",
+        "memorySwapMax": "0",
+        "memoryPeak": "64720896",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "697224ef32f34685b08bace15fe738e4"
+      },
+      "7-original-1": {
+        "maxRss": 72818688,
+        "memoryMax": "1999998976",
+        "memorySwapMax": "0",
+        "memoryPeak": "64970752",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "0d59b048d58244c0b6291d702415c6a5"
+      }
+    },
+    "maxProcessRssBytes": 106446848,
+    "maxCgroupPeakBytes": 99508224,
+    "memoryMaxBytes": 1999998976,
+    "memorySwapMaxBytes": 0,
+    "noOomOrOomKill": true,
+    "cpuResolutionMs": 10,
+    "acceptedReports": [
+      {
+        "label": "0-original-1",
+        "sha256": "ce1d34e843be74333b90aee2410c448f42f9a14e8eca14dec0202a31e9c94ba3",
+        "invocationId": "a077c90e7aa74f1596a53396e6127c5d"
+      },
+      {
+        "label": "1-batch-1",
+        "sha256": "0aa55a25689a10b49b6ab8d8dff4a39f6056d25792cf766572db75b9364d8379",
+        "invocationId": "baa43b3bb9fd442bafbf9d8dd8d597f9"
+      },
+      {
+        "label": "2-batch-4",
+        "sha256": "57adcc40c0dbfe6390400b2eb24e663512d318fe4a5f0bba35738150b8c0603b",
+        "invocationId": "23c35f936f87427f90b655134512b458"
+      },
+      {
+        "label": "3-original-4",
+        "sha256": "18c83c0ed930b1ea0d14e6c44c5a5582ea1577012e388740c62b5a5153838a46",
+        "invocationId": "00380a0f27dd40efae15798f34f4755f"
+      },
+      {
+        "label": "4-original-4",
+        "sha256": "96c9f83563d3a75c1e005535c80ba8b7ac1d09e4eb5b6d76af973b13806ec11a",
+        "invocationId": "2e782aab517545d4983e74b64461b7b0"
+      },
+      {
+        "label": "5-batch-4",
+        "sha256": "7f58b47960565d983f3ae3d90dda7a47ac3e008d08edc1a66a28e50d90e59471",
+        "invocationId": "fbdb7d915ff34006bab58be263af2942"
+      },
+      {
+        "label": "6-batch-1",
+        "sha256": "71b1f9d3908e9fb2d76e2f2d2c01fd64df3cdb590bb1d880100252f64c9d90be",
+        "invocationId": "697224ef32f34685b08bace15fe738e4"
+      },
+      {
+        "label": "7-original-1",
+        "sha256": "10f65ee9b79430b02b9d086c428c7e8b1ddd76b1a987b0ede8e706104909abd3",
+        "invocationId": "0d59b048d58244c0b6291d702415c6a5"
+      }
+    ],
+    "warmAggregates": [
+      {
+        "readers": 1,
+        "queryFilterCases": 18,
+        "method": "Equal-weight mean of the18 per-case warm medians;4 warm samples per variant/case",
+        "original": {
+          "wallMedianMs": 61.25211111111111,
+          "processCpuMedianMs": 62.22222222222222,
+          "candidateMaxMedianMs": 14.36111111111111,
+          "numericMaxMedianMs": 32.69444444444444
+        },
+        "batch": {
+          "wallMedianMs": 55.98588888888889,
+          "processCpuMedianMs": 55.27777777777778,
+          "candidateMaxMedianMs": 11.13888888888889,
+          "numericMaxMedianMs": 31.52777777777778
+        },
+        "wallChangePercent": -8.59761749708401,
+        "cpuChangePercent": -11.16071428571428,
+        "candidateChangePercent": -22.437137330754343,
+        "numericChangePercent": -3.5683942225998244
+      },
+      {
+        "readers": 4,
+        "queryFilterCases": 18,
+        "method": "Equal-weight mean of the18 per-case warm medians;4 warm samples per variant/case",
+        "original": {
+          "wallMedianMs": 38.904500000000006,
+          "processCpuMedianMs": 135.83333333333334,
+          "candidateMaxMedianMs": 13.13888888888889,
+          "numericMaxMedianMs": 10.666666666666666
+        },
+        "batch": {
+          "wallMedianMs": 38.022194444444445,
+          "processCpuMedianMs": 130.55555555555554,
+          "candidateMaxMedianMs": 11.027777777777779,
+          "numericMaxMedianMs": 11.63888888888889
+        },
+        "wallChangePercent": -2.267875324334101,
+        "cpuChangePercent": -3.8854805725971553,
+        "candidateChangePercent": -16.067653276955596,
+        "numericChangePercent": 9.114583333333348
+      }
+    ],
+    "aggregateCaveats": [
+      "Equal-weight benchmark mix, not estimated production query frequency.",
+      "ABBA schedule separately rotates original/batch at1 and4 readers; two repeated runs per variant/reader, two warm rounds per run. Four samples/case is a small experiment and does not establish statistical significance or p95.",
+      "Process CPU uses100Hz user+system ticks, so individual CPU observations are quantized to10ms. Aggregated small differences can reflect quantization and runtime/GC variance.",
+      "Candidate phase timings are maximum shard elapsed time, not process CPU. Four-reader numeric-phase increase may reflect runtime/GC variance; no numeric code changed.",
+      "Do not extrapolate the isolated micro90% reduction to complete queries. Actual2M with catalog remains unmeasured for this proposal."
+    ],
+    "allStagesPhysicalReadBytesTotal": 0
+  },
+  "interpretation": [
+    "Microbenchmark shows a large isolated guard-batching win:61% wall reduction at1worker and89\u201392% at4/8/12 for fixed total work. Process CPU similarly drops.",
+    "Real candidate phases improve on broad queries, but end-to-end4-reader gains are small and mixed. Four-reader archive import unfiltered57.575\u219258.334ms (+1.3%), email57.010\u219251.085ms (-10.4%); archive export54.949\u219253.404ms (-2.8%).",
+    "One-reader archive import115.313\u2192112.699ms (-2.3%), archive export104.907\u219295.353ms (-9.1%); search56.195\u219244.691ms (-20.5%).",
+    "The100k corpus and engine-only memory proof do not establish2M latency or memory with the retained catalog. No claim of achieving500ms at2M.",
+    "All real-query physical read counters were0; this is warm CPU/SQLite evidence, not cold-device latency.",
+    "No SQL window enlargement, index-format changes, numeric-cache batching, score cutoffs, retained-key-readability state, or auth-error fallback introduced."
+  ],
+  "buildProvenance": {
+    "original": {
+      "binarySHA256": "4f130900bb572c88a0ec46a27da87335c08b7710ce10191772b8567e8a2e39bb",
+      "packageConfigSHA256": "2e626b183d7216fdf7e56206d6d0d2cafbc01f8b375e2381b0a124e03b0e4f4d",
+      "packageGraphSHA256": "1af9694317e045b010292cb0d2908cb07457fd05d6bfaca1b6e6d34d6a0ac0cb",
+      "depfileSHA256": "0ad3a422559c4e338005c5a1c4d76cb7306d575cf19708a323661568e0bb7c19",
+      "ownPrivateIndexInDepfile": true,
+      "productionIndexInDepfile": false,
+      "sources": {
+        "disk_search_index_io.dart": "8215dcee8fabfb045984c82d145cf504829f466bfacdf42d37739fdc2c13cfda",
+        "disk_search_ranking.dart": "d475a2aa37b23af6479dfb1009ae88b8b1e5cedec4691ef963a3ba2fef827d80",
+        "disk_search_filters.dart": "a9d0add7756af94696aa9874f597278dd0df9cabb1f88903667beb9043c515e8",
+        "native_sidecar_aead.dart": "00529ef89394701930723faad32c0a896f88ce41a41410545cab38c5687b2021"
+      },
+      "nativeLibraries": {
+        "libsqlite3.so": "b17729184e5a2818055ecbddd5ed6642521bfe6e56aafa472330e483c0e2e0d2",
+        "libsodium.so": "8c77d5723be854d008f67fda8c1f7a42cc1a6385bf2d975b3fb112572e3e4f41"
+      }
+    },
+    "batch": {
+      "binarySHA256": "1c1c4853e754ab982692d856c3f1dbdaa919ff0244b9dfe82c73e8ba99f9f4e0",
+      "packageConfigSHA256": "3e584a3a09b3f955541a25e0093008c191cf487ea38ea2fd911210081d283a44",
+      "packageGraphSHA256": "1af9694317e045b010292cb0d2908cb07457fd05d6bfaca1b6e6d34d6a0ac0cb",
+      "depfileSHA256": "6c8daf5092523be3b6fe27c9a785bccf45e3d352bade15b87461663d24c35c6a",
+      "ownPrivateIndexInDepfile": true,
+      "productionIndexInDepfile": false,
+      "sources": {
+        "disk_search_index_io.dart": "1603b755edf2928a3b164debc29bcaec17e38fd626b0a31076f1049fcac42c4d",
+        "disk_search_ranking.dart": "d475a2aa37b23af6479dfb1009ae88b8b1e5cedec4691ef963a3ba2fef827d80",
+        "disk_search_filters.dart": "a9d0add7756af94696aa9874f597278dd0df9cabb1f88903667beb9043c515e8",
+        "native_sidecar_aead.dart": "7cae7b040f7baf46cd0d420acd45f860d3a2fc13b404ec28aaada985e233758a"
+      },
+      "nativeLibraries": {
+        "libsqlite3.so": "b17729184e5a2818055ecbddd5ed6642521bfe6e56aafa472330e483c0e2e0d2",
+        "libsodium.so": "8c77d5723be854d008f67fda8c1f7a42cc1a6385bf2d975b3fb112572e3e4f41"
+      }
+    }
+  },
+  "patches": {
+    "native-aead-batch.patch": {
+      "sha256": "ece09beecf4a6ff2de8679471d48c79d008afcf480570e13b1da1250902bb0de",
+      "lines": 83
+    },
+    "posting-batch-integration.patch": {
+      "sha256": "39811a2166698c3303709a0a6262e679c4a401320b97e7b092ef38b18eccd3e9",
+      "lines": 106
+    },
+    "native-aead-batch-tests.patch": {
+      "sha256": "b8160934433b223a11de4c0c6fc69abd7db4907945d0c62b1ad9ab1bd4163723",
+      "lines": 110
+    }
+  },
+  "integrationPatchProductionBase": {
+    "source": "/run/media/ekwav/Data/dev/lifenizer/app/lib/services/disk_search_index_io.dart",
+    "sha256": "f56ef730db03a59705836780702dc9e9724c45178cbb38e370102e967922cbae",
+    "privateMeasuredSource": "/tmp/lifenizer-sol-aead-batch/query-batch/lib/services/disk_search_index_io.dart",
+    "replacementExactlyMatchesMeasuredPrivateLoop": true
+  },
+  "terminalEvidence": {
+    "outerABBARunnerExitCode": 0,
+    "allEightABBAUnits": "inactive/dead, MainPID0, Resultsuccess, ExecMainStatus0",
+    "allFocusedTestsAndCompileProcessesTerminal": true,
+    "noOwnedJobsRemain": true
+  },
+  "evidenceDirectory": "/tmp/lifenizer-sol-aead-batch"
+}

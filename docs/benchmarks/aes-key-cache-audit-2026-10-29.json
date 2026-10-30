@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "measuredDate": "2026-10-29",
+  "scope": "Isolated AOT cryptography 2.9.0 experiments plus instrumented read/query-only production copy on the private 100k synthetic corpus; actual active 2M database never accessed; concurrent host; no production/dependency changes",
+  "sdk": "3.12.2 (stable) (Tue Jun 9 01:11:39 2026 -0700) on \"linux_x64\"",
+  "implementation": "DartAesGcm",
+  "sampling": {
+    "independentRuns": 2,
+    "samplesPerVariantPerRun": 8,
+    "combinedSamplesPerVariant": 16,
+    "storedPostingPlaintextRangeBytes": [
+      192,
+      681
+    ],
+    "generatedUpperRange": "Existing v5 position codec with varied positions in 200-word documents; 900\u20131000 byte payloads because this stored corpus has no such large posting rows",
+    "timedWork": "AES encrypt/decrypt only, excluding SQLite, gzip, fixture generation, RNG and key creation"
+  },
+  "microbenchmark": [
+    {
+      "group": "payload-200-299",
+      "storedPostingFixture": true,
+      "pages": 64,
+      "minBytes": 204,
+      "maxBytes": 209,
+      "medianMicrosecondsPerOperation": {
+        "decrypt:plain-async": 20.861572265625,
+        "decrypt:cached-async": 20.450439453125,
+        "decrypt:plain-sync": 19.558349609375,
+        "decrypt:cached-sync": 19.01513671875,
+        "encrypt:plain-async": 20.785888671875,
+        "encrypt:cached-async": 19.963623046875,
+        "encrypt:plain-sync": 19.721923828125,
+        "encrypt:cached-sync": 19.004638671875
+      },
+      "cacheOnlyDecryptGainPercent": 1.97076618801858,
+      "cachedSyncDecryptGainPercent": 8.850893515430258
+    },
+    {
+      "group": "payload-400-499",
+      "storedPostingFixture": true,
+      "pages": 64,
+      "minBytes": 403,
+      "maxBytes": 499,
+      "medianMicrosecondsPerOperation": {
+        "decrypt:plain-async": 43.425048828125,
+        "decrypt:cached-async": 43.618408203125,
+        "decrypt:plain-sync": 43.135498046875,
+        "decrypt:cached-sync": 42.666015625,
+        "encrypt:plain-async": 43.745361328125,
+        "encrypt:cached-async": 44.67529296875,
+        "encrypt:plain-sync": 43.068115234375,
+        "encrypt:cached-sync": 43.3271484375
+      },
+      "cacheOnlyDecryptGainPercent": -0.44527152005127135,
+      "cachedSyncDecryptGainPercent": 1.747915600807337
+    },
+    {
+      "group": "payload-600-699",
+      "storedPostingFixture": true,
+      "pages": 64,
+      "minBytes": 600,
+      "maxBytes": 681,
+      "medianMicrosecondsPerOperation": {
+        "decrypt:plain-async": 57.682373046875,
+        "decrypt:cached-async": 56.190673828125,
+        "decrypt:plain-sync": 57.822265625,
+        "decrypt:cached-sync": 55.9189453125,
+        "encrypt:plain-async": 58.396728515625,
+        "encrypt:cached-async": 58.313232421875,
+        "encrypt:plain-sync": 58.27880859375,
+        "encrypt:cached-sync": 57.34228515625
+      },
+      "cacheOnlyDecryptGainPercent": 2.5860572995805575,
+      "cachedSyncDecryptGainPercent": 3.0571345130720795
+    },
+    {
+      "group": "exact-term-archive",
+      "storedPostingFixture": true,
+      "pages": 98,
+      "minBytes": 452,
+      "maxBytes": 681,
+      "medianMicrosecondsPerOperation": {
+        "decrypt:plain-async": 54.719873663751216,
+        "decrypt:cached-async": 54.106656948493686,
+        "decrypt:plain-sync": 53.20286686103013,
+        "decrypt:cached-sync": 53.357385811467445,
+        "encrypt:plain-async": 54.310009718172985,
+        "encrypt:cached-async": 54.935374149659864,
+        "encrypt:plain-sync": 54.825558794946545,
+        "encrypt:cached-sync": 54.51068999028183
+      },
+      "cacheOnlyDecryptGainPercent": 1.120647169300304,
+      "cachedSyncDecryptGainPercent": 2.4899323793328487
+    },
+    {
+      "group": "exact-term-import",
+      "storedPostingFixture": true,
+      "pages": 98,
+      "minBytes": 364,
+      "maxBytes": 482,
+      "medianMicrosecondsPerOperation": {
+        "decrypt:plain-async": 40.62439261418854,
+        "decrypt:cached-async": 39.79786200194363,
+        "decrypt:plain-sync": 38.79543245869776,
+        "decrypt:cached-sync": 38.43901846452867,
+        "encrypt:plain-async": 41.010689990281826,
+        "encrypt:cached-async": 39.808066083576286,
+        "encrypt:plain-sync": 39.00485908649174,
+        "encrypt:cached-sync": 39.090621963070944
+      },
+      "cacheOnlyDecryptGainPercent": 2.034567310567581,
+      "cachedSyncDecryptGainPercent": 5.379462950780455
+    },
+    {
+      "group": "generated-v5-900-1000",
+      "storedPostingFixture": false,
+      "pages": 64,
+      "minBytes": 953,
+      "maxBytes": 989,
+      "medianMicrosecondsPerOperation": {
+        "decrypt:plain-async": 86.423828125,
+        "decrypt:cached-async": 84.82421875,
+        "decrypt:plain-sync": 83.958740234375,
+        "decrypt:cached-sync": 84.57373046875,
+        "encrypt:plain-async": 87.33056640625,
+        "encrypt:cached-async": 85.228759765625,
+        "encrypt:plain-sync": 85.711181640625,
+        "encrypt:cached-sync": 84.221435546875
+      },
+      "cacheOnlyDecryptGainPercent": 1.8508892856335724,
+      "cachedSyncDecryptGainPercent": 2.140726344098176
+    }
+  ],
+  "verification": {
+    "wireChecksPerRun": 8,
+    "authenticationChecksPerRun": 32,
+    "covers": [
+      "same AES-256 key, 12-byte nonce, ciphertext and 128-bit tag for all four variants",
+      "empty and nonempty AAD",
+      "ciphertext/nonce/tag/AAD tamper rejection",
+      "cached encryption/decryption schedule identity and explicit zeroing on destroy",
+      "owning raw key bytes overwritten by owner.destroy",
+      "destroyed key reuse rejected"
+    ],
+    "diagnosticOnlyPrivateApi": "Expanded schedules were observed using cryptography/src/dart/aes_impl.dart only in the scratch verifier; proposed public integration would not import it"
+  },
+  "queryAttribution": {
+    "query": "archive import",
+    "conversations": 100000,
+    "realSummaryCatalogRetained": true,
+    "returned": 100,
+    "orderedIdsStableAcrossSamples": true,
+    "firstSampleMs": 377.731,
+    "warmSamples": 7,
+    "warmMedianElapsedMs": 317.873,
+    "warmMedianProfile": {
+      "prepareMs": 0,
+      "cryptoMicros:candidate": 68682,
+      "cryptoBytes:candidate": 763926,
+      "cryptoCalls:candidate": 1683,
+      "vocabularyReads": 15,
+      "postingReads": 1666,
+      "candidateMs": 98,
+      "boundMs": 1,
+      "candidateBlocks": 783,
+      "cryptoMicros:numeric": 66763,
+      "cryptoBytes:numeric": 746141,
+      "cryptoCalls:numeric": 1666,
+      "numericMs": 200,
+      "scorePostingReads": 1666,
+      "positionReads": 882,
+      "scoredDocuments": 77265,
+      "numericPostingPages": 98,
+      "scoredBlocks": 784,
+      "fallbackDocuments": 0,
+      "scoretilesReads": 100,
+      "cryptoMicros:results": 9468,
+      "cryptoBytes:results": 114269,
+      "cryptoCalls:results": 100,
+      "scoreMs": 221
+    },
+    "medianStageCryptoTotalMs": 144.913,
+    "cryptoFractionOfQueryApprox": 0.4558833244723522,
+    "candidateCryptoFractionApprox": 0.7008367346938775,
+    "numericCryptoFractionApprox": 0.33381500000000003,
+    "interpretation": "Candidate and numeric passes each read 1666 postings; candidate adds vocabulary/metadata reads. Their AES timings dominate different fractions of each phase. Per-page stopwatch instrumentation adds overhead; values are attribution estimates, not production percentile results."
+  },
+  "keyLifecycle": {
+    "factoryIssue": "newSecretKeyFromBytes returns the cached expanded-key subtype but defaults overwriteWhenDestroyed to false. Calling only its destroy wipes expanded schedules but leaves the original caller-owned raw bytes unchanged.",
+    "verifiedPublicOwnershipRoute": "Keep existing SecretKeyData(raw, overwriteWhenDestroyed:true) as owner; cached = await (await DartAesGcm.with256bits().newSecretKeyFromBytes(owner.bytes)).extract(); close cached.destroy() then owner.destroy().",
+    "recommendation": "Do not add this lifecycle state for the measured marginal improvement."
+  },
+  "nativeAlternatives": {
+    "webcrypto": "Previously inspected maintained BoringSSL wrapper supports Linux, but imports a private raw-key copy and exposes no public destruction API; exportRawKey returns another copy. It would change explicit cleanup guarantees. Not adopted.",
+    "cryptography_flutter": "Previously inspected Linux/Windows AES-GCM uses BackgroundAesGcm, still Dart rather than native AES acceleration.",
+    "implemented": "No FFI, new dependency, GHASH modification, cipher-format change, or authentication weakening."
+  },
+  "recommendation": "Keep production unchanged. Cache-only gains are generally about 1\u20133%; combined cached/sync gains are small and variable. Even materially faster AES would leave substantial posting decoding and scoring work; actual 2M measurements remain decisive. The repeated posting decryption between candidate and scoring passes is a concrete reuse opportunity to assess separately.",
+  "productionSourcesUnchanged": true,
+  "rawEvidenceDirectory": "app/build/benchmarks/aes-key-cache-audit-20261029"
+}

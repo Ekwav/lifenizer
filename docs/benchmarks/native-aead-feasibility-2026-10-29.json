@@ -1,0 +1,358 @@
+{
+  "date": "2026-10-29",
+  "scope": "Independent synthetic AOT feasibility research followed by authorized helper/tests/dependency integration. No active2M database access and no2M latency/capacity claim.",
+  "recommendation": "Native helper and pinned dependency approved and implemented. Primary agent owns worker dispatch/lifecycle integration and broader validation; no operation/authentication fallback is permitted.",
+  "versions": {
+    "Dart": "3.12.2",
+    "cryptography": "2.9.0",
+    "archive": "4.3.0",
+    "sodium": "4.0.4",
+    "bundledLibsodium": "1.0.21",
+    "hostLibsodiumReadOnlyProbe": "1.0.22",
+    "ffi": "2.2.0"
+  },
+  "method": {
+    "input": "Existing synthetic100k posting ciphertext fixture exported by previous audit; keys are synthetic bytes0..31. No database opened in this audit. Real fixture maximum681B; separately generated validv5 varied-position pages cover953\u2013989B.",
+    "native": "One persistent guarded SodiumPointer key; readonly during each synchronous native AES256GCM call, noAccess otherwise. One calloc scratch input/output buffer per call, sodium_memzero then free. Maintained one-shot detached AEAD only; no handwritten AES/GHASH.",
+    "baseline": "Production-exact nonce12/tag16/ciphertext packing and conditional Uint8List conversion, existing DartAesGcm async API. Both variants include byte copies/packing as relevant.",
+    "sampling": "Two AOT runs,8 rotated-order samples per variant/group/run,at least2048operations per sample. Concurrent host; no hard memory cap. RNG/key creation/SQLite/gzip excluded from microbench timing.",
+    "nativeBuild": "Package native build hooks compiled and bundled its own449480-byte Linux .so; benchmark did not use system .so."
+  },
+  "combined16SampleMedians": [
+    {
+      "group": "payload-200-299",
+      "realStoredPosting": true,
+      "payloads": 64,
+      "plaintextBytes": [
+        204,
+        209
+      ],
+      "medianMicroseconds": {
+        "dartDecrypt": 19.9443359375,
+        "nativeDecrypt": 2.66943359375,
+        "dartEncrypt": 20.556640625,
+        "nativeEncrypt": 2.74658203125
+      },
+      "decryptSpeedup": 7.471373696725809,
+      "encryptSpeedup": 7.484444444444445
+    },
+    {
+      "group": "payload-400-499",
+      "realStoredPosting": true,
+      "payloads": 64,
+      "plaintextBytes": [
+        403,
+        499
+      ],
+      "medianMicroseconds": {
+        "dartDecrypt": 40.329345703125,
+        "nativeDecrypt": 2.883056640625,
+        "dartEncrypt": 41.565673828125,
+        "nativeEncrypt": 2.92724609375
+      },
+      "decryptSpeedup": 13.988398678973665,
+      "encryptSpeedup": 14.199582985821518
+    },
+    {
+      "group": "payload-600-699",
+      "realStoredPosting": true,
+      "payloads": 64,
+      "plaintextBytes": [
+        600,
+        681
+      ],
+      "medianMicroseconds": {
+        "dartDecrypt": 53.51025390625,
+        "nativeDecrypt": 3.122314453125,
+        "dartEncrypt": 56.67333984375,
+        "nativeEncrypt": 3.207275390625
+      },
+      "decryptSpeedup": 17.138009226679177,
+      "encryptSpeedup": 17.670244348024664
+    },
+    {
+      "group": "exact-term-archive",
+      "realStoredPosting": true,
+      "payloads": 98,
+      "plaintextBytes": [
+        452,
+        681
+      ],
+      "medianMicroseconds": {
+        "dartDecrypt": 52.9533527696793,
+        "nativeDecrypt": 3.118075801749271,
+        "dartEncrypt": 54.7014091350826,
+        "nativeEncrypt": 3.280369290573372
+      },
+      "decryptSpeedup": 16.982702197288454,
+      "encryptSpeedup": 16.675381424974077
+    },
+    {
+      "group": "exact-term-import",
+      "realStoredPosting": true,
+      "payloads": 98,
+      "plaintextBytes": [
+        364,
+        482
+      ],
+      "medianMicroseconds": {
+        "dartDecrypt": 38.99781341107872,
+        "nativeDecrypt": 2.8206997084548107,
+        "dartEncrypt": 38.09645286686103,
+        "nativeEncrypt": 2.8534985422740524
+      },
+      "decryptSpeedup": 13.825581395348836,
+      "encryptSpeedup": 13.350787569178374
+    },
+    {
+      "group": "generated-v5-900-1000",
+      "realStoredPosting": false,
+      "payloads": 64,
+      "plaintextBytes": [
+        953,
+        989
+      ],
+      "medianMicroseconds": {
+        "dartDecrypt": 78.845703125,
+        "nativeDecrypt": 3.295166015625,
+        "dartEncrypt": 82.209716796875,
+        "nativeEncrypt": 3.64990234375
+      },
+      "decryptSpeedup": 23.9276876342891,
+      "encryptSpeedup": 22.5238127090301
+    }
+  ],
+  "securityChecksPerRun": {
+    "wireChecks": 946,
+    "authChecks": 54,
+    "nativeWipeChecks": 986,
+    "nativeKeyZeroBeforeFree": true,
+    "dartKeyZero": true,
+    "disposedRejected": 2
+  },
+  "securityReplicationMatches": true,
+  "keyLifecycleEvidence": {
+    "rawKey": "Observed32-byte guarded key allzero before nativefree; caller owning Dart key destroys rawbytes; disposed adapter encrypt/decrypt rejected. Proposal disposal wraps mprotect+memzero in finally key.dispose.",
+    "temporaryBuffers": "986zero-before-free checks per run include success and every auth failure; proposal free is nestedfinally even if zero call throws. Auth failures expose no recovered plaintext.",
+    "nativeExpandedState": "Bundled1.0.21 AESNI one-shot encrypt_detached and decrypt_detached call sodium_memzero(&st,sizeof st) before returning. No persistent expanded context owned by adapter. Source audit, not post-free invalid-memory reads.",
+    "limitations": "The diagnostic proves adapter-owned native allocations and observed raw-key buffer clearing; it is not forensic proof that no historical CPU register/VM copy ever existed."
+  },
+  "mixedMemoryRuns": [
+    {
+      "operations": 100000,
+      "seconds": 4.522501,
+      "sampledRSSBytes": [
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800,
+        22732800
+      ],
+      "processInfoReportedPeakRSSBytes": 22228992
+    },
+    {
+      "operations": 100000,
+      "seconds": 4.607769,
+      "sampledRSSBytes": [
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000,
+        22528000
+      ],
+      "processInfoReportedPeakRSSBytes": 21868544
+    }
+  ],
+  "mixedMemoryScope": "100000 native-decrypt+strict managed-GZipDecoderWeb operations per run on actual archive postings;every16th operation also managed-GZipEncoderWeb+nativeencrypt. RSS recorded after each5000operations; no nativezlib. ProcessInfo peak and currentRSS are separate OS observations; use sampled range rather than treating them as a cgroup maximum.",
+  "proposalValidation": {
+    "native": true,
+    "wireChecks": 48,
+    "authRejects": 62,
+    "disposedRejects": 2,
+    "rawOwnerZero": true
+  },
+  "missingBundledLibraryProposal": {
+    "native": false,
+    "wireChecks": 48,
+    "authRejects": 0,
+    "disposedRejects": 0,
+    "rawOwnerZero": true
+  },
+  "availabilityTests": {
+    "actualCPU": "Bundled AES256GCM is_available()==1.",
+    "unavailableCPU": {
+      "fallbackSelected": true,
+      "reason": "UnsupportedError: Unsupported operation: simulated CPU lacks AES",
+      "roundTrip": true,
+      "rawKeyZero": true
+    },
+    "missingLibrary": {
+      "fallbackSelected": true,
+      "reason": "ArgumentError: Invalid argument(s): Couldn't resolve native function 'sodium_init' in 'package:sodium/libsodium' : Failed to load dynamic library '../lib/libsodium.so' relative to '/tmp/lifenizer-native-aead-audit/missing-library/bin/probe': Failed to load dynamic library '/tmp/lifenizer-native-aead-audit/missing-library/lib/libsodium.so': /tmp/lifenizer-native-aead-audit/missing-library/lib/libsodium.so: cannot open shared object file: No such file or directory.\n",
+      "roundTrip": true,
+      "rawKeyZero": true
+    },
+    "scope": "UnavailableCPU branch was injected; missinglibrary was real relocated AOT executable with no sibling .so. Bothfallbacks roundtrip through Dart. RealnonAESCPU not available here."
+  },
+  "dependencyChoice": {
+    "preferred": "4.0.4",
+    "reason": "Raises declared SDKfloor3.11.5\u21923.12.0, already covered by existing Flutter3.44.4CI. Only hooks/code_assets patchlevel upgrades; avoids4.0.2+1 downgrading native_toolchain_c and Objective-C packages.",
+    "actualCopiedAppResolutions": {
+      "402": {
+        "code_assets": {
+          "before": "1.2.0",
+          "after": "1.0.0"
+        },
+        "csslib": {
+          "before": null,
+          "after": "1.0.2"
+        },
+        "freezed_annotation": {
+          "before": null,
+          "after": "3.1.0"
+        },
+        "hooks": {
+          "before": "2.0.0",
+          "after": "1.0.3"
+        },
+        "html": {
+          "before": null,
+          "after": "0.15.7"
+        },
+        "json_annotation": {
+          "before": null,
+          "after": "4.12.0"
+        },
+        "native_toolchain_c": {
+          "before": "0.19.2",
+          "after": "0.17.6"
+        },
+        "objective_c": {
+          "before": "9.4.1",
+          "after": "9.3.0"
+        },
+        "sodium": {
+          "before": null,
+          "after": "4.0.2+1"
+        }
+      },
+      "404": {
+        "code_assets": {
+          "before": "1.2.0",
+          "after": "1.2.1"
+        },
+        "csslib": {
+          "before": null,
+          "after": "1.0.2"
+        },
+        "freezed_annotation": {
+          "before": null,
+          "after": "3.1.0"
+        },
+        "hooks": {
+          "before": "2.0.0",
+          "after": "2.0.2"
+        },
+        "html": {
+          "before": null,
+          "after": "0.15.7"
+        },
+        "json_annotation": {
+          "before": null,
+          "after": "4.12.0"
+        },
+        "sodium": {
+          "before": null,
+          "after": "4.0.4"
+        }
+      }
+    },
+    "alternative3.4.6": "SDK3.8, publicLibSodiumFFI(DynamicLibrary) and SodiumPointer; no nativebuildhooks, requires explicitLinux .so provision. Rejected as primary because systemlibrary-only fallback does not give repeatable acceleration on freshLinux installs."
+  },
+  "platformImpact": {
+    "runtime": "Proposal returnsnull immediately outsideLinux; existingDart implementation handlesAndroid/iOS/macOS/Windows/Web. Disk IO implementation is already conditionally excluded onWeb.",
+    "build": "Sodium4.x nativebuildhooks still run/bundle on other native targets even though runtime acceleratorisLinux-only. Linux AOT compilation proven. Android/Web/fullFlutter/Linux release builds NOT yet run and require integration gate. Package supports Android/iOS/Linux/macOS/Windows/Web; Android crosscompilation usesNDK/toolchain. Windows\u2192Android may needbash+make according to maintainer.",
+    "artifactSize": "Linux bundled libsodium.so449480bytes; executable overhead not isolated from benchmarkharness.",
+    "fallback": "Absent/failednativeinitialization or unavailableAES permits Dart; no format/version migration, changednonce generation, or authfallback."
+  },
+  "otherMaintainedCandidates": {
+    "at_chops3.7.0": "Rejected for lifecycle requirement: AESKey retains immutablebase64 String and aes_gcm_ffi_algo decodes per-operation Dart copies withoutdeterministic keydestroy. OpenSSLcontexts are freed, but keyownership isweaker.",
+    "webcrypto": "Prior audit found no publickeydispose, so notselected."
+  },
+  "proposal": {
+    "path": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/native-aead-audit-20261029/production-proposal.patch",
+    "applied": "Helper and dependency changes implemented after primary-agent authorization; archived patch is the earlier review proposal, not a current patch to apply blindly.",
+    "adapterSourceLines": 98,
+    "description": "Newnativeadapter, one store-owned nullablebackend initialized inworker,seal/unsealdispatch,finallydispose onclose,pinneddependency+SDKfloor+resolvedlockfile. Existingcipher remains fornonces,HMAC andfallback. Reviewartifact only."
+  },
+  "evidenceDirectory": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/native-aead-audit-20261029",
+  "sha256": {
+    "probe.dart": "a988e10f681bb6f407313f768e8ce1ad4eb1b1313265243cc11258bf097b1453",
+    "native_sidecar_aead.dart": "c173fd4d3bd3d492528989da16ba331ae404ff0d8deda776620b9a4a18b5f18a",
+    "production-proposal.patch": "26b81dc3078cad327e86acc82008c13b074a4e35f45f1e2fa91df1d7203cc3aa",
+    "aot-bundle/bin/probe": "6cf63740c79f18ade29026e7a738532f7e444a622ec935ce8c54b45048dab4ae",
+    "aot-bundle/lib/libsodium.so": "8c77d5723be854d008f67fda8c1f7a42cc1a6385bf2d975b3fb112572e3e4f41"
+  },
+  "primarySources": [
+    "https://pub.dev/packages/sodium/versions/4.0.4",
+    "https://pub.dev/packages/sodium/versions/4.0.2%2B1",
+    "https://pub.dev/documentation/sodium/4.0.4/sodium.ffi/LibSodiumFFI-class.html",
+    "https://pub.dev/documentation/sodium/4.0.4/sodium.ffi/SodiumPointer-class.html",
+    "https://github.com/Skycoder42/libsodium_dart_bindings",
+    "https://doc.libsodium.org/secret-key_cryptography/aead/aes-256-gcm",
+    "https://doc.libsodium.org/memory_management",
+    "https://github.com/jedisct1/libsodium/blob/1.0.21-RELEASE/src/libsodium/crypto_aead/aes256gcm/aesni/aead_aes256gcm_aesni.c",
+    "https://pub.dev/packages/at_chops/versions/3.7.0"
+  ],
+  "implementationFollowup": {
+    "ownedFiles": [
+      "app/lib/services/native_sidecar_aead.dart",
+      "app/test/native_sidecar_aead_test.dart",
+      "app/pubspec.yaml",
+      "app/pubspec.lock"
+    ],
+    "workerIntegration": "Owned by primary agent; not edited by this subagent.",
+    "validation": {
+      "focusedTests": "6/6passed; native backend present, no tests skipped. Empty/boundarymessages,bidirectionalwire,AAD/tampering,post-authfailurerecovery,truncation,caller-keycopy,idempotentdisposeanddestroyedreuse.",
+      "analysis": "No issues found for helper and focusedtest.",
+      "dependencyResolution": "Actual app lock exactly equals the independently resolved4.0.4 manifest copy; no unrelatedupgrades."
+    },
+    "remaining": "Primary-agent fullsuite,Android/Web/Linuxreleasebuilds and realcapacity/latencygates. Nativebuildhooks affectallnativeplatforms despiteLinux-onlyruntimeacceleration.",
+    "sha256": {
+      "app/lib/services/native_sidecar_aead.dart": "00529ef89394701930723faad32c0a896f88ce41a41410545cab38c5687b2021",
+      "app/test/native_sidecar_aead_test.dart": "3b013e6f080d1c9ae61dddd800aa18fe7e74f157b33df803202fcc3b3f9ccb6e",
+      "app/pubspec.yaml": "b9d4d41c8ce8218847eb746e8ab777749c96cb63eeb8c3011bd4375baf565ba1",
+      "app/pubspec.lock": "0c759cea09783a642277756708c4b87335f78178e5e21de36fb2d9b8e5100b0f"
+    }
+  }
+}
