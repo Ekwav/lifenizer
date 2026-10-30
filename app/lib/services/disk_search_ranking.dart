@@ -784,6 +784,28 @@ class _RankingQuery {
     for (final block in blocks) {
       blockBounds[block.page] = block.bound;
     }
+    final eligible = Uint8List(_DiskRanking.bitmapBytes);
+    final best = List.generate(
+      tokens.length,
+      (_) => Float64List(_DiskStore.postingPageSize),
+    );
+    final vector = criteria.useVector
+        ? List.generate(
+            tokens.length,
+            (_) => Float64List(_DiskStore.postingPageSize),
+          )
+        : const <Float64List>[];
+    final phrase = Uint8List(_DiskStore.postingPageSize);
+    final starts = positionsNeeded
+        ? List.generate(
+            _phraseTokens.length,
+            (_) => List<List<int>?>.filled(_DiskStore.postingPageSize, null),
+          )
+        : const <List<List<int>?>>[];
+    final cursors = positionsNeeded
+        ? Uint32List(starts.length)
+        : Uint32List(0);
+    final boosts = Uint8List(_DiskStore.postingPageSize);
     var boundedOut = 0;
     final groups = <int>{};
     var reads = 0;
@@ -800,7 +822,7 @@ class _RankingQuery {
       final numeric = ByteData.sublistView(
         await store.ranking.numericPage(page),
       );
-      final eligible = Uint8List(_DiskRanking.bitmapBytes);
+      eligible.fillRange(0, eligible.length, 0);
       final base = page * _DiskStore.postingPageSize;
       var count = 0;
       for (
@@ -831,27 +853,17 @@ class _RankingQuery {
         count++;
       }
       if (count == 0) continue;
-      final best = List.generate(
-        tokens.length,
-        (_) => Float64List(_DiskStore.postingPageSize),
-      );
-      final vector = criteria.useVector
-          ? List.generate(
-              tokens.length,
-              (_) => Float64List(_DiskStore.postingPageSize),
-            )
-          : const <Float64List>[];
-      final phrase = Uint8List(_DiskStore.postingPageSize);
-      final starts = positionsNeeded
-          ? List.generate(
-              _phraseTokens.length,
-              (_) => List<List<int>?>.filled(_DiskStore.postingPageSize, null),
-            )
-          : const <List<List<int>?>>[];
-      final cursors = positionsNeeded
-          ? Uint32List(starts.length)
-          : Uint32List(0);
-      final boosts = Uint8List(_DiskStore.postingPageSize);
+      for (final values in best) {
+        values.fillRange(0, values.length, 0);
+      }
+      for (final values in vector) {
+        values.fillRange(0, values.length, 0);
+      }
+      phrase.fillRange(0, phrase.length, 0);
+      for (final values in starts) {
+        values.fillRange(0, values.length, null);
+      }
+      boosts.fillRange(0, boosts.length, 0);
       bool included(int doc) => (eligible[doc >> 3] & (1 << (doc & 7))) != 0;
       for (var offset = 0; offset < terms.length; offset += 500) {
         final part = terms.sublist(

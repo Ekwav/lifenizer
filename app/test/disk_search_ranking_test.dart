@@ -188,6 +188,34 @@ void main() {
     },
   );
 
+  test('numeric page scratch resets lexical, phrase and vector scores', () async {
+    await disk.clear();
+    docs = [
+      for (var n = 0; n < 2096; n++)
+        item(
+          n,
+          title: 'Witness',
+          source: 'manual',
+          text: switch (n ~/ 1024) {
+            0 when n % 1024 < 24 => 'archive import',
+            1 when n % 1024 >= 8 && n % 1024 < 32 => 'archive filler import',
+            2 when n % 1024 < 24 => 'archived imports',
+            _ => 'unrelated memorandum',
+          },
+        ),
+    ];
+    await upsert(docs);
+    for (final vector in [false, true]) {
+      final criteria = SearchCriteria(query: 'archive import', useVector: vector);
+      for (var repeat = 0; repeat < 2; repeat++) {
+        await check(criteria);
+        final profile = await disk.searchProfile;
+        expect(profile['numericPostingPages'], 3);
+        expect(profile['scoredDocuments'], 72);
+      }
+    }
+  });
+
   test(
     'DF propagation, replacements, removals and reopen preserve exact boundaries',
     () async {
