@@ -1,13 +1,184 @@
 # Conversation search
 
+Native SQLite vaults with at least 1,000 conversations use the encrypted disk
+index described below. Search returns at most 100 results; filters still search
+the whole archive. Smaller vaults and the browser retain the in-memory index.
+
 Search runs on the decrypted vault on the device. It indexes conversation titles,
 message text, sources, tags, participant display names, aliases, linked provider
 identifiers, and relation evidence. Merging people keeps their earlier names and
 identifiers searchable across the linked conversations.
 The server receives encrypted sync envelopes; searching never sends the query or
 plaintext search index to the server. Locking clears the in-memory vault and its
-index. Unlocking rebuilds the index from the restored encrypted vault (see
-"Local vault format v2" and "Incremental search index" below).
+index. Unlocking restores the encrypted search catalog or rebuilds a missing
+cache from the original vault (see the native disk path and historical local
+vault/cache formats below).
+
+## Encrypted native disk index
+
+The earlier [million-conversation measurements](MILLION_SEARCH.md) passed under a hard
+2 GB cap with no swap. They include memory, disk size, source partitions,
+latency limits and updated sync tests.
+
+Large native vaults keep a catalog of conversation summaries in the app, rather
+than transcript bodies, string posting sets and per-document frequency maps.
+The catalog shares repeated summary strings, lists and empty collections while
+retaining loaded edits unchanged. Equal start/end timestamps share one date.
+Compressible previews use a bounded, append-only 4,096-word dictionary in memory;
+the getter reconstructs the exact original UTF-16 text. Previews that would
+expand keep their original strings. This preserves summary and wire formats;
+the [100k audit](benchmarks/preview-packing-100k-2026-10-29.json) records CPU costs
+and the GC limitations of its RSS measurements.
+A persistent writer isolate owns an adjacent SQLite sidecar. Its lookup keys
+are domain-separated HMACs; summary, scoring, vocabulary and full-body pages are
+compressed and AES-GCM encrypted. Posting pages contain encrypted 1,024-document
+bitmaps and compact upper bounds for word frequency and field boosts in each
+128-document block, plus compressed exact term frequencies, field boosts and
+token positions. SQLite stores opaque lookup keys, numeric bookkeeping and ciphertext;
+no plaintext conversation or temporary search database is written to disk.
+On Linux, bundled libsodium accelerates AES-256-GCM when the CPU supports it;
+other native platforms and unavailable backends use Dart. Both implementations
+read and write the same encrypted envelope. The accelerator guards its key
+between calls, wipes native operation buffers, and destroys its key when the
+search worker closes. See the [native AES audit](benchmarks/native-aead-feasibility-2026-10-29.json).
+Posting reads can authenticate a synchronous batch under one key guard, bounded
+to 512 payloads and 4 MiB of ciphertext; the current SQL window is 32 rows.
+Every row retains its own wiped native scratch buffer. Authentication failures
+wipe completed batch outputs and propagate without fallback. Unavailable native
+backends and oversized individual rows retain the original single-row path.
+The [batch audit](benchmarks/native-aead-batch-proof-2026-10-29.json) separates
+decryption-only gains from measured end-to-end search gains.
+Compression uses Dart-managed buffers with standard gzip framing, CRC and
+truncation checks. This avoids retaining large amounts of freed native allocator
+memory during ingestion; see the [memory investigation](benchmarks/index-memory-v6-2026-10-29.json).
+On Linux with a compatible system zlib, numeric query scoring can inflate small
+posting tails natively. Each call bounds its input/output buffers, verifies a
+complete single member, and explicitly ends the stream and wipes/frees its arena.
+Unsupported inputs or unavailable backends use the existing strict managed
+decoder. Writes, migrations and other decoding keep the managed path. The
+[query-inflation audit](benchmarks/native-query-inflate-proof-2026-10-29.json)
+records compatibility, memory stress tests and mixed real-query performance.
+
+Writes cross the isolate boundary in batches of at most 1,024 conversations.
+All-new records can commit together; requests containing existing records keep
+128-record transactions to bound the number of decrypted old pages. Physical
+document pages remain 128 records. This avoids repeatedly rewriting the same
+1,024-document posting bitmap while building a large index.
+Queries use HMAC-keyed Unicode gram routes to locate vocabulary pages, then
+verify the same prefix/substring/typo rules as the in-memory index. Splitting a
+fuzzy query into more disjoint pieces than its edit limit guarantees at least
+one unchanged piece; routing may read extra words but does not discard valid
+matches. Candidate bitmaps intersect across query terms.
+
+Encrypted block statistics bound lexical, phrase, vector, temporal and source
+scores. Blocks whose upper bound cannot beat the current hundredth result are
+skipped; equal-score blocks remain eligible for date/ID tie breaking. Document
+vector norms use log term frequencies and are independent of corpus changes;
+query words retain their IDF weights. Blocks keep their minimum document norm
+for conservative cosine bounds. These are exact ranking bounds, rather than
+truncating an arbitrary candidate list.
+Text queries score candidates in bounded 1,024-record numeric buffers. Encrypted
+40-byte records retain each document's length, vector norm, timestamps and source
+weight. Preparation warms these records into a cache capped at 96 MiB (about
+80 MB for two million documents). Exact facet bitmaps for sources, people, tags
+and favorites filter IDs before scoring. Token positions resolve ordinary
+phrase matches without decoding conversation pages. The final results load
+eight-record summary tiles; exact ties and location checks can read additional
+summaries. Unusual literal phrase boundaries fall back to a small cache of the
+original scoring pages. Result tiles contain no duplicate scoring data.
+Word caches are bounded; SQLite's page cache budget totals 16 MiB.
+Each query also retains authenticated posting payloads, with their positional
+tails still compressed, in a cache capped at 16 MiB and 65,536 entries. Scoring
+reuses these payloads and fetches only misses; oversized payloads bypass the
+cache. Within a 1,024-document scoring page, existing 128-document bounds exclude
+blocks already below the current cutoff while preserving exact ties.
+At 250,000 conversations, native search automatically uses up to eight readers,
+capped by the available CPU count. Readers share the same disk index and global
+ranking statistics, but cache disjoint numeric ranges (about 80 MB total at 2M).
+Each reader retains its own bounded posting cache, so eight readers can retain
+up to 128 MiB of posting payloads. The writer releases its numeric query cache
+before readers open. Exact local top-100 lists merge using score, timestamp and
+ID. Typing reuses the warm readers; mutations drain searches and close readers
+before writing, and locking waits for every worker to exit. Profile phase times
+are sums of worker work; benchmark query timers measure elapsed latency.
+Full bodies load on demand. A new query cancels an obsolete one. The UI preserves
+the query and offers **Rebuild search** if a disposable cache page cannot be read.
+Existing sidecars acquire the extra indexes through checkpointed transactions.
+App startup prepares them before reporting search ready; migration time is
+measured separately from ready-index query latency.
+
+The native index groups pages by source: consumed media, scans/documents, email,
+chats, and other sources (including notes and recordings). The **Source** picker
+offers these groups as well as individual providers. Provider/group filters and
+**Hide consumed media** exclude unrelated documents before scoring and skip
+posting pages containing no selected source. New records reserve separate
+1,024-document posting ranges per group, while document pages remain 128 records.
+Existing mixed pages and records whose source changes retain their ordinals;
+posting pages shared by sources still need decrypting.
+The [100k source-filter audit](benchmarks/managed-gzip-100k-query-audit-2026-10-29.json)
+found fewer scored documents but no candidate posting pages skipped in that
+legacy fixture; source filtering alone does not establish two-million-query
+latency. The range allocator improves new data; it does not repartition an
+existing archive without a cache rebuild.
+Search across everything still uses one global vocabulary,
+document frequencies and ranking, then merges into one top-100 result list;
+source groups retain comparable relevance scores without a separate worker or
+cache for each group. Existing mixed pages gain routing metadata without rewriting
+their bodies; new conversations are allocated into grouped pages.
+
+Unfiltered recent-item searches use an encrypted frontier of the newest 100
+items in each ranking category. Scoring at most 300 candidates produces the
+exact top 100, including source weights and future timestamps. Updates or
+deletions that could expose another candidate invalidate that cache; the next
+recent-item query rebuilds it once. Filtered and text searches keep the full
+matching/ranking rules rather than truncating candidates early.
+
+The encrypted core binds the disk cache with a nonce. Index mutations invalidate
+that binding until a successful save publishes a new one. Missing, stale or
+damaged caches rebuild from authenticated original vault chunks in bounded
+batches; unsent conversation envelopes are reapplied before publishing. Chunk
+growth writes a separate generation and atomically switches the core afterward,
+so interrupted growth leaves the previous layout readable. A recorded unfinished
+generation is removed on the next unlock. The maximum layout now permits 4,096
+chunks, rather than allowing million-item vaults to grow inside 128 huge chunks.
+
+The earlier memory cost came from keeping the original text, a second normalized
+text copy, per-document string frequency maps, and string-based posting sets at
+the same time. Candidate sets, scored-result lists, isolate copies and full JSON
+snapshots added to that peak. Capping displayed results alone did not bound any
+of those allocations: 100 distinct words per conversation already produce
+100 million word-to-conversation links at one million conversations.
+The disk index replaces corpus-sized search objects with
+paged reads and small query buffers; the summary catalog remains proportional
+to conversation count.
+
+The repeatable million-conversation test is
+`tool/million_search_benchmark.dart`. It streams 200-word conversations and keeps
+the actual summary catalog resident through build, queries, updates and reopen.
+Use `dart build cli --target=tool/million_search_benchmark.dart` to bundle SQLite,
+then run the executable in a systemd user service with
+`MemoryMax=2000000000` and `MemorySwapMax=0`. The million-item test refuses to run
+without that whole-process limit and records partial checkpoints plus a final
+assertion-checked report. `--build-only` separates construction from
+`--query-only` measurements. Ready-query timings exclude worker preparation,
+which is reported separately. `--shuffle-new-dates` records a deterministic date
+permutation for new rows; subsequent runs reuse its persisted fixture layout.
+The old `search_benchmark.dart` intentionally
+remains a benchmark of the in-memory implementation, not the native disk path.
+
+Keep the benchmark database on a real disk filesystem. A database in a tmpfs
+`/tmp` consumes RAM itself and defeats the purpose of the disk-backed test.
+The million-item test rejects tmpfs/ramfs. The supervisor
+`tool/run_million_search_benchmark.py` applies the cap, waits for the process's
+actual exit and writes an atomic completion artifact. `--resume` reuses committed
+synthetic rows and the recorded source layout after an interrupted run.
+Take benchmark snapshots while the producer is stopped. An interim read-only
+backup held a shared lock and interrupted a build at `COMMIT` with `SQLITE_BUSY`;
+the committed rows survived and the build resumed after an offline backup.
+Build frozen comparison projects outside the enclosing `app/` tree with matching
+`.dart_tool/package_config.json` and `.dart_tool/package_graph.json` files.
+Record `dart build cli --depfile=...` output and verify runtime feature probes
+for each engine to establish which sources were compiled.
 
 All ordinary query terms must match. Matching accepts exact words, prefixes,
 fragments of at least two characters, and spelling errors for words of at least
@@ -19,8 +190,10 @@ For example, `Joerg Muell`, `Jorg Muller`, and `Jörg Müller` find that partici
 
 Ranking uses BM25 term saturation and document-length normalization, with title,
 participant, tag, and exact phrase boosts. This prevents repeated words in a long
-transcript from overwhelming a useful title or participant match. An optional
-TF-IDF cosine boost, enabled by default, adds statistical word similarity.
+transcript from overwhelming a useful title or participant match. Its rarity
+contribution is logarithmically compressed before adding field boosts, so a rare
+incidental prefix cannot overwhelm a useful exact title through IDF alone. An optional
+query-IDF/document-log-TF cosine boost, enabled by default, adds statistical word similarity.
 It is word overlap, not neural embeddings or synonym expansion. There is no
 stemming, wildcard syntax, or language-specific semantic model. The typo rule
 covers some plural differences incidentally; it does not promise stemming.
@@ -91,6 +264,12 @@ flutter test test/search_features_test.dart test/services/search_service_test.da
   test/services/search_scorer_test.dart test/services/string_distance_service_test.dart
 dart run tool/search_benchmark.dart 10000
 ```
+
+The current benchmark defaults to 200 words per conversation and 51 results
+(the Search page's first 50 plus its pagination lookahead). The historical
+October 3 measurements below used the earlier short-note fixture and eight
+results. See [the October 28 load tests](LOAD_TESTS.md) for larger archives,
+storage sizes, initial sync, batched updates and measured limits.
 
 The tests exercise a real index, including participant/topic combinations,
 Unicode and German names, phrase order, repeated words, strict term coverage,

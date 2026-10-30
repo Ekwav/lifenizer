@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-29",
+  "scope": "Production coordinator and query-only native inflater integration; actual 2M performance gate pending.",
+  "checks": {
+    "fullTests": {
+      "command": "flutter test --no-pub --reporter expanded",
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-pool-native-inflate-full-tests-final.log",
+      "logSha256": "283185216ef750c1fc21e2e1634efbca696dc01c44f1e728de4e72557221a358",
+      "passed": 878,
+      "optInSkipped": 2
+    },
+    "analysis": {
+      "command": "flutter analyze --no-pub",
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-pool-native-inflate-analyze.log",
+      "logSha256": "0f435563aa1f5af5fa1caf7605d9e0969da4cbbcdd089baddd2150f6920a810d",
+      "lastChange": "Subsequent four-line preparation cancellation fix also passed targeted analyzer and 25 ranking/pool tests."
+    },
+    "linuxRelease": {
+      "command": "flutter build linux --release --no-pub",
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-pool-native-inflate-linux-build.log",
+      "logSha256": "a767723607a3af0de7a365af25538c29c7b6a485c0fd062d2602043eccf5e85b"
+    },
+    "webRelease": {
+      "command": "flutter build web --release --no-pub",
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-pool-native-inflate-web-build.log",
+      "logSha256": "ed228bb90658fba7b630f96ecf930fdf055c6fef698b38947c04f3ce069dcc29"
+    }
+  },
+  "sourceHashes": {
+    "app/lib/services/disk_search_index_io.dart": "68f301b0b301bd2a3a3ef92ea02ad450b1e2084b582500e8c6b123faed86846e",
+    "app/lib/services/disk_search_ranking.dart": "799aafb277284e96541839e0d9c28707f10a664a8148ac98d5ad4c0e4cc01c72",
+    "app/lib/services/disk_search_pool.dart": "ba58837a6f4b5b4b4d288991167be8adf9a8c94237da56b659038796afdc5169",
+    "app/lib/services/native_posting_inflate.dart": "f5acdb831ad17ef46960e2b4627050bf38eb34e8a43c527c507f211835a87d7d",
+    "app/lib/services/native_sidecar_aead.dart": "921e302b2f8d1827b2699ae35708c1f4934f55a6d76371a2f837bf0ba0711317",
+    "app/lib/services/conversation_catalog.dart": "2a6870745d683b77ae3066e8f4c0dff4c576861649721c1ddefec69825913e76"
+  },
+  "diffWhitespaceCheck": "passed",
+  "targetMet": false,
+  "limits": [
+    "Build success does not measure whole Flutter/GTK memory.",
+    "Two opt-in load tests were not included in the full suite; separate benchmark proofs record load measurements."
+  ],
+  "deliveryAcceptance": {
+    "date": "2026-10-29",
+    "userAcceptedApproximateWarmPilotP95Ms": 583,
+    "measuredPilotWarmP95Ms": 583.116,
+    "scope": "Eight-reader pilot: 20 criteria, 40 warm samples; separate from full 120-case production gate.",
+    "strict500msStillReportedHonestly": true
+  },
+  "reviewFollowup": {
+    "date": "2026-10-29",
+    "fixes": [
+      "Re-mark demoted native fallback chunks so repeated body reads can reload canonical data.",
+      "Hydrate existing vault chunk bodies before a reopened 999-item vault crosses the native search threshold."
+    ],
+    "sourceHashes": {
+      "app/lib/services/vault_sync.dart": "59075d2144ab9a4d543104babd6fd89ee646ea791e07475bf3444903eced589f",
+      "app/lib/services/vault_disk_search.dart": "faa90de092f53e9204fa57e60fa370cbc5cfcdebc17dbc091ed59f97e96c1ea2",
+      "app/test/disk_vault_search_test.dart": "6281bce79dcd869aa2d47b602848f446bd12cc429b9500e49015d6541be18fb4"
+    },
+    "regressions": {
+      "beforeFixes": "Both new regressions failed with the two fix lines removed.",
+      "afterFixesPassed": 3,
+      "beforeLogSha256": "3c0283b2733580410b417c56c6ea778c5f3efac834b15697d4e0a6d9fbde43d5",
+      "afterLogSha256": "8d78898116f38efb3a1f976d920ec066e60528fb80ce85f964b784cea706ffac"
+    },
+    "fullTests": {
+      "command": "flutter test --no-pub --reporter expanded",
+      "passed": 879,
+      "optInSkipped": 2,
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-friday-tests.log",
+      "logSha256": "cdb0c3d0a4cfb8c93341f1df712fadbaf0da5d68aa3d972b93afa37eabf5b3ce"
+    },
+    "analysis": {
+      "command": "flutter analyze --no-pub",
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-friday-analyze.log",
+      "logSha256": "1140446f9744550bfb5f0764093421759df58fec6271d5efc0da82fba588868b"
+    },
+    "supervisorTests": {
+      "command": "python -m unittest discover -s app/tool -p test_run_million_search_benchmark.py",
+      "passed": 8
+    },
+    "backendSync": {
+      "conversations": 1000,
+      "passed": 1,
+      "exitCode": 0,
+      "logPath": "/tmp/lifenizer-friday-backend-tests.log",
+      "logSha256": "f685950fc295fb09b099cf3e5ec02ccc3e0c513b6a0d208762c885c086c5ecb5"
+    },
+    "buildScope": "Linux/web builds above preceded the two app-state recovery fixes; follow-up analysis and tests cover the fixes. The running performance gate uses its separate frozen source archive."
+  }
+}

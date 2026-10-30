@@ -121,7 +121,8 @@ re-uploading to encrypt them. Image downloads currently require a connection.
 
 Search handles German/Unicode names, partial words, spelling mistakes, combined
 person/topic queries and local-calendar date phrases. [Search details and the
-repeatable 10,000-conversation benchmark](docs/SEARCH.md) explain ranking and limits.
+repeatable load benchmarks](docs/SEARCH.md) explain ranking, the encrypted native
+disk index, the 100-result cap and the million-conversation memory test.
 
 Run `./scripts/verify.sh` for the normal checks. With the real Whisper service forwarded,
 run `./scripts/verify.sh --live-whisper`; this requires the service and cannot silently
