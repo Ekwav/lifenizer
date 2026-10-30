@@ -1,0 +1,495 @@
+{
+  "date": "2026-10-29",
+  "status": "Completed interim physical-layout diagnostic; full two-million acceptance not established",
+  "conversations": 834560,
+  "wordsPerConversation": 200,
+  "resultLimit": 100,
+  "engine": "verified posting-cache candidate using pure Dart AES; not the newer native AES candidate",
+  "provenance": {
+    "candidateLibrariesMatchVerified": true,
+    "appDependencyPathsVerified": true,
+    "postingCacheRuntimeMarkerCompiled": true,
+    "executableSha256": "524e1a38c2eb3ffdede05875f134d435c6e118d93bbca7687275e0d90089b969",
+    "probeSourceSha256": "f2bb51bc7d6981c6db9c58bb8f82880361d00dd08a7d37f4466a8a8c9f471a9b",
+    "sqliteSha256": "b17729184e5a2818055ecbddd5ed6642521bfe6e56aafa472330e483c0e2e0d2",
+    "ioInstrumentation": "Per-query /proc/self/io plus per-device cgroup io.stat, before/after search; managed-gzip candidate libraries unchanged."
+  },
+  "limits": {
+    "memoryMaxBytes": 2000000000,
+    "memorySwapMaxBytes": 0,
+    "wholeApplicationCatalogResident": false
+  },
+  "method": {
+    "baselineSha256": "a2f353e68a4e5d2643afb940232faf8ca0a482ab3c23546aaa66388e11552b42",
+    "baselineUnchangedAfterVacuum": true,
+    "vacuumSha256": "38f7340a81ff88a67c24fab462ff768fd602193f408caf64312a3816a47311d9",
+    "copies": "Private independent inodes; production database never opened",
+    "temporaryStorage": "Real SSD, temp_store=FILE",
+    "cacheCondition": "POSIX_FADV_DONTNEED on only the owned input inode before each fresh worker open/prepare; prepared first query follows prepare, then immediate warm query",
+    "repetitions": "One fresh worker per layout/query, two stages each; four processes and eight ordered top100 checks",
+    "ioCounters": "Actual worker /proc/self/io; cgroup io.stat unavailable (empty blockIoDelta)",
+    "timingSplits": "candidateMs, boundMs, numericMs and scoreMs as emitted by engine; numericMs is within scoreMs. Dedicated result-fetch time unavailable.",
+    "systemContention": "Same SSD as live two-million producer; host contention and other workloads uncontrolled. No global cache flush."
+  },
+  "layout": {
+    "before": {
+      "bytes": 2882916352,
+      "pageSize": 4096,
+      "pageCount": 703837,
+      "freelistCount": 37,
+      "postingPageStats": [
+        {
+          "pageType": "internal",
+          "pages": 26886,
+          "payloadBytes": 89982205,
+          "unusedBytes": 18083235,
+          "pageBytes": 110125056
+        },
+        {
+          "pageType": "leaf",
+          "pages": 217124,
+          "payloadBytes": 775196681,
+          "unusedBytes": 104207319,
+          "pageBytes": 889339904
+        }
+      ],
+      "postingLeafLogicalOrder": {
+        "pages": 217124,
+        "consecutivePhysicalPairs": 44978,
+        "forwardPhysicalPairs": 203687,
+        "medianAbsolutePageDelta": 7693,
+        "p95AbsolutePageDelta": 27841,
+        "meanAbsolutePageDelta": 15200.276635823933
+      }
+    },
+    "after": {
+      "bytes": 2796322816,
+      "pageSize": 4096,
+      "pageCount": 682696,
+      "freelistCount": 0,
+      "postingPageStats": [
+        {
+          "pageType": "internal",
+          "pages": 22370,
+          "payloadBytes": 85170831,
+          "unusedBytes": 4555105,
+          "pageBytes": 91627520
+        },
+        {
+          "pageType": "leaf",
+          "pages": 204144,
+          "payloadBytes": 780008055,
+          "unusedBytes": 46281785,
+          "pageBytes": 836173824
+        }
+      ],
+      "postingLeafLogicalOrder": {
+        "pages": 204144,
+        "consecutivePhysicalPairs": 184108,
+        "forwardPhysicalPairs": 204143,
+        "medianAbsolutePageDelta": 1,
+        "p95AbsolutePageDelta": 2,
+        "meanAbsolutePageDelta": 1.1095702522251558
+      }
+    }
+  },
+  "vacuum": {
+    "exitCode": 0,
+    "wallSecondsIncludingFreezeHolds": 4246.8259973526,
+    "cgroupMemoryPeakBytes": 1999998976,
+    "observedProcessIoBeforeFinalResumeLowerBound": {
+      "readBytes": 10154418176,
+      "writeBytes": 10534170624
+    },
+    "runtimeOverrideRemoved": true,
+    "pidfdCompletionListenerExited": true
+  },
+  "measurements": [
+    {
+      "layout": "original",
+      "query": "oliver thompson",
+      "workerInvocationId": "4382a3a4fc034601ad9ee37be2c5c441",
+      "prepareMs": 8287.213,
+      "prepareIo": {
+        "rchar": 33505248,
+        "wchar": 4896,
+        "syscr": 9204,
+        "syscw": 204,
+        "read_bytes": 103059456,
+        "write_bytes": 0,
+        "cancelled_write_bytes": 0
+      },
+      "peakRssBytes": 95268864,
+      "cgroupMemoryPeakBytes": 197394432,
+      "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+      "exactOrdered100IdsMatchedAcrossLayoutsAndStages": true,
+      "orderedIdsSha256": "c637e2e1a33ad6a9b4a4ad1705387be8beead06e129a7918e100aac1fcecedc9",
+      "samples": [
+        {
+          "stage": "prepared",
+          "ms": 690.23,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 20,
+            "postingReads": 4890,
+            "candidateMs": 460,
+            "boundMs": 12,
+            "candidateBlocks": 4694,
+            "blockBoundExcludedDocuments": 13757,
+            "postingCachePeakBytes": 1871072,
+            "postingCacheEntries": 4890,
+            "postingCacheHits": 4890,
+            "scorePostingSqlReads": 0,
+            "numericMs": 160,
+            "scorePostingReads": 4890,
+            "positionReads": 1630,
+            "scoredDocuments": 19537,
+            "numericPostingPages": 815,
+            "scoredBlocks": 6520,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 215
+          },
+          "ioDelta": {
+            "rchar": 3770401,
+            "wchar": 39504,
+            "syscr": 2042,
+            "syscw": 1646,
+            "read_bytes": 4952064,
+            "write_bytes": 0,
+            "cancelled_write_bytes": 0
+          },
+          "blockIoDelta": {}
+        },
+        {
+          "stage": "warm",
+          "ms": 434.782,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 20,
+            "postingReads": 4890,
+            "candidateMs": 237,
+            "boundMs": 15,
+            "candidateBlocks": 4694,
+            "blockBoundExcludedDocuments": 13757,
+            "postingCachePeakBytes": 1871072,
+            "postingCacheEntries": 4890,
+            "postingCacheHits": 4890,
+            "scorePostingSqlReads": 0,
+            "numericMs": 161,
+            "scorePostingReads": 4890,
+            "positionReads": 1630,
+            "scoredDocuments": 19537,
+            "numericPostingPages": 815,
+            "scoredBlocks": 6520,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 182
+          },
+          "ioDelta": {
+            "rchar": 44599,
+            "wchar": 39504,
+            "syscr": 1082,
+            "syscw": 1646,
+            "read_bytes": 0,
+            "write_bytes": 0,
+            "cancelled_write_bytes": 0
+          },
+          "blockIoDelta": {}
+        }
+      ]
+    },
+    {
+      "layout": "vacuum",
+      "query": "oliver thompson",
+      "workerInvocationId": "f0f1d9adea264d99b1e3d45897f62fc1",
+      "prepareMs": 4563.315,
+      "prepareIo": {
+        "rchar": 33505248,
+        "wchar": 4896,
+        "syscr": 9203,
+        "syscw": 204,
+        "read_bytes": 34066432,
+        "write_bytes": 0,
+        "cancelled_write_bytes": 0
+      },
+      "peakRssBytes": 94932992,
+      "cgroupMemoryPeakBytes": 127619072,
+      "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+      "exactOrdered100IdsMatchedAcrossLayoutsAndStages": true,
+      "orderedIdsSha256": "c637e2e1a33ad6a9b4a4ad1705387be8beead06e129a7918e100aac1fcecedc9",
+      "samples": [
+        {
+          "stage": "prepared",
+          "ms": 553.483,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 20,
+            "postingReads": 4890,
+            "candidateMs": 309,
+            "boundMs": 11,
+            "candidateBlocks": 4694,
+            "blockBoundExcludedDocuments": 13757,
+            "postingCachePeakBytes": 1871072,
+            "postingCacheEntries": 4890,
+            "postingCacheHits": 4890,
+            "scorePostingSqlReads": 0,
+            "numericMs": 165,
+            "scorePostingReads": 4890,
+            "positionReads": 1630,
+            "scoredDocuments": 19537,
+            "numericPostingPages": 815,
+            "scoredBlocks": 6520,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 230
+          },
+          "ioDelta": {
+            "rchar": 3581984,
+            "wchar": 39504,
+            "syscr": 1935,
+            "syscw": 1646,
+            "read_bytes": 5234688,
+            "write_bytes": 0,
+            "cancelled_write_bytes": 0
+          },
+          "blockIoDelta": {}
+        },
+        {
+          "stage": "warm",
+          "ms": 480.806,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 20,
+            "postingReads": 4890,
+            "candidateMs": 258,
+            "boundMs": 17,
+            "candidateBlocks": 4694,
+            "blockBoundExcludedDocuments": 13757,
+            "postingCachePeakBytes": 1871072,
+            "postingCacheEntries": 4890,
+            "postingCacheHits": 4890,
+            "scorePostingSqlReads": 0,
+            "numericMs": 175,
+            "scorePostingReads": 4890,
+            "positionReads": 1630,
+            "scoredDocuments": 19537,
+            "numericPostingPages": 815,
+            "scoredBlocks": 6520,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 203
+          },
+          "ioDelta": {
+            "rchar": 44575,
+            "wchar": 39456,
+            "syscr": 1058,
+            "syscw": 1644,
+            "read_bytes": 0,
+            "write_bytes": 0,
+            "cancelled_write_bytes": 0
+          },
+          "blockIoDelta": {}
+        }
+      ]
+    },
+    {
+      "layout": "original",
+      "query": "delete",
+      "workerInvocationId": "9f2c4ac1b397442187f643a1e6d5f656",
+      "prepareMs": 9048.874,
+      "prepareIo": {
+        "rchar": 33505248,
+        "wchar": 4896,
+        "syscr": 9205,
+        "syscw": 204,
+        "read_bytes": 103059456,
+        "write_bytes": 0,
+        "cancelled_write_bytes": 0
+      },
+      "peakRssBytes": 92229632,
+      "cgroupMemoryPeakBytes": 193007616,
+      "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+      "exactOrdered100IdsMatchedAcrossLayoutsAndStages": true,
+      "orderedIdsSha256": "81f729669032b0bb6eaa5a1cf6bf9cb503e1aae6f77afe94486a018405c2de4e",
+      "samples": [
+        {
+          "stage": "prepared",
+          "ms": 1786.74,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 10,
+            "postingReads": 3260,
+            "candidateMs": 375,
+            "boundMs": 11,
+            "candidateBlocks": 6520,
+            "blockBoundExcludedDocuments": 181825,
+            "postingCachePeakBytes": 1502208,
+            "postingCacheEntries": 3260,
+            "postingCacheHits": 3180,
+            "scorePostingSqlReads": 0,
+            "numericMs": 144,
+            "scorePostingReads": 3180,
+            "positionReads": 0,
+            "scoredDocuments": 115530,
+            "numericPostingPages": 795,
+            "scoredBlocks": 6360,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 1398
+          },
+          "ioDelta": {
+            "rchar": 3202849,
+            "wchar": 38400,
+            "syscr": 1840,
+            "syscw": 1600,
+            "read_bytes": 3907584,
+            "write_bytes": 0,
+            "cancelled_write_bytes": 0
+          },
+          "blockIoDelta": {}
+        },
+        {
+          "stage": "warm",
+          "ms": 345.528,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 10,
+            "postingReads": 3260,
+            "candidateMs": 163,
+            "boundMs": 12,
+            "candidateBlocks": 6520,
+            "blockBoundExcludedDocuments": 181825,
+            "postingCachePeakBytes": 1502208,
+            "postingCacheEntries": 3260,
+            "postingCacheHits": 3180,
+            "scorePostingSqlReads": 0,
+            "numericMs": 148,
+            "scorePostingReads": 3180,
+            "positionReads": 0,
+            "scoredDocuments": 115530,
+            "numericPostingPages": 795,
+            "scoredBlocks": 6360,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 168
+          },
+          "ioDelta": {
+            "rchar": 42296,
+            "wchar": 38400,
+            "syscr": 1016,
+            "syscw": 1600,
+            "read_bytes": 0,
+            "write_bytes": 0,
+            "cancelled_write_bytes": 0
+          },
+          "blockIoDelta": {}
+        }
+      ]
+    },
+    {
+      "layout": "vacuum",
+      "query": "delete",
+      "workerInvocationId": "236c2e68970444cb8f1892f4b42c8392",
+      "prepareMs": 4214.096,
+      "prepareIo": {
+        "rchar": 33505248,
+        "wchar": 4896,
+        "syscr": 9201,
+        "syscw": 204,
+        "read_bytes": 34066432,
+        "write_bytes": 0,
+        "cancelled_write_bytes": 0
+      },
+      "peakRssBytes": 92327936,
+      "cgroupMemoryPeakBytes": 123912192,
+      "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+      "exactOrdered100IdsMatchedAcrossLayoutsAndStages": true,
+      "orderedIdsSha256": "81f729669032b0bb6eaa5a1cf6bf9cb503e1aae6f77afe94486a018405c2de4e",
+      "samples": [
+        {
+          "stage": "prepared",
+          "ms": 977.976,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 10,
+            "postingReads": 3260,
+            "candidateMs": 746,
+            "boundMs": 12,
+            "candidateBlocks": 6520,
+            "blockBoundExcludedDocuments": 181825,
+            "postingCachePeakBytes": 1502208,
+            "postingCacheEntries": 3260,
+            "postingCacheHits": 3180,
+            "scorePostingSqlReads": 0,
+            "numericMs": 153,
+            "scorePostingReads": 3180,
+            "positionReads": 0,
+            "scoredDocuments": 115530,
+            "numericPostingPages": 795,
+            "scoredBlocks": 6360,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 217
+          },
+          "ioDelta": {
+            "rchar": 3059488,
+            "wchar": 38400,
+            "syscr": 1731,
+            "syscw": 1600,
+            "read_bytes": 4354048,
+            "write_bytes": 0,
+            "cancelled_write_bytes": 0
+          },
+          "blockIoDelta": {}
+        },
+        {
+          "stage": "warm",
+          "ms": 379.565,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 10,
+            "postingReads": 3260,
+            "candidateMs": 179,
+            "boundMs": 13,
+            "candidateBlocks": 6520,
+            "blockBoundExcludedDocuments": 181825,
+            "postingCachePeakBytes": 1502208,
+            "postingCacheEntries": 3260,
+            "postingCacheHits": 3180,
+            "scorePostingSqlReads": 0,
+            "numericMs": 161,
+            "scorePostingReads": 3180,
+            "positionReads": 0,
+            "scoredDocuments": 115530,
+            "numericPostingPages": 795,
+            "scoredBlocks": 6360,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 185
+          },
+          "ioDelta": {
+            "rchar": 42294,
+            "wchar": 38400,
+            "syscr": 927,
+            "syscw": 1600,
+            "read_bytes": 0,
+            "write_bytes": 0,
+            "cancelled_write_bytes": 0
+          },
+          "blockIoDelta": {}
+        }
+      ]
+    }
+  ],
+  "conclusion": "VACUUM substantially improves physical adjacency and reduces file size. In this single pass preparation read amplification fell, while warm query latency did not improve. Prepared-query variation includes I/O stalls; these samples do not establish a p95 benefit or justify routine VACUUM. No production layout change adopted.",
+  "limitations": [
+    "834560 rows rather than required2000000",
+    "Only two diagnostic queries and one repetition; no p95 estimate",
+    "Index-only worker does not keep the application summary catalog resident",
+    "Pure Dart AES engine differs from current native AES candidate",
+    "Per-file cache hint is not a globally cold-storage guarantee; preparation warms numeric records",
+    "VACUUM wall time includes freezes; observed I/O counters are a lower bound",
+    "No dedicated result-fetch timing; scoreMs includes numeric scoring and result work"
+  ]
+}

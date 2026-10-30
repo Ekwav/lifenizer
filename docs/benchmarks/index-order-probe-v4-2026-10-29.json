@@ -1,0 +1,1250 @@
+{
+  "count": 20000,
+  "words": 200,
+  "fillerVocabulary": 1710,
+  "samples": [
+    {
+      "order": "chronological",
+      "query": "archive",
+      "sample": 0,
+      "stage": "reopened",
+      "ms": 151.91,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 13,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 136,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "archive",
+      "sample": 0,
+      "stage": "warm",
+      "ms": 168.282,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 7,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 160,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "alice mueller",
+      "sample": 0,
+      "stage": "reopened",
+      "ms": 274.113,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 3,
+        "candidateMs": 19,
+        "boundMs": 0,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 253,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "alice mueller",
+      "sample": 0,
+      "stage": "warm",
+      "ms": 528.157,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 7,
+        "candidateMs": 75,
+        "boundMs": 0,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 451,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "ali muell",
+      "sample": 0,
+      "stage": "reopened",
+      "ms": 283.25,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 22,
+        "boundMs": 0,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 259,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "ali muell",
+      "sample": 0,
+      "stage": "warm",
+      "ms": 204.646,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 21,
+        "boundMs": 0,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 182,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "archive grocery",
+      "sample": 0,
+      "stage": "reopened",
+      "ms": 249.241,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 25,
+        "candidateMs": 45,
+        "boundMs": 1,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 201,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "archive grocery",
+      "sample": 0,
+      "stage": "warm",
+      "ms": 204.718,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 15,
+        "candidateMs": 33,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 170,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "archive",
+      "sample": 1,
+      "stage": "reopened",
+      "ms": 252.36,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 10,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 240,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "archive",
+      "sample": 1,
+      "stage": "warm",
+      "ms": 330.863,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 11,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 318,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "alice mueller",
+      "sample": 1,
+      "stage": "reopened",
+      "ms": 602.065,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 3,
+        "candidateMs": 17,
+        "boundMs": 0,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 583,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "alice mueller",
+      "sample": 1,
+      "stage": "warm",
+      "ms": 384.638,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 17,
+        "candidateMs": 34,
+        "boundMs": 0,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 345,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "ali muell",
+      "sample": 1,
+      "stage": "reopened",
+      "ms": 451.471,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 22,
+        "boundMs": 0,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 428,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "ali muell",
+      "sample": 1,
+      "stage": "warm",
+      "ms": 254.553,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 12,
+        "boundMs": 0,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 240,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "archive grocery",
+      "sample": 1,
+      "stage": "reopened",
+      "ms": 154.503,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 11,
+        "candidateMs": 26,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 126,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "archive grocery",
+      "sample": 1,
+      "stage": "warm",
+      "ms": 343.971,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 32,
+        "candidateMs": 44,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 298,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "archive",
+      "sample": 2,
+      "stage": "reopened",
+      "ms": 308.283,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 15,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 292,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "archive",
+      "sample": 2,
+      "stage": "warm",
+      "ms": 397.084,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 12,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 382,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "alice mueller",
+      "sample": 2,
+      "stage": "reopened",
+      "ms": 651.165,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 16,
+        "candidateMs": 56,
+        "boundMs": 0,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 593,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "alice mueller",
+      "sample": 2,
+      "stage": "warm",
+      "ms": 239.223,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 2,
+        "candidateMs": 19,
+        "boundMs": 3,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 215,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "ali muell",
+      "sample": 2,
+      "stage": "reopened",
+      "ms": 781.864,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 9,
+        "boundMs": 0,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 759,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "ali muell",
+      "sample": 2,
+      "stage": "warm",
+      "ms": 826.479,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 30,
+        "boundMs": 0,
+        "candidateBlocks": 100,
+        "scoretilesReads": 100,
+        "scoreMs": 780,
+        "scoredBlocks": 100,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "archive grocery",
+      "sample": 2,
+      "stage": "reopened",
+      "ms": 518.462,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 79,
+        "candidateMs": 219,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 297,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "chronological",
+      "query": "archive grocery",
+      "sample": 2,
+      "stage": "warm",
+      "ms": 520.94,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 12,
+        "candidateMs": 28,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 5,
+        "docpagesReads": 5,
+        "scoreMs": 491,
+        "scoredBlocks": 5,
+        "scoredDocuments": 640
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive",
+      "sample": 0,
+      "stage": "reopened",
+      "ms": 2160.589,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 7,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 2152,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive",
+      "sample": 0,
+      "stage": "warm",
+      "ms": 1961.902,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 10,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 1950,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "alice mueller",
+      "sample": 0,
+      "stage": "reopened",
+      "ms": 131.781,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 2,
+        "candidateMs": 12,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 118,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "alice mueller",
+      "sample": 0,
+      "stage": "warm",
+      "ms": 161.314,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 2,
+        "candidateMs": 11,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 148,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "ali muell",
+      "sample": 0,
+      "stage": "reopened",
+      "ms": 168.433,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 7,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 159,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "ali muell",
+      "sample": 0,
+      "stage": "warm",
+      "ms": 176.254,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 6,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 169,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive grocery",
+      "sample": 0,
+      "stage": "reopened",
+      "ms": 2162.247,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 13,
+        "candidateMs": 28,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 2133,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive grocery",
+      "sample": 0,
+      "stage": "warm",
+      "ms": 2821.168,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 9,
+        "candidateMs": 19,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 2801,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive",
+      "sample": 1,
+      "stage": "reopened",
+      "ms": 1933.649,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 6,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 1926,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive",
+      "sample": 1,
+      "stage": "warm",
+      "ms": 2441.939,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 6,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 2435,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "alice mueller",
+      "sample": 1,
+      "stage": "reopened",
+      "ms": 158.705,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 2,
+        "candidateMs": 13,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 145,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "alice mueller",
+      "sample": 1,
+      "stage": "warm",
+      "ms": 162.024,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 4,
+        "candidateMs": 14,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 147,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "ali muell",
+      "sample": 1,
+      "stage": "reopened",
+      "ms": 145.255,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 7,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 136,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "ali muell",
+      "sample": 1,
+      "stage": "warm",
+      "ms": 142.169,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 10,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 131,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive grocery",
+      "sample": 1,
+      "stage": "reopened",
+      "ms": 1940.051,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 11,
+        "candidateMs": 22,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 1916,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive grocery",
+      "sample": 1,
+      "stage": "warm",
+      "ms": 1838.939,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 8,
+        "candidateMs": 17,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 1821,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive",
+      "sample": 2,
+      "stage": "reopened",
+      "ms": 1696.263,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 5,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 1689,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive",
+      "sample": 2,
+      "stage": "warm",
+      "ms": 1719.564,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 7,
+        "postingReads": 20,
+        "candidateMs": 4,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 1714,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "alice mueller",
+      "sample": 2,
+      "stage": "reopened",
+      "ms": 124.053,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 2,
+        "candidateMs": 11,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 111,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "alice mueller",
+      "sample": 2,
+      "stage": "warm",
+      "ms": 124.159,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 1,
+        "candidateMs": 10,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 113,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "ali muell",
+      "sample": 2,
+      "stage": "reopened",
+      "ms": 118.392,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 6,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 111,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "ali muell",
+      "sample": 2,
+      "stage": "warm",
+      "ms": 122.206,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 8,
+        "postingReads": 40,
+        "positionReads": 0,
+        "positionMs": 0,
+        "candidateMs": 5,
+        "boundMs": 0,
+        "candidateBlocks": 75,
+        "scoretilesReads": 98,
+        "scoreMs": 115,
+        "scoredBlocks": 75,
+        "scoredDocuments": 100
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive grocery",
+      "sample": 2,
+      "stage": "reopened",
+      "ms": 1861.832,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 7,
+        "candidateMs": 18,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 1842,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    },
+    {
+      "order": "shuffled",
+      "query": "archive grocery",
+      "sample": 2,
+      "stage": "warm",
+      "ms": 1887.453,
+      "returned": 100,
+      "profile": {
+        "prepareMs": 0,
+        "vocabularyReads": 14,
+        "postingReads": 40,
+        "positionReads": 40,
+        "positionMs": 7,
+        "candidateMs": 17,
+        "boundMs": 0,
+        "candidateBlocks": 157,
+        "summarypagesReads": 94,
+        "docpagesReads": 94,
+        "scoretilesReads": 4,
+        "scoreMs": 1869,
+        "scoredBlocks": 95,
+        "scoredDocuments": 12064
+      }
+    }
+  ],
+  "referenceOrderingPassed": true,
+  "peakRss": 2336841728,
+  "benchmarkDate": "2026-10-29",
+  "engineRankingVersion": 4,
+  "processExitCode": 0,
+  "scope": {
+    "purpose": "Insertion-order sensitivity and exact top-100 ordering; not a capacity or disk-latency benchmark.",
+    "runtime": "AOT Dart, production native encrypted SQLite search engine.",
+    "environment": "Shared development machine with concurrent separate 2M-conversation work; no CPU isolation.",
+    "memoryLimitBytes": null,
+    "databaseFilesystem": "tmpfs",
+    "retainedReference": "Full synthetic conversations and exhaustive in-memory ConversationSearchIndex retained alongside native worker; peak RSS exceeds 2 GB and does not establish the product memory bound.",
+    "samples": "Three fresh-worker samples and three immediate warm repeats per query/order; ranges are exploratory observations, not p95 estimates.",
+    "correctness": "All 48 returned ID sequences exactly matched the exhaustive SearchService top-100 reference for the identical corpus.",
+    "isolation": "Only newly-created synthetic databases were accessed; the actual capped 2M benchmark databases and binary were untouched."
+  },
+  "fixture": {
+    "transcriptWordsPerConversation": 200,
+    "segmentsPerConversation": 10,
+    "sourceRunLength": 128,
+    "sources": [
+      "manual",
+      "email",
+      "discord",
+      "scanned-pdf",
+      "browser-history"
+    ],
+    "dates": "2026-10-29T00:00:00Z minus conversation index in minutes",
+    "insertionOrders": [
+      "chronological",
+      "Dart Random(42) shuffle of identical conversations"
+    ],
+    "uniqueTitle": "Archive followed by a zero-padded 12-digit conversation index",
+    "nameMatches": 100,
+    "filler": "Deterministic LCG samples from repository documentation vocabulary, excluding expansions of archive, alice, mueller, ali, muell and grocery."
+  },
+  "artifacts": {
+    "source": "app/tool/search_order_probe.dart",
+    "aotSha256": "88a1d4d88fdce36a97ca57da7c4deb0b6d9e8cf77c563a290faa1c44819e06b0",
+    "sourceResultSha256": "0ea61b29727b2bc6702e0f4551d6439d6ec7e229ea77aadcc6fa40f6acb7e6a4"
+  },
+  "buildMilliseconds": {
+    "chronological": 92784,
+    "shuffled": 151122
+  },
+  "summary": {
+    "chronological / archive": {
+      "minMs": 151.91,
+      "maxMs": 397.084,
+      "scoredDocuments": [
+        640
+      ],
+      "scoredBlocks": [
+        5
+      ],
+      "docpagesReads": [
+        5
+      ],
+      "scoretilesReads": [
+        0
+      ]
+    },
+    "chronological / alice mueller": {
+      "minMs": 239.223,
+      "maxMs": 651.165,
+      "scoredDocuments": [
+        100
+      ],
+      "scoredBlocks": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "scoretilesReads": [
+        100
+      ]
+    },
+    "chronological / ali muell": {
+      "minMs": 204.646,
+      "maxMs": 826.479,
+      "scoredDocuments": [
+        100
+      ],
+      "scoredBlocks": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "scoretilesReads": [
+        100
+      ]
+    },
+    "chronological / archive grocery": {
+      "minMs": 154.503,
+      "maxMs": 520.94,
+      "scoredDocuments": [
+        640
+      ],
+      "scoredBlocks": [
+        5
+      ],
+      "docpagesReads": [
+        5
+      ],
+      "scoretilesReads": [
+        0
+      ]
+    },
+    "shuffled / archive": {
+      "minMs": 1696.263,
+      "maxMs": 2441.939,
+      "scoredDocuments": [
+        12064
+      ],
+      "scoredBlocks": [
+        95
+      ],
+      "docpagesReads": [
+        94
+      ],
+      "scoretilesReads": [
+        4
+      ]
+    },
+    "shuffled / alice mueller": {
+      "minMs": 124.053,
+      "maxMs": 162.024,
+      "scoredDocuments": [
+        100
+      ],
+      "scoredBlocks": [
+        75
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "scoretilesReads": [
+        98
+      ]
+    },
+    "shuffled / ali muell": {
+      "minMs": 118.392,
+      "maxMs": 176.254,
+      "scoredDocuments": [
+        100
+      ],
+      "scoredBlocks": [
+        75
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "scoretilesReads": [
+        98
+      ]
+    },
+    "shuffled / archive grocery": {
+      "minMs": 1838.939,
+      "maxMs": 2821.168,
+      "scoredDocuments": [
+        12064
+      ],
+      "scoredBlocks": [
+        95
+      ],
+      "docpagesReads": [
+        94
+      ],
+      "scoretilesReads": [
+        4
+      ]
+    }
+  }
+}
