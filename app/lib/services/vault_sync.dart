@@ -1316,13 +1316,7 @@ extension VaultSync on LifenizerAppState {
       messages: sum('messages'),
       conversations: expectedConversations,
     );
-    _setSyncProgress(
-      SyncStage.decryptingLocal,
-      completed: 0,
-      total: chunkTotal,
-      detail: 'Decrypting your cached vault',
-    );
-    var decrypted = 0;
+    _reportRestore(progress, force: true);
     var next = 0;
     var failed = false;
     var parsed = Future<void>.value();
@@ -1343,13 +1337,6 @@ extension VaultSync on LifenizerAppState {
           failed = true;
           throw const _IncompleteChunks();
         }
-        decrypted++;
-        _setSyncProgress(
-          SyncStage.decryptingLocal,
-          completed: decrypted,
-          total: chunkTotal,
-          force: false,
-        );
         final raw = decoded['conversations'] as List? ?? const [];
         parsed = parsed.then((_) {
           return _restoreConversationList(raw, progress);

@@ -10,6 +10,7 @@ import 'package:app/services/disk_search_index_io.dart';
 import 'package:app/services/discord_bot_import_service.dart';
 import 'package:app/services/local_vault_store.dart';
 import 'package:app/services/search_source_groups.dart';
+import 'package:app/services/sync_progress.dart';
 import 'package:app/services/vault_chunk_file_store.dart';
 import 'package:app/services/vault_database_worker.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -53,6 +54,31 @@ Conversation _conversation(
     ),
   ),
 );
+
+class _ProgressChunks extends FileVaultChunkStore {
+  _ProgressChunks(super.root, this.onDecrypt);
+  final void Function() onDecrypt;
+
+  @override
+  Future<Map<String, dynamic>> decryptChunk(
+    VaultCrypto crypto,
+    String key,
+    int n,
+    String expectedNonce, {
+    Iterable<String> alternateNonces = const [],
+    bool background = true,
+  }) {
+    onDecrypt();
+    return super.decryptChunk(
+      crypto,
+      key,
+      n,
+      expectedNonce,
+      alternateNonces: alternateNonces,
+      background: background,
+    );
+  }
+}
 
 class _Fixture {
   late Directory directory;
@@ -412,6 +438,70 @@ void main() {
         'conversation-7',
       );
       await reopened.lock();
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
+    'missing disk cache restores chunks with continuous progress',
+    () async {
+      await fixture.seed(1000);
+      final original = await fixture.open();
+      await original.lock();
+      final saved = (await fixture.store.read(_vaultKey))!;
+      final chunks = saved['chunkCount'] as int;
+      expect(chunks, greaterThan(1));
+      await (await fixture.indexFile()).delete();
+      fixture.offline = true;
+      final progress = <SyncProgress>[];
+      late final LifenizerAppState restored;
+      restored = LifenizerAppState(
+        localStore: fixture.store,
+        chunkStore: _ProgressChunks(
+          '${fixture.directory.path}/chunks',
+          () => progress.add(restored.syncProgress!),
+        ),
+        apiFactory: (url) => LifenizerApiClient(
+          baseUrl: url,
+          client: MockClient(fixture._handle),
+        ),
+      );
+      fixture.devices.add(restored);
+      final stages = <SyncStage>[];
+      restored.addListener(() {
+        if (restored.syncProgress case final value?) stages.add(value.stage);
+      });
+      await restored.login(
+        baseUrl: _url,
+        email: _email,
+        password: 'synthetic-password',
+        passphrase: 'synthetic-passphrase',
+        deviceVaultKey: base64Encode(_deviceKey),
+        deviceVaultSalt: _salt,
+        offline: true,
+      );
+      await restored.waitForBackgroundSync();
+      expect(restored.error, isNull);
+      expect(restored.syncError, isNull);
+      expect(
+        stages.skipWhile((stage) => stage != SyncStage.restoring),
+        isNot(contains(SyncStage.decryptingLocal)),
+      );
+      expect(progress, hasLength(chunks));
+      expect(progress.first.completed, 0);
+      expect(progress.first.stageClock, isNotNull);
+      for (var i = 0; i < progress.length; i++) {
+        expect(progress[i].stage, SyncStage.restoring);
+        expect(progress[i].total, 8000);
+        expect(progress[i].stageClock, same(progress.first.stageClock));
+        if (i > 0) {
+          expect(progress[i].completed, greaterThan(progress[i - 1].completed));
+        }
+      }
+      expect(restored.conversations, hasLength(1000));
+      expect(restored.syncCursor, 1000);
+      await _expectBodySearch(restored);
+      await restored.lock();
     },
     timeout: const Timeout(Duration(minutes: 2)),
   );
