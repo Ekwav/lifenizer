@@ -83,3 +83,20 @@ Commit `6d7ecff` keeps writer migrations and metadata preparation, but avoids hy
 | Broad | 433.386 | 680.921 | 624.723 |
 
 Preparation p95 roughly halved across all families, and total run time fell from 494.737 to 316.773 seconds. Cgroup peak fell from 1,973,964,800 to 1,908,953,088 bytes, with no limit events, OOMs or swap. Broad query tails were worse than the scratch-only run, and the strict 500 ms query gate still failed. The before/after runs do not isolate shared-machine timing variation; preparation improvements must not be presented as proof of the query-latency target.
+
+
+## Exact posting-score reuse and accepted delivery
+
+Commits `de8b5e5` and `e830e8d` reuse identical score arithmetic for consecutive postings with the same term frequency and document length; document boosts remain separate. The cache is local to each posting payload. All 75 focused checks, clean analysis and the compiled 1,000-item smoke passed. The [full 2M comparison](benchmarks/two-million-score-memo-query-2026-10-30.json) preserved all 120 ordered top-100 lists and all 32 authored relevance results against each of the original default, scratch-reuse and reader-preparation runs. All 20 original bodies were restored and the catalog checksum was unchanged.
+
+| Query family | Preparation p95 (ms) | Prepared-first p95 (ms) | Warm p95 (ms) |
+| --- | ---: | ---: | ---: |
+| Ordinary | 620.711 | 539.650 | 544.517 |
+| Names | 601.595 | 504.342 | 193.625 |
+| Prefix | 628.336 | 188.701 | 167.028 |
+| Fuzzy | 568.521 | 247.191 | 160.171 |
+| Broad | 624.614 | 404.289 | 335.507 |
+
+The highest family warm p95 was 544.517 ms and the highest prepared-first p95 was 539.650 ms. Preparation remains separate. The run took 318.513 seconds; peak process RSS was 1,864,441,856 bytes and cgroup peak was 1,865,728,000 bytes, with no limit events, OOMs or swap. The strict 500 ms gate correctly retained its `latency-target-missed` result. The user's acceptance of approximately 583 ms for now closes this delivery milestone; it does not turn the original 500 ms gate into a pass or establish a universal latency guarantee.
+
+Broad and fuzzy warm tails improved versus the preceding run, while some other tails regressed. These single runs on a shared machine with uncontrolled OS page cache cannot isolate the optimization's contribution. The archived callback arithmetic microbenchmark also records approximately 8.4% overhead when no score reuse occurs. Full-query results, rather than that microbenchmark, establish this run's measured performance. Independent golden ordering for every top-100, whole Flutter/GTK memory and actual 2M wire synchronization remain unmeasured.
