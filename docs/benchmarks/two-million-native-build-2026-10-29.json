@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-29",
+  "status": "completed-build-only-query-gate-pending",
+  "targetMet": false,
+  "scope": "Actual2Mbuild/catalog/reopen/update/delete proof; no full2Mquery latency or32judgment acceptance yet.",
+  "invocationId": "976782db3d5f444aaef657fda55f7e4a",
+  "executableSha256": "c0344dca0bad107f5ffe7c402fa1f8b76d16efbd02659a522f4b3105d1ce2ce0",
+  "conversations": 2000000,
+  "catalogLength": 2000000,
+  "resumedConversations": 1604608,
+  "newlyCommittedConversations": 395392,
+  "wordsPerConversation": 200,
+  "segmentsPerConversation": 10,
+  "sourcePartitionCounts": {
+    "consumed": 400000,
+    "documents": 400000,
+    "email": 400000,
+    "chat": 400000,
+    "other": 400000
+  },
+  "fixtureDateLayout": {
+    "layout": "new-date-permutation-v1",
+    "start": 0,
+    "span": 2000000
+  },
+  "checks": {
+    "allCatalogSummaryFields": true,
+    "representativeFullBodyReopen": true,
+    "update100": true,
+    "delete3AndRestore": true,
+    "updatedBodyAndQueryPersistence": true
+  },
+  "peakRssBytes": 1865588736,
+  "cgroupPeakBytes": 1999998976,
+  "cgroupCapBytes": 1999998976,
+  "swapPeakBytes": 0,
+  "memoryEvents": {
+    "low": "0",
+    "high": "0",
+    "max": "13826",
+    "oom": "0",
+    "oom_kill": "0",
+    "oom_group_kill": "0"
+  },
+  "databaseBytes": 6887403520,
+  "elapsedSeconds": 4441.665,
+  "completionExitCode": 0,
+  "innerAndOuterTerminal": true,
+  "notification": {
+    "thread": "01a1839f-b6d1-7f91-82ff-e9250a0bbdfd",
+    "claimMode": "0600",
+    "directoryMode": "0700",
+    "queueExitCode": 0,
+    "queueAcceptanceIsNotDeliveryProof": true
+  },
+  "rawReportSha256": "f95463f2d7b74d22572d861d5569966952397b8d4a8004a1e1daa29679d1cc82",
+  "rawCompletionSha256": "aed729fe1fddfcc312624c58dba6ae8b143890cb382ebcd818dd3ae416a79d30",
+  "evidenceDirectory": "app/build/benchmarks/two-million-search-v6-shuffled-20261029",
+  "next": "Freeze tested current dense query candidate, full1k120+32 smoke, then full2Mquery-only120cases+32judgments under2GB/noSwap and quiet owned experiments."
+}
