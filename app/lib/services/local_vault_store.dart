@@ -16,6 +16,11 @@ class LocalVaultStore {
 
   static Future<LocalVaultStore> open() => platform.openVaultStore();
 
+  /// Native SQLite sidecars share the vault's directory, never its plaintext.
+  Future<String?> get sqlitePath async => _request == null
+      ? null
+      : await _request('sqlitePath', null, null) as String?;
+
   Future<Map<String, dynamic>?> read(String key) async {
     final value = _request == null
         ? await _records.record(key).get(_database!)

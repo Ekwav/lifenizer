@@ -100,6 +100,8 @@ Future<void> _serveVaultDatabase(
       try {
         Object? value;
         switch (operation) {
+          case 'sqlitePath':
+            value = null;
           case 'read':
             value = await records.record(request[2] as String).get(database);
           case 'write':
@@ -199,6 +201,8 @@ Future<void> _serveSqliteDatabase(
       try {
         Object? value;
         switch (operation) {
+          case 'sqlitePath':
+            value = path;
           case 'read':
             final rows = database.select(
               'SELECT value FROM vaults WHERE key = ?',
