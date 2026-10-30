@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "date": "2026-10-29",
+  "experiment": "Exact posting-local lexical BM25 memo",
+  "decision": "Defer both candidates; no production changes.",
+  "fixture": {
+    "documentCount": 100000,
+    "path": "app/build/benchmarks/ranking-record-cache-audit-20261029/search.sqlite",
+    "reuse": "Existing exclusive private fixture; no live or archived 2M query."
+  },
+  "provenance": {
+    "privateDirectory": "app/build/benchmarks/lexical-memo-preparation-20261029",
+    "baselineSourceSha256": {
+      "app/lib/services/disk_search_index_io.dart": "dbb0fb8753045967729b2409d10e3f5860b8e95066167d27699b7520d8de74c8",
+      "app/lib/services/disk_search_filters.dart": "a9d0add7756af94696aa9874f597278dd0df9cabb1f88903667beb9043c515e8",
+      "app/lib/services/native_sidecar_aead.dart": "00529ef89394701930723faad32c0a896f88ce41a41410545cab38c5687b2021",
+      "app/lib/services/disk_search_ranking.dart": "948cfd1e8ff323f40cf72911546a9923ee1595c511446b75885e9e7005ac477e"
+    },
+    "evidenceSha256": {
+      "result.json": "8114dfbb44df34d4a4a1070c8657e9fe953cc702f32354d8977966d5ca0f571c",
+      "tests.log": "f0b69d6f004feb39462610e02bd34b4c469d115667070d9da24ef4e110efb763",
+      "map-unapplied.patch": "6d6a7f69e1c67ffd0bf455d59f745ad3f37aa3d3c4b61652449252df6528a192",
+      "last-pair-unapplied.patch": "7ae4d64b5591eaeee0f4f5cd45ed6dd1741a46999322169a50cd6ddcc6ee7124"
+    }
+  },
+  "variants": {
+    "baseline": "Native AEAD + bounded decoder hint + synchronous existing-page cache hits + dense sorted phrase positions.",
+    "map": "Exact base lexical value keyed by (TF,document length), bounded to one term in one 1024-document posting; field boost added after lookup.",
+    "last": "One-entry consecutive (TF,length) memo using three scalar locals; boost added after lookup."
+  },
+  "method": {
+    "rounds": 5,
+    "warmRounds": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "criteria": 24,
+    "ordering": "Three variants rotated per round.",
+    "queries": "Broad single words, phrases, names, fuzzy and prefix/suffix edges, repeated words; unfiltered and group:email.",
+    "cpu": "/proc/self/stat aggregate query deltas; 100 ticks per second.",
+    "limits": {
+      "memoryMax": "2GiB",
+      "swapMax": 0
+    }
+  },
+  "correctness": {
+    "allOrderedChecks": 360,
+    "checksPerVariant": {
+      "baseline": 120,
+      "map": 120,
+      "last": 120
+    },
+    "candidateComparisonClarification": "Each candidate has 120 exact ordered-ID checks against baseline-established goldens; 360 includes 120 baseline checks.",
+    "nativeAeadAll": true,
+    "minimumReturned": 93,
+    "focusedCanonicalTestsPassed": 67,
+    "canonicalCases": "Mixed field boosts, alternating TF/length pairs, multiple terms/IDFs and pages, vector on/off, long repeated phrases, editorial relevance and posting validation."
+  },
+  "warmResults": {
+    "baseline": {
+      "queryCount": 96,
+      "cpuTicks": 621,
+      "wallMs": 6169.95,
+      "numericMs": 3557,
+      "p95Ms": 108.557,
+      "physicalReadBytes": 0,
+      "majorFaults": 0
+    },
+    "map": {
+      "queryCount": 96,
+      "cpuTicks": 628,
+      "wallMs": 6328.713,
+      "numericMs": 3698,
+      "p95Ms": 112.859,
+      "physicalReadBytes": 0,
+      "majorFaults": 0
+    },
+    "last": {
+      "queryCount": 96,
+      "cpuTicks": 606,
+      "wallMs": 6051.015,
+      "numericMs": 3454,
+      "p95Ms": 104.79,
+      "physicalReadBytes": 0,
+      "majorFaults": 0
+    }
+  },
+  "relativeToBaseline": {
+    "map": {
+      "cpuChangePercent": 1.13,
+      "wallChangePercent": 2.57
+    },
+    "last": {
+      "cpuChangePercent": -2.42,
+      "wallChangePercent": -1.93
+    }
+  },
+  "memory": {
+    "processPeakRssBytes": 103444480,
+    "systemdPeak": "112M",
+    "swapBytes": 0,
+    "attribution": "Three workers open in one process; RSS cannot establish separate candidate peak-memory benefit."
+  },
+  "limits": [
+    "100k CPU experiment, not a 2M latency gate.",
+    "Both candidates miss the required 5% aggregate CPU improvement; some individual queries regress.",
+    "No further runs or promotion justified."
+  ]
+}

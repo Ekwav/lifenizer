@@ -1,0 +1,295 @@
+{
+  "date": "2026-10-29",
+  "status": "Completed 100k diagnostic; two-million acceptance not established",
+  "conversations": 100000,
+  "wordsPerConversation": 200,
+  "maxResults": 100,
+  "conclusion": {
+    "warmWallReductionPercent": 18.72403197049206,
+    "warmCpuReductionPercent": 15.217391304347828,
+    "warmNumericReductionPercent": 33.59046283309958,
+    "databaseGrowthPercent": 9.168393842714417,
+    "encryptedPostingGrowthPercent": 24.369728680677238,
+    "interpretation": "Level0 tails reduce warm CPU and wall time in this 100k fixture. Prepared physical reads increase and individual cold-hinted cases regress; no p95 or 2M claim. The largest query posting cache is only 1.22 MB, so 16 MiB spill remains untested.",
+    "productionChange": "None. Private patch changes only newly packed posting tails; existing pages keep their current gzip until rewritten. No migration is proposed."
+  },
+  "provenance": {
+    "project": "/tmp/lifenizer-level0-100k-uwmvfkqs",
+    "executable": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/posting-level0-100k-20261029/aot/bundle/bin/posting_level0",
+    "executableSha256": "0758cb22605c0d060876f825c74f6612bb723d9aec57d386c6a09d04c36fd824",
+    "helperSourceSha256": "e77113eb05be854f2b468cce40fed2cc7cc9c52980eb212b0d0ec89d7913c583",
+    "compilerDepfileSha256": "106ee4150cffe049a56c5db69d348e3a06c94aa25b417ff83c837fd133c9c48f",
+    "sourceManifestSha256": "590f3ee10c15d6ea5e9a2cc8c48daeef27f79e0ba127c8b25992adb63eebccfc",
+    "allSnapshotAndCurrentRootFilesUnchangedThroughCompile": true,
+    "allLibrariesCount": 140,
+    "appDependencyPathsVerified": true,
+    "runtimeAssets": {
+      "libsodium.so": "8c77d5723be854d008f67fda8c1f7a42cc1a6385bf2d975b3fb112572e3e4f41",
+      "libsqlite3.so": "b17729184e5a2818055ecbddd5ed6642521bfe6e56aafa472330e483c0e2e0d2"
+    },
+    "engineSources": {
+      "pubspec.yaml": "b9d4d41c8ce8218847eb746e8ab777749c96cb63eeb8c3011bd4375baf565ba1",
+      "pubspec.lock": "0c759cea09783a642277756708c4b87335f78178e5e21de36fb2d9b8e5100b0f",
+      "lib/services/disk_search_index_io.dart": "dbb0fb8753045967729b2409d10e3f5860b8e95066167d27699b7520d8de74c8",
+      "lib/services/disk_search_ranking.dart": "9b27d0169c841b495e9207d8df2d6eeceff9e375420c11532055402f3a8c5a86",
+      "lib/services/native_sidecar_aead.dart": "00529ef89394701930723faad32c0a896f88ce41a41410545cab38c5687b2021",
+      "lib/services/search_criteria.dart": "a6ae357812cc4637e79c888c7eff273e9e5c4c5f6c5b1f505656e971d4592d76"
+    },
+    "nativeSodiumVersion": "4.0.4",
+    "runtimeNativeAeadCheck": "Every measured query requires nativeAead=1",
+    "sourceCodeMarkers": {
+      "nativeCipher": true,
+      "boundedDecodeHint": true,
+      "syncCachedRecord": true
+    }
+  },
+  "sourceSha256BeforeAndAfter": "933d5cb82b7c532d9f86d350f87ae48917f9a7d77aac28fad8939142cb8aa98e",
+  "sourceUnchanged": true,
+  "allNonPostingTableContentsAndSchemaUnchanged": true,
+  "validation": {
+    "postingRows": 272228,
+    "validatedRows": 272228,
+    "allPrefixesAndPositionBytesExactlyPreserved": true,
+    "format": 5,
+    "prefixBytes": 169,
+    "gzipLevel": 0,
+    "newNoncePerRow": true,
+    "exactOrderedTop100Samples": 120,
+    "queryCases": 10,
+    "allCasesReturned100": true,
+    "allOrderedIdsMatchAcrossLayoutsStagesAndRounds": true
+  },
+  "method": {
+    "copies": "Two new private independent inodes on real SSD; source read-only and hash-checked before/after",
+    "mutation": "128-row keyset transactions update only postings.payload; public NativeSidecarAead key 0..31; strict managed gzip and full second-pass row comparisons",
+    "layout": "No VACUUM, rebuild, schema/ranking change or format bump",
+    "queries": "Six fresh capped workers, alternating layout order over 3 rounds; 10 cases rotated by 3 positions per round; immediate repeated warm query; real 100k summary catalog retained throughout",
+    "cacheCondition": "POSIX_FADV_DONTNEED only on owned input before each worker; catalog hydration and prepare precede queries; earlier cases can warm shared pages",
+    "cpuTicksPerSecond": 100,
+    "timingSplits": "numericMs is within scoreMs; dedicated result-fetch time unavailable",
+    "contention": "Shared SSD/host with live producer and uncontrolled workloads; no global cache flush. Transcode actual CPU 52.77 s versus 2,190.53 s mutation wall, worker observed waiting for ext4 journal commit."
+  },
+  "limits": {
+    "memoryMaxRequestedBytes": 2000000000,
+    "memoryMaxObservedBytes": 1999998976,
+    "memorySwapMaxBytes": 0,
+    "allOomAndMaxEventsZero": true,
+    "transcodePeakRssBytes": 79437824,
+    "transcodeCgroupMemoryPeakBytes": 107749376,
+    "queryMaxRssBytes": 148873216,
+    "queryMaxCgroupMemoryPeakBytes": 195112960,
+    "catalogLength": 100000,
+    "ownedRuntimeOverrideRemovedAfterTerminal": true
+  },
+  "transcode": {
+    "rows": 272228,
+    "positionBytes": 66328561,
+    "encryptedBytesBefore": 101486690,
+    "encryptedBytesAfter": 126218721,
+    "mutationMs": 2190530.755,
+    "totalMsIncludingVerification": 2199255.029,
+    "mutationCounters": {
+      "rchar": 125933585,
+      "wchar": 401980932,
+      "syscr": 37188,
+      "syscw": 191910,
+      "read_bytes": 188416,
+      "write_bytes": 417988608,
+      "cancelled_write_bytes": 0,
+      "cpuTicks": 5277,
+      "majorFaults": 0,
+      "minorFaults": 9162
+    },
+    "allCounters": {
+      "rchar": 408050376,
+      "wchar": 401980932,
+      "syscr": 110824,
+      "syscw": 191910,
+      "read_bytes": 17244160,
+      "write_bytes": 417988608,
+      "cancelled_write_bytes": 0,
+      "cpuTicks": 6059,
+      "majorFaults": 0,
+      "minorFaults": 13357
+    }
+  },
+  "layoutBefore": {
+    "fileBytes": 351772672,
+    "pageSize": 4096,
+    "pageCount": 85882,
+    "freelistCount": 31,
+    "encryptedPostingBytes": 101486690,
+    "postingRows": 272228,
+    "postingsDbstat": [
+      {
+        "pageType": "internal",
+        "pages": 3475,
+        "payloadBytes": 11315964,
+        "unusedBytes": 2658280,
+        "pageBytes": 14233600,
+        "maxPayloadBytes": 700
+      },
+      {
+        "pageType": "leaf",
+        "pages": 27208,
+        "payloadBytes": 92399615,
+        "unusedBytes": 17846605,
+        "pageBytes": 111443968,
+        "maxPayloadBytes": 715
+      }
+    ]
+  },
+  "layoutAfter": {
+    "fileBytes": 384024576,
+    "pageSize": 4096,
+    "pageCount": 93756,
+    "freelistCount": 0,
+    "encryptedPostingBytes": 126218721,
+    "postingRows": 272228,
+    "postingsDbstat": [
+      {
+        "pageType": "internal",
+        "pages": 5097,
+        "payloadBytes": 17422482,
+        "unusedBytes": 3131966,
+        "pageBytes": 20877312,
+        "maxPayloadBytes": 4324
+      },
+      {
+        "pageType": "leaf",
+        "pages": 32664,
+        "payloadBytes": 109459657,
+        "unusedBytes": 23109603,
+        "pageBytes": 133791744,
+        "maxPayloadBytes": 4324
+      },
+      {
+        "pageType": "overflow",
+        "pages": 827,
+        "payloadBytes": 1565471,
+        "unusedBytes": 1818613,
+        "pageBytes": 3387392,
+        "maxPayloadBytes": 0
+      }
+    ]
+  },
+  "aggregate": {
+    "prepared": {
+      "base": {
+        "samples": 30,
+        "wallMs": 8120.526,
+        "cpuMs": 2360.0,
+        "physicalReadBytes": 17403904,
+        "majorFaults": 0,
+        "candidateMs": 4419,
+        "numericMs": 1400,
+        "scoreMsIncludingNumericAndResultWork": 3634,
+        "postingSqlRereads": 0
+      },
+      "level0": {
+        "samples": 30,
+        "wallMs": 6371.262,
+        "cpuMs": 1930.0,
+        "physicalReadBytes": 24670208,
+        "majorFaults": 0,
+        "candidateMs": 2346,
+        "numericMs": 932,
+        "scoreMsIncludingNumericAndResultWork": 3957,
+        "postingSqlRereads": 0
+      }
+    },
+    "warm": {
+      "base": {
+        "samples": 30,
+        "wallMs": 2251.326,
+        "cpuMs": 2300.0,
+        "physicalReadBytes": 0,
+        "majorFaults": 0,
+        "candidateMs": 428,
+        "numericMs": 1426,
+        "scoreMsIncludingNumericAndResultWork": 1760,
+        "postingSqlRereads": 0
+      },
+      "level0": {
+        "samples": 30,
+        "wallMs": 1829.787,
+        "cpuMs": 1950.0,
+        "physicalReadBytes": 0,
+        "majorFaults": 0,
+        "candidateMs": 463,
+        "numericMs": 947,
+        "scoreMsIncludingNumericAndResultWork": 1304,
+        "postingSqlRereads": 0
+      }
+    }
+  },
+  "privateRawReports": [
+    {
+      "file": "query-base-0.json",
+      "sha256": "ccbf279848c7b394424c685131766f46f038953884ef192de2f7bf9131558251",
+      "invocationId": "2f6ec5df78ea46489151429f2dd30a7a",
+      "layout": "base",
+      "round": 0
+    },
+    {
+      "file": "query-level0-0.json",
+      "sha256": "8cef8f3b6336a170fd914f3ac7a93c9959092715b8130ddf67a452664ad99d23",
+      "invocationId": "48ed03e892b7455fa538baff4bbbf0ec",
+      "layout": "level0",
+      "round": 0
+    },
+    {
+      "file": "query-level0-1.json",
+      "sha256": "e979e05d3fcd6bd0c0c16250255c7e05c5b77abfa4bbb511754520814f1a9958",
+      "invocationId": "c789920f17e84592bb9a7148af7c77f0",
+      "layout": "level0",
+      "round": 1
+    },
+    {
+      "file": "query-base-1.json",
+      "sha256": "557c7a6476c6126d7f733b6cc372d41bc2b7e403b8472f8ba24d5259f53122a9",
+      "invocationId": "1d69dab2da1c497aa7c6ccfd7abf3e9c",
+      "layout": "base",
+      "round": 1
+    },
+    {
+      "file": "query-base-2.json",
+      "sha256": "e7080d01adee5e31f713262b7a9773d3bfabf7b3f47e0faeb4b44aad9fca6351",
+      "invocationId": "6d92d33afe4f4fb28e6cd25c86027ea8",
+      "layout": "base",
+      "round": 2
+    },
+    {
+      "file": "query-level0-2.json",
+      "sha256": "9dc051fb92429fc0b06db6f8ebcc3ae00a5307621a0da3baaf01b4004c3de172",
+      "invocationId": "d0cebbc8720b4493b4e0c508d911d422",
+      "layout": "level0",
+      "round": 2
+    }
+  ],
+  "privateUnappliedPatch": {
+    "path": "app/build/benchmarks/posting-level0-100k-20261029/posting-tail-level0-unapplied.patch",
+    "sha256": "a2b5eacd3599fc8562389e41b04b2cf11ce41eca771776a3bbd3d99638d563df",
+    "gitApplyCheckPassed": true
+  },
+  "limitations": [
+    "100k rather than 2 million; only 3 samples per case/stage/layout",
+    "No stable p95 estimate or controlled storage workload",
+    "Posting cache never reaches 16 MiB; larger-corpus eviction and I/O can erase CPU gains",
+    "Per-file cache hint is not a globally cold-storage guarantee; queries follow preparation",
+    "CPU tick resolution 10 ms; no dedicated result-fetch phase timing",
+    "No production encoding change adopted"
+  ],
+  "caseComparisons": [
+    {"case":"archive-import","results":100,"warmMedianMs":{"base":146.879,"level0":111.673},"warmMs":{"base":[135.425,146.879,163.689],"level0":[111.673,105.176,113.197]},"preparedMs":{"base":[836.958,133.595,927.85],"level0":[221.293,527.83,151.578]},"warmMedianCpuMs":{"base":150.0,"level0":110.0},"warmMedianNumericMs":{"base":109,"level0":70},"maxPostingCacheBytes":{"base":746141,"level0":1223918},"orderedIdsSha256":"1d5ec4ee68c3cecb9bbc168ab6acac149ecba688d6e6929a4d768738bdda678b"},
+    {"case":"import","results":100,"warmMedianMs":{"base":65.947,"level0":43.34},"warmMs":{"base":[65.566,67.044,65.947],"level0":[43.34,42.763,48.049]},"preparedMs":{"base":[79.142,67.615,65.838],"level0":[55.163,42.547,51.004]},"warmMedianCpuMs":{"base":60.0,"level0":50.0},"warmMedianNumericMs":{"base":38,"level0":17},"maxPostingCacheBytes":{"base":557726,"level0":723553},"orderedIdsSha256":"d6b14aeabe1573097977ff157096f3deb2a12597b9e8c4000cf6ec6d22914b7d"},
+    {"case":"oliver-thompson","results":100,"warmMedianMs":{"base":41.118,"level0":34.129},"warmMs":{"base":[43.174,41.118,39.928],"level0":[32.659,34.129,40.186]},"preparedMs":{"base":[86.48,808.556,76.388],"level0":[72.854,550.237,1043.557]},"warmMedianCpuMs":{"base":40.0,"level0":40.0},"warmMedianNumericMs":{"base":16,"level0":8},"maxPostingCacheBytes":{"base":211223,"level0":319139},"orderedIdsSha256":"6e9b6809f08d85d7989599f3943ff9459b0189362155247e1fb4d1230f8f0927"},
+    {"case":"grocery-shopping","results":100,"warmMedianMs":{"base":84.126,"level0":78.555},"warmMs":{"base":[81.873,86.713,84.126],"level0":[103.055,78.555,76.091]},"preparedMs":{"base":[107.592,127.406,86.06],"level0":[110.471,622.86,80.678]},"warmMedianCpuMs":{"base":80.0,"level0":80.0},"warmMedianNumericMs":{"base":62,"level0":55},"maxPostingCacheBytes":{"base":86216,"level0":692651},"orderedIdsSha256":"6a78e1f9a8d07b5a5c325d1c68352e35c8bd2cf117525d636525e667cb115e52"},
+    {"case":"archive-import-email","results":100,"warmMedianMs":{"base":95.994,"level0":68.867},"warmMs":{"base":[111.433,95.203,95.994],"level0":[68.867,92.995,64.717]},"preparedMs":{"base":[607.014,2798.025,106.01],"level0":[75.974,171.992,70.249]},"warmMedianCpuMs":{"base":100.0,"level0":60.0},"warmMedianNumericMs":{"base":61,"level0":30},"maxPostingCacheBytes":{"base":746141,"level0":1223918},"orderedIdsSha256":"a88fc56b108c59957ad57baaa76d6617d548806765a36e3890eb36c083409a8d"},
+    {"case":"import-email","results":100,"warmMedianMs":{"base":53.97,"level0":36.629},"warmMs":{"base":[58.397,53.97,51.307],"level0":[35.438,37.161,36.629]},"preparedMs":{"base":[53.565,144.072,52.765],"level0":[369.83,42.121,47.752]},"warmMedianCpuMs":{"base":60.0,"level0":40.0},"warmMedianNumericMs":{"base":25,"level0":8},"maxPostingCacheBytes":{"base":557726,"level0":723553},"orderedIdsSha256":"96cbfca9ca98af89bf29ac0cdb43e01c689933f922c37199daba218e48bad175"},
+    {"case":"grocery-hide-consumed","results":100,"warmMedianMs":{"base":81.807,"level0":79.831},"warmMs":{"base":[78.515,105.92,81.807],"level0":[83.384,79.649,79.831]},"preparedMs":{"base":[86.85,77.3,118.874],"level0":[77.183,81.02,130.042]},"warmMedianCpuMs":{"base":90.0,"level0":90.0},"warmMedianNumericMs":{"base":58,"level0":54},"maxPostingCacheBytes":{"base":86216,"level0":692651},"orderedIdsSha256":"6a78e1f9a8d07b5a5c325d1c68352e35c8bd2cf117525d636525e667cb115e52"},
+    {"case":"grocery-chat","results":100,"warmMedianMs":{"base":50.453,"level0":48.314},"warmMs":{"base":[50.258,50.453,50.672],"level0":[48.863,48.314,47.636]},"preparedMs":{"base":[63.671,118.53,61.458],"level0":[295.905,58.633,953.264]},"warmMedianCpuMs":{"base":50.0,"level0":50.0},"warmMedianNumericMs":{"base":27,"level0":24},"maxPostingCacheBytes":{"base":86216,"level0":692651},"orderedIdsSha256":"a8fe39b0214176abc1ea878e5e688a992630f6c0357b4db9eb61c5cd036d151e"},
+    {"case":"import-no-vector","results":100,"warmMedianMs":{"base":63.304,"level0":40.586},"warmMs":{"base":[65.724,63.304,61.474],"level0":[40.586,41.091,40.422]},"preparedMs":{"base":[68.284,70.155,131.597],"level0":[139.881,51.327,121.025]},"warmMedianCpuMs":{"base":60.0,"level0":40.0},"warmMedianNumericMs":{"base":38,"level0":15},"maxPostingCacheBytes":{"base":557726,"level0":723553},"orderedIdsSha256":"f612a23318f44d346e4c832fc417b36cab250090096bae6cf93d014a348c54ec"},
+    {"case":"grocery-date","results":100,"warmMedianMs":{"base":51.774,"level0":51.757},"warmMs":{"base":[51.774,52.979,50.66],"level0":[51.999,51.757,51.575]},"preparedMs":{"base":[50.8,56.088,51.988],"level0":[53.805,52.084,49.103]},"warmMedianCpuMs":{"base":50.0,"level0":50.0},"warmMedianNumericMs":{"base":30,"level0":28},"maxPostingCacheBytes":{"base":86216,"level0":692651},"orderedIdsSha256":"6a78e1f9a8d07b5a5c325d1c68352e35c8bd2cf117525d636525e667cb115e52"}
+  ]
+}

@@ -1,0 +1,357 @@
+{
+  "schemaVersion": 3,
+  "date": "2026-10-29",
+  "status": "interim-native-completed",
+  "targetConversations": 2000000,
+  "conversations": 834560,
+  "targetMet": false,
+  "scope": "Interim diagnostic only; does not establish full2M capacity, relevance or latency acceptance.",
+  "corpus": {
+    "wordsPerConversation": 200,
+    "segmentsPerConversation": 10,
+    "fixtureDateLayout": {
+      "layout": "new-date-permutation-v1",
+      "start": 0,
+      "span": 2000000
+    },
+    "fixtureDateLayoutScope": "all 834560 conversations permuted across 2000000 minutes"
+  },
+  "nativeBuild": {
+    "executableSha256": "10cddd9e052f9eb2845834246d4c35dff9c7c4669fcc247bb3bceddd19292166",
+    "harnessSha256": "814054d47f1fe8d5089922c22f6f00cca30506b71323a3271bdd9b7950b3bf84",
+    "sourceManifestSha256": "33a63585c329ba118528bd279da9704f163b611c9ddcbf528027be98631822a1",
+    "compilerDepfileSha256": "67e2e1bcc0e0a6eb2b5ab26ecfb9ea66d33b2a2a879fc48dcfa0f09809bf31af",
+    "allProductionSourcesUnchangedThroughCompile": true,
+    "appDependencyPathsVerified": true,
+    "cacheAndNativeMarkersPresent": true,
+    "runtimeLibraries": {
+      "libsqlite3.so": "b17729184e5a2818055ecbddd5ed6642521bfe6e56aafa472330e483c0e2e0d2",
+      "libsodium.so": "8c77d5723be854d008f67fda8c1f7a42cc1a6385bf2d975b3fb112572e3e4f41"
+    },
+    "sourceDependencyFiles": {
+      "app/pubspec.yaml": "b9d4d41c8ce8218847eb746e8ab777749c96cb63eeb8c3011bd4375baf565ba1",
+      "app/pubspec.lock": "0c759cea09783a642277756708c4b87335f78178e5e21de36fb2d9b8e5100b0f",
+      "app/lib/services/native_sidecar_aead.dart": "00529ef89394701930723faad32c0a896f88ce41a41410545cab38c5687b2021",
+      "app/lib/services/disk_search_index_io.dart": "4405248d4ed8903d5a5a036b72fffc58d0089e45281cc432209127fbe2344afc",
+      "app/lib/services/disk_search_ranking.dart": "2bb88409c56a95dfee1cf1f446202aa2c4c65d9cbe7a513d567913790c4f5110"
+    },
+    "frozenVocabularyDocuments": {
+      "docs/ARCHITECTURE.md": "2a522e032687ad7f9b81ab1ee888451a36b91f2fc243f7178f237fc48d2e171e",
+      "docs/AUTH.md": "816696642e981321f0c9a9c2eba0fae17191f3b1251fdf92f03520b02218a84f",
+      "docs/DATABASE.md": "a5d18ad5c031ae2638827592866842a96d2930025877fcbc3de1415f882a45fb",
+      "docs/IMPORTERS.md": "12fcdf059fbf16d31fa2788287192444bc2f576a46a1e89763b3eac181e22861"
+    }
+  },
+  "nativeSmoke": {
+    "passed": true,
+    "judgments": 32,
+    "restoredConversations": 20,
+    "nativeAeadProfiles": 32,
+    "cacheProfiles": 30,
+    "invocationId": "5f62101ef71448b3b4dae8eaa3d7772c",
+    "memoryPeakBytes": 76963840
+  },
+  "nativeCompletion": {
+    "unit": "lifenizer-managed-interim-native-proven-20261029.service",
+    "invocationId": "272589fb8a244d388cd37b592a5b7195",
+    "result": "success",
+    "runtimeMaxSeconds": 2400,
+    "lastCompletedPhase": "complete",
+    "serviceResult": "success",
+    "execMainCode": 1,
+    "execMainStatus": 0,
+    "exitCode": 0,
+    "systemdRunExitCode": 0,
+    "terminationSignal": null,
+    "memoryPeakBytes": 1004384256,
+    "benchmarkPassed": true,
+    "targetMet": false,
+    "report": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/managed-interim-query-audit-20261029/offline-fixture/query-result.json",
+    "partialReport": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/managed-interim-query-audit-20261029/offline-fixture/query-result.partial.json",
+    "elapsedSeconds": 2393.289
+  },
+  "nativeFamilies": {
+    "ordinary": {
+      "sampleCount": 24,
+      "preparationP95Ms": 277.489,
+      "firstQueryP95Ms": 2151.459,
+      "warmP95Ms": 560.559,
+      "ambiguousExpansionCases": 24,
+      "worstWarm": {
+        "query": "import",
+        "source": "group:chat",
+        "warmMs": 599.945,
+        "profile": {
+          "nativeAead": 1,
+          "postingReads": 10595,
+          "candidateMs": 206,
+          "postingCachePeakBytes": 4636026,
+          "postingCacheHits": 8619,
+          "scorePostingSqlReads": 0,
+          "numericMs": 377,
+          "positionReads": 0,
+          "scoredDocuments": 96244,
+          "scoreMs": 389
+        }
+      }
+    },
+    "name": {
+      "sampleCount": 24,
+      "preparationP95Ms": 277.904,
+      "firstQueryP95Ms": 1151.035,
+      "warmP95Ms": 299.344,
+      "ambiguousExpansionCases": 8,
+      "worstWarm": {
+        "query": "oliver thompson",
+        "source": null,
+        "warmMs": 317.793,
+        "profile": {
+          "nativeAead": 1,
+          "postingReads": 4890,
+          "candidateMs": 91,
+          "postingCachePeakBytes": 1762608,
+          "postingCacheHits": 4890,
+          "scorePostingSqlReads": 0,
+          "numericMs": 195,
+          "positionReads": 1630,
+          "scoredDocuments": 19537,
+          "scoreMs": 208
+        }
+      }
+    },
+    "prefix": {
+      "sampleCount": 24,
+      "preparationP95Ms": 264.537,
+      "firstQueryP95Ms": 442.075,
+      "warmP95Ms": 155.597,
+      "ambiguousExpansionCases": 3,
+      "worstWarm": {
+        "query": "camil thompson",
+        "source": null,
+        "warmMs": 371.151,
+        "profile": {
+          "nativeAead": 1,
+          "postingReads": 1630,
+          "candidateMs": 222,
+          "postingCachePeakBytes": 335421,
+          "postingCacheHits": 1630,
+          "scorePostingSqlReads": 0,
+          "numericMs": 106,
+          "positionReads": 815,
+          "scoredDocuments": 2413,
+          "scoreMs": 123
+        }
+      }
+    },
+    "fuzzy": {
+      "sampleCount": 24,
+      "preparationP95Ms": 253.089,
+      "firstQueryP95Ms": 1226.949,
+      "warmP95Ms": 246.639,
+      "ambiguousExpansionCases": 7,
+      "worstWarm": {
+        "query": "zmelia thompson",
+        "source": null,
+        "warmMs": 319.934,
+        "profile": {
+          "nativeAead": 1,
+          "postingReads": 2445,
+          "candidateMs": 193,
+          "postingCachePeakBytes": 691313,
+          "postingCacheHits": 2445,
+          "scorePostingSqlReads": 0,
+          "numericMs": 98,
+          "positionReads": 815,
+          "scoredDocuments": 7391,
+          "scoreMs": 110
+        }
+      }
+    },
+    "broad": {
+      "sampleCount": 24,
+      "preparationP95Ms": 19438.877,
+      "firstQueryP95Ms": 70399.129,
+      "warmP95Ms": 1065.092,
+      "ambiguousExpansionCases": 22,
+      "worstWarm": {
+        "query": "archive import",
+        "source": null,
+        "warmMs": 1233.719,
+        "profile": {
+          "nativeAead": 1,
+          "postingReads": 13855,
+          "candidateMs": 223,
+          "postingCachePeakBytes": 6207734,
+          "postingCacheHits": 13855,
+          "scorePostingSqlReads": 0,
+          "numericMs": 981,
+          "positionReads": 7335,
+          "scoredDocuments": 516993,
+          "scoreMs": 994
+        }
+      }
+    }
+  },
+  "semantic": {
+    "passed": true,
+    "judgments": 32,
+    "restoredConversations": 20
+  },
+  "baseline": {
+    "executableSha256": "1daf0d98c7ff65a0a15891a5c77971151f9e69e48d7f7da990b3d7f29cd0cad2",
+    "completion": {
+      "unit": "lifenizer-managed-interim-baseline-proven-20261029.service",
+      "invocationId": "fe09def7c64041c6900b335527804123",
+      "result": "timeout",
+      "runtimeMaxSeconds": 1200,
+      "lastCompletedPhase": "query:broad:8",
+      "serviceResult": "timeout",
+      "execMainCode": 2,
+      "execMainStatus": 15,
+      "exitCode": 143,
+      "systemdRunExitCode": 1,
+      "terminationSignal": 15,
+      "memoryPeakBytes": 841158656,
+      "benchmarkPassed": false,
+      "targetMet": false,
+      "report": null,
+      "partialReport": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/managed-interim-query-audit-20261029/offline-fixture/query-result.partial.json",
+      "elapsedSeconds": 1200.496
+    },
+    "families": {
+      "ordinary": {
+        "sampleCount": 24,
+        "preparationP95Ms": 3067.147,
+        "firstQueryP95Ms": 1169.087,
+        "warmP95Ms": 1085.629,
+        "ambiguousExpansionCases": 24
+      },
+      "name": {
+        "sampleCount": 24,
+        "preparationP95Ms": 2983.31,
+        "firstQueryP95Ms": 660.234,
+        "warmP95Ms": 661.395,
+        "ambiguousExpansionCases": 8
+      },
+      "prefix": {
+        "sampleCount": 24,
+        "preparationP95Ms": 3138.31,
+        "firstQueryP95Ms": 471.216,
+        "warmP95Ms": 317.4,
+        "ambiguousExpansionCases": 3
+      },
+      "fuzzy": {
+        "sampleCount": 24,
+        "preparationP95Ms": 4106.229,
+        "firstQueryP95Ms": 36430.026,
+        "warmP95Ms": 606.49,
+        "ambiguousExpansionCases": 7
+      },
+      "broad": {
+        "sampleCount": 8,
+        "preparationP95Ms": 3868.69,
+        "firstQueryP95Ms": 75139.096,
+        "warmP95Ms": 2554.992,
+        "ambiguousExpansionCases": 6
+      }
+    },
+    "completedCases": 104
+  },
+  "matchingCaseComparison": {
+    "ordinary": {
+      "matchingCases": 24,
+      "matchingTopIds": 24,
+      "baselineFirstP95Ms": 1169.087,
+      "nativeFirstP95Ms": 2151.459,
+      "baselineWarmP95Ms": 1085.629,
+      "nativeWarmP95Ms": 560.559
+    },
+    "name": {
+      "matchingCases": 24,
+      "matchingTopIds": 24,
+      "baselineFirstP95Ms": 660.234,
+      "nativeFirstP95Ms": 1151.035,
+      "baselineWarmP95Ms": 661.395,
+      "nativeWarmP95Ms": 299.344
+    },
+    "prefix": {
+      "matchingCases": 24,
+      "matchingTopIds": 24,
+      "baselineFirstP95Ms": 471.216,
+      "nativeFirstP95Ms": 442.075,
+      "baselineWarmP95Ms": 317.4,
+      "nativeWarmP95Ms": 155.597
+    },
+    "fuzzy": {
+      "matchingCases": 24,
+      "matchingTopIds": 24,
+      "baselineFirstP95Ms": 36430.026,
+      "nativeFirstP95Ms": 1226.949,
+      "baselineWarmP95Ms": 606.49,
+      "nativeWarmP95Ms": 246.639
+    },
+    "broad": {
+      "matchingCases": 8,
+      "matchingTopIds": 8,
+      "baselineFirstP95Ms": 75139.096,
+      "nativeFirstP95Ms": 1553.86,
+      "baselineWarmP95Ms": 2554.992,
+      "nativeWarmP95Ms": 860.396
+    }
+  },
+  "conditions": [
+    "Fresh prepared worker per case; initialization excluded and reported separately; OS page cache uncontrolled.",
+    "Original2M builder remained running on same host/storage. Private layout VACUUM overlapped baseline, including ~8GB I/O; native gate ran with that cgroup frozen. Baseline fuzzy/broad first-query p95 is confounded; matching-case comparisons are descriptive and cannot establish causal speedups.",
+    "Native snapshot precedes root parser-hint/new-varint decoder changes; production later changed independently.",
+    "Native startup and prepared-first samples are contended: root measured storage100%busy, reads25.4MB/s,writes16.6MB/s,inflight64/85; unrelated authorized host jobs cannot be stopped by this task. Native initialization was observed D/folio_wait_bit_common with advancing read counters; do not interpret delay as an isolated native AES cost.",
+    "Native gate cap2,000,000,000bytes, swap0, runtime2400s. Baseline cap identical, runtime1200s expired after104cases; no fullbaseline relevance result."
+  ],
+  "excludedEvidence": {
+    "directory": "app/build/benchmarks/managed-interim-query-audit-20261029/engine-unverified-results",
+    "reason": "Initial nested compiler context resolved liveapp; initial120/32 run has unverified engine provenance and is excluded."
+  },
+  "sourceIncident": {
+    "cause": "Earlier live read lock caused producer COMMIT SQLITE_BUSY, exit255 at834560records; not OOM.",
+    "recovery": "Separate consistent offline backup obtained with original producer failed/PID0; root resumed producer separately. Native gate never opens live source.",
+    "offlineBackup": {
+      "sourceAccess": "mode=ro; offline SQLite backup API",
+      "unit": "lifenizer-search-two-million-managed-resume-20261029.service",
+      "deadlineSeconds": 120,
+      "sourceWrites": false,
+      "producerBefore": {
+        "ActiveState": "failed",
+        "InvocationID": "8852e256efe14c2784385e42c1d5f75a",
+        "MainPID": "0"
+      },
+      "journalMode": "delete",
+      "copiedConversations": 834560,
+      "backupSeconds": 45.608,
+      "producerAfter": {
+        "ActiveState": "failed",
+        "InvocationID": "8852e256efe14c2784385e42c1d5f75a",
+        "MainPID": "0"
+      },
+      "passed": true,
+      "copySha256": "36e14598924cd248c5f56db9159ee9e748f2d0759a759c431a1007b850e4b5a4",
+      "copyBytes": 2882760704,
+      "quickCheck": "ok"
+    }
+  },
+  "evidenceDirectory": "app/build/benchmarks/managed-interim-query-audit-20261029",
+  "nativeCompletedCases": 120,
+  "nativeCorrectnessPassed": true,
+  "nativeLatencyTargetPassed": false,
+  "finalVerification": {
+    "frozenSourcesUnchangedAfterRun": true,
+    "executableUnchangedAfterRun": true,
+    "runtimeLibrariesUnchangedAfterRun": true,
+    "reportSha256": "da8b964ab10f7062f96696fdbf9232027473b5721f4dab4b80f0dadc3d3c8e24",
+    "completionSha256": "670c4afa8d3046ffb6496273f549bcc3d0fa194e12f7181f944a0cbb4130e138",
+    "semanticOverlayRestored": true,
+    "restoredConversations": 20,
+    "compilerDependenciesStillVerified": true,
+    "frozenSQLiteAssetMatchesOriginal52bd": true,
+    "packageConfigSha256": "220afaa1bee3c951b955bd027772e9b12acfc2d726a70d51a53aabc43e1313cd",
+    "packageGraphSha256": "c0ee4b9136f507df491140195b311ece399ce94da6f19e1c42f424c9fb27db47"
+  }
+}

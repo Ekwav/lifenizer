@@ -1,0 +1,846 @@
+{
+  "experiment": "Exact raw TF/boost prefix before compressed positional posting stream",
+  "date": "2026-10-29",
+  "decision": "DEFER: private prototype only; no production posting-format or migration change",
+  "scale": {
+    "syntheticConversations": 100000,
+    "averageWordsPerConversation": 200,
+    "full2MCandidateRun": false
+  },
+  "layout": {
+    "postingFormat": 6,
+    "rankingVersionUnchanged": 6,
+    "description": "Existing168-byte bitmap/impact header; marker6; big-endian uint16 score length; canonical uint32 varint TF + byte boost per set bitmap bit; original gzip(v5 positional stream)",
+    "maximumRawScoreBytesPerPosting": 6144,
+    "cacheLimitBytes": 16777216,
+    "oldFormats4And5ReadCompatible": true,
+    "validationBoundary": "Score-only reads validate every score, including excluded documents, plus compressed-tail bounds/magic/method/reserved flags; entire payload remains AEAD authenticated. Positional reads fully validate gzip and deltas and cross-check every TF/boost against the prefix. Score-only reads intentionally defer semantic validation of unused v6 positional bytes."
+  },
+  "correctness": {
+    "allOrdersEqual": true,
+    "uniqueQueryFilters": 18,
+    "sampleCount": 432,
+    "allNativeAead": true,
+    "nonPostingTablesIdentical": true,
+    "sourceSHA256Unchanged": "330683ef3027a592a31c2d8fa5c211f4a783f45738716bc20c272d3a086f5d61",
+    "orderedIdsPerSample": 100,
+    "fullOrderedIdsCompared": 43200,
+    "nonemptyQueryFilterCases": 18,
+    "emptyCases": 0,
+    "sampleOrder": "baseline, candidate, candidate, baseline",
+    "reopensPerQueryFilterPerRun": 3,
+    "stages": [
+      "prepared",
+      "warm"
+    ],
+    "orderProofs": [
+      {
+        "query": "search",
+        "source": null,
+        "ordered100IdsSHA256": "901c519da60bfeacf204b8bece253630b849ce141bc793cae8786f496c2260c9",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "search",
+        "source": "group:email",
+        "ordered100IdsSHA256": "0f72eb6775444912217a6977de80ee0d5fea267208318915924b27c39c3ff171",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "search",
+        "source": "imap",
+        "ordered100IdsSHA256": "0f72eb6775444912217a6977de80ee0d5fea267208318915924b27c39c3ff171",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "metadata",
+        "source": null,
+        "ordered100IdsSHA256": "da55c8facb494c06eed346afb572b68d1ec6821a72a99931efe29ca5164b3aee",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "metadata",
+        "source": "group:email",
+        "ordered100IdsSHA256": "b9d4bb34943fe98d120e60a4d8b3d740d63a16fabb658b6236576700106309b3",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "metadata",
+        "source": "imap",
+        "ordered100IdsSHA256": "b9d4bb34943fe98d120e60a4d8b3d740d63a16fabb658b6236576700106309b3",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "create",
+        "source": null,
+        "ordered100IdsSHA256": "0c1c716af66e35466c5b96110346f54141b8905c64437e3485cd049fd25564b8",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "create",
+        "source": "group:email",
+        "ordered100IdsSHA256": "f80c28b06e71e8cd95c17e8ce71841cbb35c287d71950ee7ce91e0076b21e6d5",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "create",
+        "source": "imap",
+        "ordered100IdsSHA256": "f80c28b06e71e8cd95c17e8ce71841cbb35c287d71950ee7ce91e0076b21e6d5",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "archive import",
+        "source": null,
+        "ordered100IdsSHA256": "1d5ec4ee68c3cecb9bbc168ab6acac149ecba688d6e6929a4d768738bdda678b",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "archive import",
+        "source": "group:email",
+        "ordered100IdsSHA256": "a88fc56b108c59957ad57baaa76d6617d548806765a36e3890eb36c083409a8d",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "archive import",
+        "source": "imap",
+        "ordered100IdsSHA256": "a88fc56b108c59957ad57baaa76d6617d548806765a36e3890eb36c083409a8d",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "archive export",
+        "source": null,
+        "ordered100IdsSHA256": "cb3238cfbebc9f215ef8e84ee85a95312bf9b1676a3759d41efad741e53adcfa",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "archive export",
+        "source": "group:email",
+        "ordered100IdsSHA256": "a55d3a506d66c97ed321a9513f3e366fabc0216291e18a0c1a5cfe89ebcd26eb",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "archive export",
+        "source": "imap",
+        "ordered100IdsSHA256": "a55d3a506d66c97ed321a9513f3e366fabc0216291e18a0c1a5cfe89ebcd26eb",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "archive",
+        "source": null,
+        "ordered100IdsSHA256": "5f43f76ea2b8e84a2f5a7b400cea8816011d346bd61400282fabaec2c5ecdacc",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "archive",
+        "source": "group:email",
+        "ordered100IdsSHA256": "7ade2826303ce8d5216f64bf900a0a63b98d854127797ae49d467eff917a456e",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      },
+      {
+        "query": "archive",
+        "source": "imap",
+        "ordered100IdsSHA256": "7ade2826303ce8d5216f64bf900a0a63b98d854127797ae49d467eff917a456e",
+        "fullOrderedIdChecks": 24,
+        "returnedIdsEach": 100
+      }
+    ],
+    "providerGroupOrderingIdentical": true
+  },
+  "fullPostingVerification": {
+    "event": "transcode-complete",
+    "totalPostings": 272228,
+    "newlyConvertedThisAttempt": 256932,
+    "validatedExistingV6": 15296,
+    "verifiedPostings": 272228,
+    "allHeaderAndGzipBytesIdentical": true,
+    "allPrefixScoresMatchPositions": true,
+    "oldPayloadBytes": 93864306,
+    "newPayloadBytes": 133139976,
+    "addedBytes": 39275670,
+    "ms": 61843,
+    "maxRss": 65146880,
+    "nativeAead": 1
+  },
+  "attempts": {
+    "original": {
+      "result": "Controlled stop after fsync-bound DELETE/FULL journal commits of64 rows",
+      "wallSecondsUntilStopped": 261.1180637179641,
+      "lastInspection": {
+        "wallSeconds": 183,
+        "cpuSeconds": 0.727832,
+        "memoryCurrentBytes": 15118336,
+        "procReadBytes": 622592,
+        "procWriteBytes": 29708288
+      },
+      "stopResultCaveat": "systemd reported exit0 for explicit stop; old runner incorrectly advanced to baseline. Baseline then rejected unsupported insurance-renewal fixture and exited255. No candidate query ran. These results are excluded from accepted ABBA samples.",
+      "artifactsDirectory": "attempt1-stopped"
+    },
+    "resume": {
+      "result": "Completed with explicit structured completion; original partial copy retained",
+      "journalModeDuringTranscode": "WAL",
+      "synchronousDuringTranscode": "NORMAL",
+      "batchRows": 512,
+      "finalJournalMode": "DELETE after TRUNCATE checkpoint",
+      "boundedGzipAllocationHintBytes": [
+        64,
+        65536
+      ],
+      "totalPostingRows": 272228,
+      "validatedAndSkippedExistingV6Rows": 15296,
+      "newlyConvertedThisAttemptRows": 256932,
+      "independentFinalVerifiedRows": 272228,
+      "serviceCPUSeconds": 21.781,
+      "serviceWallSeconds": 61.895,
+      "processPeakRssBytes": 65146880,
+      "systemdReportedCgroupPeak": "380.7M",
+      "systemdReportedSwap": "0B",
+      "invocationId": "4b7e50f43c7d49889d3ed161dee5e34b",
+      "completionGate": "Exactly one transcode-complete event with full row counts and header/gzip/prefix verification required before benchmark",
+      "sourceUnchanged": true
+    }
+  },
+  "resources": {
+    "memoryMaxBytes": 1999998976,
+    "memorySwapMaxBytes": 0,
+    "oomEvents": 0,
+    "queryRuns": {
+      "0-baseline": {
+        "peakRss": 86048768,
+        "memoryMax": "1999998976",
+        "memoryPeak": "78786560",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "7a59e8e2510d40c78f40a86b61185c68"
+      },
+      "1-candidate": {
+        "peakRss": 84193280,
+        "memoryMax": "1999998976",
+        "memoryPeak": "91779072",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "e7490bac34444c7485229f1444a1ca34"
+      },
+      "2-candidate": {
+        "peakRss": 85053440,
+        "memoryMax": "1999998976",
+        "memoryPeak": "77660160",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "36914488050843d29051937ac70c1dec"
+      },
+      "3-baseline": {
+        "peakRss": 84119552,
+        "memoryMax": "1999998976",
+        "memoryPeak": "76460032",
+        "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "invocationId": "61a352937f0b4613aedd85321c9f2df1"
+      }
+    },
+    "queryPhysicalReadBytesTotal": 5578752,
+    "queryPhysicalReadBytesAllZero": false,
+    "deviceIOAccounting": "Unavailable: completed unit properties reported [not set]; not treated as zero",
+    "baselineDatabaseBytes": 354340864,
+    "candidateDatabaseBytes": 404254720
+  },
+  "warmMeasurements": {
+    "samplesPerVariantPerQueryFilter": 6,
+    "aggregation": "Median across the two rotated runs, three reopen samples each",
+    "rows": [
+      {
+        "query": "search",
+        "source": null,
+        "baselineMedianMs": 50.025,
+        "candidateMedianMs": 44.933,
+        "changePercent": -10.18,
+        "baseline": {
+          "candidateMs": 9.5,
+          "numericMs": 27.5,
+          "scorePostingReads": 679.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 300725.0,
+          "postingCacheHits": 679.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 21820.0
+        },
+        "candidate": {
+          "candidateMs": 13.5,
+          "numericMs": 15.0,
+          "scorePostingReads": 679.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 453041.0,
+          "postingCacheHits": 679.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 21820.0
+        }
+      },
+      {
+        "query": "search",
+        "source": "group:email",
+        "baselineMedianMs": 40.127,
+        "candidateMedianMs": 39.675,
+        "changePercent": -1.13,
+        "baseline": {
+          "candidateMs": 11.5,
+          "numericMs": 15.5,
+          "scorePostingReads": 490.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 300725.0,
+          "postingCacheHits": 490.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 7766.0
+        },
+        "candidate": {
+          "candidateMs": 16.0,
+          "numericMs": 8.5,
+          "scorePostingReads": 490.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 453041.0,
+          "postingCacheHits": 490.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 7766.0
+        }
+      },
+      {
+        "query": "search",
+        "source": "imap",
+        "baselineMedianMs": 40.157,
+        "candidateMedianMs": 42.856,
+        "changePercent": 6.72,
+        "baseline": {
+          "candidateMs": 10.0,
+          "numericMs": 16.0,
+          "scorePostingReads": 490.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 300725.0,
+          "postingCacheHits": 490.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 7766.0
+        },
+        "candidate": {
+          "candidateMs": 19.0,
+          "numericMs": 7.5,
+          "scorePostingReads": 490.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 453041.0,
+          "postingCacheHits": 490.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 7766.0
+        }
+      },
+      {
+        "query": "metadata",
+        "source": null,
+        "baselineMedianMs": 27.463,
+        "candidateMedianMs": 30.467,
+        "changePercent": 10.94,
+        "baseline": {
+          "candidateMs": 5.5,
+          "numericMs": 8.5,
+          "scorePostingReads": 188.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 86111.0,
+          "postingCacheHits": 188.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 7580.0
+        },
+        "candidate": {
+          "candidateMs": 7.5,
+          "numericMs": 6.5,
+          "scorePostingReads": 188.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 129881.0,
+          "postingCacheHits": 188.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 7580.0
+        }
+      },
+      {
+        "query": "metadata",
+        "source": "group:email",
+        "baselineMedianMs": 26.8,
+        "candidateMedianMs": 30.469,
+        "changePercent": 13.69,
+        "baseline": {
+          "candidateMs": 8.5,
+          "numericMs": 5.0,
+          "scorePostingReads": 122.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 86111.0,
+          "postingCacheHits": 122.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 2643.0
+        },
+        "candidate": {
+          "candidateMs": 10.0,
+          "numericMs": 3.5,
+          "scorePostingReads": 122.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 129881.0,
+          "postingCacheHits": 122.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 2643.0
+        }
+      },
+      {
+        "query": "metadata",
+        "source": "imap",
+        "baselineMedianMs": 27.816,
+        "candidateMedianMs": 31.11,
+        "changePercent": 11.84,
+        "baseline": {
+          "candidateMs": 8.5,
+          "numericMs": 5.5,
+          "scorePostingReads": 122.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 86111.0,
+          "postingCacheHits": 122.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 2643.0
+        },
+        "candidate": {
+          "candidateMs": 8.0,
+          "numericMs": 6.5,
+          "scorePostingReads": 122.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 129881.0,
+          "postingCacheHits": 122.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 2643.0
+        }
+      },
+      {
+        "query": "create",
+        "source": null,
+        "baselineMedianMs": 50.457,
+        "candidateMedianMs": 43.82,
+        "changePercent": -13.15,
+        "baseline": {
+          "candidateMs": 11.0,
+          "numericMs": 27.0,
+          "scorePostingReads": 760.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 343459.0,
+          "postingCacheHits": 760.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 22605.0
+        },
+        "candidate": {
+          "candidateMs": 13.0,
+          "numericMs": 16.5,
+          "scorePostingReads": 760.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 517629.0,
+          "postingCacheHits": 760.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 22605.0
+        }
+      },
+      {
+        "query": "create",
+        "source": "group:email",
+        "baselineMedianMs": 46.333,
+        "candidateMedianMs": 37.063,
+        "changePercent": -20.01,
+        "baseline": {
+          "candidateMs": 12.5,
+          "numericMs": 19.5,
+          "scorePostingReads": 600.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 343459.0,
+          "postingCacheHits": 600.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 8613.0
+        },
+        "candidate": {
+          "candidateMs": 15.0,
+          "numericMs": 8.5,
+          "scorePostingReads": 600.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 517629.0,
+          "postingCacheHits": 600.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 8613.0
+        }
+      },
+      {
+        "query": "create",
+        "source": "imap",
+        "baselineMedianMs": 43.132,
+        "candidateMedianMs": 45.291,
+        "changePercent": 5.01,
+        "baseline": {
+          "candidateMs": 11.0,
+          "numericMs": 19.5,
+          "scorePostingReads": 600.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 343459.0,
+          "postingCacheHits": 600.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 8613.0
+        },
+        "candidate": {
+          "candidateMs": 15.0,
+          "numericMs": 14.0,
+          "scorePostingReads": 600.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 517629.0,
+          "postingCacheHits": 600.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 8613.0
+        }
+      },
+      {
+        "query": "archive import",
+        "source": null,
+        "baselineMedianMs": 113.358,
+        "candidateMedianMs": 122.993,
+        "changePercent": 8.5,
+        "baseline": {
+          "candidateMs": 23.0,
+          "numericMs": 76.0,
+          "scorePostingReads": 1666.0,
+          "positionReads": 882.0,
+          "postingCachePeakBytes": 746141.0,
+          "postingCacheHits": 1666.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 61894.0
+        },
+        "candidate": {
+          "candidateMs": 32.5,
+          "numericMs": 75.5,
+          "scorePostingReads": 1666.0,
+          "positionReads": 882.0,
+          "postingCachePeakBytes": 1293003.0,
+          "postingCacheHits": 1666.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 61894.0
+        }
+      },
+      {
+        "query": "archive import",
+        "source": "group:email",
+        "baselineMedianMs": 107.291,
+        "candidateMedianMs": 94.981,
+        "changePercent": -11.47,
+        "baseline": {
+          "candidateMs": 30.0,
+          "numericMs": 61.0,
+          "scorePostingReads": 1666.0,
+          "positionReads": 882.0,
+          "postingCachePeakBytes": 746141.0,
+          "postingCacheHits": 1666.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 15436.0
+        },
+        "candidate": {
+          "candidateMs": 32.0,
+          "numericMs": 49.5,
+          "scorePostingReads": 1666.0,
+          "positionReads": 882.0,
+          "postingCachePeakBytes": 1293003.0,
+          "postingCacheHits": 1666.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 15436.0
+        }
+      },
+      {
+        "query": "archive import",
+        "source": "imap",
+        "baselineMedianMs": 108.829,
+        "candidateMedianMs": 88.605,
+        "changePercent": -18.58,
+        "baseline": {
+          "candidateMs": 29.0,
+          "numericMs": 61.5,
+          "scorePostingReads": 1666.0,
+          "positionReads": 882.0,
+          "postingCachePeakBytes": 746141.0,
+          "postingCacheHits": 1666.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 15436.0
+        },
+        "candidate": {
+          "candidateMs": 31.0,
+          "numericMs": 45.5,
+          "scorePostingReads": 1666.0,
+          "positionReads": 882.0,
+          "postingCachePeakBytes": 1293003.0,
+          "postingCacheHits": 1666.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 15436.0
+        }
+      },
+      {
+        "query": "archive export",
+        "source": null,
+        "baselineMedianMs": 117.868,
+        "candidateMedianMs": 103.908,
+        "changePercent": -11.84,
+        "baseline": {
+          "candidateMs": 23.0,
+          "numericMs": 74.0,
+          "scorePostingReads": 1470.0,
+          "positionReads": 490.0,
+          "postingCachePeakBytes": 660677.0,
+          "postingCacheHits": 1470.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 57359.0
+        },
+        "candidate": {
+          "candidateMs": 29.0,
+          "numericMs": 57.5,
+          "scorePostingReads": 1470.0,
+          "positionReads": 490.0,
+          "postingCachePeakBytes": 1164983.0,
+          "postingCacheHits": 1470.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 57359.0
+        }
+      },
+      {
+        "query": "archive export",
+        "source": "group:email",
+        "baselineMedianMs": 102.608,
+        "candidateMedianMs": 69.796,
+        "changePercent": -31.98,
+        "baseline": {
+          "candidateMs": 26.0,
+          "numericMs": 60.0,
+          "scorePostingReads": 1470.0,
+          "positionReads": 490.0,
+          "postingCachePeakBytes": 660677.0,
+          "postingCacheHits": 1470.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 14337.0
+        },
+        "candidate": {
+          "candidateMs": 25.0,
+          "numericMs": 32.0,
+          "scorePostingReads": 1470.0,
+          "positionReads": 490.0,
+          "postingCachePeakBytes": 1164983.0,
+          "postingCacheHits": 1470.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 14337.0
+        }
+      },
+      {
+        "query": "archive export",
+        "source": "imap",
+        "baselineMedianMs": 97.312,
+        "candidateMedianMs": 71.233,
+        "changePercent": -26.8,
+        "baseline": {
+          "candidateMs": 27.0,
+          "numericMs": 54.0,
+          "scorePostingReads": 1470.0,
+          "positionReads": 490.0,
+          "postingCachePeakBytes": 660677.0,
+          "postingCacheHits": 1470.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 14337.0
+        },
+        "candidate": {
+          "candidateMs": 25.5,
+          "numericMs": 32.5,
+          "scorePostingReads": 1470.0,
+          "positionReads": 490.0,
+          "postingCachePeakBytes": 1164983.0,
+          "postingCacheHits": 1470.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 14337.0
+        }
+      },
+      {
+        "query": "archive",
+        "source": null,
+        "baselineMedianMs": 49.867,
+        "candidateMedianMs": 41.82,
+        "changePercent": -16.14,
+        "baseline": {
+          "candidateMs": 7.5,
+          "numericMs": 26.5,
+          "scorePostingReads": 392.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 188415.0,
+          "postingCacheHits": 392.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 60416.0
+        },
+        "candidate": {
+          "candidateMs": 9.0,
+          "numericMs": 17.5,
+          "scorePostingReads": 392.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 453225.0,
+          "postingCacheHits": 392.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 60416.0
+        }
+      },
+      {
+        "query": "archive",
+        "source": "group:email",
+        "baselineMedianMs": 43.657,
+        "candidateMedianMs": 34.663,
+        "changePercent": -20.6,
+        "baseline": {
+          "candidateMs": 11.0,
+          "numericMs": 20.5,
+          "scorePostingReads": 392.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 188415.0,
+          "postingCacheHits": 392.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 19968.0
+        },
+        "candidate": {
+          "candidateMs": 9.0,
+          "numericMs": 12.0,
+          "scorePostingReads": 392.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 453225.0,
+          "postingCacheHits": 392.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 19968.0
+        }
+      },
+      {
+        "query": "archive",
+        "source": "imap",
+        "baselineMedianMs": 50.087,
+        "candidateMedianMs": 36.344,
+        "changePercent": -27.44,
+        "baseline": {
+          "candidateMs": 11.0,
+          "numericMs": 23.0,
+          "scorePostingReads": 392.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 188415.0,
+          "postingCacheHits": 392.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 19968.0
+        },
+        "candidate": {
+          "candidateMs": 10.5,
+          "numericMs": 14.0,
+          "scorePostingReads": 392.0,
+          "positionReads": 0.0,
+          "postingCachePeakBytes": 453225.0,
+          "postingCacheHits": 392.0,
+          "scorePostingSqlReads": 0.0,
+          "scoredDocuments": 19968.0
+        }
+      }
+    ]
+  },
+  "caveats": [
+    "Mixed timing: 12/18 warm cases improved, six regressed; archive import unfiltered median113.358\u2192122.993ms (+8.5%). Metadata regressed10.9\u201313.7%. This is not an overall broad-query win.",
+    "Raw posting bytes increased93,864,306\u2192133,139,976 (+41.84%). Archive-import cache increased746,141\u21921,293,003B (+73.29%) while retaining the16MiB cap.",
+    "Extrapolating the observed cache ratio onto the previous2M14.89MB broad-query working set gives about25.8MB; this is an inference, not an actual2M candidate measurement. Eviction and extra SQL/decryption may erase CPU savings.",
+    "All accepted query physical read_bytes counters were0. This experiment primarily measures warm CPU/SQLite behavior and does not establish cold-device latency.",
+    "No claim of achieving the500ms full2M target. No packed/RLE prefix variant implemented. No production migration implemented.",
+    "Initial private build attempts used a stale3.11 package config missing sodium and attempted blocked advisory/native-asset resolution. Final builds use matching3.12 package config+package_graph, private depfiles and identical native libraries."
+  ],
+  "sourceFixture": {
+    "source": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/candidate-header-100k-audit-20261029/search.sqlite",
+    "sha256": "330683ef3027a592a31c2d8fa5c211f4a783f45738716bc20c272d3a086f5d61",
+    "size": 354340864
+  },
+  "unappliedPatch": {
+    "file": "score-prefix.patch",
+    "sha256": "34723250d4ac5fad5fec3e172a4187852e1b6eaa6699b50a3d043aebf7b90311"
+  },
+  "buildProvenance": {
+    "baseline": {
+      "binarySHA256": "ad7b0141f800dae65ec464031f29c38061a4560599012db73bb500063bd7c190",
+      "packageConfigSHA256": "e24ce0786c2526044e3dc804c860300b7098698d6374852bd6cb4d80f01be610",
+      "packageGraphSHA256": "1af9694317e045b010292cb0d2908cb07457fd05d6bfaca1b6e6d34d6a0ac0cb",
+      "depfileSHA256": "53089c31094f9c5b1605d122ea3caf46e80065bd557705d212e0a6b437cb3e65",
+      "nativeAssets": {
+        "libsodium.so": "8c77d5723be854d008f67fda8c1f7a42cc1a6385bf2d975b3fb112572e3e4f41",
+        "libsqlite3.so": "b17729184e5a2818055ecbddd5ed6642521bfe6e56aafa472330e483c0e2e0d2"
+      },
+      "engineSources": {
+        "disk_search_index_io.dart": "dbb0fb8753045967729b2409d10e3f5860b8e95066167d27699b7520d8de74c8",
+        "disk_search_ranking.dart": "948cfd1e8ff323f40cf72911546a9923ee1595c511446b75885e9e7005ac477e",
+        "search_posting_positions.dart": "1cbfa5c3e9a6a6c73179f59e9f8a47369fcbf0b931796e2f58dda752a64d40f3",
+        "native_sidecar_aead.dart": "00529ef89394701930723faad32c0a896f88ce41a41410545cab38c5687b2021"
+      },
+      "isolatedEnginePathsInDepfile": true,
+      "productionEnginePathInDepfile": false
+    },
+    "candidate": {
+      "binarySHA256": "f771ea072a185247e84370177ff7f486f765ec8440614d50e11c0b66dfe2a437",
+      "packageConfigSHA256": "d477cb7d0b82a9926188abbdb601bf928cdc9a9e2d6aadbf512e353c1d5ab695",
+      "packageGraphSHA256": "1af9694317e045b010292cb0d2908cb07457fd05d6bfaca1b6e6d34d6a0ac0cb",
+      "depfileSHA256": "3cc246f42be4b6fa359f798585f1c072010a41310a23626cf91cbd2d6ae4e2d9",
+      "nativeAssets": {
+        "libsodium.so": "8c77d5723be854d008f67fda8c1f7a42cc1a6385bf2d975b3fb112572e3e4f41",
+        "libsqlite3.so": "b17729184e5a2818055ecbddd5ed6642521bfe6e56aafa472330e483c0e2e0d2"
+      },
+      "engineSources": {
+        "disk_search_index_io.dart": "dbb0fb8753045967729b2409d10e3f5860b8e95066167d27699b7520d8de74c8",
+        "disk_search_ranking.dart": "c0037d135f0bd3fa54a5c2269408174d664914619b3bfbd960bc02d6f7561636",
+        "search_posting_positions.dart": "5e90fafa4e320c8c951df40d8ded103dae8bf89272ff1d7cda0afae8dde90882",
+        "native_sidecar_aead.dart": "00529ef89394701930723faad32c0a896f88ce41a41410545cab38c5687b2021"
+      },
+      "isolatedEnginePathsInDepfile": true,
+      "productionEnginePathInDepfile": false
+    }
+  },
+  "acceptedRawReportSHA256": {
+    "0-baseline.json": "29a2a0e2be0d6e69a4d74bdc54484e0ab9dd378788f72ddbc873e62d796a211c",
+    "1-candidate.json": "3a106cee9e978fb86f5c8d50b20db747ad210a8a9dcd4eb2c73f6c2a68ad708a",
+    "2-candidate.json": "8654a210be1430026fd2125214b914c4943d8c4a8701fb52899bc0e34fb272b2",
+    "3-baseline.json": "f56a6f3cbc7e2849a0b7456f1e737a870b4dd1a5d80b43612238afee08d250d9"
+  },
+  "evidenceRoot": "app/build/benchmarks/score-prefix-100k-private-20261029",
+  "terminalEvidence": {
+    "outerRunnerExitCode": 0,
+    "allFiveOwnedUnits": "inactive/dead, MainPID0, Resultsuccess, ExecMainStatus0",
+    "units": [
+      "lifenizer-sol-score-prefix100k-resume-transcode-20261029",
+      "lifenizer-sol-score-prefix100k-resume-0-baseline-20261029",
+      "lifenizer-sol-score-prefix100k-resume-1-candidate-20261029",
+      "lifenizer-sol-score-prefix100k-resume-2-candidate-20261029",
+      "lifenizer-sol-score-prefix100k-resume-3-baseline-20261029"
+    ]
+  },
+  "focusedVerification": {
+    "existingAdaptedFlutterTests": 34,
+    "existingTestsResult": "PASS",
+    "formatAdaptations": "Private writer format/position-offset expectations now parse v6 score length; legacy v4 upgrade and gzip validation cases retained",
+    "newAuthenticatedMalformedV6Tests": 5,
+    "newTestsResult": "PASS",
+    "newCases": [
+      "score length out of bounds",
+      "boost out of range",
+      "positional tail shorter than minimum gzip",
+      "invalid gzip header",
+      "TF prefix disagreement with positional stream"
+    ],
+    "seededCodecPages": 100,
+    "seededCodecDocuments": 25497,
+    "seededCodecResult": "PASS: exact old/new TF, boost and every position; malformed TF/boost/varints/tails and excluded-document consistency checks",
+    "logs": {
+      "focused-tests.log": "fa3c1be449f6c977f3cc915fefc19f76796803b129a0b85e12069a8a49183af8",
+      "v6-malformed-tests.log": "0ba7f54ad2a7e09655e4868ed164866b1aa887dc4666166e80e99ac5b76f9e31"
+    },
+    "analyzer": "No errors for private codec/ranking/transcode; initial legacy tool had deprecated dispose info only; final resume utility analyzed with no issues"
+  }
+}
