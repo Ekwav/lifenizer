@@ -14,12 +14,19 @@ public sealed class NativeClientTests
     {
         await using var factory = new LifenizerApiFactory();
         using var client = factory.CreateClient();
-        foreach (var path in new[] { "/", "/index.html", "/extension", "/extension.html", "/security.html", "/privacy.html", "/imports.html", "/hosted.html", "/styles.css", "/landing.js" })
+        foreach (var path in new[] { "/", "/index.html", "/extension", "/extension.html", "/security.html", "/privacy.html", "/imports.html", "/hosted.html", "/styles.css", "/landing.js", "/icon.png", "/favicon.png" })
         {
             using var response = await client.GetAsync(path);
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), path);
             Assert.That(response.Headers.CacheControl?.NoCache, Is.True, path);
             Assert.That(response.Headers.GetValues("X-Content-Type-Options"), Contains.Item("nosniff"));
+            if (path.EndsWith(".png"))
+            {
+                Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("image/png"));
+                var png = await response.Content.ReadAsByteArrayAsync();
+                Assert.That(png.Take(8), Is.EqualTo(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }));
+                continue;
+            }
             var content = await response.Content.ReadAsStringAsync();
             Assert.That(content, Does.Not.Contain("unsplash.com"));
             if (path == "/")

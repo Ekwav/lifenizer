@@ -46,15 +46,10 @@
                     letter-spacing:-.5px;
                     text-decoration:none}
                     .logo-mark{
-                      display:grid;
-                      place-items:center;
-                      width:30px;
+                      display:block;
+                      width:32px;
                       height:32px;
-                      border-radius:9px 9px 9px 2px;
-                      background:var(--brand);
-                      color:var(--button-ink);
-                      font-family:Georgia,serif;
-                      font-size:24px}
+                      object-fit:contain}
                       .nav{
                         display:flex;
                         gap:28px;

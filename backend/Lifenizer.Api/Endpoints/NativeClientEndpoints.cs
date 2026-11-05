@@ -37,7 +37,7 @@ public static class NativeClientEndpoints
             }).AllowAnonymous();
         }
 
-        foreach (var asset in new[] { "index.html", "extension.html", "styles.css", "landing.js", "security.html", "privacy.html", "imports.html", "hosted.html" })
+        foreach (var asset in new[] { "index.html", "extension.html", "styles.css", "landing.js", "security.html", "privacy.html", "imports.html", "hosted.html", "icon.png", "favicon.png" })
         {
             IResult Serve(HttpResponse response)
             {
@@ -45,7 +45,13 @@ public static class NativeClientEndpoints
                 response.Headers.XContentTypeOptions = "nosniff";
                 response.Headers.ContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
                 var stream = typeof(NativeClientEndpoints).Assembly.GetManifestResourceStream($"Lifenizer.Landing.{asset}")!;
-                return Results.Stream(stream, asset.EndsWith(".css") ? "text/css" : asset.EndsWith(".js") ? "text/javascript" : "text/html");
+                return Results.Stream(stream, Path.GetExtension(asset) switch
+                {
+                    ".css" => "text/css",
+                    ".js" => "text/javascript",
+                    ".png" => "image/png",
+                    _ => "text/html"
+                });
             }
             app.MapGet($"/{asset}", Serve).AllowAnonymous();
             if (asset == "index.html") app.MapGet("/", Serve).AllowAnonymous();
