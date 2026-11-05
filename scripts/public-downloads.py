@@ -87,7 +87,7 @@ def prepare(args):
                 require(archive.testzip() is None, "Damaged extension archive")
                 for entry in archive.namelist():
                     path = Path(entry)
-                    require(not path.is_absolute() and ".." not in path.parts and path.parts[0] in {"manifest.json", "src", "popup", "options", "pair", "vendor"}, "Unexpected extension archive entry")
+                    require(not path.is_absolute() and ".." not in path.parts and path.parts[0] in {"manifest.json", "src", "popup", "options", "pair", "vendor", "icons"}, "Unexpected extension archive entry")
                     if not entry.endswith("/"):
                         relative = f"integrations/browser-extension/{entry}"
                         require(run("git", "ls-files", "--", relative) == relative, "Untracked extension payload")

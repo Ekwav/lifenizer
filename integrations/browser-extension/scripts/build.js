@@ -11,6 +11,6 @@ fs.mkdirSync(dist, { recursive: true });
 for (const target of ['chromium', 'firefox']) {
   const out = path.join(dist, `lifenizer-history-sync-${target}.zip`);
   fs.rmSync(out, { force: true });
-  execFileSync('zip', ['-r', '-q', out, 'manifest.json', 'src', 'popup', 'options', 'pair', 'vendor'], { cwd: root });
+  execFileSync('zip', ['-r', '-q', out, 'manifest.json', 'icons', 'src', 'popup', 'options', 'pair', 'vendor'], { cwd: root });
   console.log('wrote', out);
 }
