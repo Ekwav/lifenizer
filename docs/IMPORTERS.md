@@ -547,22 +547,29 @@ to the configured Whisper service.
 ### correcting transcription for TAB
 
 Open an audio conversation and choose **Correct for TAB** beside a transcript sentence.
-Enter the corrected text and confirm that it is your own voice without confidential
-information. The dialog loads TAB's current notice and requires explicit training
-consent. Anonymous contributions need no email account. Only the selected sentence's
-WAV clip and corrected text are submitted for validation and training; this does not
-immediately retrain the model. A successful submission updates the encrypted transcript
-and its search index, retaining the provider contribution reference.
+First edit the sentence while keeping the previous text visible and replaying just
+that sentence. Choose **Next** for a separate, compact privacy step. Confirm both
+**My voice; no confidential content** and **I allow Coflnet speech-recognition
+training**, then **Share correction**. Full notice and terms remain available through
+the link. Nothing is shared while editing or replaying. A successful submission
+updates the encrypted transcript and search index; failures keep your edits for retry.
+
+To keep the original out of training, choose **Record a replacement**. Type a new,
+non-private sentence using the corrected word, record it, replay it, and choose
+**Use this recording**. Only the new audio and its exact typed sentence are sent;
+the original audio and original/corrected private text are excluded. The replacement
+stays in memory and is not added to the library. The correction to your actual
+transcript remains separate and is stored encrypted after a successful submission.
 
 New audio imports retain the original recording in a separate encrypted device-local
 cache, outside the search snapshot. Persistent online storage is opt-in; playback can also retrieve an original from
 an unlocked live device. For older imports or when no original is available, use
-**Attach original WAV** (16 kHz mono PCM, up to 64 MiB). Segment
+**Audio options → Attach original WAV** (16 kHz mono PCM, up to 64 MiB). Segment
 end timestamps from Whisper are preserved; missing ends use the next segment's start,
 or the recording's end. Unusable sentence boundaries require re-transcription before
 contributing. Each contribution is limited to two minutes.
 
-The correction dialog also offers **Withdraw TAB training consent** for the receipts
+The **Full notice & terms** view also offers **Withdraw training consent** for the receipts
 created on this device. Receipt capabilities are encrypted locally. The authenticated
 `/api/training/tab` proxy uses `Training:Tab:BaseUrl` (default `https://tab.coflnet.com`)
 and never forwards vault login credentials to TAB. Correction failures leave the

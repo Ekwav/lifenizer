@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -5,6 +6,7 @@ import 'dart:typed_data';
 import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
 import 'package:app/services/local_vault_store.dart';
+import 'package:app/services/recording_playback.dart';
 import 'package:app/services/wav_audio.dart';
 import 'package:app/widgets/transcription_correction_dialog.dart';
 import 'package:flutter/material.dart';
@@ -37,6 +39,7 @@ class _Store extends LocalVaultStore {
 
 class _Fixture {
   final bodies = <String, Map<String, dynamic>>{};
+  int noticeRequests = 0;
   late final LifenizerAppState state;
   late final Directory directory;
   final previousPaths = PathProviderPlatform.instance;
@@ -64,10 +67,14 @@ class _Fixture {
       }
       if (path == '/api/imports/capabilities') return http.Response('[]', 200);
       if (path == '/api/training/tab/notice') {
+        noticeRequests++;
         return http.Response(
           jsonEncode({
             'version': 'training-v1',
-            'information': 'Example TAB provider training notice.',
+            'information': List.filled(
+              40,
+              'Example TAB provider training notice.',
+            ).join(' '),
             'terms': 'Only contribute your own recordings.',
             'purposes': [
               {
@@ -139,91 +146,305 @@ class _Fixture {
       email: 'owner@example.test',
       passphrase: 'a long private vault passphrase',
     );
-    await state.importAudioBytes(
-      bytes: encodeWav(Uint8List(3 * 32000)),
-      fileName: 'memo.wav',
-    );
+    final pcm = Uint8List(3 * 32000)
+      ..fillRange(0, 32000, 11)
+      ..fillRange(32000, 64000, 22)
+      ..fillRange(64000, 96000, 33);
+    await state.importAudioBytes(bytes: encodeWav(pcm), fileName: 'memo.wav');
     expect(state.error, isNull);
   }
 }
 
-void main() {
-  testWidgets(
-    'training requires explicit consent and keeps correction after provider failure',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1000, 1400));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      final f = _Fixture();
-      await tester.runAsync(f.open);
-      addTearDown(f.dispose);
-      final conversation = f.state.conversations.single;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TranscriptionCorrectionDialog(
-              state: f.state,
-              conversation: conversation,
-              segment: conversation.segments.single,
+class _Engine implements RecordingAudioEngine {
+  final played = Completer<void>.sync();
+  RecordingAudio? loaded;
+  bool disposed = false;
+  @override
+  Duration position = Duration.zero;
+  @override
+  Duration get duration => const Duration(seconds: 1);
+  @override
+  Stream<void> get completed => const Stream.empty();
+  @override
+  Future<void> load(RecordingAudio audio) async => loaded = audio;
+  @override
+  Future<void> play() async => played.complete();
+  @override
+  Future<void> pause() async {}
+  @override
+  Future<void> seek(Duration value) async => position = value;
+  @override
+  Future<void> dispose() async => disposed = true;
+}
+
+Future<void> _open(
+  WidgetTester tester,
+  _Fixture fixture, {
+  double height = 844,
+  double textScale = 1,
+  _Engine? engine,
+}) async {
+  await tester.binding.setSurfaceSize(Size(390, height));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.runAsync(fixture.open);
+  addTearDown(fixture.dispose);
+  final conversation = fixture.state.conversations.single;
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => TranscriptionCorrectionDialog(
+                state: fixture.state,
+                conversation: conversation,
+                segment: conversation.segments.single,
+                engineFactory: engine == null ? null : () => engine,
+              ),
             ),
+            child: const Text('Open correction'),
           ),
         ),
-      );
-      await tester.pumpAndSettle();
-      final submit = find.widgetWithText(FilledButton, 'Submit correction');
-      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
-      expect(
-        find.text('Example TAB provider training notice.'),
-        findsOneWidget,
-      );
-      await tester.enterText(find.byType(TextField), 'The corrected sentence.');
+      ),
+    ),
+  );
+  await tester.tap(find.text('Open correction'));
+  await tester.pumpAndSettle();
+  expect(tester.takeException(), isNull, reason: 'editor layout');
+}
+
+Future<void> _next(WidgetTester tester) async {
+  await tester.enterText(
+    find.byKey(const Key('corrected-sentence')),
+    'The corrected sentence.',
+  );
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
+  await tester.tap(find.widgetWithText(FilledButton, 'Next'));
+  await tester.pumpAndSettle();
+  expect(tester.takeException(), isNull, reason: 'privacy layout');
+}
+
+final _voice = find.byKey(const Key('correction-own-voice'));
+final _terms = find.byKey(const Key('correction-training-consent'));
+final _share = find.widgetWithText(FilledButton, 'Share correction');
+
+void main() {
+  testWidgets(
+    'cancel protects unfinished correction until explicitly discarded',
+    (tester) async {
+      final f = _Fixture();
+      await _open(tester, f);
+      final field = find.byKey(const Key('corrected-sentence'));
+      await tester.enterText(field, 'My unfinished correction.');
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
-      final voice = find.widgetWithText(
-        CheckboxListTile,
-        'This is my own voice and this sentence contains no confidential information.',
-      );
-      final terms = find.widgetWithText(
-        CheckboxListTile,
-        'I accept the current TAB notice and consent to Coflnet speech-recognition training for my contributions.',
-      );
-      expect(tester.widget<CheckboxListTile>(voice).value, isFalse);
-      expect(tester.widget<CheckboxListTile>(terms).value, isFalse);
-      await tester.ensureVisible(voice);
+      await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.descendant(of: voice, matching: find.byType(Checkbox)),
-      );
-      await tester.pump();
-      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
-      await tester.ensureVisible(terms);
+      expect(find.text('Discard correction?'), findsOneWidget);
+      await tester.tap(find.text('Keep editing'));
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.descendant(of: terms, matching: find.byType(Checkbox)),
+      expect(
+        tester.widget<TextField>(field).controller!.text,
+        'My unfinished correction.',
       );
-      await tester.pump();
-      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+      expect(find.byType(TranscriptionCorrectionDialog), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Discard'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TranscriptionCorrectionDialog), findsNothing);
+      expect(f.noticeRequests, 0);
+      expect(f.bodies, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets('keyboard leaves correction and Next usable on a phone', (
+    tester,
+  ) async {
+    final f = _Fixture();
+    await _open(tester, f);
+    addTearDown(tester.view.resetViewInsets);
+    final field = find.byKey(const Key('corrected-sentence'));
+    await tester.enterText(field, 'The corrected sentence.');
+    expect(tester.testTextInput.isVisible, isTrue);
+    tester.view.viewInsets = FakeViewPadding(
+      bottom: 300 * tester.view.devicePixelRatio,
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(field);
+    await tester.pumpAndSettle();
+    final next = find.widgetWithText(FilledButton, 'Next');
+    for (final control in [field, next]) {
+      expect(control.hitTestable(), findsOneWidget);
+      expect(tester.getRect(control).top, greaterThanOrEqualTo(0));
+      expect(tester.getRect(control).bottom, lessThanOrEqualTo(544));
+    }
+    expect(tester.widget<FilledButton>(next).onPressed, isNotNull);
+    expect(tester.takeException(), isNull);
+    await tester.tap(next);
+    await tester.pumpAndSettle();
+    expect(tester.testTextInput.isVisible, isFalse);
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
+    expect(find.text('Share for training'), findsOneWidget);
+    for (final control in [_voice, _terms, _share]) {
+      expect(control.hitTestable(), findsOneWidget);
+      expect(tester.getRect(control).bottom, lessThanOrEqualTo(844));
+    }
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets(
+    'editing stays local and replay contains only the selected sentence',
+    (tester) async {
+      final f = _Fixture();
+      final engine = _Engine();
+      await _open(tester, f, engine: engine);
+      expect(f.noticeRequests, 0);
+      expect(find.text('Original sentence'), findsOneWidget);
+      expect(
+        find.widgetWithText(SelectableText, 'The wrong sentence.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Example TAB provider'), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Next'))
+            .onPressed,
+        isNull,
+      );
       await tester.runAsync(() async {
-        tester.widget<FilledButton>(submit).onPressed!();
+        tester
+            .widget<IconButton>(find.byKey(const Key('recording-play-pause')))
+            .onPressed!();
+        await engine.played.future.timeout(const Duration(seconds: 10));
+      });
+      await tester.pump();
+      expect(engine.loaded!.bytes.length, 32044);
+      expect(engine.loaded!.bytes.skip(44), everyElement(22));
+      expect(engine.loaded!.fileName, 'sentence.wav');
+      expect(f.bodies, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(engine.disposed, isTrue);
+    },
+  );
+
+  for (final (height, scale) in [(780.0, 1.0), (844.0, 1.0), (780.0, 1.3)]) {
+    testWidgets(
+      'privacy controls fit a 390 x $height phone at text scale $scale',
+      (tester) async {
+        final f = _Fixture();
+        await _open(tester, f, height: height, textScale: scale);
+        await _next(tester);
+        expect(f.noticeRequests, 1);
+        expect(find.text('Share for training'), findsOneWidget);
+        expect(find.textContaining('Example TAB provider'), findsNothing);
+        expect(find.text('Only contribute your own recordings.'), findsNothing);
+        for (final control in [
+          _voice,
+          _terms,
+          _share,
+          find.text('Privacy notice'),
+        ]) {
+          final rect = tester.getRect(control);
+          expect(rect.top, greaterThanOrEqualTo(0));
+          expect(rect.bottom, lessThanOrEqualTo(height));
+          expect(control.hitTestable(), findsOneWidget);
+        }
+        expect(tester.widget<CheckboxListTile>(_voice).value, isFalse);
+        expect(tester.widget<CheckboxListTile>(_terms).value, isFalse);
+        expect(tester.widget<FilledButton>(_share).onPressed, isNull);
+        await tester.tap(find.text('Full notice & terms'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'full notice layout');
+        expect(find.text('TAB training notice'), findsOneWidget);
+        expect(find.textContaining('Example TAB provider'), findsOneWidget);
+        expect(
+          find.text('Only contribute your own recordings.'),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Done'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Example TAB provider'), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
+  testWidgets(
+    'explicit consent and edits survive failure and returning to the editor',
+    (tester) async {
+      final f = _Fixture();
+      await _open(tester, f);
+      await _next(tester);
+      await tester.tap(_voice);
+      await tester.pump();
+      expect(tester.widget<FilledButton>(_share).onPressed, isNull);
+      await tester.tap(_terms);
+      await tester.pump();
+      expect(tester.widget<FilledButton>(_share).onPressed, isNotNull);
+      await tester.runAsync(() async {
+        tester.widget<FilledButton>(_share).onPressed!();
         await Future.doWhile(() async {
           await Future<void>.delayed(const Duration(milliseconds: 10));
           return f.state.busy;
         }).timeout(const Duration(seconds: 10));
       });
       await tester.pumpAndSettle();
-      expect(
-        tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        'The corrected sentence.',
-      );
       expect(find.byType(TranscriptionCorrectionDialog), findsOneWidget);
       expect(
         find.textContaining('TAB could not complete this request'),
         findsOneWidget,
       );
+      expect(tester.widget<FilledButton>(_share).onPressed, isNotNull);
       expect(f.bodies['/api/training/tab/consents']!['acceptTerms'], isTrue);
       final sent = f.bodies['/api/training/tab/corrections']!;
       expect(sent['correctedText'], 'The corrected sentence.');
-      expect(base64Decode(sent['payloadBase64'] as String).length, 32000 + 44);
-      expect(conversation.segments.single.text, 'The wrong sentence.');
+      final clip = base64Decode(sent['payloadBase64'] as String);
+      expect(clip.length, 32044);
+      expect(clip.skip(44), everyElement(22));
+      expect(
+        f.state.conversations.single.segments.single.text,
+        'The wrong sentence.',
+      );
+
+      await tester.tap(find.text('Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('Original sentence'), findsOneWidget);
+      expect(
+        find.widgetWithText(SelectableText, 'The wrong sentence.'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('corrected-sentence')))
+            .controller!
+            .text,
+        'The corrected sentence.',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Next'));
+      await tester.pumpAndSettle();
+      // A saved consent receipt never prechecks either per-contribution choice.
+      expect(tester.widget<CheckboxListTile>(_voice).value, isFalse);
+      expect(tester.widget<CheckboxListTile>(_terms).value, isFalse);
+      expect(tester.widget<FilledButton>(_share).onPressed, isNull);
+      await tester.tap(_terms);
+      await tester.pump();
+      expect(tester.widget<FilledButton>(_share).onPressed, isNull);
+      await tester.tap(_voice);
+      await tester.pump();
+      expect(tester.widget<FilledButton>(_share).onPressed, isNotNull);
+      await tester.pumpWidget(const SizedBox.shrink());
     },
   );
 }
