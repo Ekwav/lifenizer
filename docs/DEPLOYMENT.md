@@ -1,13 +1,14 @@
 # Deployment guide
 
-The existing service runs on the mail server. Its replacement is prepared in
-`../fleet/lifenizer` for `https://lifenizer.coflnet.com`; it remains inactive until
-the database migration, secret provisioning and image promotion are verified.
+Since the verified 2026-10-24 cutover, the API runs in the Fleet cluster at
+`https://lifenizer.coflnet.com`. `https://mail.coflnet.com/lifenizer` remains a
+transparent compatibility proxy. The old mail-server Compose API stays stopped
+so the cluster remains the only SQLite writer.
 
 ## Fleet cluster migration
 
 The Fleet chart is the authoritative Kubernetes configuration. Follow
-`../fleet/lifenizer/README.md` for its staged activation and gateway prerequisites.
+`../fleet/lifenizer/README.md` for the completed migration and gateway prerequisites.
 It uses one SQLite writer, a retained encrypted volume, and injected OpenBao
 files at `/var/run/secrets/lifenizer`. The API loads those files before configuring
 authentication, payments and object storage. Existing Compose deployments need
@@ -26,11 +27,12 @@ fields at `kv/services/lifenizer`. It uses Fleet's short-lived child session,
 revokes that child, verifies HTTP 403, and removes its credential artifacts.
 It does not create the bucket, enable billing, or deploy the application.
 
-Cluster image CI is prepared for `Coflnet/Lifenizer` on `main`; it does not publish
+Normal updates use cluster image CI for `Coflnet/Lifenizer` on `main`; it does not publish
 from the existing personal repository or feature branches. After application
 checks, the shared workflow builds, then Argo validates, scans and pins the image
 in `lifenizer/app/chart/values.yaml`. Follow `../fleet/argo-workflow/CI.md`, including
-independent review where required. An image pin alone leaves the chart disabled.
+independent review where required. Verify Argo promotion, the Fleet image pin,
+the workload rollout and public behavior before reporting an update deployed.
 
 For cutover, preserve the current signing key, pairing configuration, complete
 SQLite state and local artifacts. Keep `https://mail.coflnet.com/lifenizer` as a
@@ -42,7 +44,12 @@ hostname for upstream TLS and HTTP. Do not redirect or relink existing devices:
 their full server URL is part of the local vault and recording-cache identity. Verify playback of the
 existing phone recording from the PC before retiring the old backend.
 
-## Mail server: install and upgrade
+## Legacy Compose: mail server install, upgrade and backup
+
+The Compose instructions below apply only to a separate legacy Compose deployment.
+Do not run the installer, backup helper or restore procedure against the migrated
+mail-server deployment while the cluster is active. The backup helper restarts the
+Compose API even if it was stopped, which would create a second SQLite writer.
 
 Run from a clean, reviewed commit on the KDE machine:
 
