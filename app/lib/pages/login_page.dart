@@ -264,9 +264,21 @@ class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Lifenizer',
-                    style: Theme.of(context).textTheme.displaySmall,
+                  Row(
+                    children: [
+                      Image.asset(
+                        'assets/branding/logo.png',
+                        width: 48,
+                        height: 48,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Lifenizer',
+                          style: Theme.of(context).textTheme.displaySmall,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   const Text('Your conversations, searchable on every device.'),

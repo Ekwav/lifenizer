@@ -11,8 +11,10 @@ install_dir=${XDG_DATA_HOME:-"$HOME/.local/share"}/lifenizer
 runner_dir=${XDG_DATA_HOME:-"$HOME/.local/share"}/krunner/dbusplugins
 application_dir=${XDG_DATA_HOME:-"$HOME/.local/share"}/applications
 service_dir=${XDG_DATA_HOME:-"$HOME/.local/share"}/dbus-1/services
-mkdir -p "$install_dir" "$runner_dir" "$application_dir" "$service_dir"
+icon_dir=${XDG_DATA_HOME:-"$HOME/.local/share"}/icons/hicolor/512x512/apps
+mkdir -p "$install_dir" "$runner_dir" "$application_dir" "$service_dir" "$icon_dir"
 cp -a --remove-destination "$bundle_dir/." "$install_dir/"
+install -m644 "$bundle_dir/data/flutter_assets/assets/branding/logo.png" "$icon_dir/com.lifenizer.app.png"
 install -m644 "$repo_dir/integrations/kde/lifenizer.desktop" "$runner_dir/lifenizer.desktop"
 # The quoted path in Exec follows the freedesktop desktop-entry quoting rules.
 escaped_dir=${install_dir//\\/\\\\}
@@ -34,7 +36,7 @@ cat > "$application_dir/com.lifenizer.app.desktop" <<ENTRY
 Type=Application
 Name=Lifenizer
 Comment=Private conversation search and capture
-Icon=system-search
+Icon=com.lifenizer.app
 Exec="$escaped_dir/open" %u
 Terminal=false
 Categories=Utility;

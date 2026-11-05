@@ -298,7 +298,7 @@ class LifenizerRunner extends DBusObject {
   ) => DBusStruct([
     DBusString(id),
     DBusString(title),
-    const DBusString('system-search'),
+    const DBusString('com.lifenizer.app'),
     const DBusInt32(100),
     DBusDouble(relevance),
     DBusDict.stringVariant({'subtext': DBusString(subtitle)}),

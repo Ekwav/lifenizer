@@ -346,7 +346,16 @@ class _VaultShellState extends State<VaultShell> with WidgetsBindingObserver {
                 ),
               ),
         appBar: AppBar(
-          title: const Text('Lifenizer'),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset('assets/branding/logo.png', width: 32, height: 32),
+              const SizedBox(width: 10),
+              const Flexible(
+                child: Text('Lifenizer', overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
           actions: [
             IconButton(
               tooltip: 'Find a conversation (Ctrl+K)',

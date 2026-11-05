@@ -2,7 +2,7 @@
 Type=Service
 Name=Lifenizer conversations
 Comment=Find private conversations in your unlocked vault
-Icon=system-search
+Icon=com.lifenizer.app
 X-KDE-PluginInfo-Name=lifenizer
 X-KDE-PluginInfo-Version=1.0
 X-KDE-PluginInfo-EnabledByDefault=true
