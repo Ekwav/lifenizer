@@ -44,8 +44,9 @@ public sealed class TabTrainingTests
         });
     }
 
-    [Test]
-    public async Task SelectedCorrection_VerifiesTrainingPurposeAndUploadsOnlySelectedClipAndCorrectedText()
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task SelectedCorrection_VerifiesTrainingPurposeAndUploadsOnlySelectedClipAndCorrectedText(bool isReplacement)
     {
         var requests = new List<string>();
         JsonElement? upload = null;
@@ -62,18 +63,23 @@ public sealed class TabTrainingTests
         await using var factory = Factory(tab);
         using var client = await AuthenticatedAsync(factory);
         var wav = Wav();
-        var response = await client.PostAsJsonAsync("/api/training/tab/corrections", Correction(wav));
+        var response = await client.PostAsJsonAsync("/api/training/tab/corrections", isReplacement ? new
+        {
+            contributionKey = Key, consentId = Receipt, payloadBase64 = Convert.ToBase64String(wav),
+            originalText = "", correctedText = "Replacement sample sentence.", isReplacement = true
+        } : Correction(wav));
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Multiple(() =>
         {
             Assert.That(requests, Is.EqualTo(new[] { $"/api/dialect/consents/{Receipt}", "/api/Dialect/upload" }));
             Assert.That(upload!.Value.GetProperty("base64Audio").GetString(), Is.EqualTo(Convert.ToBase64String(wav)));
-            Assert.That(upload.Value.GetProperty("transcription").GetString(), Is.EqualTo("Correct selected sentence."));
+            Assert.That(upload.Value.GetProperty("transcription").GetString(), Is.EqualTo(isReplacement ? "Replacement sample sentence." : "Correct selected sentence."));
             Assert.That(upload.Value.GetProperty("contributionConsentId").GetString(), Is.EqualTo(Receipt));
             Assert.That(upload.Value.GetProperty("uploaderEmail").GetString(), Is.EqualTo("alias@contribution.invalid"));
             Assert.That(upload.Value.TryGetProperty("originalText", out _), Is.False);
             Assert.That(upload.Value.TryGetProperty("contributionKey", out _), Is.False);
+            Assert.That(upload.Value.TryGetProperty("isReplacement", out _), Is.False);
             Assert.That(result.GetProperty("status").GetString(), Is.EqualTo("submitted_for_validation"));
         });
     }
@@ -83,6 +89,10 @@ public sealed class TabTrainingTests
     [TestCase("wrong-rate")]
     [TestCase("too-long")]
     [TestCase("unchanged-text")]
+    [TestCase("replacement-original-text")]
+    [TestCase("replacement-empty-text")]
+    [TestCase("replacement-long-text")]
+    [TestCase("replacement-invalid-wav")]
     public async Task InvalidSelection_IsRejectedBeforeAnyProviderRequest(string problem)
     {
         var requests = 0;
@@ -92,7 +102,7 @@ public sealed class TabTrainingTests
         var payload = problem switch
         {
             "invalid-base64" => "not-base64!",
-            "not-wav" => Convert.ToBase64String(Encoding.UTF8.GetBytes("not a WAV recording")),
+            "not-wav" or "replacement-invalid-wav" => Convert.ToBase64String(Encoding.UTF8.GetBytes("not a WAV recording")),
             "wrong-rate" => Convert.ToBase64String(Wav(rate: 8000)),
             "too-long" => Convert.ToBase64String(Wav(seconds: 121)),
             _ => Convert.ToBase64String(Wav())
@@ -100,14 +110,23 @@ public sealed class TabTrainingTests
         var response = await client.PostAsJsonAsync("/api/training/tab/corrections", new
         {
             contributionKey = Key, consentId = Receipt, payloadBase64 = payload,
-            originalText = "Wrong sentence.", correctedText = problem == "unchanged-text" ? "Wrong sentence." : "Correct sentence."
+            originalText = problem.StartsWith("replacement-") && problem != "replacement-original-text" ? "" : "Wrong sentence.",
+            correctedText = problem switch
+            {
+                "unchanged-text" => "Wrong sentence.",
+                "replacement-empty-text" => " ",
+                "replacement-long-text" => new string('a', 10_001),
+                _ => "Correct sentence."
+            },
+            isReplacement = problem.StartsWith("replacement-")
         });
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(requests, Is.Zero);
     }
 
-    [Test]
-    public async Task WithdrawnReceipt_DoesNotUploadAudio()
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task WithdrawnReceipt_DoesNotUploadAudio(bool isReplacement)
     {
         var requests = new List<string>();
         await using var tab = new MockHttpServer(request =>
@@ -117,7 +136,11 @@ public sealed class TabTrainingTests
         });
         await using var factory = Factory(tab);
         using var client = await AuthenticatedAsync(factory);
-        var response = await client.PostAsJsonAsync("/api/training/tab/corrections", Correction(Wav()));
+        var response = await client.PostAsJsonAsync("/api/training/tab/corrections", isReplacement ? new
+        {
+            contributionKey = Key, consentId = Receipt, payloadBase64 = Convert.ToBase64String(Wav()),
+            originalText = "", correctedText = "Replacement sample sentence.", isReplacement = true
+        } : Correction(Wav()));
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(requests, Is.EqualTo(new[] { $"/api/dialect/consents/{Receipt}" }));
     }

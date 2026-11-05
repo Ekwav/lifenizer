@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace Lifenizer.Api.Services;
 
 public sealed record TabConsentRequest(string ContributionKey, string Version, bool AcceptTerms);
-public sealed record TabCorrectionRequest(string ContributionKey, string ConsentId, string PayloadBase64, string OriginalText, string CorrectedText);
+public sealed record TabCorrectionRequest(string ContributionKey, string ConsentId, string PayloadBase64, string OriginalText, string CorrectedText, bool IsReplacement = false);
 public sealed record TabWithdrawalRequest(string ContributionKey);
 
 /// <summary>Explicit selected-speech contributions; no vault data is discovered or stored here.</summary>
@@ -30,10 +30,13 @@ public sealed class TabTrainingClient(IHttpClientFactory clients, IConfiguration
     {
         ValidateKey(request.ContributionKey);
         ValidateConsentId(request.ConsentId);
-        if (string.IsNullOrWhiteSpace(request.OriginalText) || request.OriginalText.Length > 10_000 ||
-            string.IsNullOrWhiteSpace(request.CorrectedText) || request.CorrectedText.Length > 10_000 ||
-            request.CorrectedText.Trim() == request.OriginalText.Trim())
-            throw new ArgumentException("Select an erroneous sentence and enter its corrected text (up to 10,000 characters).");
+        if (string.IsNullOrWhiteSpace(request.CorrectedText) || request.CorrectedText.Length > 10_000 ||
+            (request.IsReplacement ? request.OriginalText != string.Empty :
+                string.IsNullOrWhiteSpace(request.OriginalText) || request.OriginalText.Length > 10_000 ||
+                request.CorrectedText.Trim() == request.OriginalText.Trim()))
+            throw new ArgumentException(request.IsReplacement
+                ? "Enter the replacement sentence (up to 10,000 characters) without an original transcript."
+                : "Select an erroneous sentence and enter its corrected text (up to 10,000 characters).");
         if (string.IsNullOrEmpty(request.PayloadBase64) || request.PayloadBase64.Length > (MaxAudioBytes + 2) / 3 * 4)
             throw new ArgumentException("Select one WAV clip of at most 8 MB and 120 seconds.");
         byte[] audio;
