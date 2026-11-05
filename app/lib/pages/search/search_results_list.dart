@@ -386,6 +386,7 @@ class _ConversationDetailSheet extends StatefulWidget {
 
 class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
   Future<Conversation>? _conversation;
+  Conversation? _catalogConversation;
   Animation<double>? _entrance;
   late final bool _openedUnlocked;
   bool _locked = false;
@@ -396,6 +397,7 @@ class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
   void initState() {
     super.initState();
     _openedUnlocked = state.isAuthenticated;
+    _catalogConversation = _currentConversation;
     if (widget.conversation.isLoaded) _conversation = _load();
   }
 
@@ -428,9 +430,16 @@ class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
     super.dispose();
   }
 
-  Future<Conversation> _load() => widget.conversation.isLoaded
-      ? Future.value(widget.conversation)
-      : state.loadConversation(widget.conversation.id);
+  Conversation? get _currentConversation => state.conversations
+      .where((item) => item.id == widget.conversation.id)
+      .firstOrNull;
+
+  Future<Conversation> _load() {
+    final current = _currentConversation ?? widget.conversation;
+    return current.isLoaded
+        ? Future.value(current)
+        : state.loadConversation(current.id);
+  }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -438,6 +447,11 @@ class _ConversationDetailSheetState extends State<_ConversationDetailSheet> {
     builder: (context, _) {
       if (_openedUnlocked && !state.isAuthenticated) _locked = true;
       if (_locked) return const SizedBox.shrink();
+      final current = _currentConversation;
+      if (current != null && !identical(current, _catalogConversation)) {
+        _catalogConversation = current;
+        _conversation = _load();
+      }
       return FutureBuilder<Conversation>(
         future: _conversation,
         initialData: widget.conversation.isLoaded ? widget.conversation : null,

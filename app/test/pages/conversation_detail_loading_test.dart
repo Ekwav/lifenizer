@@ -25,6 +25,13 @@ class _LoadingState extends LifenizerAppState {
     unlocked = false;
     notifyListeners();
   }
+
+  void publish(Conversation conversation) {
+    conversations
+      ..clear()
+      ..add(conversation);
+    notifyListeners();
+  }
 }
 
 Conversation _conversation({bool loaded = false}) => Conversation(
@@ -63,6 +70,57 @@ Future<void> _open(
 }
 
 void main() {
+  testWidgets('an open recording detail reloads a new transcript from disk', (
+    tester,
+  ) async {
+    final state = _LoadingState();
+    addTearDown(state.dispose);
+    final recording = Conversation(
+      id: 'thread',
+      title: 'Recording',
+      source: 'audio',
+      participantIds: [],
+      segments: [],
+    );
+    state.publish(recording);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConversationCard(state: state, conversation: recording),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Recording').first);
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+    await tester.pumpAndSettle();
+    expect(find.text('No transcript.'), findsOneWidget);
+    expect(state.requests, isEmpty);
+
+    final updated = Conversation(
+      id: 'thread',
+      title: 'Recording',
+      source: 'audio',
+      participantIds: [],
+      segments: [
+        ConversationSegment(id: 'message', text: 'Newly transcribed text'),
+      ],
+    );
+    state.publish(Conversation.fromSummaryJson(updated.toSummaryJson()));
+    await tester.pump();
+    expect(state.requests, hasLength(1));
+    state.requests.last.complete(updated);
+    await tester.pumpAndSettle();
+    expect(find.text('Newly transcribed text'), findsOneWidget);
+    expect(find.text('No transcript.'), findsNothing);
+
+    // Busy/progress notifications with the same summary must not reload it.
+    state.notifyListeners();
+    await tester.pumpAndSettle();
+    expect(state.requests, hasLength(1));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('conversation body loads on open and failed loads can retry', (
     tester,
   ) async {
