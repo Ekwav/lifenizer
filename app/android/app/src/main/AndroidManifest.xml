@@ -19,7 +19,7 @@
         android:label="Lifenizer"
         android:name="${applicationName}"
         android:allowBackup="false"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_lifenizer">
         <service android:name=".RecordingService" android:exported="false"
             android:stopWithTask="false"
             android:foregroundServiceType="microphone|location" />
