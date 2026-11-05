@@ -46,6 +46,40 @@ extension VaultTraining on LifenizerAppState {
     });
   }
 
+  /// Loads only the selected sentence for both replay and contribution.
+  Future<RecordingAudio> loadTranscriptionSentence({
+    required Conversation conversation,
+    required ConversationSegment segment,
+    List<int>? audioOverride,
+  }) async {
+    final index = conversation.segments.indexWhere(
+      (item) => item.id == segment.id,
+    );
+    if (conversation.source != 'audio' || index < 0) {
+      throw StateError('Select a sentence from this recording.');
+    }
+    final nextStart = index + 1 < conversation.segments.length
+        ? conversation.segments[index + 1].offsetMs
+        : null;
+    if (segment.endMs == null &&
+        nextStart != null &&
+        nextStart <= segment.offsetMs) {
+      throw StateError(
+        'This sentence has no usable audio end timestamp. Re-transcribe the original recording or record a replacement sentence.',
+      );
+    }
+    final bytes =
+        audioOverride ?? (await loadRecordingAudio(conversation.id)).bytes;
+    return RecordingAudio(
+      bytes: await compute(_trainingClip, (
+        bytes,
+        segment.offsetMs,
+        segment.endMs ?? nextStart,
+      )),
+      fileName: 'sentence.wav',
+    );
+  }
+
   Future<bool> submitTranscriptionCorrection({
     required Conversation conversation,
     required ConversationSegment segment,
@@ -53,10 +87,13 @@ extension VaultTraining on LifenizerAppState {
     required bool acceptTerms,
     required String consentVersion,
     List<int>? audioOverride,
+    ({List<int> audio, String text})? replacement,
   }) async {
     var submitted = false;
     await _run(() async {
       if (!isAuthenticated) throw StateError('Unlock the vault first.');
+      final api = _requireApi();
+      final identity = recordingIdentity;
       try {
         await _syncInFlight;
       } catch (_) {}
@@ -77,46 +114,17 @@ extension VaultTraining on LifenizerAppState {
           'This transcript changed. Reopen the sentence before correcting it.',
         );
       }
-      String? savedAudio;
-      if (audioOverride == null) {
-        final saved = await audio_cache.readAudioCache(
-          '$_localVaultKey:audio:${current.id}',
-        );
-        if (saved == null) {
-          throw StateError(
-            'Original audio is not available on this device. Attach the original WAV recording.',
-          );
-        }
-        final value = await _crypto.decryptJson(
-          cipherText: saved['cipherText'] as String,
-          nonce: saved['nonce'] as String,
-          background: true,
-        );
-        if (value['vaultKey'] != _localVaultKey ||
-            value['conversationId'] != current.id) {
-          throw StateError(
-            'The original recording does not belong to this conversation.',
-          );
-        }
-        savedAudio = value['bytes'] as String;
+      if (replacement != null && replacement.text.trim().isEmpty) {
+        throw ArgumentError('Enter the sentence you recorded.');
       }
-      final nextStart = index + 1 < current.segments.length
-          ? current.segments[index + 1].offsetMs
-          : null;
-      if (segment.endMs == null &&
-          nextStart != null &&
-          nextStart <= segment.offsetMs) {
-        throw StateError(
-          'This sentence has no usable audio end timestamp. Re-transcribe the original recording before contributing it.',
-        );
-      }
-      final end = segment.endMs ?? nextStart;
-      final clip = await compute(_trainingClip, (
-        audioOverride,
-        savedAudio,
-        segment.offsetMs,
-        end,
-      ), debugLabel: 'training-audio-clip');
+      final clip = replacement == null
+          ? (await loadTranscriptionSentence(
+              conversation: current,
+              segment: segment,
+              audioOverride: audioOverride,
+            )).bytes
+          : await compute(_trainingClip, (replacement.audio, 0, null));
+      _checkRecordingSession(api, identity);
       var consent = await tabTrainingConsent();
       var receipts = (consent?['receipts'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
@@ -141,13 +149,16 @@ extension VaultTraining on LifenizerAppState {
         consent = {'contributionKey': key, 'receipts': receipts};
         await _saveTrainingConsent(consent);
       }
-      final result = await _requireApi().submitTabCorrection({
+      _checkRecordingSession(api, identity);
+      final result = await api.submitTabCorrection({
         'contributionKey': key,
         'consentId': receipt['id'],
         'payloadBase64': base64Encode(clip),
-        'originalText': segment.text,
-        'correctedText': correctedText.trim(),
+        'originalText': replacement == null ? segment.text : '',
+        'correctedText': replacement?.text.trim() ?? correctedText.trim(),
+        if (replacement != null) 'isReplacement': true,
       });
+      _checkRecordingSession(api, identity);
       final segments = [...current.segments];
       segments[index] = ConversationSegment.fromJson({
         ...segments[index].toJson(),
@@ -165,7 +176,13 @@ extension VaultTraining on LifenizerAppState {
           }),
         },
       });
-      conversations[conversations.indexOf(current)] = updated;
+      final position = conversations.indexWhere(
+        (item) => item.id == current.id,
+      );
+      if (position < 0) {
+        throw StateError('This recording is no longer available.');
+      }
+      conversations[position] = updated;
       _markConversationChanged(updated.id);
       await _pushEntity('conversation', updated.id, updated.toJson());
       submitted = true;
@@ -208,8 +225,5 @@ extension VaultTraining on LifenizerAppState {
   }
 }
 
-Uint8List _trainingClip((List<int>?, String?, int, int?) input) => clipWav(
-  input.$1 ?? base64Decode(input.$2!),
-  startMs: input.$3,
-  endMs: input.$4,
-);
+Uint8List _trainingClip((List<int>, int, int?) input) =>
+    clipWav(input.$1, startMs: input.$2, endMs: input.$3);
