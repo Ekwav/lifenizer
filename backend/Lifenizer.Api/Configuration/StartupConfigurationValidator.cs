@@ -67,6 +67,8 @@ public static class StartupConfigurationValidator
             logger.LogInformation("ConnectionString 'Lifenizer' not configured. Using default SQLite database in application directory");
         }
 
+        Lifenizer.Api.Services.WhisperSettings.WarnIfChunksExceedWhisperWindow(configuration, logger);
+
         if (errors.Count > 0)
         {
             var message = "Critical configuration errors:\n  - " + string.Join("\n  - ", errors);

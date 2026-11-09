@@ -4,8 +4,8 @@ namespace Lifenizer.Api.Services;
 
 /// <summary>
 /// Splits PCM16 audio at long pauses (default 10 s, the pause itself is dropped) so each piece can be
-/// transcribed separately; stretches longer than MaxChunk are cut at their best silence. Null means "not chunkable" (callers fall back to one request); a plan with no
-/// chunks means "chunkable but nothing audible".
+/// transcribed separately; stretches longer than MaxChunk (default 28 s) are split into contiguous pieces at their best
+/// gap. Null means "not chunkable" (callers fall back to one request); a plan with no chunks means "chunkable but nothing audible".
 /// </summary>
 public static class WavSilenceChunker
 {
@@ -40,7 +40,7 @@ public static class WavSilenceChunker
         var silent = SilentFlags(energy, frameSeconds, options);
         var ranges = PlanRanges(silent, energy, frameSeconds, options);
 
-        var chunks = BuildChunks(ranges, energy, silent, options, new FrameGeometry(frameBytes, frameSeconds, layout));
+        var chunks = BuildChunks(ranges, energy, options, new FrameGeometry(frameBytes, frameSeconds, layout));
         return new WavChunkPlan(format, chunks);
     }
 
@@ -195,7 +195,10 @@ public static class WavSilenceChunker
 
     private static int Frames(TimeSpan span, double frameSeconds) => (int)(span.TotalSeconds / frameSeconds);
 
-    /// <summary>Speech ranges between pauses, each split further when it exceeds the maximum chunk length.</summary>
+    /// <summary>
+    /// Speech ranges between pauses that hold enough speech, each split further (without a gap between the pieces)
+    /// when it exceeds the maximum chunk length. MinSpeech is judged on the whole range, so a cap piece of quiet speech is kept.
+    /// </summary>
     private static List<FrameRange> PlanRanges(bool[] silent, double[] energy, double frameSeconds, WavChunkerOptions options)
     {
         var rules = new PauseRules(
@@ -208,9 +211,20 @@ public static class WavSilenceChunker
             Math.Max(2, Frames(options.MaxChunk, frameSeconds)),
             Math.Max(1, Frames(options.CapSearchWindow, frameSeconds)),
             Frames(options.MinTrailingChunk, frameSeconds));
+        var speech = new SpeechTest(energy, silent, options.MinSilenceRms, Math.Max(1, Frames(options.MinSpeech, frameSeconds)));
         var ranges = new List<FrameRange>();
-        foreach (var range in SpeechRanges(pauses, padding, silent.Length)) SplitLong(range, silent, energy, cap, ranges);
+        foreach (var range in SpeechRanges(pauses, padding, silent.Length))
+        {
+            if (speech.IsWorthSending(range)) SplitLong(range, silent, energy, cap, ranges);
+        }
         return ranges;
+    }
+
+    /// <summary>A range is sent when it is audible and holds at least MinSpeech of non-silent frames (drops stray noise between two pauses).</summary>
+    private sealed record SpeechTest(double[] Energy, bool[] Silent, double MinSilenceRms, int MinSpeechFrames)
+    {
+        public bool IsWorthSending(FrameRange range) =>
+            !IsInaudible(Energy, range.Start, range.End, MinSilenceRms) && SpeechFrames(Silent, range, MinSpeechFrames) >= MinSpeechFrames;
     }
 
     private readonly record struct PauseRules(int MinFrames, int BlipFrames, int MinSilenceBeforeBlip);
@@ -285,70 +299,86 @@ public static class WavSilenceChunker
         if (frameCount > start) yield return new FrameRange(start, frameCount);
     }
 
-    /// <summary>Adds the range, cut at the best silence near the maximum length while it is longer than that.</summary>
+    /// <summary>Adds the range as contiguous pieces of at most MaxFrames, each cut at the best gap near the cap.</summary>
     private static void SplitLong(FrameRange range, bool[] silent, double[] energy, CapSplit cap, List<FrameRange> result)
     {
-        var first = result.Count;
         var start = range.Start;
-        var searchFrames = Math.Min(cap.SearchFrames, cap.MaxFrames - 1);
         while (range.End - start > cap.MaxFrames)
         {
-            var cut = BestCut(silent, energy, start + cap.MaxFrames - searchFrames, start + cap.MaxFrames);
+            var cut = CapCut(new FrameRange(start, range.End), silent, energy, cap);
             result.Add(new FrameRange(start, cut));
             start = cut;
-        }
-        if (result.Count > first && range.End - start < cap.MinTrailingFrames)
-        {
-            start = result[^1].Start;
-            result.RemoveAt(result.Count - 1);
         }
         result.Add(new FrameRange(start, range.End));
     }
 
-    /// <summary>Middle of the longest silent run in [from, to), else the quietest frame.</summary>
-    private static int BestCut(bool[] silent, double[] energy, int from, int to)
+    /// <summary>
+    /// Cut point for a range longer than the cap, inside the search window: the middle of the longest gap (silent
+    /// run) touching the window, else a clearly quieter frame, else a hard cut at the window end.
+    /// </summary>
+    private static int CapCut(FrameRange range, bool[] silent, double[] energy, CapSplit cap)
     {
-        var (runStart, runLength) = LongestSilentRun(silent, from, to);
-        return runLength > 0 ? runStart + runLength / 2 : QuietestFrame(energy, from, to);
+        var window = SearchWindow(range, cap);
+        var gap = LongestGap(silent, window, range);
+        if (gap.End > gap.Start) return Math.Clamp((gap.Start + gap.End) / 2, window.Start, window.End);
+
+        return ClearDip(energy, window) ?? window.End;
     }
 
-    private static (int Start, int Length) LongestSilentRun(bool[] silent, int from, int to)
+    /// <summary>
+    /// [cap - search, cap], its end pulled in so the last piece keeps at least MinTrailingFrames (no sub-second
+    /// whisper requests, no word split off at the very end).
+    /// </summary>
+    private static FrameRange SearchWindow(FrameRange range, CapSplit cap)
     {
-        var best = (Start: from, Length: 0);
-        var runStart = from;
-        for (var f = from; f < to; f++)
+        var hi = range.Start + cap.MaxFrames;
+        var lo = hi - Math.Min(cap.SearchFrames, cap.MaxFrames - 1);
+        return new FrameRange(lo, Math.Clamp(range.End - cap.MinTrailingFrames, lo + 1, hi));
+    }
+
+    /// <summary>Longest silent run overlapping the window, measured in full within the range (a gap straddling the window edge keeps its real length).</summary>
+    private static FrameRange LongestGap(bool[] silent, FrameRange window, FrameRange range)
+    {
+        var best = new FrameRange(window.Start, window.Start);
+        var f = window.Start;
+        while (silent[window.Start] && f > range.Start && silent[f - 1]) f--;
+        while (f < window.End)
         {
             if (!silent[f])
             {
-                runStart = f + 1;
+                f++;
                 continue;
             }
-            var length = f - runStart + 1;
-            if (length > best.Length) best = (runStart, length);
+            var end = f;
+            while (end < range.End && silent[end]) end++;
+            if (end - f > best.End - best.Start) best = new FrameRange(f, end);
+            f = end;
         }
         return best;
     }
 
-    private static int QuietestFrame(double[] energy, int from, int to)
+    /// <summary>A frame is a gap when it is this much quieter than the window's median (speech gaps in a room where the threshold is not trusted).</summary>
+    private const double DipShareOfMedian = 0.5;
+
+    /// <summary>The quietest frame of the window when it is clearly quieter than the window's median, else null.</summary>
+    private static int? ClearDip(double[] energy, FrameRange window)
     {
-        var quietest = from;
-        for (var f = from + 1; f < to; f++)
-        {
-            if (energy[f] < energy[quietest]) quietest = f;
-        }
-        return quietest;
+        var levels = energy[window.Start..window.End];
+        var quietest = window.Start + Array.IndexOf(levels, levels.Min());
+        Array.Sort(levels);
+        var median = levels[levels.Length / 2];
+        return energy[quietest] <= median * DipShareOfMedian ? quietest : null;
     }
 
     private sealed record FrameGeometry(int FrameBytes, double FrameSeconds, WavLayout Layout);
 
-    private static List<WavChunk> BuildChunks(List<FrameRange> ranges, double[] energy, bool[] silent, WavChunkerOptions options, FrameGeometry geometry)
+    /// <summary>Byte chunks for the planned ranges; a cap piece is only dropped when it is entirely inaudible.</summary>
+    private static List<WavChunk> BuildChunks(List<FrameRange> ranges, double[] energy, WavChunkerOptions options, FrameGeometry geometry)
     {
         var chunks = new List<WavChunk>();
-        var minSpeechFrames = Math.Max(1, (int)(options.MinSpeech.TotalSeconds / geometry.FrameSeconds));
         foreach (var range in ranges)
         {
             if (IsInaudible(energy, range.Start, range.End, options.MinSilenceRms)) continue;
-            if (SpeechFrames(silent, range, minSpeechFrames) < minSpeechFrames) continue;
             var startByte = range.Start * geometry.FrameBytes;
             var endByte = Math.Min(range.End * geometry.FrameBytes, geometry.Layout.DataLength);
             chunks.Add(new WavChunk(geometry.Layout.DataOffset + startByte, endByte - startByte, TimeSpan.FromSeconds(range.Start * geometry.FrameSeconds)));

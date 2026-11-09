@@ -39,6 +39,30 @@ internal static class SyntheticWav
         return Wrap(data, 1, false);
     }
 
+    /// <summary>
+    /// Continuous talk: sentences of 2-9 s separated by 0.5-1 s gaps (reproducible per seed), starting with speech.
+    /// Any 10 s stretch holds a whole gap.
+    /// </summary>
+    public static Func<double, bool> Sentences(double seconds, int seed)
+    {
+        var random = new Random(seed);
+        var gaps = new List<(double Start, double End)>();
+        var t = 2 + random.NextDouble() * 7;
+        while (t < seconds)
+        {
+            var gap = 0.5 + random.NextDouble() * 0.5;
+            gaps.Add((t, t + gap));
+            t += gap + 2 + random.NextDouble() * 7;
+        }
+        var starts = gaps.Select(g => g.Start).ToArray();
+        return time =>
+        {
+            var index = Array.BinarySearch(starts, time);
+            var last = index >= 0 ? index : ~index - 1; // last gap starting at or before time
+            return last < 0 || time >= gaps[last].End;
+        };
+    }
+
     /// <summary>4 s speech followed by 1 s silence, repeated.</summary>
     public static bool SentencePattern(double t) => t % 5 < 4;
 

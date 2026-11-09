@@ -6,6 +6,7 @@ using System.Text.Json;
 using Lifenizer.Api.Services;
 using Lifenizer.Core;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Lifenizer.Tests;
@@ -202,7 +203,70 @@ public sealed class ChunkedAudioImportTests
             Assert.That(ChunkedWhisperTranscriber.TimeoutFor(baseTimeout, 300, 0, 4), Is.EqualTo(baseTimeout));
             Assert.That(ChunkedWhisperTranscriber.TimeoutFor(baseTimeout, 1e9, 20, 64), Is.EqualTo(TimeSpan.FromHours(6)), "capped");
             Assert.That(ChunkedWhisperTranscriber.TimeoutFor(baseTimeout, double.NaN, 2, 4), Is.EqualTo(baseTimeout));
+            // A 28 s chunk behind 3 queued ones in whisper (one at a time, ~10 s overhead each) needs about
+            // 4 x (10 s + 28 s at real time) = 152 s; the scaled 224 s covers that even at real-time speed.
+            Assert.That(ChunkedWhisperTranscriber.TimeoutFor(baseTimeout, 28, 2.0, 4), Is.EqualTo(TimeSpan.FromSeconds(224)));
+            Assert.That(ChunkedWhisperTranscriber.TimeoutFor(baseTimeout, 28, 2.0, 1), Is.EqualTo(baseTimeout), "a lone 28 s chunk keeps the base");
         });
+    }
+
+    [Test]
+    public async Task ChunkPlan_AndEachFinishedChunk_AreLoggedAtInformation()
+    {
+        var wav = SyntheticWav.Build(70, _ => true);
+        var plan = WavSilenceChunker.TryPlan(wav)!;
+        var logger = new ListLogger<ChunkedWhisperTranscriber>();
+        using var transcriber = new ChunkedWhisperTranscriber(logger, 2, TimeSpan.FromSeconds(30), timeoutPerAudioSecond: 0);
+
+        await transcriber.TranscribeAsync(wav, plan, 2, (_, _) => Task.FromResult(new WhisperTranscriptionResult("x", "en", [])), CancellationToken.None);
+
+        var planLines = logger.Lines.Where(l => l.StartsWith("Planned ", StringComparison.Ordinal)).ToList();
+        Assert.That(plan.Chunks, Has.Count.EqualTo(3));
+        Assert.That(planLines, Has.Count.EqualTo(1), "one plan line per file");
+        Assert.That(planLines[0], Does.Contain("Planned 3 audio chunks").And.Contain("#1 0.0+28.0").And.Contain("#2 28.0+28.0").And.Contain("#3 56.0+14.0"));
+        var finished = logger.Lines.Where(l => l.StartsWith("Transcribed audio chunk ", StringComparison.Ordinal)).ToList();
+        Assert.That(finished, Has.Count.EqualTo(3));
+        Assert.That(finished, Has.All.Match(@"^Transcribed audio chunk [1-3]/3 \(start \d+[.,]\d s, length \d+[.,]\d s\): whisper \d+ ms, queued \d+ ms, 1 attempt\(s\)$"));
+    }
+
+    [Test]
+    public async Task ChunkLog_SeparatesWhisperTimeFromTheWaitForAGlobalSlot()
+    {
+        var wav = SyntheticWav.Build(70, _ => true);
+        var plan = WavSilenceChunker.TryPlan(wav)!;
+        var logger = new ListLogger<ChunkedWhisperTranscriber>();
+        using var transcriber = new ChunkedWhisperTranscriber(logger, 1, TimeSpan.FromSeconds(30), timeoutPerAudioSecond: 0);
+
+        // one global slot, three chunks in parallel: they queue behind each other for ~300 ms each
+        await transcriber.TranscribeAsync(wav, plan, 3, async (_, token) =>
+        {
+            await Task.Delay(300, token);
+            return new WhisperTranscriptionResult("x", "en", []);
+        }, CancellationToken.None);
+
+        var finished = logger.Entries.Where(e => e.Values.ContainsKey("WhisperMs")).ToList();
+        Assert.That(finished, Has.Count.EqualTo(3));
+        Assert.That(finished.Select(e => (long)e.Values["WhisperMs"]!), Has.All.InRange(250L, 5000L), "whisper time excludes the queue");
+        Assert.That(finished.Max(e => (long)e.Values["QueuedMs"]!), Is.GreaterThanOrEqualTo(500L), "the last chunk waited for two others");
+    }
+
+    [Test]
+    public async Task PlanLine_ListsAtMostFiftyChunks()
+    {
+        // 60 one-second chunks over a small buffer; only the plan matters here
+        var wav = new byte[44 + SyntheticWav.Rate * 2];
+        var plan = new WavChunkPlan(new WavFormat(SyntheticWav.Rate, 1),
+            Enumerable.Range(0, 60).Select(i => new WavChunk(44, SyntheticWav.Rate * 2, TimeSpan.FromSeconds(i * 28))).ToList());
+        var logger = new ListLogger<ChunkedWhisperTranscriber>();
+        using var transcriber = new ChunkedWhisperTranscriber(logger, 64, TimeSpan.FromSeconds(30), timeoutPerAudioSecond: 0);
+
+        await transcriber.TranscribeAsync(wav, plan, 16, (_, _) => Task.FromResult(new WhisperTranscriptionResult("x", "en", [])), CancellationToken.None);
+
+        var planLine = logger.Lines.Single(l => l.StartsWith("Planned ", StringComparison.Ordinal));
+        var more = plan.Chunks.Count - ChunkedWhisperTranscriber.MaxLoggedPlanEntries;
+        Assert.That(more, Is.GreaterThan(0));
+        Assert.That(planLine, Does.Contain("#50 ").And.Not.Contain("#51 ").And.EndWith($", … {more} more"));
+        Assert.That(planLine.Length, Is.LessThan(16 * 1024));
     }
 
     [Test]
