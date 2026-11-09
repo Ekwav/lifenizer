@@ -525,7 +525,14 @@ Optional request metadata:
 
 #### Chunked transcription
 
-WAV (PCM16) and Ogg Opus recordings longer than 30 s are split on silence into ~7-17 s chunks,
+WAV (PCM16) and Ogg Opus recordings longer than 30 s are cut at long pauses (silence of at least
+`Whisper:MinPauseSeconds`, default 10 s; short non-silent blips up to 300 ms do not break a pause). The pause itself is
+dropped (0.5 s of padding stays on each side), so chunks can be minutes long. A blip is only bridged when at least 1 s
+of silence precedes and follows it, so syllable gaps in noisy speech never form a pause. Silence is relative to the recording's
+noise floor only when there is at least 1 s of clearly louder audio and the floor is plausibly silence (RMS up to
+250, or a tenth of the recording is clearly louder, as in a loud room); otherwise only the absolute level (RMS 120) counts, so quiet or steady recordings are sent whole. Chunks with
+less than 0.2 s of non-silent audio are dropped. The ASR request sets `vad_filter=true` as a second line of defence. A stretch without a pause longer than
+`Whisper:MaxChunkSeconds` (default 300) is cut at its longest silence in the last 60 s of that window. Chunks are
 transcribed in parallel and merged (segment times shifted by the chunk offset; language is the most
 frequent chunk language). Entirely silent recordings fail with "no usable text" without calling whisper.
 Other formats (mp3, m4a, webm, float WAV) are sent whole as before, with no duration check (pre-existing behaviour). Config:
@@ -541,8 +548,13 @@ Other formats (mp3, m4a, webm, float WAV) are sent whole as before, with no dura
 - `Imports:MaxConcurrentAudioImportsPerUser` (default 2) and `Imports:MaxConcurrentAudioImports` (default 3, all
   users) — concurrent audio imports (`/api/imports/audio` and `/api/imports/audio/upload`, matched by route, so
   trailing slashes and casing do not bypass them); extra ones get 429. Other import routes are not limited.
-- `Whisper:ChunkTimeoutSeconds` (default 180) — per chunk request, excluding queue time; timeouts are not retried
-  (connection errors and 5xx are retried once)
+- `Whisper:MinPauseSeconds` (default 10, clamped 2..3600) and `Whisper:MaxChunkSeconds` (default 300, clamped 90..3600) — see above
+- `Whisper:ChunkTimeoutSeconds` (default 180) — minimum per chunk request timeout, excluding queue time for the global
+  slot; the effective timeout is `max(this, chunk audio seconds × Whisper:ChunkTimeoutPerAudioSecond × Whisper:MaxConcurrentRequests)`
+  (factor default 2.0, clamped 0..20; capped at 6 h), because whisper serves requests one at a time per replica and
+  queued requests wait inside whisper. Timeouts are not retried (connection errors and 5xx are retried once).
+- `Whisper:WholeFileTimeoutSeconds` (default 600) — bound for whole-file (unchunked) requests
+- Non-numeric, NaN or infinite values of these keys fall back to their defaults.
 
 #### Multipart upload: `POST /api/imports/audio/upload`
 

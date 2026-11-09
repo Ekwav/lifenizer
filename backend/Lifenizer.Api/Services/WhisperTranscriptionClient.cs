@@ -51,6 +51,21 @@ public sealed class WhisperTranscriptionClient(IHttpClientFactory httpClientFact
         string? requestLanguage,
         CancellationToken cancellationToken)
     {
+        var fileContent = new ByteArrayContent(audioBytes);
+        fileContent.Headers.ContentType = !string.IsNullOrWhiteSpace(mimeType) && MediaTypeHeaderValue.TryParse(mimeType, out var parsedType)
+            ? parsedType
+            : new MediaTypeHeaderValue("application/octet-stream");
+        return await TranscribeAsync(fileContent, fileName, requestLanguage, cancellationToken);
+    }
+
+    /// <summary>Same as the byte overload for a prepared body; the content is disposed with the request.</summary>
+    public async Task<WhisperTranscriptionResult> TranscribeAsync(
+        HttpContent fileContent,
+        string fileName,
+        string? requestLanguage,
+        CancellationToken cancellationToken)
+    {
+        using var _ = fileContent;
         var baseUrl = string.IsNullOrWhiteSpace(configuration["Whisper:BaseUrl"])
             ? DefaultBaseUrl
             : configuration["Whisper:BaseUrl"]!;
@@ -61,7 +76,7 @@ public sealed class WhisperTranscriptionClient(IHttpClientFactory httpClientFact
         }
 
         var language = NormalizeLanguage(requestLanguage) ?? NormalizeLanguage(configuration["Whisper:Language"]);
-        var query = "task=transcribe&output=json&encode=true";
+        var query = "task=transcribe&output=json&encode=true&vad_filter=true";
         if (language is not null)
         {
             query += $"&language={Uri.EscapeDataString(language)}";
@@ -70,10 +85,6 @@ public sealed class WhisperTranscriptionClient(IHttpClientFactory httpClientFact
         var uri = new Uri(baseUri, $"asr?{query}");
 
         using var content = new MultipartFormDataContent();
-        var fileContent = new ByteArrayContent(audioBytes);
-        fileContent.Headers.ContentType = !string.IsNullOrWhiteSpace(mimeType) && MediaTypeHeaderValue.TryParse(mimeType, out var parsedType)
-            ? parsedType
-            : new MediaTypeHeaderValue("application/octet-stream");
         content.Add(fileContent, "audio_file", string.IsNullOrWhiteSpace(fileName) ? "audio" : fileName);
 
         using var message = new HttpRequestMessage(HttpMethod.Post, uri) { Content = content };

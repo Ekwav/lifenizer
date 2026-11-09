@@ -44,7 +44,7 @@ public sealed class WhisperUnixSocketTests
             var client = new WhisperTranscriptionClient(provider.GetRequiredService<IHttpClientFactory>(), config);
             var transcript = await client.TranscribeAsync([0, 1, 2, 3], "audio.wav", "audio/wav", "en", timeout.Token);
             Assert.That(transcript.Text, Is.EqualTo("Private relay transcription"));
-            Assert.That(await serve, Does.StartWith("POST /asr?task=transcribe&output=json&encode=true&language=en HTTP/1.1"));
+            Assert.That(await serve, Does.StartWith("POST /asr?task=transcribe&output=json&encode=true&vad_filter=true&language=en HTTP/1.1"));
         }
         finally { listener.Dispose(); File.Delete(path); }
     }

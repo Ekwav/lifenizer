@@ -23,12 +23,12 @@ public static class AudioChunking
         if (layout is null) return null;
         var seconds = (double)layout.DataLength / layout.Format.BlockAlign / layout.Format.SampleRate;
         if (seconds > limits.MaxAudioSeconds) throw new AudioTooLongException(limits.MaxAudioSeconds);
-        if (seconds <= WavSilenceChunker.DefaultOptions.NoChunkUpTo.TotalSeconds) return null;
+        if (seconds <= (limits.Chunking ?? WavSilenceChunker.DefaultOptions).NoChunkUpTo.TotalSeconds) return null;
 
         var lease = await limits.Budget.AcquireAsync(wav.Length + wav.Length / PlanningOverheadDivisor, cancellationToken);
         try
         {
-            var plan = await Task.Run(() => WavSilenceChunker.TryPlan(wav, layout), cancellationToken);
+            var plan = await Task.Run(() => WavSilenceChunker.TryPlan(wav, layout, limits.Chunking), cancellationToken);
             if (plan is null)
             {
                 lease.Dispose();
@@ -47,7 +47,7 @@ public static class AudioChunking
     {
         var scan = await Task.Run(() => OpusStreamScanner.Scan(ogg), cancellationToken);
         if (scan.ExceedsSeconds(limits.MaxAudioSeconds)) throw new AudioTooLongException(limits.MaxAudioSeconds);
-        if (scan.DecodableSamples48k <= WavSilenceChunker.DefaultOptions.NoChunkUpTo.TotalSeconds * 48000) return null;
+        if (scan.DecodableSamples48k <= (limits.Chunking ?? WavSilenceChunker.DefaultOptions).NoChunkUpTo.TotalSeconds * 48000) return null;
 
         var lease = await limits.Budget.AcquireAsync(OggOpusDecoder.OutputBytes(scan), cancellationToken);
         try
@@ -64,7 +64,7 @@ public static class AudioChunking
     private static async Task<AudioChunkSource?> DecodeAndPlanAsync(byte[] ogg, OpusScan scan, AudioLimits limits, IDisposable lease, CancellationToken cancellationToken)
     {
         var pcm = await Task.Run(() => Decode(ogg, scan, limits.MaxAudioSeconds, cancellationToken), cancellationToken);
-        var plan = WavSilenceChunker.PlanPcm(pcm, new WavLayout(OggOpusDecoder.Format, 0, pcm.Length - pcm.Length % 2));
+        var plan = WavSilenceChunker.PlanPcm(pcm, new WavLayout(OggOpusDecoder.Format, 0, pcm.Length - pcm.Length % 2), limits.Chunking);
         if (plan is null)
         {
             lease.Dispose();

@@ -20,8 +20,30 @@ internal static class SyntheticWav
         return Wrap(data, channels, listChunkFirst, formatTag, bits, extensible, fmtAfterData, rate);
     }
 
+    /// <summary>
+    /// Mono 300 Hz tone whose amplitude follows <paramref name="level"/> over uniform noise of the given RMS
+    /// (a stand-in for speech in a noisy room).
+    /// </summary>
+    public static byte[] BuildShaped(double seconds, Func<double, double> level, double noiseRms = 0, int seed = 1)
+    {
+        var random = new Random(seed);
+        var frames = (int)(seconds * Rate);
+        var data = new byte[frames * 2];
+        var noisePeak = noiseRms * Math.Sqrt(3);
+        for (var i = 0; i < frames; i++)
+        {
+            var t = (double)i / Rate;
+            var value = level(t) * Math.Sin(2 * Math.PI * 300 * t) + (random.NextDouble() * 2 - 1) * noisePeak;
+            BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan(i * 2), (short)Math.Clamp(value, short.MinValue, short.MaxValue));
+        }
+        return Wrap(data, 1, false);
+    }
+
     /// <summary>4 s speech followed by 1 s silence, repeated.</summary>
     public static bool SentencePattern(double t) => t % 5 < 4;
+
+    /// <summary>4 s speech followed by an 11 s pause (long enough to be cut), repeated.</summary>
+    public static bool PausedPattern(double t) => t % 15 < 4;
 
     public static byte[] Wrap(byte[] data, int channels, bool listChunkFirst, int formatTag = 1, int bits = 16, bool extensible = false, bool fmtAfterData = false, int rate = Rate)
     {

@@ -43,11 +43,12 @@ public static class ServiceExtensions
         services.AddHttpClient(TabTrainingClient.HttpClientName, client => client.Timeout = TimeSpan.FromMinutes(2))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
-        // CPU-based whisper-trained transcription is slow for longer recordings, so this client
-        // gets a generous timeout distinct from the "imports" client used by fast provider calls.
+        // CPU-based whisper-trained transcription is slow for longer recordings. Chunk requests scale
+        // their timeout with the chunk length (ChunkedWhisperTranscriber) and whole-file requests are
+        // bounded by ProviderHttpImportClient, so the client itself must not cut requests short.
         services.AddHttpClient(WhisperTranscriptionClient.HttpClientName, client =>
         {
-            client.Timeout = TimeSpan.FromMinutes(10);
+            client.Timeout = Timeout.InfiniteTimeSpan;
         }).ConfigurePrimaryHttpMessageHandler(provider => WhisperTranscriptionClient.CreateHttpHandler(provider.GetRequiredService<IConfiguration>()));
 
         return services;

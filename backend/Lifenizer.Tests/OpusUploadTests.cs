@@ -18,8 +18,8 @@ public sealed class OpusUploadTests
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private const double Tolerance = 0.05;
 
-    /// <summary>1 s lead-in silence, then 4 s speech / 1 s silence.</summary>
-    private static bool Speech(double t) => t >= 1 && (t - 1) % 5 < 4;
+    /// <summary>1 s lead-in silence, then 4 s speech / 11 s silence.</summary>
+    private static bool Speech(double t) => t >= 1 && (t - 1) % 15 < 4;
 
     [Test]
     public void Decoder_RemovesPreSkip_SoTimingMatchesTheInput()
@@ -158,7 +158,7 @@ public sealed class OpusUploadTests
     [Test]
     public async Task Upload_WavPart_WorksToo()
     {
-        var wav = SyntheticWav.Build(60, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(60, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         await using var whisper = new ChunkedAudioImportTests.ConcurrentWhisper(wav, plan, (_, _) => ChunkedAudioImportTests.ConcurrentWhisper.Ok);
         await using var factory = ChunkedAudioImportTests.FactoryFor(whisper, maxParallel: 3);
@@ -175,7 +175,7 @@ public sealed class OpusUploadTests
     [Test]
     public async Task JsonEndpoint_StillWorksForBase64Wav()
     {
-        var wav = SyntheticWav.Build(60, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(60, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         await using var whisper = new ChunkedAudioImportTests.ConcurrentWhisper(wav, plan, (_, _) => ChunkedAudioImportTests.ConcurrentWhisper.Ok);
         await using var factory = ChunkedAudioImportTests.FactoryFor(whisper, maxParallel: 3);
@@ -209,7 +209,7 @@ public sealed class OpusUploadTests
     [Test]
     public void Wav_OverTheCap_IsRejectedBeforePlanning()
     {
-        var wav = SyntheticWav.Build(120, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(120, SyntheticWav.PausedPattern);
         var before = GC.GetTotalAllocatedBytes(precise: true);
 
         Assert.Throws<AudioTooLongException>(() => Source(wav, max: 60));
@@ -235,7 +235,7 @@ public sealed class OpusUploadTests
     [Test]
     public async Task Upload_GlobalAudioLimit_Gives429AcrossUsers()
     {
-        var wav = SyntheticWav.Build(60, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(60, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         using var release = new ManualResetEventSlim();
         await using var whisper = new ChunkedAudioImportTests.ConcurrentWhisper(wav, plan, (_, _) =>
@@ -266,7 +266,7 @@ public sealed class OpusUploadTests
     [Test]
     public async Task Upload_TrailingSlashVariants_AreLimitedToo()
     {
-        var wav = SyntheticWav.Build(60, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(60, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         using var release = new ManualResetEventSlim();
         await using var whisper = new ChunkedAudioImportTests.ConcurrentWhisper(wav, plan, (_, _) =>
@@ -502,7 +502,7 @@ public sealed class OpusUploadTests
     [Test]
     public async Task Upload_SecondConcurrentAudioImportOfOneUser_Gets429_ButOtherRoutesAreUnaffected()
     {
-        var wav = SyntheticWav.Build(60, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(60, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         using var release = new ManualResetEventSlim();
         await using var whisper = new ChunkedAudioImportTests.ConcurrentWhisper(wav, plan, (_, _) =>

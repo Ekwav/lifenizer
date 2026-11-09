@@ -18,7 +18,7 @@ public sealed class ChunkedAudioImportTests
     [Test]
     public async Task LongWav_IsTranscribedInBoundedParallelChunks_WithShiftedMonotonicSegments()
     {
-        var wav = SyntheticWav.Build(120, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(120, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         await using var whisper = new ConcurrentWhisper(wav, plan, (_, _) => ConcurrentWhisper.Ok);
         await using var factory = FactoryFor(whisper, maxParallel: 3);
@@ -47,7 +47,7 @@ public sealed class ChunkedAudioImportTests
     [Test]
     public async Task TransientFailureOnOneChunk_IsRetriedOnce_AndImportSucceeds()
     {
-        var wav = SyntheticWav.Build(120, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(120, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         await using var whisper = new ConcurrentWhisper(wav, plan, (index, attempt) =>
             index == 2 && attempt == 1 ? new MockHttpResponse("text/plain", "busy", 503) : ConcurrentWhisper.Ok);
@@ -63,7 +63,7 @@ public sealed class ChunkedAudioImportTests
     [Test]
     public async Task PermanentFailureOnOneChunk_FailsImport_AndStopsRemainingChunks()
     {
-        var wav = SyntheticWav.Build(120, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(120, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         await using var whisper = new ConcurrentWhisper(wav, plan, (index, _) =>
             index == 1 ? new MockHttpResponse("text/plain", "bad audio", 400) : ConcurrentWhisper.Ok);
@@ -80,7 +80,7 @@ public sealed class ChunkedAudioImportTests
     [Test]
     public async Task PersistentServerError_IsRetriedOnce_ThenFailsImport()
     {
-        var wav = SyntheticWav.Build(120, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(120, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         await using var whisper = new ConcurrentWhisper(wav, plan, (index, _) =>
             index == 0 ? new MockHttpResponse("text/plain", "down", 500) : ConcurrentWhisper.Ok);
@@ -96,7 +96,7 @@ public sealed class ChunkedAudioImportTests
     [Test]
     public async Task Cancellation_StopsStartingChunks_AndThrowsOperationCanceled()
     {
-        var wav = SyntheticWav.Build(120, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(120, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         using var transcriber = NewTranscriber();
         using var cts = new CancellationTokenSource();
@@ -117,7 +117,7 @@ public sealed class ChunkedAudioImportTests
     [Test]
     public async Task FailureOfOneChunk_CancelsInFlightSiblings()
     {
-        var wav = SyntheticWav.Build(120, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(120, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         using var transcriber = NewTranscriber();
         var siblingCancelled = new TaskCompletionSource();
@@ -157,7 +157,7 @@ public sealed class ChunkedAudioImportTests
     [Test]
     public async Task TwoSimultaneousImports_ShareTheGlobalRequestLimit()
     {
-        var wav = SyntheticWav.Build(120, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(120, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         await using var whisper = new ConcurrentWhisper(wav, plan, (_, _) => ConcurrentWhisper.Ok);
         await using var factory = FactoryFor(whisper, maxParallel: 4, maxConcurrent: 3);
@@ -173,7 +173,7 @@ public sealed class ChunkedAudioImportTests
     [Test]
     public async Task ChunkTimeout_FailsWithTimeoutError_AndIsNotRetried()
     {
-        var wav = SyntheticWav.Build(120, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(120, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         using var transcriber = NewTranscriber(timeoutSeconds: 0.2);
         var calls = 0;
@@ -190,9 +190,77 @@ public sealed class ChunkedAudioImportTests
     }
 
     [Test]
+    public void ChunkTimeout_ScalesWithChunkAudioLengthAndGlobalConcurrency()
+    {
+        var baseTimeout = TimeSpan.FromSeconds(180);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ChunkedWhisperTranscriber.TimeoutFor(baseTimeout, 20, 2.0, 4), Is.EqualTo(baseTimeout), "short chunk keeps the base");
+            Assert.That(ChunkedWhisperTranscriber.TimeoutFor(baseTimeout, 300, 2.0, 1), Is.EqualTo(TimeSpan.FromSeconds(600)));
+            Assert.That(ChunkedWhisperTranscriber.TimeoutFor(baseTimeout, 300, 2.0, 4), Is.EqualTo(TimeSpan.FromSeconds(2400)), "requests queue inside whisper");
+            Assert.That(ChunkedWhisperTranscriber.TimeoutFor(baseTimeout, 300, 0, 4), Is.EqualTo(baseTimeout));
+            Assert.That(ChunkedWhisperTranscriber.TimeoutFor(baseTimeout, 1e9, 20, 64), Is.EqualTo(TimeSpan.FromHours(6)), "capped");
+            Assert.That(ChunkedWhisperTranscriber.TimeoutFor(baseTimeout, double.NaN, 2, 4), Is.EqualTo(baseTimeout));
+        });
+    }
+
+    [Test]
+    public async Task ChunkBody_IsIdenticalToAStandaloneWav_WithoutACopy()
+    {
+        var wav = SyntheticWav.Build(60, SyntheticWav.PausedPattern);
+        var layout = WavSilenceChunker.ParseLayout(wav)!;
+        var plan = WavSilenceChunker.TryPlan(wav, layout)!;
+
+        foreach (var chunk in plan.Chunks)
+        {
+            using var content = new WavChunkContent(wav, plan.Format, chunk);
+            Assert.That(await content.ReadAsByteArrayAsync(), Is.EqualTo(WavSilenceChunker.ToWav(wav, plan.Format, chunk)));
+            Assert.That(content.Headers.ContentLength, Is.EqualTo(44 + chunk.ByteLength));
+        }
+    }
+
+    [Test]
+    public void WholeFileTimeout_ThrowsWhisperTimeout_ButUserCancellationStaysCancellation()
+    {
+        Assert.ThrowsAsync<WhisperTimeoutException>(async () =>
+            await ChunkedWhisperTranscriber.WithTimeoutAsync(TimeSpan.FromMilliseconds(100), async token =>
+            {
+                await Task.Delay(Timeout.Infinite, token);
+                return 0;
+            }, CancellationToken.None));
+
+        using var cts = new CancellationTokenSource(100);
+        Assert.CatchAsync<OperationCanceledException>(async () =>
+            await ChunkedWhisperTranscriber.WithTimeoutAsync(TimeSpan.FromMinutes(5), async token =>
+            {
+                await Task.Delay(Timeout.Infinite, token);
+                return 0;
+            }, cts.Token));
+        Assert.That(cts.IsCancellationRequested, Is.True);
+    }
+
+    [Test]
+    public async Task LongChunk_GetsALongerTimeoutThanTheBase()
+    {
+        var wav = SyntheticWav.Build(60, t => true);
+        var plan = new WavChunkPlan(new WavFormat(SyntheticWav.Rate, 1), [new WavChunk(44, 60 * SyntheticWav.Rate * 2, TimeSpan.Zero)]);
+        using var transcriber = new ChunkedWhisperTranscriber(NullLogger<ChunkedWhisperTranscriber>.Instance, 1, TimeSpan.FromSeconds(0.1), timeoutPerAudioSecond: 0.02);
+
+        // base 0.1 s would time out; 60 s * 0.02 = 1.2 s lets the 0.4 s request finish.
+        var result = await transcriber.TranscribeAsync(wav, plan, 1, async (_, token) =>
+        {
+            await Task.Delay(400, token);
+            return new WhisperTranscriptionResult("done", "en", []);
+        }, CancellationToken.None);
+
+        Assert.That(result.Text, Is.EqualTo("done"));
+    }
+
+    [Test]
     public async Task QueueWaitOnGlobalLimit_DoesNotCountTowardsChunkTimeout()
     {
-        var wav = SyntheticWav.Build(240, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(240, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         using var transcriber = NewTranscriber(maxConcurrent: 1, timeoutSeconds: 1);
 
@@ -210,7 +278,7 @@ public sealed class ChunkedAudioImportTests
     [Test]
     public async Task WholeFileRequests_AreAlsoLimitedByTheGlobalGate()
     {
-        var wav = SyntheticWav.Build(10, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(10, SyntheticWav.PausedPattern);
         await using var whisper = new ConcurrentWhisper(wav, new WavChunkPlan(new WavFormat(16000, 1), []), (_, _) => ConcurrentWhisper.Ok, acceptAny: true);
         await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
         {
@@ -229,7 +297,7 @@ public sealed class ChunkedAudioImportTests
     [Test]
     public void Merge_PicksMostFrequentLanguage_AndJoinsText()
     {
-        var wav = SyntheticWav.Build(60, SyntheticWav.SentencePattern);
+        var wav = SyntheticWav.Build(60, SyntheticWav.PausedPattern);
         var plan = WavSilenceChunker.TryPlan(wav)!;
         var n = plan.Chunks.Count;
         var results = Enumerable.Range(0, n)
@@ -243,7 +311,7 @@ public sealed class ChunkedAudioImportTests
     }
 
     private static ChunkedWhisperTranscriber NewTranscriber(int maxConcurrent = 4, double timeoutSeconds = 180) =>
-        new(NullLogger<ChunkedWhisperTranscriber>.Instance, maxConcurrent, TimeSpan.FromSeconds(timeoutSeconds));
+        new(NullLogger<ChunkedWhisperTranscriber>.Instance, maxConcurrent, TimeSpan.FromSeconds(timeoutSeconds), timeoutPerAudioSecond: 0);
 
     private static ImportRequest Request(byte[] wav) =>
         new(OriginalFileName: "long.wav", MimeType: "audio/wav", PayloadBase64: Convert.ToBase64String(wav));

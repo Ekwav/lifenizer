@@ -9,31 +9,43 @@ namespace Lifenizer.Api.Services;
 public sealed class ChunkedWhisperTranscriber : IDisposable
 {
     private const int DefaultMaxConcurrentRequests = 4;
-    private const int DefaultChunkTimeoutSeconds = 180;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(500);
 
     private readonly ILogger<ChunkedWhisperTranscriber> logger;
     private readonly SemaphoreSlim gate;
     private readonly TimeSpan chunkTimeout;
+    private readonly double timeoutPerAudioSecond;
+    private readonly int maxConcurrentRequests;
 
-    public delegate Task<WhisperTranscriptionResult> TranscribeChunk(byte[] wav, CancellationToken cancellationToken);
+    /// <summary>Sends one chunk; the audio body is created per attempt and disposed by the request.</summary>
+    public delegate Task<WhisperTranscriptionResult> TranscribeChunk(WavChunkContent audio, CancellationToken cancellationToken);
 
     public ChunkedWhisperTranscriber(ILogger<ChunkedWhisperTranscriber> logger, IConfiguration configuration)
-        : this(logger, MaxConcurrentRequests(configuration), ChunkTimeout(configuration))
+        : this(logger, MaxConcurrentRequests(configuration), WhisperSettings.ChunkTimeout(configuration), WhisperSettings.TimeoutPerAudioSecond(configuration))
     {
     }
 
     public static int MaxConcurrentRequests(IConfiguration configuration) =>
         Math.Clamp(configuration.GetValue("Whisper:MaxConcurrentRequests", DefaultMaxConcurrentRequests), 1, 64);
 
-    public static TimeSpan ChunkTimeout(IConfiguration configuration) =>
-        TimeSpan.FromSeconds(Math.Max(1, configuration.GetValue("Whisper:ChunkTimeoutSeconds", DefaultChunkTimeoutSeconds)));
+    /// <summary>
+    /// Base timeout, or the chunk's audio length times <paramref name="perAudioSecond"/> times the number of
+    /// requests that may queue inside whisper (it serves them one at a time per replica), whichever is longer.
+    /// </summary>
+    public static TimeSpan TimeoutFor(TimeSpan baseTimeout, double chunkSeconds, double perAudioSecond, int maxConcurrentRequests)
+    {
+        var scaled = chunkSeconds * perAudioSecond * Math.Max(1, maxConcurrentRequests);
+        var seconds = Math.Max(baseTimeout.TotalSeconds, double.IsFinite(scaled) ? scaled : 0);
+        return TimeSpan.FromSeconds(Math.Min(seconds, WhisperSettings.MaxTimeoutSeconds));
+    }
 
-    public ChunkedWhisperTranscriber(ILogger<ChunkedWhisperTranscriber> logger, int maxConcurrentRequests, TimeSpan chunkTimeout)
+    public ChunkedWhisperTranscriber(ILogger<ChunkedWhisperTranscriber> logger, int maxConcurrentRequests, TimeSpan chunkTimeout, double timeoutPerAudioSecond = WhisperSettings.DefaultTimeoutPerAudioSecond)
     {
         this.logger = logger;
         gate = new SemaphoreSlim(maxConcurrentRequests, maxConcurrentRequests);
         this.chunkTimeout = chunkTimeout;
+        this.timeoutPerAudioSecond = double.IsFinite(timeoutPerAudioSecond) ? Math.Clamp(timeoutPerAudioSecond, 0, 20) : 0;
+        this.maxConcurrentRequests = maxConcurrentRequests;
     }
 
     public void Dispose() => gate.Dispose();
@@ -49,8 +61,9 @@ public sealed class ChunkedWhisperTranscriber : IDisposable
         // chunks and no new chunk starts afterwards.
         await Parallel.ForEachAsync(Enumerable.Range(0, plan.Chunks.Count), options, async (index, token) =>
         {
-            var wav = WavSilenceChunker.ToWav(source, plan.Format, plan.Chunks[index]);
-            results[index] = await WithRetryAsync(wav, transcribe, token);
+            var chunk = plan.Chunks[index];
+            var seconds = (double)chunk.ByteLength / plan.Format.BlockAlign / plan.Format.SampleRate;
+            results[index] = await WithRetryAsync(() => new WavChunkContent(source, plan.Format, chunk), TimeoutFor(chunkTimeout, seconds, timeoutPerAudioSecond, maxConcurrentRequests), transcribe, token);
         });
 
         logger.LogInformation("Transcribed {ChunkCount} audio chunks with concurrency {Concurrency} in {ElapsedMs} ms",
@@ -58,36 +71,40 @@ public sealed class ChunkedWhisperTranscriber : IDisposable
         return Merge(plan, results);
     }
 
-    private async Task<WhisperTranscriptionResult> WithRetryAsync(byte[] wav, TranscribeChunk transcribe, CancellationToken token)
+    private async Task<WhisperTranscriptionResult> WithRetryAsync(Func<WavChunkContent> audio, TimeSpan timeout, TranscribeChunk transcribe, CancellationToken token)
     {
         try
         {
-            return await AttemptAsync(wav, transcribe, token);
+            return await AttemptAsync(audio, timeout, transcribe, token);
         }
         catch (Exception exception) when (IsRetryable(exception) && !token.IsCancellationRequested)
         {
             logger.LogWarning(exception, "Audio chunk transcription failed transiently; retrying once");
             await Task.Delay(RetryDelay, token);
-            return await AttemptAsync(wav, transcribe, token);
+            return await AttemptAsync(audio, timeout, transcribe, token);
         }
     }
 
-    /// <summary>One chunk request: waits for a global slot (not counted against the timeout), then runs under the chunk timeout.</summary>
-    private async Task<WhisperTranscriptionResult> AttemptAsync(byte[] wav, TranscribeChunk transcribe, CancellationToken token)
+    /// <summary>One chunk request: waits for a global slot (not counted against the timeout), then runs under the chunk's timeout.</summary>
+    private async Task<WhisperTranscriptionResult> AttemptAsync(Func<WavChunkContent> audio, TimeSpan chunkTimeout, TranscribeChunk transcribe, CancellationToken token)
     {
-        return await RunGatedAsync(async slotToken =>
+        return await RunGatedAsync(
+            slotToken => WithTimeoutAsync(chunkTimeout, timed => transcribe(audio(), timed), slotToken), token);
+    }
+
+    /// <summary>Runs the request under a timeout; expiry is a <see cref="WhisperTimeoutException"/>, the caller's own cancellation stays an <see cref="OperationCanceledException"/>.</summary>
+    public static async Task<T> WithTimeoutAsync<T>(TimeSpan timeout, Func<CancellationToken, Task<T>> request, CancellationToken token)
+    {
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeoutSource.CancelAfter(timeout);
+        try
         {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(slotToken);
-            timeout.CancelAfter(chunkTimeout);
-            try
-            {
-                return await transcribe(wav, timeout.Token);
-            }
-            catch (OperationCanceledException) when (!slotToken.IsCancellationRequested)
-            {
-                throw new WhisperTimeoutException($"Whisper transcription of an audio chunk timed out after {chunkTimeout.TotalSeconds:0} s.");
-            }
-        }, token);
+            return await request(timeoutSource.Token);
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            throw new WhisperTimeoutException($"Whisper transcription timed out after {timeout.TotalSeconds:0} s.");
+        }
     }
 
     /// <summary>Runs any whisper request under the process-wide concurrency limit (no timeout beyond the caller's).</summary>

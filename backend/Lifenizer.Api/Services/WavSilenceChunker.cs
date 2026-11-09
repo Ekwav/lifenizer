@@ -3,8 +3,8 @@ using System.Buffers.Binary;
 namespace Lifenizer.Api.Services;
 
 /// <summary>
-/// Splits PCM16 audio into ~10 s pieces cut inside silences so each piece can be transcribed
-/// separately. Null means "not chunkable" (callers fall back to one request); a plan with no
+/// Splits PCM16 audio at long pauses (default 10 s, the pause itself is dropped) so each piece can be
+/// transcribed separately; stretches longer than MaxChunk are cut at their best silence. Null means "not chunkable" (callers fall back to one request); a plan with no
 /// chunks means "chunkable but nothing audible".
 /// </summary>
 public static class WavSilenceChunker
@@ -37,10 +37,10 @@ public static class WavSilenceChunker
         var frameBytes = frameSamples * format.BlockAlign;
         var frameSeconds = (double)frameSamples / format.SampleRate;
         var energy = FrameEnergies(source, layout, frameBytes);
-        var silent = SilentFlags(energy, options);
-        var bounds = CutFrames(silent, energy, frameSeconds, options);
+        var silent = SilentFlags(energy, frameSeconds, options);
+        var ranges = PlanRanges(silent, energy, frameSeconds, options);
 
-        var chunks = BuildChunks(bounds, energy, options, new FrameGeometry(frameBytes, frameSeconds, layout));
+        var chunks = BuildChunks(ranges, energy, silent, options, new FrameGeometry(frameBytes, frameSeconds, layout));
         return new WavChunkPlan(format, chunks);
     }
 
@@ -55,6 +55,16 @@ public static class WavSilenceChunker
 
     /// <summary>Builds a standalone WAV around PCM16 samples.</summary>
     public static byte[] ToWav(byte[] pcm, WavFormat format) => ToWav(pcm, format, new WavChunk(0, pcm.Length, TimeSpan.Zero));
+
+    public const int WavHeaderLength = HeaderLength;
+
+    /// <summary>The 44-byte canonical header for <paramref name="dataLength"/> bytes of PCM16.</summary>
+    public static byte[] CreateHeader(WavFormat format, int dataLength)
+    {
+        var header = new byte[HeaderLength];
+        WriteHeader(header, format, dataLength);
+        return header;
+    }
 
     private static void WriteHeader(Span<byte> span, WavFormat format, int dataLength)
     {
@@ -146,31 +156,153 @@ public static class WavSilenceChunker
         return Math.Sqrt(sum / samples);
     }
 
-    /// <summary>Adaptive threshold from the recording's noise floor; only used to choose cut points.</summary>
-    private static bool[] SilentFlags(double[] energy, WavChunkerOptions options)
+    private const double MinContrast = 2.0;
+    /// <summary>In a loud room (floor above MaxNoiseFloorRms) the threshold is trusted only when this share of the recording is clearly louder.</summary>
+    private const double MinLoudShareOfNoisyRecording = 0.10;
+
+    /// <summary>
+    /// Adaptive threshold from the recording's noise floor; only used to choose cut points. The threshold is
+    /// trusted only when there is clearly louder audio (at least MinLoudDuration at MinContrast times the
+    /// threshold) and the floor is plausibly silence (not above MaxNoiseFloorRms, unless a tenth of the recording is that loud). Otherwise (steady or quiet
+    /// recordings, or almost no speech) only the absolute MinSilenceRms level counts as silence.
+    /// </summary>
+    private static bool[] SilentFlags(double[] energy, double frameSeconds, WavChunkerOptions options)
     {
         var sorted = energy.ToArray();
         Array.Sort(sorted);
         var floor = sorted[(int)((sorted.Length - 1) * options.NoiseFloorPercentile)];
         var threshold = Math.Clamp(floor * options.NoiseFloorFactor, options.MinSilenceRms, options.MaxSilenceRms);
-        return energy.Select(e => e < threshold).ToArray();
+        var minLoudFrames = Math.Max(1, (int)(options.MinLoudDuration.TotalSeconds / frameSeconds));
+        var loudFrames = CountAtLeast(energy, threshold * MinContrast);
+        var plausibleSilence = floor <= options.MaxNoiseFloorRms || loudFrames >= energy.Length * MinLoudShareOfNoisyRecording;
+        var trusted = plausibleSilence && loudFrames >= minLoudFrames;
+        var limit = trusted ? threshold : options.MinSilenceRms;
+        return energy.Select(e => e < limit).ToArray();
     }
 
-    /// <summary>Returns chunk boundary frame indices, starting with 0 and ending with the frame count.</summary>
-    private static List<int> CutFrames(bool[] silent, double[] energy, double frameSeconds, WavChunkerOptions options)
+    private static int CountAtLeast(double[] energy, double level)
     {
-        var minFrames = Math.Max(1, (int)(options.MinChunk.TotalSeconds / frameSeconds));
-        var searchFrames = Math.Max(minFrames + 1, (int)(options.SearchEnd.TotalSeconds / frameSeconds));
-        var bounds = new List<int> { 0 };
-        var start = 0;
-        while (silent.Length - start > searchFrames)
+        var count = 0;
+        foreach (var e in energy)
         {
-            start = BestCut(silent, energy, start + minFrames, start + searchFrames);
-            bounds.Add(start);
+            if (e >= level) count++;
         }
-        bounds.Add(silent.Length);
-        MergeTrailing(bounds, (int)(options.MinTrailingChunk.TotalSeconds / frameSeconds));
-        return bounds;
+        return count;
+    }
+
+    /// <summary>Frame range [Start, End) of audio to transcribe.</summary>
+    private readonly record struct FrameRange(int Start, int End);
+
+    private static int Frames(TimeSpan span, double frameSeconds) => (int)(span.TotalSeconds / frameSeconds);
+
+    /// <summary>Speech ranges between pauses, each split further when it exceeds the maximum chunk length.</summary>
+    private static List<FrameRange> PlanRanges(bool[] silent, double[] energy, double frameSeconds, WavChunkerOptions options)
+    {
+        var rules = new PauseRules(
+            Math.Max(1, Frames(options.MinPause, frameSeconds)),
+            Frames(options.MaxBlipInPause, frameSeconds),
+            Frames(options.MinSilenceBeforeBlip, frameSeconds));
+        var pauses = FindPauses(silent, rules);
+        var padding = Frames(options.PausePadding, frameSeconds);
+        var cap = new CapSplit(
+            Math.Max(2, Frames(options.MaxChunk, frameSeconds)),
+            Math.Max(1, Frames(options.CapSearchWindow, frameSeconds)),
+            Frames(options.MinTrailingChunk, frameSeconds));
+        var ranges = new List<FrameRange>();
+        foreach (var range in SpeechRanges(pauses, padding, silent.Length)) SplitLong(range, silent, energy, cap, ranges);
+        return ranges;
+    }
+
+    private readonly record struct PauseRules(int MinFrames, int BlipFrames, int MinSilenceBeforeBlip);
+
+    private readonly record struct CapSplit(int MaxFrames, int SearchFrames, int MinTrailingFrames);
+
+    /// <summary>
+    /// Pauses: runs of silent frames of at least <see cref="PauseRules.MinFrames"/>; a non-silent run of
+    /// up to BlipFrames is bridged only after a long enough silent run. A pause ends at its last silent frame.
+    /// </summary>
+    private static List<FrameRange> FindPauses(bool[] silent, PauseRules rules)
+    {
+        var pauses = new List<FrameRange>();
+        var f = 0;
+        while (f < silent.Length)
+        {
+            if (!silent[f])
+            {
+                f++;
+                continue;
+            }
+            var end = PauseEnd(silent, f, rules);
+            if (end - f >= rules.MinFrames) pauses.Add(new FrameRange(f, end));
+            f = end;
+        }
+        return pauses;
+    }
+
+    /// <summary>Exclusive end of the pause that starts at silent frame <paramref name="start"/>.</summary>
+    private static int PauseEnd(bool[] silent, int start, PauseRules rules)
+    {
+        var end = start;
+        var runStart = start;
+        var f = start;
+        while (f < silent.Length)
+        {
+            if (silent[f])
+            {
+                f++;
+                end = f;
+                continue;
+            }
+            var blipEnd = f;
+            while (blipEnd < silent.Length && !silent[blipEnd]) blipEnd++;
+            var bridgeable = blipEnd < silent.Length && blipEnd - f <= rules.BlipFrames
+                && f - runStart >= rules.MinSilenceBeforeBlip && SilentRun(silent, blipEnd, rules.MinSilenceBeforeBlip) >= rules.MinSilenceBeforeBlip;
+            if (!bridgeable) break;
+            f = blipEnd;
+            runStart = blipEnd;
+        }
+        return end;
+    }
+
+    /// <summary>Length of the silent run starting at <paramref name="from"/>, counting at most <paramref name="limit"/> frames.</summary>
+    private static int SilentRun(bool[] silent, int from, int limit)
+    {
+        var count = 0;
+        while (from + count < silent.Length && count < limit && silent[from + count]) count++;
+        return count;
+    }
+
+    /// <summary>The audio between pauses, each pause shrunk by the padding on both sides; a pause at either edge trims it.</summary>
+    private static IEnumerable<FrameRange> SpeechRanges(List<FrameRange> pauses, int padding, int frameCount)
+    {
+        var start = 0;
+        foreach (var pause in pauses)
+        {
+            var end = pause.Start == 0 ? 0 : Math.Min(frameCount, pause.Start + padding);
+            if (end > start) yield return new FrameRange(start, end);
+            start = pause.End >= frameCount ? frameCount : Math.Max(start, pause.End - padding);
+        }
+        if (frameCount > start) yield return new FrameRange(start, frameCount);
+    }
+
+    /// <summary>Adds the range, cut at the best silence near the maximum length while it is longer than that.</summary>
+    private static void SplitLong(FrameRange range, bool[] silent, double[] energy, CapSplit cap, List<FrameRange> result)
+    {
+        var first = result.Count;
+        var start = range.Start;
+        var searchFrames = Math.Min(cap.SearchFrames, cap.MaxFrames - 1);
+        while (range.End - start > cap.MaxFrames)
+        {
+            var cut = BestCut(silent, energy, start + cap.MaxFrames - searchFrames, start + cap.MaxFrames);
+            result.Add(new FrameRange(start, cut));
+            start = cut;
+        }
+        if (result.Count > first && range.End - start < cap.MinTrailingFrames)
+        {
+            start = result[^1].Start;
+            result.RemoveAt(result.Count - 1);
+        }
+        result.Add(new FrameRange(start, range.End));
     }
 
     /// <summary>Middle of the longest silent run in [from, to), else the quietest frame.</summary>
@@ -207,25 +339,32 @@ public static class WavSilenceChunker
         return quietest;
     }
 
-    private static void MergeTrailing(List<int> bounds, int minTrailingFrames)
-    {
-        if (bounds.Count < 3) return;
-        if (bounds[^1] - bounds[^2] < minTrailingFrames) bounds.RemoveAt(bounds.Count - 2);
-    }
-
     private sealed record FrameGeometry(int FrameBytes, double FrameSeconds, WavLayout Layout);
 
-    private static List<WavChunk> BuildChunks(List<int> bounds, double[] energy, WavChunkerOptions options, FrameGeometry geometry)
+    private static List<WavChunk> BuildChunks(List<FrameRange> ranges, double[] energy, bool[] silent, WavChunkerOptions options, FrameGeometry geometry)
     {
         var chunks = new List<WavChunk>();
-        for (var i = 0; i + 1 < bounds.Count; i++)
+        var minSpeechFrames = Math.Max(1, (int)(options.MinSpeech.TotalSeconds / geometry.FrameSeconds));
+        foreach (var range in ranges)
         {
-            if (IsInaudible(energy, bounds[i], bounds[i + 1], options.MinSilenceRms)) continue;
-            var startByte = bounds[i] * geometry.FrameBytes;
-            var endByte = Math.Min(bounds[i + 1] * geometry.FrameBytes, geometry.Layout.DataLength);
-            chunks.Add(new WavChunk(geometry.Layout.DataOffset + startByte, endByte - startByte, TimeSpan.FromSeconds(bounds[i] * geometry.FrameSeconds)));
+            if (IsInaudible(energy, range.Start, range.End, options.MinSilenceRms)) continue;
+            if (SpeechFrames(silent, range, minSpeechFrames) < minSpeechFrames) continue;
+            var startByte = range.Start * geometry.FrameBytes;
+            var endByte = Math.Min(range.End * geometry.FrameBytes, geometry.Layout.DataLength);
+            chunks.Add(new WavChunk(geometry.Layout.DataOffset + startByte, endByte - startByte, TimeSpan.FromSeconds(range.Start * geometry.FrameSeconds)));
         }
         return chunks;
+    }
+
+    /// <summary>Number of non-silent frames in the range, counting stops at <paramref name="enough"/>.</summary>
+    private static int SpeechFrames(bool[] silent, FrameRange range, int enough)
+    {
+        var count = 0;
+        for (var f = range.Start; f < range.End && count < enough; f++)
+        {
+            if (!silent[f]) count++;
+        }
+        return count;
     }
 
     /// <summary>Absolute test (not the adaptive threshold) so quiet speech in a noisy recording is kept.</summary>
