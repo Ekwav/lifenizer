@@ -12,14 +12,17 @@ public sealed record WavChunkerOptions
     public TimeSpan MinSilenceBeforeBlip { get; init; } = TimeSpan.FromSeconds(1);
     /// <summary>Silence kept on both sides of a dropped pause so word edges are not clipped.</summary>
     public TimeSpan PausePadding { get; init; } = TimeSpan.FromMilliseconds(500);
-    /// <summary>Longest chunk; a longer stretch without a pause is cut at its best silence near this length.</summary>
-    public TimeSpan MaxChunk { get; init; } = TimeSpan.FromMinutes(5);
-    /// <summary>A forced cut is searched in the last part of the window: [MaxChunk - this, MaxChunk].</summary>
-    public TimeSpan CapSearchWindow { get; init; } = TimeSpan.FromSeconds(60);
-    /// <summary>A shorter final piece of a forced split is merged into its predecessor.</summary>
+    /// <summary>
+    /// Longest chunk (a hard limit); a longer stretch without a pause is cut at its best gap near this length.
+    /// Below 30 s because the trained whisper drops the text at the end of its 30 s decoding window.
+    /// </summary>
+    public TimeSpan MaxChunk { get; init; } = TimeSpan.FromSeconds(28);
+    /// <summary>A forced cut is searched in the last part of the chunk: [MaxChunk - this, MaxChunk].</summary>
+    public TimeSpan CapSearchWindow { get; init; } = TimeSpan.FromSeconds(10);
+    /// <summary>Every cap cut (gap, dip or hard) leaves at least this much for the last piece.</summary>
     public TimeSpan MinTrailingChunk { get; init; } = TimeSpan.FromSeconds(2);
-    /// <summary>Recordings up to this length are not chunked.</summary>
-    public TimeSpan NoChunkUpTo { get; init; } = TimeSpan.FromSeconds(30);
+    /// <summary>Recordings up to this length are sent whole; never longer than MaxChunk.</summary>
+    public TimeSpan NoChunkUpTo { get; init; } = TimeSpan.FromSeconds(28);
     /// <summary>A chunk with less non-silent audio than this is dropped (stray noise between two pauses).</summary>
     public TimeSpan MinSpeech { get; init; } = TimeSpan.FromMilliseconds(200);
     /// <summary>The adaptive threshold needs at least this much clearly loud audio, else only the absolute MinSilenceRms counts as silence.</summary>
@@ -42,7 +45,18 @@ public sealed record WavChunkerOptions
         if (CapSearchWindow < Frame) throw new ArgumentException("CapSearchWindow must span at least one frame.", nameof(CapSearchWindow));
         if (MaxChunk <= CapSearchWindow) throw new ArgumentException("MaxChunk must be longer than CapSearchWindow.", nameof(MaxChunk));
         if (MinTrailingChunk < TimeSpan.Zero) throw new ArgumentException("MinTrailingChunk must not be negative.", nameof(MinTrailingChunk));
+        if (NoChunkUpTo > MaxChunk) throw new ArgumentException("NoChunkUpTo must not exceed MaxChunk.", nameof(NoChunkUpTo));
     }
+
+    /// <summary>Sets the chunk cap and shrinks the cap search window (to at most half the cap) and NoChunkUpTo to fit it.</summary>
+    public WavChunkerOptions WithMaxChunk(TimeSpan maxChunk) => this with
+    {
+        MaxChunk = maxChunk,
+        CapSearchWindow = Min(CapSearchWindow, maxChunk / 2),
+        NoChunkUpTo = Min(NoChunkUpTo, maxChunk)
+    };
+
+    private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
 }
 
 public sealed record WavFormat(int SampleRate, int Channels)

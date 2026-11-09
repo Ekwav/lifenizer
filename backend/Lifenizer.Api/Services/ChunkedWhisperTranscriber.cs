@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 
 namespace Lifenizer.Api.Services;
 
@@ -56,14 +57,18 @@ public sealed class ChunkedWhisperTranscriber : IDisposable
         var results = new WhisperTranscriptionResult[plan.Chunks.Count];
         var stopwatch = Stopwatch.StartNew();
         var options = new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, maxParallel), CancellationToken = cancellationToken };
+        LogPlan(plan);
 
         // Parallel.ForEachAsync links a token internally: the first failure cancels the other
         // chunks and no new chunk starts afterwards.
         await Parallel.ForEachAsync(Enumerable.Range(0, plan.Chunks.Count), options, async (index, token) =>
         {
             var chunk = plan.Chunks[index];
-            var seconds = (double)chunk.ByteLength / plan.Format.BlockAlign / plan.Format.SampleRate;
-            results[index] = await WithRetryAsync(() => new WavChunkContent(source, plan.Format, chunk), TimeoutFor(chunkTimeout, seconds, timeoutPerAudioSecond, maxConcurrentRequests), transcribe, token);
+            var seconds = ChunkSeconds(plan, chunk);
+            var timing = new ChunkTiming();
+            results[index] = await WithRetryAsync(() => new WavChunkContent(source, plan.Format, chunk), TimeoutFor(chunkTimeout, seconds, timeoutPerAudioSecond, maxConcurrentRequests), transcribe, timing, token);
+            logger.LogInformation("Transcribed audio chunk {ChunkNumber}/{ChunkCount} (start {StartSeconds:0.0} s, length {LengthSeconds:0.0} s): whisper {WhisperMs} ms, queued {QueuedMs} ms, {Attempts} attempt(s)",
+                index + 1, plan.Chunks.Count, chunk.Start.TotalSeconds, seconds, timing.WhisperMs, timing.QueuedMs, timing.Attempts);
         });
 
         logger.LogInformation("Transcribed {ChunkCount} audio chunks with concurrency {Concurrency} in {ElapsedMs} ms",
@@ -71,25 +76,78 @@ public sealed class ChunkedWhisperTranscriber : IDisposable
         return Merge(plan, results);
     }
 
-    private async Task<WhisperTranscriptionResult> WithRetryAsync(Func<WavChunkContent> audio, TimeSpan timeout, TranscribeChunk transcribe, CancellationToken token)
+    private static double ChunkSeconds(WavChunkPlan plan, WavChunk chunk) =>
+        (double)chunk.ByteLength / plan.Format.BlockAlign / plan.Format.SampleRate;
+
+    /// <summary>The plan line lists at most this many chunks, so it stays below the 16 KiB container log line limit.</summary>
+    public const int MaxLoggedPlanEntries = 50;
+
+    /// <summary>One line per file: the chunks' start and length in seconds, in send order (the first MaxLoggedPlanEntries).</summary>
+    private void LogPlan(WavChunkPlan plan)
+    {
+        if (!logger.IsEnabled(LogLevel.Information)) return;
+        logger.LogInformation("Planned {ChunkCount} audio chunks (start+length in s): {ChunkPlan}", plan.Chunks.Count, DescribePlan(plan));
+    }
+
+    private static string DescribePlan(WavChunkPlan plan)
+    {
+        var pieces = plan.Chunks.Take(MaxLoggedPlanEntries).Select((chunk, i) =>
+            string.Create(CultureInfo.InvariantCulture, $"#{i + 1} {chunk.Start.TotalSeconds:0.0}+{ChunkSeconds(plan, chunk):0.0}"));
+        var text = string.Join(", ", pieces);
+        var more = plan.Chunks.Count - MaxLoggedPlanEntries;
+        return more > 0 ? $"{text}, … {more} more" : text;
+    }
+
+    /// <summary>Per chunk: time spent waiting for a global slot and time spent in whisper, summed over attempts.</summary>
+    private sealed class ChunkTiming
+    {
+        private TimeSpan queued;
+        private TimeSpan whisper;
+
+        public int Attempts { get; private set; }
+        public long QueuedMs => (long)queued.TotalMilliseconds;
+        public long WhisperMs => (long)whisper.TotalMilliseconds;
+
+        public void AddQueued(long waitStarted) => queued += Stopwatch.GetElapsedTime(waitStarted);
+
+        public async Task<T> TimeWhisperAsync<T>(Func<Task<T>> request)
+        {
+            Attempts++;
+            var started = Stopwatch.GetTimestamp();
+            try
+            {
+                return await request();
+            }
+            finally
+            {
+                whisper += Stopwatch.GetElapsedTime(started);
+            }
+        }
+    }
+
+    private async Task<WhisperTranscriptionResult> WithRetryAsync(Func<WavChunkContent> audio, TimeSpan timeout, TranscribeChunk transcribe, ChunkTiming timing, CancellationToken token)
     {
         try
         {
-            return await AttemptAsync(audio, timeout, transcribe, token);
+            return await AttemptAsync(audio, timeout, transcribe, timing, token);
         }
         catch (Exception exception) when (IsRetryable(exception) && !token.IsCancellationRequested)
         {
             logger.LogWarning(exception, "Audio chunk transcription failed transiently; retrying once");
             await Task.Delay(RetryDelay, token);
-            return await AttemptAsync(audio, timeout, transcribe, token);
+            return await AttemptAsync(audio, timeout, transcribe, timing, token);
         }
     }
 
     /// <summary>One chunk request: waits for a global slot (not counted against the timeout), then runs under the chunk's timeout.</summary>
-    private async Task<WhisperTranscriptionResult> AttemptAsync(Func<WavChunkContent> audio, TimeSpan chunkTimeout, TranscribeChunk transcribe, CancellationToken token)
+    private async Task<WhisperTranscriptionResult> AttemptAsync(Func<WavChunkContent> audio, TimeSpan chunkTimeout, TranscribeChunk transcribe, ChunkTiming timing, CancellationToken token)
     {
-        return await RunGatedAsync(
-            slotToken => WithTimeoutAsync(chunkTimeout, timed => transcribe(audio(), timed), slotToken), token);
+        var waitStarted = Stopwatch.GetTimestamp();
+        return await RunGatedAsync(slotToken =>
+        {
+            timing.AddQueued(waitStarted);
+            return timing.TimeWhisperAsync(() => WithTimeoutAsync(chunkTimeout, timed => transcribe(audio(), timed), slotToken));
+        }, token);
     }
 
     /// <summary>Runs the request under a timeout; expiry is a <see cref="WhisperTimeoutException"/>, the caller's own cancellation stays an <see cref="OperationCanceledException"/>.</summary>
