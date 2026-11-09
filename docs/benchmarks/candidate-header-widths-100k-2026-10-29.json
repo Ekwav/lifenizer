@@ -1,0 +1,6168 @@
+{
+  "benchmarkDate": "2026-10-29",
+  "count": 100000,
+  "twoMillionLatencyEvaluated": false,
+  "productionChanged": false,
+  "exactOrderedTop100Comparisons": 144,
+  "exactOrderPassed": true,
+  "scope": {
+    "isolation": "Private 100k SQLite copy and private AOT engine only; active 834,560-row comparison copy and live producer untouched.",
+    "runtime": "Same instrumented AOT binary for all three widths. Same 34 terms indexed in each companion; all other terms retain original postings. No posting-payload cache, new pruning bounds or position intervals.",
+    "sampling": "Forward order 16,64,256 then reverse 256,64,16. One fresh prepared/warm pair per query/filter in each pass, giving two observations per stage/width/case. Shared load; no statistical latency guarantee.",
+    "coverage": "Four queries \u00d7 three source filters \u00d7 two timing stages \u00d7 three widths \u00d7 two passes = 144 exact ordered top 100 comparisons against frozen baseline.",
+    "memory": "Every process separately capped at 2,000,000,000 bytes with no swap. This is 100k query-only evidence, not 2M capacity.",
+    "timing": "ComponentUs counters measure SQLite header select, authenticated decryption, managed gzip decode, and bitmap/impact-bound loop separately. Bound loop includes first-use ranking metadata reads. CandidateMs also includes dictionary/planning/filter work. Component medians need not sum to median total.",
+    "bytes": "headerDecryptedBytes is compressed plaintext authenticated/decrypted from companion blobs; headerExpandedBytes includes zero-padded fixed chunks. No plaintext written to SQLite."
+  },
+  "finding": "64-page chunks modestly reduce the candidate floor compared with16.256 does not improve the observed archive-import candidate median despite fewer calls. Compressed byte volume, gzip and unchanged per-block impact work now dominate; further call batching alone does not establish500ms at2M.",
+  "updateTradeoff": {
+    "rawRecompressionBytesPerChangedTermChunk": {
+      "16": 2688,
+      "64": 10752,
+      "256": 43008
+    },
+    "note": "A64-page chunk is a provisional read/write compromise. No update-amplification, migration/recovery or production integration test was run; these remain required before adoption."
+  },
+  "cacheInteraction": "Header gains are not additive with candidate positional-payload reuse, because compact headers omit scoring positions. Scoring still reads original postings unless tighter bounds prune them.",
+  "packing": [
+    {
+      "chunkPages": 16,
+      "terms": [
+        {
+          "term": 1508,
+          "word": "active",
+          "headerRows": 7,
+          "sealedBytes": 8558,
+          "decryptedCompressedBytes": 8362,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45552
+        },
+        {
+          "term": 0,
+          "word": "archive",
+          "headerRows": 7,
+          "sealedBytes": 995,
+          "decryptedCompressedBytes": 799,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 62893
+        },
+        {
+          "term": 39,
+          "word": "archived",
+          "headerRows": 7,
+          "sealedBytes": 8572,
+          "decryptedCompressedBytes": 8376,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45514
+        },
+        {
+          "term": 171,
+          "word": "archives",
+          "headerRows": 7,
+          "sealedBytes": 8573,
+          "decryptedCompressedBytes": 8377,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45432
+        },
+        {
+          "term": 1365,
+          "word": "cheat",
+          "headerRows": 7,
+          "sealedBytes": 8619,
+          "decryptedCompressedBytes": 8423,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45785
+        },
+        {
+          "term": 778,
+          "word": "create",
+          "headerRows": 7,
+          "sealedBytes": 8566,
+          "decryptedCompressedBytes": 8370,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45406
+        },
+        {
+          "term": 808,
+          "word": "created",
+          "headerRows": 7,
+          "sealedBytes": 8621,
+          "decryptedCompressedBytes": 8425,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45606
+        },
+        {
+          "term": 1774,
+          "word": "createdat",
+          "headerRows": 7,
+          "sealedBytes": 8625,
+          "decryptedCompressedBytes": 8429,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45786
+        },
+        {
+          "term": 1153,
+          "word": "createddatetime",
+          "headerRows": 7,
+          "sealedBytes": 8722,
+          "decryptedCompressedBytes": 8526,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 46310
+        },
+        {
+          "term": 1050,
+          "word": "creates",
+          "headerRows": 7,
+          "sealedBytes": 8587,
+          "decryptedCompressedBytes": 8391,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45503
+        },
+        {
+          "term": 667,
+          "word": "each",
+          "headerRows": 7,
+          "sealedBytes": 8529,
+          "decryptedCompressedBytes": 8333,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45266
+        },
+        {
+          "term": 1313,
+          "word": "ensurecreated",
+          "headerRows": 7,
+          "sealedBytes": 8599,
+          "decryptedCompressedBytes": 8403,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45659
+        },
+        {
+          "term": 476,
+          "word": "export",
+          "headerRows": 7,
+          "sealedBytes": 8558,
+          "decryptedCompressedBytes": 8362,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45580
+        },
+        {
+          "term": 572,
+          "word": "import",
+          "headerRows": 7,
+          "sealedBytes": 8577,
+          "decryptedCompressedBytes": 8381,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45420
+        },
+        {
+          "term": 1046,
+          "word": "importaudiobytes",
+          "headerRows": 7,
+          "sealedBytes": 8563,
+          "decryptedCompressedBytes": 8367,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45428
+        },
+        {
+          "term": 1254,
+          "word": "imported",
+          "headerRows": 7,
+          "sealedBytes": 8616,
+          "decryptedCompressedBytes": 8420,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45660
+        },
+        {
+          "term": 1765,
+          "word": "importer",
+          "headerRows": 7,
+          "sealedBytes": 8539,
+          "decryptedCompressedBytes": 8343,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45330
+        },
+        {
+          "term": 1013,
+          "word": "importers",
+          "headerRows": 7,
+          "sealedBytes": 8649,
+          "decryptedCompressedBytes": 8453,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 46128
+        },
+        {
+          "term": 1188,
+          "word": "importing",
+          "headerRows": 7,
+          "sealedBytes": 8527,
+          "decryptedCompressedBytes": 8331,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45294
+        },
+        {
+          "term": 605,
+          "word": "importintegrationtests",
+          "headerRows": 7,
+          "sealedBytes": 8536,
+          "decryptedCompressedBytes": 8340,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45397
+        },
+        {
+          "term": 1334,
+          "word": "imports",
+          "headerRows": 7,
+          "sealedBytes": 8575,
+          "decryptedCompressedBytes": 8379,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45435
+        },
+        {
+          "term": 1604,
+          "word": "metadata",
+          "headerRows": 7,
+          "sealedBytes": 8668,
+          "decryptedCompressedBytes": 8472,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 46221
+        },
+        {
+          "term": 1368,
+          "word": "metadataextractor",
+          "headerRows": 7,
+          "sealedBytes": 8551,
+          "decryptedCompressedBytes": 8355,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45378
+        },
+        {
+          "term": 1208,
+          "word": "port",
+          "headerRows": 7,
+          "sealedBytes": 8670,
+          "decryptedCompressedBytes": 8474,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45994
+        },
+        {
+          "term": 1080,
+          "word": "rate",
+          "headerRows": 7,
+          "sealedBytes": 8564,
+          "decryptedCompressedBytes": 8368,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45356
+        },
+        {
+          "term": 1770,
+          "word": "reach",
+          "headerRows": 7,
+          "sealedBytes": 8725,
+          "decryptedCompressedBytes": 8529,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 46267
+        },
+        {
+          "term": 315,
+          "word": "reimported",
+          "headerRows": 7,
+          "sealedBytes": 8611,
+          "decryptedCompressedBytes": 8415,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45753
+        },
+        {
+          "term": 516,
+          "word": "reimporting",
+          "headerRows": 7,
+          "sealedBytes": 8635,
+          "decryptedCompressedBytes": 8439,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45765
+        },
+        {
+          "term": 189,
+          "word": "report",
+          "headerRows": 7,
+          "sealedBytes": 8715,
+          "decryptedCompressedBytes": 8519,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 46214
+        },
+        {
+          "term": 474,
+          "word": "search",
+          "headerRows": 7,
+          "sealedBytes": 8598,
+          "decryptedCompressedBytes": 8402,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45605
+        },
+        {
+          "term": 879,
+          "word": "searchable",
+          "headerRows": 7,
+          "sealedBytes": 8601,
+          "decryptedCompressedBytes": 8405,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45552
+        },
+        {
+          "term": 111,
+          "word": "searched",
+          "headerRows": 7,
+          "sealedBytes": 8605,
+          "decryptedCompressedBytes": 8409,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45521
+        },
+        {
+          "term": 1690,
+          "word": "searches",
+          "headerRows": 7,
+          "sealedBytes": 8622,
+          "decryptedCompressedBytes": 8426,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45790
+        },
+        {
+          "term": 305,
+          "word": "searchready",
+          "headerRows": 7,
+          "sealedBytes": 8656,
+          "decryptedCompressedBytes": 8460,
+          "expandedBytes": 18816,
+          "originalRows": 98,
+          "originalSealedBytes": 45932
+        }
+      ],
+      "headerRows": 238,
+      "sealedBytes": 284927,
+      "decryptedCompressedBytes": 278263,
+      "expandedBytes": 639744
+    },
+    {
+      "chunkPages": 64,
+      "terms": [
+        {
+          "term": 1508,
+          "word": "active",
+          "headerRows": 2,
+          "sealedBytes": 8127,
+          "decryptedCompressedBytes": 8071,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45552
+        },
+        {
+          "term": 0,
+          "word": "archive",
+          "headerRows": 2,
+          "sealedBytes": 586,
+          "decryptedCompressedBytes": 530,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 62893
+        },
+        {
+          "term": 39,
+          "word": "archived",
+          "headerRows": 2,
+          "sealedBytes": 8111,
+          "decryptedCompressedBytes": 8055,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45514
+        },
+        {
+          "term": 171,
+          "word": "archives",
+          "headerRows": 2,
+          "sealedBytes": 8098,
+          "decryptedCompressedBytes": 8042,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45432
+        },
+        {
+          "term": 1365,
+          "word": "cheat",
+          "headerRows": 2,
+          "sealedBytes": 8179,
+          "decryptedCompressedBytes": 8123,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45785
+        },
+        {
+          "term": 778,
+          "word": "create",
+          "headerRows": 2,
+          "sealedBytes": 8103,
+          "decryptedCompressedBytes": 8047,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45406
+        },
+        {
+          "term": 808,
+          "word": "created",
+          "headerRows": 2,
+          "sealedBytes": 8165,
+          "decryptedCompressedBytes": 8109,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45606
+        },
+        {
+          "term": 1774,
+          "word": "createdat",
+          "headerRows": 2,
+          "sealedBytes": 8186,
+          "decryptedCompressedBytes": 8130,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45786
+        },
+        {
+          "term": 1153,
+          "word": "createddatetime",
+          "headerRows": 2,
+          "sealedBytes": 8270,
+          "decryptedCompressedBytes": 8214,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 46310
+        },
+        {
+          "term": 1050,
+          "word": "creates",
+          "headerRows": 2,
+          "sealedBytes": 8103,
+          "decryptedCompressedBytes": 8047,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45503
+        },
+        {
+          "term": 667,
+          "word": "each",
+          "headerRows": 2,
+          "sealedBytes": 8051,
+          "decryptedCompressedBytes": 7995,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45266
+        },
+        {
+          "term": 1313,
+          "word": "ensurecreated",
+          "headerRows": 2,
+          "sealedBytes": 8135,
+          "decryptedCompressedBytes": 8079,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45659
+        },
+        {
+          "term": 476,
+          "word": "export",
+          "headerRows": 2,
+          "sealedBytes": 8096,
+          "decryptedCompressedBytes": 8040,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45580
+        },
+        {
+          "term": 572,
+          "word": "import",
+          "headerRows": 2,
+          "sealedBytes": 8098,
+          "decryptedCompressedBytes": 8042,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45420
+        },
+        {
+          "term": 1046,
+          "word": "importaudiobytes",
+          "headerRows": 2,
+          "sealedBytes": 8112,
+          "decryptedCompressedBytes": 8056,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45428
+        },
+        {
+          "term": 1254,
+          "word": "imported",
+          "headerRows": 2,
+          "sealedBytes": 8147,
+          "decryptedCompressedBytes": 8091,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45660
+        },
+        {
+          "term": 1765,
+          "word": "importer",
+          "headerRows": 2,
+          "sealedBytes": 8073,
+          "decryptedCompressedBytes": 8017,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45330
+        },
+        {
+          "term": 1013,
+          "word": "importers",
+          "headerRows": 2,
+          "sealedBytes": 8212,
+          "decryptedCompressedBytes": 8156,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 46128
+        },
+        {
+          "term": 1188,
+          "word": "importing",
+          "headerRows": 2,
+          "sealedBytes": 8059,
+          "decryptedCompressedBytes": 8003,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45294
+        },
+        {
+          "term": 605,
+          "word": "importintegrationtests",
+          "headerRows": 2,
+          "sealedBytes": 8063,
+          "decryptedCompressedBytes": 8007,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45397
+        },
+        {
+          "term": 1334,
+          "word": "imports",
+          "headerRows": 2,
+          "sealedBytes": 8121,
+          "decryptedCompressedBytes": 8065,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45435
+        },
+        {
+          "term": 1604,
+          "word": "metadata",
+          "headerRows": 2,
+          "sealedBytes": 8228,
+          "decryptedCompressedBytes": 8172,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 46221
+        },
+        {
+          "term": 1368,
+          "word": "metadataextractor",
+          "headerRows": 2,
+          "sealedBytes": 8101,
+          "decryptedCompressedBytes": 8045,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45378
+        },
+        {
+          "term": 1208,
+          "word": "port",
+          "headerRows": 2,
+          "sealedBytes": 8215,
+          "decryptedCompressedBytes": 8159,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45994
+        },
+        {
+          "term": 1080,
+          "word": "rate",
+          "headerRows": 2,
+          "sealedBytes": 8104,
+          "decryptedCompressedBytes": 8048,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45356
+        },
+        {
+          "term": 1770,
+          "word": "reach",
+          "headerRows": 2,
+          "sealedBytes": 8269,
+          "decryptedCompressedBytes": 8213,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 46267
+        },
+        {
+          "term": 315,
+          "word": "reimported",
+          "headerRows": 2,
+          "sealedBytes": 8165,
+          "decryptedCompressedBytes": 8109,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45753
+        },
+        {
+          "term": 516,
+          "word": "reimporting",
+          "headerRows": 2,
+          "sealedBytes": 8164,
+          "decryptedCompressedBytes": 8108,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45765
+        },
+        {
+          "term": 189,
+          "word": "report",
+          "headerRows": 2,
+          "sealedBytes": 8258,
+          "decryptedCompressedBytes": 8202,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 46214
+        },
+        {
+          "term": 474,
+          "word": "search",
+          "headerRows": 2,
+          "sealedBytes": 8134,
+          "decryptedCompressedBytes": 8078,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45605
+        },
+        {
+          "term": 879,
+          "word": "searchable",
+          "headerRows": 2,
+          "sealedBytes": 8134,
+          "decryptedCompressedBytes": 8078,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45552
+        },
+        {
+          "term": 111,
+          "word": "searched",
+          "headerRows": 2,
+          "sealedBytes": 8116,
+          "decryptedCompressedBytes": 8060,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45521
+        },
+        {
+          "term": 1690,
+          "word": "searches",
+          "headerRows": 2,
+          "sealedBytes": 8146,
+          "decryptedCompressedBytes": 8090,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45790
+        },
+        {
+          "term": 305,
+          "word": "searchready",
+          "headerRows": 2,
+          "sealedBytes": 8189,
+          "decryptedCompressedBytes": 8133,
+          "expandedBytes": 21504,
+          "originalRows": 98,
+          "originalSealedBytes": 45932
+        }
+      ],
+      "headerRows": 68,
+      "sealedBytes": 269318,
+      "decryptedCompressedBytes": 267414,
+      "expandedBytes": 731136
+    },
+    {
+      "chunkPages": 256,
+      "terms": [
+        {
+          "term": 1508,
+          "word": "active",
+          "headerRows": 1,
+          "sealedBytes": 8134,
+          "decryptedCompressedBytes": 8106,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45552
+        },
+        {
+          "term": 0,
+          "word": "archive",
+          "headerRows": 1,
+          "sealedBytes": 530,
+          "decryptedCompressedBytes": 502,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 62893
+        },
+        {
+          "term": 39,
+          "word": "archived",
+          "headerRows": 1,
+          "sealedBytes": 8111,
+          "decryptedCompressedBytes": 8083,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45514
+        },
+        {
+          "term": 171,
+          "word": "archives",
+          "headerRows": 1,
+          "sealedBytes": 8084,
+          "decryptedCompressedBytes": 8056,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45432
+        },
+        {
+          "term": 1365,
+          "word": "cheat",
+          "headerRows": 1,
+          "sealedBytes": 8193,
+          "decryptedCompressedBytes": 8165,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45785
+        },
+        {
+          "term": 778,
+          "word": "create",
+          "headerRows": 1,
+          "sealedBytes": 8118,
+          "decryptedCompressedBytes": 8090,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45406
+        },
+        {
+          "term": 808,
+          "word": "created",
+          "headerRows": 1,
+          "sealedBytes": 8156,
+          "decryptedCompressedBytes": 8128,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45606
+        },
+        {
+          "term": 1774,
+          "word": "createdat",
+          "headerRows": 1,
+          "sealedBytes": 8190,
+          "decryptedCompressedBytes": 8162,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45786
+        },
+        {
+          "term": 1153,
+          "word": "createddatetime",
+          "headerRows": 1,
+          "sealedBytes": 8266,
+          "decryptedCompressedBytes": 8238,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 46310
+        },
+        {
+          "term": 1050,
+          "word": "creates",
+          "headerRows": 1,
+          "sealedBytes": 8111,
+          "decryptedCompressedBytes": 8083,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45503
+        },
+        {
+          "term": 667,
+          "word": "each",
+          "headerRows": 1,
+          "sealedBytes": 8055,
+          "decryptedCompressedBytes": 8027,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45266
+        },
+        {
+          "term": 1313,
+          "word": "ensurecreated",
+          "headerRows": 1,
+          "sealedBytes": 8126,
+          "decryptedCompressedBytes": 8098,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45659
+        },
+        {
+          "term": 476,
+          "word": "export",
+          "headerRows": 1,
+          "sealedBytes": 8116,
+          "decryptedCompressedBytes": 8088,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45580
+        },
+        {
+          "term": 572,
+          "word": "import",
+          "headerRows": 1,
+          "sealedBytes": 8101,
+          "decryptedCompressedBytes": 8073,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45420
+        },
+        {
+          "term": 1046,
+          "word": "importaudiobytes",
+          "headerRows": 1,
+          "sealedBytes": 8118,
+          "decryptedCompressedBytes": 8090,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45428
+        },
+        {
+          "term": 1254,
+          "word": "imported",
+          "headerRows": 1,
+          "sealedBytes": 8150,
+          "decryptedCompressedBytes": 8122,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45660
+        },
+        {
+          "term": 1765,
+          "word": "importer",
+          "headerRows": 1,
+          "sealedBytes": 8087,
+          "decryptedCompressedBytes": 8059,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45330
+        },
+        {
+          "term": 1013,
+          "word": "importers",
+          "headerRows": 1,
+          "sealedBytes": 8215,
+          "decryptedCompressedBytes": 8187,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 46128
+        },
+        {
+          "term": 1188,
+          "word": "importing",
+          "headerRows": 1,
+          "sealedBytes": 8067,
+          "decryptedCompressedBytes": 8039,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45294
+        },
+        {
+          "term": 605,
+          "word": "importintegrationtests",
+          "headerRows": 1,
+          "sealedBytes": 8077,
+          "decryptedCompressedBytes": 8049,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45397
+        },
+        {
+          "term": 1334,
+          "word": "imports",
+          "headerRows": 1,
+          "sealedBytes": 8120,
+          "decryptedCompressedBytes": 8092,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45435
+        },
+        {
+          "term": 1604,
+          "word": "metadata",
+          "headerRows": 1,
+          "sealedBytes": 8233,
+          "decryptedCompressedBytes": 8205,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 46221
+        },
+        {
+          "term": 1368,
+          "word": "metadataextractor",
+          "headerRows": 1,
+          "sealedBytes": 8102,
+          "decryptedCompressedBytes": 8074,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45378
+        },
+        {
+          "term": 1208,
+          "word": "port",
+          "headerRows": 1,
+          "sealedBytes": 8221,
+          "decryptedCompressedBytes": 8193,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45994
+        },
+        {
+          "term": 1080,
+          "word": "rate",
+          "headerRows": 1,
+          "sealedBytes": 8100,
+          "decryptedCompressedBytes": 8072,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45356
+        },
+        {
+          "term": 1770,
+          "word": "reach",
+          "headerRows": 1,
+          "sealedBytes": 8279,
+          "decryptedCompressedBytes": 8251,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 46267
+        },
+        {
+          "term": 315,
+          "word": "reimported",
+          "headerRows": 1,
+          "sealedBytes": 8171,
+          "decryptedCompressedBytes": 8143,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45753
+        },
+        {
+          "term": 516,
+          "word": "reimporting",
+          "headerRows": 1,
+          "sealedBytes": 8160,
+          "decryptedCompressedBytes": 8132,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45765
+        },
+        {
+          "term": 189,
+          "word": "report",
+          "headerRows": 1,
+          "sealedBytes": 8271,
+          "decryptedCompressedBytes": 8243,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 46214
+        },
+        {
+          "term": 474,
+          "word": "search",
+          "headerRows": 1,
+          "sealedBytes": 8145,
+          "decryptedCompressedBytes": 8117,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45605
+        },
+        {
+          "term": 879,
+          "word": "searchable",
+          "headerRows": 1,
+          "sealedBytes": 8143,
+          "decryptedCompressedBytes": 8115,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45552
+        },
+        {
+          "term": 111,
+          "word": "searched",
+          "headerRows": 1,
+          "sealedBytes": 8121,
+          "decryptedCompressedBytes": 8093,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45521
+        },
+        {
+          "term": 1690,
+          "word": "searches",
+          "headerRows": 1,
+          "sealedBytes": 8143,
+          "decryptedCompressedBytes": 8115,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45790
+        },
+        {
+          "term": 305,
+          "word": "searchready",
+          "headerRows": 1,
+          "sealedBytes": 8193,
+          "decryptedCompressedBytes": 8165,
+          "expandedBytes": 43008,
+          "originalRows": 98,
+          "originalSealedBytes": 45932
+        }
+      ],
+      "headerRows": 34,
+      "sealedBytes": 269407,
+      "decryptedCompressedBytes": 268455,
+      "expandedBytes": 1462272
+    }
+  ],
+  "completions": [
+    {
+      "width": 16,
+      "pass": 0,
+      "exitCode": 0,
+      "elapsedSeconds": 9.71667194366455,
+      "report": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/candidate-header-100k-audit-20261029/width-16-pass-0.json"
+    },
+    {
+      "width": 64,
+      "pass": 0,
+      "exitCode": 0,
+      "elapsedSeconds": 7.479748964309692,
+      "report": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/candidate-header-100k-audit-20261029/width-64-pass-0.json"
+    },
+    {
+      "width": 256,
+      "pass": 0,
+      "exitCode": 0,
+      "elapsedSeconds": 8.464547157287598,
+      "report": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/candidate-header-100k-audit-20261029/width-256-pass-0.json"
+    },
+    {
+      "width": 256,
+      "pass": 1,
+      "exitCode": 0,
+      "elapsedSeconds": 8.238996744155884,
+      "report": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/candidate-header-100k-audit-20261029/width-256-pass-1.json"
+    },
+    {
+      "width": 64,
+      "pass": 1,
+      "exitCode": 0,
+      "elapsedSeconds": 7.1130452156066895,
+      "report": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/candidate-header-100k-audit-20261029/width-64-pass-1.json"
+    },
+    {
+      "width": 16,
+      "pass": 1,
+      "exitCode": 0,
+      "elapsedSeconds": 7.47997522354126,
+      "report": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/candidate-header-100k-audit-20261029/width-16-pass-1.json"
+    }
+  ],
+  "summary": [
+    {
+      "chunkPages": 16,
+      "query": "search",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 135.839,
+      "medianMs": 146.789,
+      "maxMs": 157.739,
+      "preparationMedianMs": 751.029,
+      "profiles": {
+        "candidateMs": {
+          "min": 28,
+          "median": 32.0,
+          "max": 36
+        },
+        "candidateHeaderReads": {
+          "min": 49,
+          "median": 49.0,
+          "max": 49
+        },
+        "headerSqlUs": {
+          "min": 417,
+          "median": 426.5,
+          "max": 436
+        },
+        "headerDecryptUs": {
+          "min": 4938,
+          "median": 5093.5,
+          "max": 5249
+        },
+        "headerGzipUs": {
+          "min": 2912,
+          "median": 2939.5,
+          "max": 2967
+        },
+        "headerBoundsUs": {
+          "min": 10109,
+          "median": 11600.5,
+          "max": 13092
+        },
+        "headerDecryptedBytes": {
+          "min": 58964,
+          "median": 58964.0,
+          "max": 58964
+        },
+        "headerExpandedBytes": {
+          "min": 131712,
+          "median": 131712.0,
+          "max": 131712
+        },
+        "scorePostingReads": {
+          "min": 679,
+          "median": 679.0,
+          "max": 679
+        },
+        "numericMs": {
+          "min": 72,
+          "median": 75.5,
+          "max": 79
+        },
+        "scoredDocuments": {
+          "min": 54492,
+          "median": 54492.0,
+          "max": 54492
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "search",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 108.271,
+      "medianMs": 108.78200000000001,
+      "maxMs": 109.293,
+      "preparationMedianMs": 751.029,
+      "profiles": {
+        "candidateMs": {
+          "min": 17,
+          "median": 18.0,
+          "max": 19
+        },
+        "candidateHeaderReads": {
+          "min": 49,
+          "median": 49.0,
+          "max": 49
+        },
+        "headerSqlUs": {
+          "min": 338,
+          "median": 341.5,
+          "max": 345
+        },
+        "headerDecryptUs": {
+          "min": 4980,
+          "median": 5084.5,
+          "max": 5189
+        },
+        "headerGzipUs": {
+          "min": 2659,
+          "median": 2718.0,
+          "max": 2777
+        },
+        "headerBoundsUs": {
+          "min": 4750,
+          "median": 5024.5,
+          "max": 5299
+        },
+        "headerDecryptedBytes": {
+          "min": 58964,
+          "median": 58964.0,
+          "max": 58964
+        },
+        "headerExpandedBytes": {
+          "min": 131712,
+          "median": 131712.0,
+          "max": 131712
+        },
+        "scorePostingReads": {
+          "min": 679,
+          "median": 679.0,
+          "max": 679
+        },
+        "numericMs": {
+          "min": 68,
+          "median": 68.5,
+          "max": 69
+        },
+        "scoredDocuments": {
+          "min": 54492,
+          "median": 54492.0,
+          "max": 54492
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "search",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 104.672,
+      "medianMs": 383.49850000000004,
+      "maxMs": 662.325,
+      "preparationMedianMs": 342.38,
+      "profiles": {
+        "candidateMs": {
+          "min": 31,
+          "median": 31.0,
+          "max": 31
+        },
+        "candidateHeaderReads": {
+          "min": 49,
+          "median": 49.0,
+          "max": 49
+        },
+        "headerSqlUs": {
+          "min": 480,
+          "median": 637.0,
+          "max": 794
+        },
+        "headerDecryptUs": {
+          "min": 5603,
+          "median": 5681.0,
+          "max": 5759
+        },
+        "headerGzipUs": {
+          "min": 3017,
+          "median": 3170.0,
+          "max": 3323
+        },
+        "headerBoundsUs": {
+          "min": 10795,
+          "median": 10966.5,
+          "max": 11138
+        },
+        "headerDecryptedBytes": {
+          "min": 58964,
+          "median": 58964.0,
+          "max": 58964
+        },
+        "headerExpandedBytes": {
+          "min": 131712,
+          "median": 131712.0,
+          "max": 131712
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 48,
+          "median": 49.5,
+          "max": 51
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "search",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 89.377,
+      "medianMs": 90.86099999999999,
+      "maxMs": 92.345,
+      "preparationMedianMs": 342.38,
+      "profiles": {
+        "candidateMs": {
+          "min": 20,
+          "median": 20.5,
+          "max": 21
+        },
+        "candidateHeaderReads": {
+          "min": 49,
+          "median": 49.0,
+          "max": 49
+        },
+        "headerSqlUs": {
+          "min": 329,
+          "median": 348.0,
+          "max": 367
+        },
+        "headerDecryptUs": {
+          "min": 5030,
+          "median": 5124.0,
+          "max": 5218
+        },
+        "headerGzipUs": {
+          "min": 2748,
+          "median": 2768.0,
+          "max": 2788
+        },
+        "headerBoundsUs": {
+          "min": 5107,
+          "median": 5274.0,
+          "max": 5441
+        },
+        "headerDecryptedBytes": {
+          "min": 58964,
+          "median": 58964.0,
+          "max": 58964
+        },
+        "headerExpandedBytes": {
+          "min": 131712,
+          "median": 131712.0,
+          "max": 131712
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 47,
+          "median": 47.0,
+          "max": 47
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "search",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 97.737,
+      "medianMs": 98.5625,
+      "maxMs": 99.388,
+      "preparationMedianMs": 362.8455,
+      "profiles": {
+        "candidateMs": {
+          "min": 25,
+          "median": 27.0,
+          "max": 29
+        },
+        "candidateHeaderReads": {
+          "min": 49,
+          "median": 49.0,
+          "max": 49
+        },
+        "headerSqlUs": {
+          "min": 381,
+          "median": 416.5,
+          "max": 452
+        },
+        "headerDecryptUs": {
+          "min": 4855,
+          "median": 4898.0,
+          "max": 4941
+        },
+        "headerGzipUs": {
+          "min": 2630,
+          "median": 2755.5,
+          "max": 2881
+        },
+        "headerBoundsUs": {
+          "min": 8303,
+          "median": 9366.0,
+          "max": 10429
+        },
+        "headerDecryptedBytes": {
+          "min": 58964,
+          "median": 58964.0,
+          "max": 58964
+        },
+        "headerExpandedBytes": {
+          "min": 131712,
+          "median": 131712.0,
+          "max": 131712
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 45,
+          "median": 47.5,
+          "max": 50
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "search",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 84.234,
+      "medianMs": 86.4005,
+      "maxMs": 88.567,
+      "preparationMedianMs": 362.8455,
+      "profiles": {
+        "candidateMs": {
+          "min": 18,
+          "median": 19.5,
+          "max": 21
+        },
+        "candidateHeaderReads": {
+          "min": 49,
+          "median": 49.0,
+          "max": 49
+        },
+        "headerSqlUs": {
+          "min": 350,
+          "median": 385.5,
+          "max": 421
+        },
+        "headerDecryptUs": {
+          "min": 4965,
+          "median": 5157.5,
+          "max": 5350
+        },
+        "headerGzipUs": {
+          "min": 2718,
+          "median": 2780.0,
+          "max": 2842
+        },
+        "headerBoundsUs": {
+          "min": 3961,
+          "median": 3985.0,
+          "max": 4009
+        },
+        "headerDecryptedBytes": {
+          "min": 58964,
+          "median": 58964.0,
+          "max": 58964
+        },
+        "headerExpandedBytes": {
+          "min": 131712,
+          "median": 131712.0,
+          "max": 131712
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 43,
+          "median": 44.0,
+          "max": 45
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "metadata",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 72.651,
+      "medianMs": 168.868,
+      "maxMs": 265.085,
+      "preparationMedianMs": 347.173,
+      "profiles": {
+        "candidateMs": {
+          "min": 20,
+          "median": 114.0,
+          "max": 208
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 122,
+          "median": 140.0,
+          "max": 158
+        },
+        "headerDecryptUs": {
+          "min": 1679,
+          "median": 1721.5,
+          "max": 1764
+        },
+        "headerGzipUs": {
+          "min": 939,
+          "median": 939.0,
+          "max": 939
+        },
+        "headerBoundsUs": {
+          "min": 11356,
+          "median": 11423.0,
+          "max": 11490
+        },
+        "headerDecryptedBytes": {
+          "min": 16827,
+          "median": 16827.0,
+          "max": 16827
+        },
+        "headerExpandedBytes": {
+          "min": 37632,
+          "median": 37632.0,
+          "max": 37632
+        },
+        "scorePostingReads": {
+          "min": 188,
+          "median": 188.0,
+          "max": 188
+        },
+        "numericMs": {
+          "min": 22,
+          "median": 23.5,
+          "max": 25
+        },
+        "scoredDocuments": {
+          "min": 19710,
+          "median": 19710.0,
+          "max": 19710
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "metadata",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 53.907,
+      "medianMs": 56.3925,
+      "maxMs": 58.878,
+      "preparationMedianMs": 347.173,
+      "profiles": {
+        "candidateMs": {
+          "min": 10,
+          "median": 10.5,
+          "max": 11
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 104,
+          "median": 116.0,
+          "max": 128
+        },
+        "headerDecryptUs": {
+          "min": 1391,
+          "median": 1636.0,
+          "max": 1881
+        },
+        "headerGzipUs": {
+          "min": 735,
+          "median": 867.0,
+          "max": 999
+        },
+        "headerBoundsUs": {
+          "min": 1109,
+          "median": 1283.0,
+          "max": 1457
+        },
+        "headerDecryptedBytes": {
+          "min": 16827,
+          "median": 16827.0,
+          "max": 16827
+        },
+        "headerExpandedBytes": {
+          "min": 37632,
+          "median": 37632.0,
+          "max": 37632
+        },
+        "scorePostingReads": {
+          "min": 188,
+          "median": 188.0,
+          "max": 188
+        },
+        "numericMs": {
+          "min": 22,
+          "median": 23.0,
+          "max": 24
+        },
+        "scoredDocuments": {
+          "min": 19710,
+          "median": 19710.0,
+          "max": 19710
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "metadata",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 60.663,
+      "medianMs": 63.6515,
+      "maxMs": 66.64,
+      "preparationMedianMs": 352.655,
+      "profiles": {
+        "candidateMs": {
+          "min": 16,
+          "median": 18.0,
+          "max": 20
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 137,
+          "median": 137.5,
+          "max": 138
+        },
+        "headerDecryptUs": {
+          "min": 1511,
+          "median": 1650.0,
+          "max": 1789
+        },
+        "headerGzipUs": {
+          "min": 830,
+          "median": 878.5,
+          "max": 927
+        },
+        "headerBoundsUs": {
+          "min": 6665,
+          "median": 8479.5,
+          "max": 10294
+        },
+        "headerDecryptedBytes": {
+          "min": 16827,
+          "median": 16827.0,
+          "max": 16827
+        },
+        "headerExpandedBytes": {
+          "min": 37632,
+          "median": 37632.0,
+          "max": 37632
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 13,
+          "median": 13.0,
+          "max": 13
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "metadata",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 43.994,
+      "medianMs": 44.076,
+      "maxMs": 44.158,
+      "preparationMedianMs": 352.655,
+      "profiles": {
+        "candidateMs": {
+          "min": 10,
+          "median": 10.5,
+          "max": 11
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 90,
+          "median": 93.5,
+          "max": 97
+        },
+        "headerDecryptUs": {
+          "min": 1418,
+          "median": 1421.5,
+          "max": 1425
+        },
+        "headerGzipUs": {
+          "min": 743,
+          "median": 756.5,
+          "max": 770
+        },
+        "headerBoundsUs": {
+          "min": 1104,
+          "median": 1164.0,
+          "max": 1224
+        },
+        "headerDecryptedBytes": {
+          "min": 16827,
+          "median": 16827.0,
+          "max": 16827
+        },
+        "headerExpandedBytes": {
+          "min": 37632,
+          "median": 37632.0,
+          "max": 37632
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 12,
+          "median": 12.0,
+          "max": 12
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "metadata",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 55.532,
+      "medianMs": 114.33500000000001,
+      "maxMs": 173.138,
+      "preparationMedianMs": 341.13,
+      "profiles": {
+        "candidateMs": {
+          "min": 16,
+          "median": 45.0,
+          "max": 74
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 100,
+          "median": 107.0,
+          "max": 114
+        },
+        "headerDecryptUs": {
+          "min": 1354,
+          "median": 1464.0,
+          "max": 1574
+        },
+        "headerGzipUs": {
+          "min": 751,
+          "median": 809.5,
+          "max": 868
+        },
+        "headerBoundsUs": {
+          "min": 5688,
+          "median": 6349.5,
+          "max": 7011
+        },
+        "headerDecryptedBytes": {
+          "min": 16827,
+          "median": 16827.0,
+          "max": 16827
+        },
+        "headerExpandedBytes": {
+          "min": 37632,
+          "median": 37632.0,
+          "max": 37632
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 12,
+          "median": 13.5,
+          "max": 15
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "metadata",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 44.439,
+      "medianMs": 48.063,
+      "maxMs": 51.687,
+      "preparationMedianMs": 341.13,
+      "profiles": {
+        "candidateMs": {
+          "min": 12,
+          "median": 13.5,
+          "max": 15
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 95,
+          "median": 117.5,
+          "max": 140
+        },
+        "headerDecryptUs": {
+          "min": 1422,
+          "median": 1548.5,
+          "max": 1675
+        },
+        "headerGzipUs": {
+          "min": 747,
+          "median": 810.0,
+          "max": 873
+        },
+        "headerBoundsUs": {
+          "min": 1196,
+          "median": 1345.5,
+          "max": 1495
+        },
+        "headerDecryptedBytes": {
+          "min": 16827,
+          "median": 16827.0,
+          "max": 16827
+        },
+        "headerExpandedBytes": {
+          "min": 37632,
+          "median": 37632.0,
+          "max": 37632
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 12,
+          "median": 12.5,
+          "max": 13
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "create",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 133.71,
+      "medianMs": 144.364,
+      "maxMs": 155.018,
+      "preparationMedianMs": 336.406,
+      "profiles": {
+        "candidateMs": {
+          "min": 24,
+          "median": 27.0,
+          "max": 30
+        },
+        "candidateHeaderReads": {
+          "min": 56,
+          "median": 56.0,
+          "max": 56
+        },
+        "headerSqlUs": {
+          "min": 466,
+          "median": 493.0,
+          "max": 520
+        },
+        "headerDecryptUs": {
+          "min": 6004,
+          "median": 6064.5,
+          "max": 6125
+        },
+        "headerGzipUs": {
+          "min": 3219,
+          "median": 3258.0,
+          "max": 3297
+        },
+        "headerBoundsUs": {
+          "min": 9566,
+          "median": 9993.5,
+          "max": 10421
+        },
+        "headerDecryptedBytes": {
+          "min": 67335,
+          "median": 67335.0,
+          "max": 67335
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 760,
+          "median": 760.0,
+          "max": 760
+        },
+        "numericMs": {
+          "min": 84,
+          "median": 84.5,
+          "max": 85
+        },
+        "scoredDocuments": {
+          "min": 58109,
+          "median": 58109.0,
+          "max": 58109
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "create",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 119.225,
+      "medianMs": 119.4225,
+      "maxMs": 119.62,
+      "preparationMedianMs": 336.406,
+      "profiles": {
+        "candidateMs": {
+          "min": 20,
+          "median": 22.0,
+          "max": 24
+        },
+        "candidateHeaderReads": {
+          "min": 56,
+          "median": 56.0,
+          "max": 56
+        },
+        "headerSqlUs": {
+          "min": 446,
+          "median": 476.0,
+          "max": 506
+        },
+        "headerDecryptUs": {
+          "min": 6314,
+          "median": 6965.0,
+          "max": 7616
+        },
+        "headerGzipUs": {
+          "min": 3166,
+          "median": 3672.5,
+          "max": 4179
+        },
+        "headerBoundsUs": {
+          "min": 4871,
+          "median": 5249.5,
+          "max": 5628
+        },
+        "headerDecryptedBytes": {
+          "min": 67335,
+          "median": 67335.0,
+          "max": 67335
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 760,
+          "median": 760.0,
+          "max": 760
+        },
+        "numericMs": {
+          "min": 72,
+          "median": 73.5,
+          "max": 75
+        },
+        "scoredDocuments": {
+          "min": 58109,
+          "median": 58109.0,
+          "max": 58109
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "create",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 119.063,
+      "medianMs": 136.075,
+      "maxMs": 153.087,
+      "preparationMedianMs": 349.9975,
+      "profiles": {
+        "candidateMs": {
+          "min": 34,
+          "median": 34.0,
+          "max": 34
+        },
+        "candidateHeaderReads": {
+          "min": 56,
+          "median": 56.0,
+          "max": 56
+        },
+        "headerSqlUs": {
+          "min": 510,
+          "median": 511.0,
+          "max": 512
+        },
+        "headerDecryptUs": {
+          "min": 6258,
+          "median": 6400.0,
+          "max": 6542
+        },
+        "headerGzipUs": {
+          "min": 3371,
+          "median": 3427.0,
+          "max": 3483
+        },
+        "headerBoundsUs": {
+          "min": 14485,
+          "median": 14612.0,
+          "max": 14739
+        },
+        "headerDecryptedBytes": {
+          "min": 67335,
+          "median": 67335.0,
+          "max": 67335
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 58,
+          "median": 58.0,
+          "max": 58
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "create",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 108.826,
+      "medianMs": 109.633,
+      "maxMs": 110.44,
+      "preparationMedianMs": 349.9975,
+      "profiles": {
+        "candidateMs": {
+          "min": 24,
+          "median": 25.5,
+          "max": 27
+        },
+        "candidateHeaderReads": {
+          "min": 56,
+          "median": 56.0,
+          "max": 56
+        },
+        "headerSqlUs": {
+          "min": 436,
+          "median": 449.0,
+          "max": 462
+        },
+        "headerDecryptUs": {
+          "min": 6094,
+          "median": 6156.0,
+          "max": 6218
+        },
+        "headerGzipUs": {
+          "min": 3558,
+          "median": 5276.0,
+          "max": 6994
+        },
+        "headerBoundsUs": {
+          "min": 4912,
+          "median": 5538.5,
+          "max": 6165
+        },
+        "headerDecryptedBytes": {
+          "min": 67335,
+          "median": 67335.0,
+          "max": 67335
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 55,
+          "median": 56.5,
+          "max": 58
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "create",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 105.462,
+      "medianMs": 109.49549999999999,
+      "maxMs": 113.529,
+      "preparationMedianMs": 351.44449999999995,
+      "profiles": {
+        "candidateMs": {
+          "min": 25,
+          "median": 28.0,
+          "max": 31
+        },
+        "candidateHeaderReads": {
+          "min": 56,
+          "median": 56.0,
+          "max": 56
+        },
+        "headerSqlUs": {
+          "min": 386,
+          "median": 437.0,
+          "max": 488
+        },
+        "headerDecryptUs": {
+          "min": 5591,
+          "median": 5855.5,
+          "max": 6120
+        },
+        "headerGzipUs": {
+          "min": 2986,
+          "median": 3128.0,
+          "max": 3270
+        },
+        "headerBoundsUs": {
+          "min": 9572,
+          "median": 10014.5,
+          "max": 10457
+        },
+        "headerDecryptedBytes": {
+          "min": 67335,
+          "median": 67335.0,
+          "max": 67335
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 54,
+          "median": 55.5,
+          "max": 57
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "create",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 92.538,
+      "medianMs": 93.8955,
+      "maxMs": 95.253,
+      "preparationMedianMs": 351.44449999999995,
+      "profiles": {
+        "candidateMs": {
+          "min": 21,
+          "median": 21.0,
+          "max": 21
+        },
+        "candidateHeaderReads": {
+          "min": 56,
+          "median": 56.0,
+          "max": 56
+        },
+        "headerSqlUs": {
+          "min": 378,
+          "median": 402.0,
+          "max": 426
+        },
+        "headerDecryptUs": {
+          "min": 5964,
+          "median": 6124.0,
+          "max": 6284
+        },
+        "headerGzipUs": {
+          "min": 3200,
+          "median": 3259.5,
+          "max": 3319
+        },
+        "headerBoundsUs": {
+          "min": 4505,
+          "median": 4715.5,
+          "max": 4926
+        },
+        "headerDecryptedBytes": {
+          "min": 67335,
+          "median": 67335.0,
+          "max": 67335
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 50,
+          "median": 51.0,
+          "max": 52
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "archive import",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 288.156,
+      "medianMs": 377.69050000000004,
+      "maxMs": 467.225,
+      "preparationMedianMs": 355.9655,
+      "profiles": {
+        "candidateMs": {
+          "min": 48,
+          "median": 74.5,
+          "max": 101
+        },
+        "candidateHeaderReads": {
+          "min": 119,
+          "median": 119.0,
+          "max": 119
+        },
+        "headerSqlUs": {
+          "min": 931,
+          "median": 947.0,
+          "max": 963
+        },
+        "headerDecryptUs": {
+          "min": 11950,
+          "median": 12082.5,
+          "max": 12215
+        },
+        "headerGzipUs": {
+          "min": 6591,
+          "median": 6897.0,
+          "max": 7203
+        },
+        "headerBoundsUs": {
+          "min": 16075,
+          "median": 16521.5,
+          "max": 16968
+        },
+        "headerDecryptedBytes": {
+          "min": 135137,
+          "median": 135137.0,
+          "max": 135137
+        },
+        "headerExpandedBytes": {
+          "min": 319872,
+          "median": 319872.0,
+          "max": 319872
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 210,
+          "median": 212.0,
+          "max": 214
+        },
+        "scoredDocuments": {
+          "min": 77265,
+          "median": 77265.0,
+          "max": 77265
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "archive import",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 272.999,
+      "medianMs": 273.86350000000004,
+      "maxMs": 274.728,
+      "preparationMedianMs": 355.9655,
+      "profiles": {
+        "candidateMs": {
+          "min": 41,
+          "median": 42.0,
+          "max": 43
+        },
+        "candidateHeaderReads": {
+          "min": 119,
+          "median": 119.0,
+          "max": 119
+        },
+        "headerSqlUs": {
+          "min": 775,
+          "median": 872.0,
+          "max": 969
+        },
+        "headerDecryptUs": {
+          "min": 11218,
+          "median": 11580.5,
+          "max": 11943
+        },
+        "headerGzipUs": {
+          "min": 6298,
+          "median": 6519.5,
+          "max": 6741
+        },
+        "headerBoundsUs": {
+          "min": 9436,
+          "median": 10221.0,
+          "max": 11006
+        },
+        "headerDecryptedBytes": {
+          "min": 135137,
+          "median": 135137.0,
+          "max": 135137
+        },
+        "headerExpandedBytes": {
+          "min": 319872,
+          "median": 319872.0,
+          "max": 319872
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 206,
+          "median": 207.0,
+          "max": 208
+        },
+        "scoredDocuments": {
+          "min": 77265,
+          "median": 77265.0,
+          "max": 77265
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "archive import",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 267.687,
+      "medianMs": 458.0845,
+      "maxMs": 648.482,
+      "preparationMedianMs": 355.21500000000003,
+      "profiles": {
+        "candidateMs": {
+          "min": 54,
+          "median": 63.0,
+          "max": 72
+        },
+        "candidateHeaderReads": {
+          "min": 119,
+          "median": 119.0,
+          "max": 119
+        },
+        "headerSqlUs": {
+          "min": 932,
+          "median": 1169.0,
+          "max": 1406
+        },
+        "headerDecryptUs": {
+          "min": 12837,
+          "median": 14473.0,
+          "max": 16109
+        },
+        "headerGzipUs": {
+          "min": 6931,
+          "median": 8028.5,
+          "max": 9126
+        },
+        "headerBoundsUs": {
+          "min": 17253,
+          "median": 20452.0,
+          "max": 23651
+        },
+        "headerDecryptedBytes": {
+          "min": 135137,
+          "median": 135137.0,
+          "max": 135137
+        },
+        "headerExpandedBytes": {
+          "min": 319872,
+          "median": 319872.0,
+          "max": 319872
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 155,
+          "median": 162.5,
+          "max": 170
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "archive import",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 226.316,
+      "medianMs": 227.4845,
+      "maxMs": 228.653,
+      "preparationMedianMs": 355.21500000000003,
+      "profiles": {
+        "candidateMs": {
+          "min": 46,
+          "median": 46.0,
+          "max": 46
+        },
+        "candidateHeaderReads": {
+          "min": 119,
+          "median": 119.0,
+          "max": 119
+        },
+        "headerSqlUs": {
+          "min": 909,
+          "median": 914.0,
+          "max": 919
+        },
+        "headerDecryptUs": {
+          "min": 12370,
+          "median": 12592.5,
+          "max": 12815
+        },
+        "headerGzipUs": {
+          "min": 6699,
+          "median": 6790.5,
+          "max": 6882
+        },
+        "headerBoundsUs": {
+          "min": 11626,
+          "median": 11882.5,
+          "max": 12139
+        },
+        "headerDecryptedBytes": {
+          "min": 135137,
+          "median": 135137.0,
+          "max": 135137
+        },
+        "headerExpandedBytes": {
+          "min": 319872,
+          "median": 319872.0,
+          "max": 319872
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 157,
+          "median": 158.0,
+          "max": 159
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "archive import",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 235.897,
+      "medianMs": 237.048,
+      "maxMs": 238.199,
+      "preparationMedianMs": 346.17650000000003,
+      "profiles": {
+        "candidateMs": {
+          "min": 53,
+          "median": 54.0,
+          "max": 55
+        },
+        "candidateHeaderReads": {
+          "min": 119,
+          "median": 119.0,
+          "max": 119
+        },
+        "headerSqlUs": {
+          "min": 1029,
+          "median": 1038.5,
+          "max": 1048
+        },
+        "headerDecryptUs": {
+          "min": 12507,
+          "median": 12694.0,
+          "max": 12881
+        },
+        "headerGzipUs": {
+          "min": 9671,
+          "median": 11121.0,
+          "max": 12571
+        },
+        "headerBoundsUs": {
+          "min": 15777,
+          "median": 16168.5,
+          "max": 16560
+        },
+        "headerDecryptedBytes": {
+          "min": 135137,
+          "median": 135137.0,
+          "max": 135137
+        },
+        "headerExpandedBytes": {
+          "min": 319872,
+          "median": 319872.0,
+          "max": 319872
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 159,
+          "median": 159.5,
+          "max": 160
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    },
+    {
+      "chunkPages": 16,
+      "query": "archive import",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 224.746,
+      "medianMs": 227.14100000000002,
+      "maxMs": 229.536,
+      "preparationMedianMs": 346.17650000000003,
+      "profiles": {
+        "candidateMs": {
+          "min": 43,
+          "median": 43.5,
+          "max": 44
+        },
+        "candidateHeaderReads": {
+          "min": 119,
+          "median": 119.0,
+          "max": 119
+        },
+        "headerSqlUs": {
+          "min": 822,
+          "median": 826.0,
+          "max": 830
+        },
+        "headerDecryptUs": {
+          "min": 12323,
+          "median": 12562.0,
+          "max": 12801
+        },
+        "headerGzipUs": {
+          "min": 6594,
+          "median": 6706.0,
+          "max": 6818
+        },
+        "headerBoundsUs": {
+          "min": 11035,
+          "median": 11075.5,
+          "max": 11116
+        },
+        "headerDecryptedBytes": {
+          "min": 135137,
+          "median": 135137.0,
+          "max": 135137
+        },
+        "headerExpandedBytes": {
+          "min": 319872,
+          "median": 319872.0,
+          "max": 319872
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 158,
+          "median": 160.5,
+          "max": 163
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "search",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 124.741,
+      "medianMs": 129.9425,
+      "maxMs": 135.144,
+      "preparationMedianMs": 348.236,
+      "profiles": {
+        "candidateMs": {
+          "min": 24,
+          "median": 24.5,
+          "max": 25
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 343,
+          "median": 349.5,
+          "max": 356
+        },
+        "headerDecryptUs": {
+          "min": 4482,
+          "median": 4552.5,
+          "max": 4623
+        },
+        "headerGzipUs": {
+          "min": 2110,
+          "median": 2129.5,
+          "max": 2149
+        },
+        "headerBoundsUs": {
+          "min": 9568,
+          "median": 9589.0,
+          "max": 9610
+        },
+        "headerDecryptedBytes": {
+          "min": 56647,
+          "median": 56647.0,
+          "max": 56647
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 679,
+          "median": 679.0,
+          "max": 679
+        },
+        "numericMs": {
+          "min": 76,
+          "median": 77.0,
+          "max": 78
+        },
+        "scoredDocuments": {
+          "min": 54492,
+          "median": 54492.0,
+          "max": 54492
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "search",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 102.67,
+      "medianMs": 104.74199999999999,
+      "maxMs": 106.814,
+      "preparationMedianMs": 348.236,
+      "profiles": {
+        "candidateMs": {
+          "min": 16,
+          "median": 18.0,
+          "max": 20
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 282,
+          "median": 287.5,
+          "max": 293
+        },
+        "headerDecryptUs": {
+          "min": 4597,
+          "median": 4675.5,
+          "max": 4754
+        },
+        "headerGzipUs": {
+          "min": 2084,
+          "median": 2095.5,
+          "max": 2107
+        },
+        "headerBoundsUs": {
+          "min": 4768,
+          "median": 6397.5,
+          "max": 8027
+        },
+        "headerDecryptedBytes": {
+          "min": 56647,
+          "median": 56647.0,
+          "max": 56647
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 679,
+          "median": 679.0,
+          "max": 679
+        },
+        "numericMs": {
+          "min": 64,
+          "median": 64.5,
+          "max": 65
+        },
+        "scoredDocuments": {
+          "min": 54492,
+          "median": 54492.0,
+          "max": 54492
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "search",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 85.912,
+      "medianMs": 89.4645,
+      "maxMs": 93.017,
+      "preparationMedianMs": 344.1265,
+      "profiles": {
+        "candidateMs": {
+          "min": 21,
+          "median": 22.0,
+          "max": 23
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 287,
+          "median": 330.0,
+          "max": 373
+        },
+        "headerDecryptUs": {
+          "min": 4486,
+          "median": 4505.5,
+          "max": 4525
+        },
+        "headerGzipUs": {
+          "min": 2000,
+          "median": 2032.0,
+          "max": 2064
+        },
+        "headerBoundsUs": {
+          "min": 8252,
+          "median": 8881.0,
+          "max": 9510
+        },
+        "headerDecryptedBytes": {
+          "min": 56647,
+          "median": 56647.0,
+          "max": 56647
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 42,
+          "median": 44.0,
+          "max": 46
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "search",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 83.34,
+      "medianMs": 84.592,
+      "maxMs": 85.844,
+      "preparationMedianMs": 344.1265,
+      "profiles": {
+        "candidateMs": {
+          "min": 17,
+          "median": 17.0,
+          "max": 17
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 262,
+          "median": 282.0,
+          "max": 302
+        },
+        "headerDecryptUs": {
+          "min": 4447,
+          "median": 4538.5,
+          "max": 4630
+        },
+        "headerGzipUs": {
+          "min": 2008,
+          "median": 2039.0,
+          "max": 2070
+        },
+        "headerBoundsUs": {
+          "min": 3303,
+          "median": 3572.0,
+          "max": 3841
+        },
+        "headerDecryptedBytes": {
+          "min": 56647,
+          "median": 56647.0,
+          "max": 56647
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 42,
+          "median": 43.5,
+          "max": 45
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "search",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 92.594,
+      "medianMs": 94.791,
+      "maxMs": 96.988,
+      "preparationMedianMs": 338.011,
+      "profiles": {
+        "candidateMs": {
+          "min": 22,
+          "median": 22.5,
+          "max": 23
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 281,
+          "median": 341.0,
+          "max": 401
+        },
+        "headerDecryptUs": {
+          "min": 4439,
+          "median": 4527.0,
+          "max": 4615
+        },
+        "headerGzipUs": {
+          "min": 2092,
+          "median": 2098.5,
+          "max": 2105
+        },
+        "headerBoundsUs": {
+          "min": 8517,
+          "median": 8550.5,
+          "max": 8584
+        },
+        "headerDecryptedBytes": {
+          "min": 56647,
+          "median": 56647.0,
+          "max": 56647
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 49,
+          "median": 49.0,
+          "max": 49
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "search",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 87.611,
+      "medianMs": 89.6195,
+      "maxMs": 91.628,
+      "preparationMedianMs": 338.011,
+      "profiles": {
+        "candidateMs": {
+          "min": 21,
+          "median": 21.0,
+          "max": 21
+        },
+        "candidateHeaderReads": {
+          "min": 14,
+          "median": 14.0,
+          "max": 14
+        },
+        "headerSqlUs": {
+          "min": 303,
+          "median": 331.0,
+          "max": 359
+        },
+        "headerDecryptUs": {
+          "min": 5244,
+          "median": 5316.0,
+          "max": 5388
+        },
+        "headerGzipUs": {
+          "min": 2133,
+          "median": 2362.5,
+          "max": 2592
+        },
+        "headerBoundsUs": {
+          "min": 5120,
+          "median": 5553.5,
+          "max": 5987
+        },
+        "headerDecryptedBytes": {
+          "min": 56647,
+          "median": 56647.0,
+          "max": 56647
+        },
+        "headerExpandedBytes": {
+          "min": 150528,
+          "median": 150528.0,
+          "max": 150528
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 44,
+          "median": 45.0,
+          "max": 46
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "metadata",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 64.714,
+      "medianMs": 77.015,
+      "maxMs": 89.316,
+      "preparationMedianMs": 339.714,
+      "profiles": {
+        "candidateMs": {
+          "min": 12,
+          "median": 12.5,
+          "max": 13
+        },
+        "candidateHeaderReads": {
+          "min": 4,
+          "median": 4.0,
+          "max": 4
+        },
+        "headerSqlUs": {
+          "min": 118,
+          "median": 119.5,
+          "max": 121
+        },
+        "headerDecryptUs": {
+          "min": 1281,
+          "median": 1327.5,
+          "max": 1374
+        },
+        "headerGzipUs": {
+          "min": 589,
+          "median": 609.5,
+          "max": 630
+        },
+        "headerBoundsUs": {
+          "min": 5916,
+          "median": 6087.0,
+          "max": 6258
+        },
+        "headerDecryptedBytes": {
+          "min": 16217,
+          "median": 16217.0,
+          "max": 16217
+        },
+        "headerExpandedBytes": {
+          "min": 43008,
+          "median": 43008.0,
+          "max": 43008
+        },
+        "scorePostingReads": {
+          "min": 188,
+          "median": 188.0,
+          "max": 188
+        },
+        "numericMs": {
+          "min": 26,
+          "median": 27.5,
+          "max": 29
+        },
+        "scoredDocuments": {
+          "min": 19710,
+          "median": 19710.0,
+          "max": 19710
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "metadata",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 52.028,
+      "medianMs": 53.4775,
+      "maxMs": 54.927,
+      "preparationMedianMs": 339.714,
+      "profiles": {
+        "candidateMs": {
+          "min": 7,
+          "median": 7.0,
+          "max": 7
+        },
+        "candidateHeaderReads": {
+          "min": 4,
+          "median": 4.0,
+          "max": 4
+        },
+        "headerSqlUs": {
+          "min": 85,
+          "median": 91.0,
+          "max": 97
+        },
+        "headerDecryptUs": {
+          "min": 1268,
+          "median": 1279.0,
+          "max": 1290
+        },
+        "headerGzipUs": {
+          "min": 570,
+          "median": 575.0,
+          "max": 580
+        },
+        "headerBoundsUs": {
+          "min": 1058,
+          "median": 1070.5,
+          "max": 1083
+        },
+        "headerDecryptedBytes": {
+          "min": 16217,
+          "median": 16217.0,
+          "max": 16217
+        },
+        "headerExpandedBytes": {
+          "min": 43008,
+          "median": 43008.0,
+          "max": 43008
+        },
+        "scorePostingReads": {
+          "min": 188,
+          "median": 188.0,
+          "max": 188
+        },
+        "numericMs": {
+          "min": 22,
+          "median": 23.5,
+          "max": 25
+        },
+        "scoredDocuments": {
+          "min": 19710,
+          "median": 19710.0,
+          "max": 19710
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "metadata",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 50.954,
+      "medianMs": 55.164500000000004,
+      "maxMs": 59.375,
+      "preparationMedianMs": 352.7115,
+      "profiles": {
+        "candidateMs": {
+          "min": 17,
+          "median": 19.5,
+          "max": 22
+        },
+        "candidateHeaderReads": {
+          "min": 4,
+          "median": 4.0,
+          "max": 4
+        },
+        "headerSqlUs": {
+          "min": 87,
+          "median": 102.0,
+          "max": 117
+        },
+        "headerDecryptUs": {
+          "min": 1266,
+          "median": 1386.0,
+          "max": 1506
+        },
+        "headerGzipUs": {
+          "min": 590,
+          "median": 644.5,
+          "max": 699
+        },
+        "headerBoundsUs": {
+          "min": 5961,
+          "median": 6143.0,
+          "max": 6325
+        },
+        "headerDecryptedBytes": {
+          "min": 16217,
+          "median": 16217.0,
+          "max": 16217
+        },
+        "headerExpandedBytes": {
+          "min": 43008,
+          "median": 43008.0,
+          "max": 43008
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 13,
+          "median": 13.5,
+          "max": 14
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "metadata",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 47.122,
+      "medianMs": 49.144999999999996,
+      "maxMs": 51.168,
+      "preparationMedianMs": 352.7115,
+      "profiles": {
+        "candidateMs": {
+          "min": 13,
+          "median": 14.5,
+          "max": 16
+        },
+        "candidateHeaderReads": {
+          "min": 4,
+          "median": 4.0,
+          "max": 4
+        },
+        "headerSqlUs": {
+          "min": 95,
+          "median": 109.0,
+          "max": 123
+        },
+        "headerDecryptUs": {
+          "min": 1586,
+          "median": 1729.0,
+          "max": 1872
+        },
+        "headerGzipUs": {
+          "min": 682,
+          "median": 738.5,
+          "max": 795
+        },
+        "headerBoundsUs": {
+          "min": 2385,
+          "median": 2520.0,
+          "max": 2655
+        },
+        "headerDecryptedBytes": {
+          "min": 16217,
+          "median": 16217.0,
+          "max": 16217
+        },
+        "headerExpandedBytes": {
+          "min": 43008,
+          "median": 43008.0,
+          "max": 43008
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 13,
+          "median": 13.0,
+          "max": 13
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "metadata",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 49.623,
+      "medianMs": 51.8655,
+      "maxMs": 54.108,
+      "preparationMedianMs": 349.7625,
+      "profiles": {
+        "candidateMs": {
+          "min": 17,
+          "median": 17.0,
+          "max": 17
+        },
+        "candidateHeaderReads": {
+          "min": 4,
+          "median": 4.0,
+          "max": 4
+        },
+        "headerSqlUs": {
+          "min": 99,
+          "median": 100.0,
+          "max": 101
+        },
+        "headerDecryptUs": {
+          "min": 1285,
+          "median": 1286.0,
+          "max": 1287
+        },
+        "headerGzipUs": {
+          "min": 571,
+          "median": 580.5,
+          "max": 590
+        },
+        "headerBoundsUs": {
+          "min": 7371,
+          "median": 7397.0,
+          "max": 7423
+        },
+        "headerDecryptedBytes": {
+          "min": 16217,
+          "median": 16217.0,
+          "max": 16217
+        },
+        "headerExpandedBytes": {
+          "min": 43008,
+          "median": 43008.0,
+          "max": 43008
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 12,
+          "median": 12.5,
+          "max": 13
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "metadata",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 45.066,
+      "medianMs": 48.824,
+      "maxMs": 52.582,
+      "preparationMedianMs": 349.7625,
+      "profiles": {
+        "candidateMs": {
+          "min": 10,
+          "median": 11.0,
+          "max": 12
+        },
+        "candidateHeaderReads": {
+          "min": 4,
+          "median": 4.0,
+          "max": 4
+        },
+        "headerSqlUs": {
+          "min": 86,
+          "median": 439.5,
+          "max": 793
+        },
+        "headerDecryptUs": {
+          "min": 1469,
+          "median": 1573.0,
+          "max": 1677
+        },
+        "headerGzipUs": {
+          "min": 699,
+          "median": 817.0,
+          "max": 935
+        },
+        "headerBoundsUs": {
+          "min": 1497,
+          "median": 1677.0,
+          "max": 1857
+        },
+        "headerDecryptedBytes": {
+          "min": 16217,
+          "median": 16217.0,
+          "max": 16217
+        },
+        "headerExpandedBytes": {
+          "min": 43008,
+          "median": 43008.0,
+          "max": 43008
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 14,
+          "median": 15.0,
+          "max": 16
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "create",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 130.238,
+      "medianMs": 133.2095,
+      "maxMs": 136.181,
+      "preparationMedianMs": 370.068,
+      "profiles": {
+        "candidateMs": {
+          "min": 26,
+          "median": 31.0,
+          "max": 36
+        },
+        "candidateHeaderReads": {
+          "min": 16,
+          "median": 16.0,
+          "max": 16
+        },
+        "headerSqlUs": {
+          "min": 415,
+          "median": 660.5,
+          "max": 906
+        },
+        "headerDecryptUs": {
+          "min": 5487,
+          "median": 6413.5,
+          "max": 7340
+        },
+        "headerGzipUs": {
+          "min": 2532,
+          "median": 2756.5,
+          "max": 2981
+        },
+        "headerBoundsUs": {
+          "min": 11818,
+          "median": 15192.0,
+          "max": 18566
+        },
+        "headerDecryptedBytes": {
+          "min": 64797,
+          "median": 64797.0,
+          "max": 64797
+        },
+        "headerExpandedBytes": {
+          "min": 172032,
+          "median": 172032.0,
+          "max": 172032
+        },
+        "scorePostingReads": {
+          "min": 760,
+          "median": 760.0,
+          "max": 760
+        },
+        "numericMs": {
+          "min": 75,
+          "median": 77.0,
+          "max": 79
+        },
+        "scoredDocuments": {
+          "min": 58109,
+          "median": 58109.0,
+          "max": 58109
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "create",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 126.679,
+      "medianMs": 127.9865,
+      "maxMs": 129.294,
+      "preparationMedianMs": 370.068,
+      "profiles": {
+        "candidateMs": {
+          "min": 22,
+          "median": 22.0,
+          "max": 22
+        },
+        "candidateHeaderReads": {
+          "min": 16,
+          "median": 16.0,
+          "max": 16
+        },
+        "headerSqlUs": {
+          "min": 412,
+          "median": 476.0,
+          "max": 540
+        },
+        "headerDecryptUs": {
+          "min": 5889,
+          "median": 6059.5,
+          "max": 6230
+        },
+        "headerGzipUs": {
+          "min": 2570,
+          "median": 2638.0,
+          "max": 2706
+        },
+        "headerBoundsUs": {
+          "min": 6440,
+          "median": 6754.5,
+          "max": 7069
+        },
+        "headerDecryptedBytes": {
+          "min": 64797,
+          "median": 64797.0,
+          "max": 64797
+        },
+        "headerExpandedBytes": {
+          "min": 172032,
+          "median": 172032.0,
+          "max": 172032
+        },
+        "scorePostingReads": {
+          "min": 760,
+          "median": 760.0,
+          "max": 760
+        },
+        "numericMs": {
+          "min": 79,
+          "median": 80.5,
+          "max": 82
+        },
+        "scoredDocuments": {
+          "min": 58109,
+          "median": 58109.0,
+          "max": 58109
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "create",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 100.232,
+      "medianMs": 112.8745,
+      "maxMs": 125.517,
+      "preparationMedianMs": 361.9615,
+      "profiles": {
+        "candidateMs": {
+          "min": 23,
+          "median": 27.0,
+          "max": 31
+        },
+        "candidateHeaderReads": {
+          "min": 16,
+          "median": 16.0,
+          "max": 16
+        },
+        "headerSqlUs": {
+          "min": 327,
+          "median": 416.5,
+          "max": 506
+        },
+        "headerDecryptUs": {
+          "min": 5188,
+          "median": 5700.5,
+          "max": 6213
+        },
+        "headerGzipUs": {
+          "min": 2508,
+          "median": 2633.5,
+          "max": 2759
+        },
+        "headerBoundsUs": {
+          "min": 8874,
+          "median": 10643.5,
+          "max": 12413
+        },
+        "headerDecryptedBytes": {
+          "min": 64797,
+          "median": 64797.0,
+          "max": 64797
+        },
+        "headerExpandedBytes": {
+          "min": 172032,
+          "median": 172032.0,
+          "max": 172032
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 54,
+          "median": 60.0,
+          "max": 66
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "create",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 93.669,
+      "medianMs": 106.3095,
+      "maxMs": 118.95,
+      "preparationMedianMs": 361.9615,
+      "profiles": {
+        "candidateMs": {
+          "min": 18,
+          "median": 23.0,
+          "max": 28
+        },
+        "candidateHeaderReads": {
+          "min": 16,
+          "median": 16.0,
+          "max": 16
+        },
+        "headerSqlUs": {
+          "min": 315,
+          "median": 454.5,
+          "max": 594
+        },
+        "headerDecryptUs": {
+          "min": 5152,
+          "median": 6013.0,
+          "max": 6874
+        },
+        "headerGzipUs": {
+          "min": 2423,
+          "median": 2804.5,
+          "max": 3186
+        },
+        "headerBoundsUs": {
+          "min": 4864,
+          "median": 6715.0,
+          "max": 8566
+        },
+        "headerDecryptedBytes": {
+          "min": 64797,
+          "median": 64797.0,
+          "max": 64797
+        },
+        "headerExpandedBytes": {
+          "min": 172032,
+          "median": 172032.0,
+          "max": 172032
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 53,
+          "median": 59.5,
+          "max": 66
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "create",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 100.04,
+      "medianMs": 104.7645,
+      "maxMs": 109.489,
+      "preparationMedianMs": 359.24199999999996,
+      "profiles": {
+        "candidateMs": {
+          "min": 26,
+          "median": 28.5,
+          "max": 31
+        },
+        "candidateHeaderReads": {
+          "min": 16,
+          "median": 16.0,
+          "max": 16
+        },
+        "headerSqlUs": {
+          "min": 398,
+          "median": 457.5,
+          "max": 517
+        },
+        "headerDecryptUs": {
+          "min": 5211,
+          "median": 5631.5,
+          "max": 6052
+        },
+        "headerGzipUs": {
+          "min": 2397,
+          "median": 2577.0,
+          "max": 2757
+        },
+        "headerBoundsUs": {
+          "min": 12049,
+          "median": 12949.0,
+          "max": 13849
+        },
+        "headerDecryptedBytes": {
+          "min": 64797,
+          "median": 64797.0,
+          "max": 64797
+        },
+        "headerExpandedBytes": {
+          "min": 172032,
+          "median": 172032.0,
+          "max": 172032
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 52,
+          "median": 53.0,
+          "max": 54
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "create",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 96.22,
+      "medianMs": 96.309,
+      "maxMs": 96.398,
+      "preparationMedianMs": 359.24199999999996,
+      "profiles": {
+        "candidateMs": {
+          "min": 19,
+          "median": 19.5,
+          "max": 20
+        },
+        "candidateHeaderReads": {
+          "min": 16,
+          "median": 16.0,
+          "max": 16
+        },
+        "headerSqlUs": {
+          "min": 324,
+          "median": 330.0,
+          "max": 336
+        },
+        "headerDecryptUs": {
+          "min": 5240,
+          "median": 5306.5,
+          "max": 5373
+        },
+        "headerGzipUs": {
+          "min": 2345,
+          "median": 2374.5,
+          "max": 2404
+        },
+        "headerBoundsUs": {
+          "min": 3912,
+          "median": 3996.5,
+          "max": 4081
+        },
+        "headerDecryptedBytes": {
+          "min": 64797,
+          "median": 64797.0,
+          "max": 64797
+        },
+        "headerExpandedBytes": {
+          "min": 172032,
+          "median": 172032.0,
+          "max": 172032
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 53,
+          "median": 53.5,
+          "max": 54
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "archive import",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 271.642,
+      "medianMs": 285.424,
+      "maxMs": 299.206,
+      "preparationMedianMs": 353.73400000000004,
+      "profiles": {
+        "candidateMs": {
+          "min": 44,
+          "median": 45.5,
+          "max": 47
+        },
+        "candidateHeaderReads": {
+          "min": 34,
+          "median": 34.0,
+          "max": 34
+        },
+        "headerSqlUs": {
+          "min": 747,
+          "median": 816.0,
+          "max": 885
+        },
+        "headerDecryptUs": {
+          "min": 11029,
+          "median": 11421.0,
+          "max": 11813
+        },
+        "headerGzipUs": {
+          "min": 5011,
+          "median": 5167.0,
+          "max": 5323
+        },
+        "headerBoundsUs": {
+          "min": 16806,
+          "median": 17894.0,
+          "max": 18982
+        },
+        "headerDecryptedBytes": {
+          "min": 129753,
+          "median": 129753.0,
+          "max": 129753
+        },
+        "headerExpandedBytes": {
+          "min": 365568,
+          "median": 365568.0,
+          "max": 365568
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 204,
+          "median": 215.5,
+          "max": 227
+        },
+        "scoredDocuments": {
+          "min": 77265,
+          "median": 77265.0,
+          "max": 77265
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "archive import",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 261.861,
+      "medianMs": 266.1445,
+      "maxMs": 270.428,
+      "preparationMedianMs": 353.73400000000004,
+      "profiles": {
+        "candidateMs": {
+          "min": 38,
+          "median": 38.0,
+          "max": 38
+        },
+        "candidateHeaderReads": {
+          "min": 34,
+          "median": 34.0,
+          "max": 34
+        },
+        "headerSqlUs": {
+          "min": 742,
+          "median": 778.0,
+          "max": 814
+        },
+        "headerDecryptUs": {
+          "min": 11124,
+          "median": 11140.5,
+          "max": 11157
+        },
+        "headerGzipUs": {
+          "min": 5158,
+          "median": 5206.5,
+          "max": 5255
+        },
+        "headerBoundsUs": {
+          "min": 10404,
+          "median": 10579.0,
+          "max": 10754
+        },
+        "headerDecryptedBytes": {
+          "min": 129753,
+          "median": 129753.0,
+          "max": 129753
+        },
+        "headerExpandedBytes": {
+          "min": 365568,
+          "median": 365568.0,
+          "max": 365568
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 200,
+          "median": 204.0,
+          "max": 208
+        },
+        "scoredDocuments": {
+          "min": 77265,
+          "median": 77265.0,
+          "max": 77265
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "archive import",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 221.543,
+      "medianMs": 223.8305,
+      "maxMs": 226.118,
+      "preparationMedianMs": 335.12149999999997,
+      "profiles": {
+        "candidateMs": {
+          "min": 46,
+          "median": 48.0,
+          "max": 50
+        },
+        "candidateHeaderReads": {
+          "min": 34,
+          "median": 34.0,
+          "max": 34
+        },
+        "headerSqlUs": {
+          "min": 747,
+          "median": 854.0,
+          "max": 961
+        },
+        "headerDecryptUs": {
+          "min": 11306,
+          "median": 11482.5,
+          "max": 11659
+        },
+        "headerGzipUs": {
+          "min": 5172,
+          "median": 5343.5,
+          "max": 5515
+        },
+        "headerBoundsUs": {
+          "min": 14836,
+          "median": 15433.5,
+          "max": 16031
+        },
+        "headerDecryptedBytes": {
+          "min": 129753,
+          "median": 129753.0,
+          "max": 129753
+        },
+        "headerExpandedBytes": {
+          "min": 365568,
+          "median": 365568.0,
+          "max": 365568
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 152,
+          "median": 152.0,
+          "max": 152
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "archive import",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 210.657,
+      "medianMs": 211.9985,
+      "maxMs": 213.34,
+      "preparationMedianMs": 335.12149999999997,
+      "profiles": {
+        "candidateMs": {
+          "min": 40,
+          "median": 40.5,
+          "max": 41
+        },
+        "candidateHeaderReads": {
+          "min": 34,
+          "median": 34.0,
+          "max": 34
+        },
+        "headerSqlUs": {
+          "min": 686,
+          "median": 745.5,
+          "max": 805
+        },
+        "headerDecryptUs": {
+          "min": 12466,
+          "median": 13180.5,
+          "max": 13895
+        },
+        "headerGzipUs": {
+          "min": 5017,
+          "median": 5212.0,
+          "max": 5407
+        },
+        "headerBoundsUs": {
+          "min": 9541,
+          "median": 10035.0,
+          "max": 10529
+        },
+        "headerDecryptedBytes": {
+          "min": 129753,
+          "median": 129753.0,
+          "max": 129753
+        },
+        "headerExpandedBytes": {
+          "min": 365568,
+          "median": 365568.0,
+          "max": 365568
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 148,
+          "median": 148.5,
+          "max": 149
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "archive import",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 217.699,
+      "medianMs": 223.96,
+      "maxMs": 230.221,
+      "preparationMedianMs": 331.0555,
+      "profiles": {
+        "candidateMs": {
+          "min": 45,
+          "median": 46.0,
+          "max": 47
+        },
+        "candidateHeaderReads": {
+          "min": 34,
+          "median": 34.0,
+          "max": 34
+        },
+        "headerSqlUs": {
+          "min": 684,
+          "median": 694.5,
+          "max": 705
+        },
+        "headerDecryptUs": {
+          "min": 11287,
+          "median": 11897.5,
+          "max": 12508
+        },
+        "headerGzipUs": {
+          "min": 4902,
+          "median": 4932.5,
+          "max": 4963
+        },
+        "headerBoundsUs": {
+          "min": 16232,
+          "median": 16975.0,
+          "max": 17718
+        },
+        "headerDecryptedBytes": {
+          "min": 129753,
+          "median": 129753.0,
+          "max": 129753
+        },
+        "headerExpandedBytes": {
+          "min": 365568,
+          "median": 365568.0,
+          "max": 365568
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 147,
+          "median": 153.0,
+          "max": 159
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    },
+    {
+      "chunkPages": 64,
+      "query": "archive import",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 217.869,
+      "medianMs": 218.1975,
+      "maxMs": 218.526,
+      "preparationMedianMs": 331.0555,
+      "profiles": {
+        "candidateMs": {
+          "min": 40,
+          "median": 40.0,
+          "max": 40
+        },
+        "candidateHeaderReads": {
+          "min": 34,
+          "median": 34.0,
+          "max": 34
+        },
+        "headerSqlUs": {
+          "min": 645,
+          "median": 704.5,
+          "max": 764
+        },
+        "headerDecryptUs": {
+          "min": 10389,
+          "median": 10954.5,
+          "max": 11520
+        },
+        "headerGzipUs": {
+          "min": 4924,
+          "median": 5069.0,
+          "max": 5214
+        },
+        "headerBoundsUs": {
+          "min": 10762,
+          "median": 10822.0,
+          "max": 10882
+        },
+        "headerDecryptedBytes": {
+          "min": 129753,
+          "median": 129753.0,
+          "max": 129753
+        },
+        "headerExpandedBytes": {
+          "min": 365568,
+          "median": 365568.0,
+          "max": 365568
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 154,
+          "median": 155.0,
+          "max": 156
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "search",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 142.49,
+      "medianMs": 248.257,
+      "maxMs": 354.024,
+      "preparationMedianMs": 361.557,
+      "profiles": {
+        "candidateMs": {
+          "min": 25,
+          "median": 26.5,
+          "max": 28
+        },
+        "candidateHeaderReads": {
+          "min": 7,
+          "median": 7.0,
+          "max": 7
+        },
+        "headerSqlUs": {
+          "min": 369,
+          "median": 415.0,
+          "max": 461
+        },
+        "headerDecryptUs": {
+          "min": 4576,
+          "median": 5087.5,
+          "max": 5599
+        },
+        "headerGzipUs": {
+          "min": 3026,
+          "median": 3133.5,
+          "max": 3241
+        },
+        "headerBoundsUs": {
+          "min": 9379,
+          "median": 9810.0,
+          "max": 10241
+        },
+        "headerDecryptedBytes": {
+          "min": 56883,
+          "median": 56883.0,
+          "max": 56883
+        },
+        "headerExpandedBytes": {
+          "min": 301056,
+          "median": 301056.0,
+          "max": 301056
+        },
+        "scorePostingReads": {
+          "min": 679,
+          "median": 679.0,
+          "max": 679
+        },
+        "numericMs": {
+          "min": 77,
+          "median": 81.0,
+          "max": 85
+        },
+        "scoredDocuments": {
+          "min": 54492,
+          "median": 54492.0,
+          "max": 54492
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "search",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 113.729,
+      "medianMs": 118.775,
+      "maxMs": 123.821,
+      "preparationMedianMs": 361.557,
+      "profiles": {
+        "candidateMs": {
+          "min": 18,
+          "median": 22.0,
+          "max": 26
+        },
+        "candidateHeaderReads": {
+          "min": 7,
+          "median": 7.0,
+          "max": 7
+        },
+        "headerSqlUs": {
+          "min": 415,
+          "median": 415.5,
+          "max": 416
+        },
+        "headerDecryptUs": {
+          "min": 4812,
+          "median": 5589.0,
+          "max": 6366
+        },
+        "headerGzipUs": {
+          "min": 2998,
+          "median": 3371.5,
+          "max": 3745
+        },
+        "headerBoundsUs": {
+          "min": 5100,
+          "median": 6930.0,
+          "max": 8760
+        },
+        "headerDecryptedBytes": {
+          "min": 56883,
+          "median": 56883.0,
+          "max": 56883
+        },
+        "headerExpandedBytes": {
+          "min": 301056,
+          "median": 301056.0,
+          "max": 301056
+        },
+        "scorePostingReads": {
+          "min": 679,
+          "median": 679.0,
+          "max": 679
+        },
+        "numericMs": {
+          "min": 72,
+          "median": 73.0,
+          "max": 74
+        },
+        "scoredDocuments": {
+          "min": 54492,
+          "median": 54492.0,
+          "max": 54492
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "search",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 87.875,
+      "medianMs": 92.53649999999999,
+      "maxMs": 97.198,
+      "preparationMedianMs": 357.90200000000004,
+      "profiles": {
+        "candidateMs": {
+          "min": 23,
+          "median": 24.5,
+          "max": 26
+        },
+        "candidateHeaderReads": {
+          "min": 7,
+          "median": 7.0,
+          "max": 7
+        },
+        "headerSqlUs": {
+          "min": 320,
+          "median": 343.5,
+          "max": 367
+        },
+        "headerDecryptUs": {
+          "min": 4586,
+          "median": 5103.5,
+          "max": 5621
+        },
+        "headerGzipUs": {
+          "min": 3024,
+          "median": 3098.0,
+          "max": 3172
+        },
+        "headerBoundsUs": {
+          "min": 8357,
+          "median": 8867.5,
+          "max": 9378
+        },
+        "headerDecryptedBytes": {
+          "min": 56883,
+          "median": 56883.0,
+          "max": 56883
+        },
+        "headerExpandedBytes": {
+          "min": 301056,
+          "median": 301056.0,
+          "max": 301056
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 43,
+          "median": 45.5,
+          "max": 48
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "search",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 80.77,
+      "medianMs": 86.555,
+      "maxMs": 92.34,
+      "preparationMedianMs": 357.90200000000004,
+      "profiles": {
+        "candidateMs": {
+          "min": 18,
+          "median": 19.0,
+          "max": 20
+        },
+        "candidateHeaderReads": {
+          "min": 7,
+          "median": 7.0,
+          "max": 7
+        },
+        "headerSqlUs": {
+          "min": 301,
+          "median": 305.5,
+          "max": 310
+        },
+        "headerDecryptUs": {
+          "min": 4619,
+          "median": 4800.5,
+          "max": 4982
+        },
+        "headerGzipUs": {
+          "min": 2809,
+          "median": 2890.0,
+          "max": 2971
+        },
+        "headerBoundsUs": {
+          "min": 4121,
+          "median": 4373.0,
+          "max": 4625
+        },
+        "headerDecryptedBytes": {
+          "min": 56883,
+          "median": 56883.0,
+          "max": 56883
+        },
+        "headerExpandedBytes": {
+          "min": 301056,
+          "median": 301056.0,
+          "max": 301056
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 40,
+          "median": 43.5,
+          "max": 47
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "search",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 90.363,
+      "medianMs": 93.881,
+      "maxMs": 97.399,
+      "preparationMedianMs": 340.55899999999997,
+      "profiles": {
+        "candidateMs": {
+          "min": 23,
+          "median": 23.5,
+          "max": 24
+        },
+        "candidateHeaderReads": {
+          "min": 7,
+          "median": 7.0,
+          "max": 7
+        },
+        "headerSqlUs": {
+          "min": 321,
+          "median": 340.5,
+          "max": 360
+        },
+        "headerDecryptUs": {
+          "min": 4570,
+          "median": 4574.0,
+          "max": 4578
+        },
+        "headerGzipUs": {
+          "min": 2859,
+          "median": 2885.0,
+          "max": 2911
+        },
+        "headerBoundsUs": {
+          "min": 8856,
+          "median": 9200.0,
+          "max": 9544
+        },
+        "headerDecryptedBytes": {
+          "min": 56883,
+          "median": 56883.0,
+          "max": 56883
+        },
+        "headerExpandedBytes": {
+          "min": 301056,
+          "median": 301056.0,
+          "max": 301056
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 43,
+          "median": 46.5,
+          "max": 50
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "search",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 86.602,
+      "medianMs": 88.9125,
+      "maxMs": 91.223,
+      "preparationMedianMs": 340.55899999999997,
+      "profiles": {
+        "candidateMs": {
+          "min": 18,
+          "median": 19.0,
+          "max": 20
+        },
+        "candidateHeaderReads": {
+          "min": 7,
+          "median": 7.0,
+          "max": 7
+        },
+        "headerSqlUs": {
+          "min": 301,
+          "median": 306.5,
+          "max": 312
+        },
+        "headerDecryptUs": {
+          "min": 4628,
+          "median": 4704.0,
+          "max": 4780
+        },
+        "headerGzipUs": {
+          "min": 2822,
+          "median": 2834.0,
+          "max": 2846
+        },
+        "headerBoundsUs": {
+          "min": 3613,
+          "median": 3629.5,
+          "max": 3646
+        },
+        "headerDecryptedBytes": {
+          "min": 56883,
+          "median": 56883.0,
+          "max": 56883
+        },
+        "headerExpandedBytes": {
+          "min": 301056,
+          "median": 301056.0,
+          "max": 301056
+        },
+        "scorePostingReads": {
+          "min": 490,
+          "median": 490.0,
+          "max": 490
+        },
+        "numericMs": {
+          "min": 46,
+          "median": 47.0,
+          "max": 48
+        },
+        "scoredDocuments": {
+          "min": 8379,
+          "median": 8379.0,
+          "max": 8379
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "metadata",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 60.678,
+      "medianMs": 67.6345,
+      "maxMs": 74.591,
+      "preparationMedianMs": 343.678,
+      "profiles": {
+        "candidateMs": {
+          "min": 13,
+          "median": 13.5,
+          "max": 14
+        },
+        "candidateHeaderReads": {
+          "min": 2,
+          "median": 2.0,
+          "max": 2
+        },
+        "headerSqlUs": {
+          "min": 97,
+          "median": 105.0,
+          "max": 113
+        },
+        "headerDecryptUs": {
+          "min": 1395,
+          "median": 1443.5,
+          "max": 1492
+        },
+        "headerGzipUs": {
+          "min": 808,
+          "median": 954.0,
+          "max": 1100
+        },
+        "headerBoundsUs": {
+          "min": 6208,
+          "median": 6399.0,
+          "max": 6590
+        },
+        "headerDecryptedBytes": {
+          "min": 16279,
+          "median": 16279.0,
+          "max": 16279
+        },
+        "headerExpandedBytes": {
+          "min": 86016,
+          "median": 86016.0,
+          "max": 86016
+        },
+        "scorePostingReads": {
+          "min": 188,
+          "median": 188.0,
+          "max": 188
+        },
+        "numericMs": {
+          "min": 25,
+          "median": 26.0,
+          "max": 27
+        },
+        "scoredDocuments": {
+          "min": 19710,
+          "median": 19710.0,
+          "max": 19710
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "metadata",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 52.879,
+      "medianMs": 54.730000000000004,
+      "maxMs": 56.581,
+      "preparationMedianMs": 343.678,
+      "profiles": {
+        "candidateMs": {
+          "min": 8,
+          "median": 8.0,
+          "max": 8
+        },
+        "candidateHeaderReads": {
+          "min": 2,
+          "median": 2.0,
+          "max": 2
+        },
+        "headerSqlUs": {
+          "min": 80,
+          "median": 94.0,
+          "max": 108
+        },
+        "headerDecryptUs": {
+          "min": 1249,
+          "median": 1301.0,
+          "max": 1353
+        },
+        "headerGzipUs": {
+          "min": 794,
+          "median": 800.0,
+          "max": 806
+        },
+        "headerBoundsUs": {
+          "min": 1060,
+          "median": 1100.0,
+          "max": 1140
+        },
+        "headerDecryptedBytes": {
+          "min": 16279,
+          "median": 16279.0,
+          "max": 16279
+        },
+        "headerExpandedBytes": {
+          "min": 86016,
+          "median": 86016.0,
+          "max": 86016
+        },
+        "scorePostingReads": {
+          "min": 188,
+          "median": 188.0,
+          "max": 188
+        },
+        "numericMs": {
+          "min": 22,
+          "median": 23.0,
+          "max": 24
+        },
+        "scoredDocuments": {
+          "min": 19710,
+          "median": 19710.0,
+          "max": 19710
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "metadata",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 51.563,
+      "medianMs": 53.47,
+      "maxMs": 55.377,
+      "preparationMedianMs": 343.126,
+      "profiles": {
+        "candidateMs": {
+          "min": 16,
+          "median": 17.5,
+          "max": 19
+        },
+        "candidateHeaderReads": {
+          "min": 2,
+          "median": 2.0,
+          "max": 2
+        },
+        "headerSqlUs": {
+          "min": 105,
+          "median": 1428.5,
+          "max": 2752
+        },
+        "headerDecryptUs": {
+          "min": 1375,
+          "median": 1381.5,
+          "max": 1388
+        },
+        "headerGzipUs": {
+          "min": 822,
+          "median": 824.5,
+          "max": 827
+        },
+        "headerBoundsUs": {
+          "min": 6035,
+          "median": 6061.5,
+          "max": 6088
+        },
+        "headerDecryptedBytes": {
+          "min": 16279,
+          "median": 16279.0,
+          "max": 16279
+        },
+        "headerExpandedBytes": {
+          "min": 86016,
+          "median": 86016.0,
+          "max": 86016
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 13,
+          "median": 13.5,
+          "max": 14
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "metadata",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 46.087,
+      "medianMs": 47.034000000000006,
+      "maxMs": 47.981,
+      "preparationMedianMs": 343.126,
+      "profiles": {
+        "candidateMs": {
+          "min": 10,
+          "median": 10.5,
+          "max": 11
+        },
+        "candidateHeaderReads": {
+          "min": 2,
+          "median": 2.0,
+          "max": 2
+        },
+        "headerSqlUs": {
+          "min": 87,
+          "median": 96.5,
+          "max": 106
+        },
+        "headerDecryptUs": {
+          "min": 1285,
+          "median": 1290.5,
+          "max": 1296
+        },
+        "headerGzipUs": {
+          "min": 806,
+          "median": 813.5,
+          "max": 821
+        },
+        "headerBoundsUs": {
+          "min": 1070,
+          "median": 1109.5,
+          "max": 1149
+        },
+        "headerDecryptedBytes": {
+          "min": 16279,
+          "median": 16279.0,
+          "max": 16279
+        },
+        "headerExpandedBytes": {
+          "min": 86016,
+          "median": 86016.0,
+          "max": 86016
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 12,
+          "median": 12.5,
+          "max": 13
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "metadata",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 50.432,
+      "medianMs": 50.5345,
+      "maxMs": 50.637,
+      "preparationMedianMs": 333.6755,
+      "profiles": {
+        "candidateMs": {
+          "min": 16,
+          "median": 16.0,
+          "max": 16
+        },
+        "candidateHeaderReads": {
+          "min": 2,
+          "median": 2.0,
+          "max": 2
+        },
+        "headerSqlUs": {
+          "min": 84,
+          "median": 86.0,
+          "max": 88
+        },
+        "headerDecryptUs": {
+          "min": 1234,
+          "median": 1250.5,
+          "max": 1267
+        },
+        "headerGzipUs": {
+          "min": 778,
+          "median": 785.5,
+          "max": 793
+        },
+        "headerBoundsUs": {
+          "min": 5686,
+          "median": 5802.5,
+          "max": 5919
+        },
+        "headerDecryptedBytes": {
+          "min": 16279,
+          "median": 16279.0,
+          "max": 16279
+        },
+        "headerExpandedBytes": {
+          "min": 86016,
+          "median": 86016.0,
+          "max": 86016
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 13,
+          "median": 13.0,
+          "max": 13
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "metadata",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 45.079,
+      "medianMs": 45.6525,
+      "maxMs": 46.226,
+      "preparationMedianMs": 333.6755,
+      "profiles": {
+        "candidateMs": {
+          "min": 10,
+          "median": 11.0,
+          "max": 12
+        },
+        "candidateHeaderReads": {
+          "min": 2,
+          "median": 2.0,
+          "max": 2
+        },
+        "headerSqlUs": {
+          "min": 104,
+          "median": 106.0,
+          "max": 108
+        },
+        "headerDecryptUs": {
+          "min": 1407,
+          "median": 1418.0,
+          "max": 1429
+        },
+        "headerGzipUs": {
+          "min": 790,
+          "median": 798.5,
+          "max": 807
+        },
+        "headerBoundsUs": {
+          "min": 1082,
+          "median": 1138.5,
+          "max": 1195
+        },
+        "headerDecryptedBytes": {
+          "min": 16279,
+          "median": 16279.0,
+          "max": 16279
+        },
+        "headerExpandedBytes": {
+          "min": 86016,
+          "median": 86016.0,
+          "max": 86016
+        },
+        "scorePostingReads": {
+          "min": 122,
+          "median": 122.0,
+          "max": 122
+        },
+        "numericMs": {
+          "min": 13,
+          "median": 13.5,
+          "max": 14
+        },
+        "scoredDocuments": {
+          "min": 2718,
+          "median": 2718.0,
+          "max": 2718
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "create",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 129.828,
+      "medianMs": 491.658,
+      "maxMs": 853.488,
+      "preparationMedianMs": 341.11199999999997,
+      "profiles": {
+        "candidateMs": {
+          "min": 27,
+          "median": 27.5,
+          "max": 28
+        },
+        "candidateHeaderReads": {
+          "min": 8,
+          "median": 8.0,
+          "max": 8
+        },
+        "headerSqlUs": {
+          "min": 376,
+          "median": 381.5,
+          "max": 387
+        },
+        "headerDecryptUs": {
+          "min": 5498,
+          "median": 5816.5,
+          "max": 6135
+        },
+        "headerGzipUs": {
+          "min": 3553,
+          "median": 3559.5,
+          "max": 3566
+        },
+        "headerBoundsUs": {
+          "min": 12625,
+          "median": 12664.0,
+          "max": 12703
+        },
+        "headerDecryptedBytes": {
+          "min": 65036,
+          "median": 65036.0,
+          "max": 65036
+        },
+        "headerExpandedBytes": {
+          "min": 344064,
+          "median": 344064.0,
+          "max": 344064
+        },
+        "scorePostingReads": {
+          "min": 760,
+          "median": 760.0,
+          "max": 760
+        },
+        "numericMs": {
+          "min": 70,
+          "median": 74.0,
+          "max": 78
+        },
+        "scoredDocuments": {
+          "min": 58109,
+          "median": 58109.0,
+          "max": 58109
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "create",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 117.357,
+      "medianMs": 118.4635,
+      "maxMs": 119.57,
+      "preparationMedianMs": 341.11199999999997,
+      "profiles": {
+        "candidateMs": {
+          "min": 17,
+          "median": 17.5,
+          "max": 18
+        },
+        "candidateHeaderReads": {
+          "min": 8,
+          "median": 8.0,
+          "max": 8
+        },
+        "headerSqlUs": {
+          "min": 297,
+          "median": 315.0,
+          "max": 333
+        },
+        "headerDecryptUs": {
+          "min": 5089,
+          "median": 5263.0,
+          "max": 5437
+        },
+        "headerGzipUs": {
+          "min": 3252,
+          "median": 3314.0,
+          "max": 3376
+        },
+        "headerBoundsUs": {
+          "min": 4376,
+          "median": 4413.5,
+          "max": 4451
+        },
+        "headerDecryptedBytes": {
+          "min": 65036,
+          "median": 65036.0,
+          "max": 65036
+        },
+        "headerExpandedBytes": {
+          "min": 344064,
+          "median": 344064.0,
+          "max": 344064
+        },
+        "scorePostingReads": {
+          "min": 760,
+          "median": 760.0,
+          "max": 760
+        },
+        "numericMs": {
+          "min": 74,
+          "median": 75.0,
+          "max": 76
+        },
+        "scoredDocuments": {
+          "min": 58109,
+          "median": 58109.0,
+          "max": 58109
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "create",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 111.186,
+      "medianMs": 294.765,
+      "maxMs": 478.344,
+      "preparationMedianMs": 354.8455,
+      "profiles": {
+        "candidateMs": {
+          "min": 26,
+          "median": 27.5,
+          "max": 29
+        },
+        "candidateHeaderReads": {
+          "min": 8,
+          "median": 8.0,
+          "max": 8
+        },
+        "headerSqlUs": {
+          "min": 375,
+          "median": 387.5,
+          "max": 400
+        },
+        "headerDecryptUs": {
+          "min": 5610,
+          "median": 5866.0,
+          "max": 6122
+        },
+        "headerGzipUs": {
+          "min": 3467,
+          "median": 3642.0,
+          "max": 3817
+        },
+        "headerBoundsUs": {
+          "min": 10502,
+          "median": 10540.5,
+          "max": 10579
+        },
+        "headerDecryptedBytes": {
+          "min": 65036,
+          "median": 65036.0,
+          "max": 65036
+        },
+        "headerExpandedBytes": {
+          "min": 344064,
+          "median": 344064.0,
+          "max": 344064
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 55,
+          "median": 57.0,
+          "max": 59
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "create",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 101.997,
+      "medianMs": 108.9385,
+      "maxMs": 115.88,
+      "preparationMedianMs": 354.8455,
+      "profiles": {
+        "candidateMs": {
+          "min": 27,
+          "median": 29.5,
+          "max": 32
+        },
+        "candidateHeaderReads": {
+          "min": 8,
+          "median": 8.0,
+          "max": 8
+        },
+        "headerSqlUs": {
+          "min": 361,
+          "median": 1049.0,
+          "max": 1737
+        },
+        "headerDecryptUs": {
+          "min": 5358,
+          "median": 6314.5,
+          "max": 7271
+        },
+        "headerGzipUs": {
+          "min": 3497,
+          "median": 4111.0,
+          "max": 4725
+        },
+        "headerBoundsUs": {
+          "min": 8627,
+          "median": 9315.5,
+          "max": 10004
+        },
+        "headerDecryptedBytes": {
+          "min": 65036,
+          "median": 65036.0,
+          "max": 65036
+        },
+        "headerExpandedBytes": {
+          "min": 344064,
+          "median": 344064.0,
+          "max": 344064
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 52,
+          "median": 56.5,
+          "max": 61
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "create",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 101.739,
+      "medianMs": 107.261,
+      "maxMs": 112.783,
+      "preparationMedianMs": 346.277,
+      "profiles": {
+        "candidateMs": {
+          "min": 28,
+          "median": 28.5,
+          "max": 29
+        },
+        "candidateHeaderReads": {
+          "min": 8,
+          "median": 8.0,
+          "max": 8
+        },
+        "headerSqlUs": {
+          "min": 348,
+          "median": 355.5,
+          "max": 363
+        },
+        "headerDecryptUs": {
+          "min": 5277,
+          "median": 5392.0,
+          "max": 5507
+        },
+        "headerGzipUs": {
+          "min": 3289,
+          "median": 3406.0,
+          "max": 3523
+        },
+        "headerBoundsUs": {
+          "min": 11977,
+          "median": 12079.5,
+          "max": 12182
+        },
+        "headerDecryptedBytes": {
+          "min": 65036,
+          "median": 65036.0,
+          "max": 65036
+        },
+        "headerExpandedBytes": {
+          "min": 344064,
+          "median": 344064.0,
+          "max": 344064
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 51,
+          "median": 55.5,
+          "max": 60
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "create",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 91.032,
+      "medianMs": 91.8205,
+      "maxMs": 92.609,
+      "preparationMedianMs": 346.277,
+      "profiles": {
+        "candidateMs": {
+          "min": 20,
+          "median": 20.0,
+          "max": 20
+        },
+        "candidateHeaderReads": {
+          "min": 8,
+          "median": 8.0,
+          "max": 8
+        },
+        "headerSqlUs": {
+          "min": 300,
+          "median": 330.0,
+          "max": 360
+        },
+        "headerDecryptUs": {
+          "min": 5090,
+          "median": 5296.0,
+          "max": 5502
+        },
+        "headerGzipUs": {
+          "min": 3162,
+          "median": 3267.0,
+          "max": 3372
+        },
+        "headerBoundsUs": {
+          "min": 4237,
+          "median": 4345.0,
+          "max": 4453
+        },
+        "headerDecryptedBytes": {
+          "min": 65036,
+          "median": 65036.0,
+          "max": 65036
+        },
+        "headerExpandedBytes": {
+          "min": 344064,
+          "median": 344064.0,
+          "max": 344064
+        },
+        "scorePostingReads": {
+          "min": 600,
+          "median": 600.0,
+          "max": 600
+        },
+        "numericMs": {
+          "min": 49,
+          "median": 49.5,
+          "max": 50
+        },
+        "scoredDocuments": {
+          "min": 9392,
+          "median": 9392.0,
+          "max": 9392
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "archive import",
+      "source": null,
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 284.079,
+      "medianMs": 556.6905,
+      "maxMs": 829.302,
+      "preparationMedianMs": 349.7415,
+      "profiles": {
+        "candidateMs": {
+          "min": 46,
+          "median": 47.5,
+          "max": 49
+        },
+        "candidateHeaderReads": {
+          "min": 17,
+          "median": 17.0,
+          "max": 17
+        },
+        "headerSqlUs": {
+          "min": 686,
+          "median": 723.0,
+          "max": 760
+        },
+        "headerDecryptUs": {
+          "min": 10718,
+          "median": 10758.5,
+          "max": 10799
+        },
+        "headerGzipUs": {
+          "min": 6731,
+          "median": 6890.0,
+          "max": 7049
+        },
+        "headerBoundsUs": {
+          "min": 17071,
+          "median": 17554.5,
+          "max": 18038
+        },
+        "headerDecryptedBytes": {
+          "min": 130257,
+          "median": 130257.0,
+          "max": 130257
+        },
+        "headerExpandedBytes": {
+          "min": 731136,
+          "median": 731136.0,
+          "max": 731136
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 201,
+          "median": 205.5,
+          "max": 210
+        },
+        "scoredDocuments": {
+          "min": 77265,
+          "median": 77265.0,
+          "max": 77265
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "archive import",
+      "source": null,
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 260.267,
+      "medianMs": 272.4385,
+      "maxMs": 284.61,
+      "preparationMedianMs": 349.7415,
+      "profiles": {
+        "candidateMs": {
+          "min": 37,
+          "median": 38.0,
+          "max": 39
+        },
+        "candidateHeaderReads": {
+          "min": 17,
+          "median": 17.0,
+          "max": 17
+        },
+        "headerSqlUs": {
+          "min": 646,
+          "median": 685.5,
+          "max": 725
+        },
+        "headerDecryptUs": {
+          "min": 10527,
+          "median": 10714.5,
+          "max": 10902
+        },
+        "headerGzipUs": {
+          "min": 6801,
+          "median": 6894.5,
+          "max": 6988
+        },
+        "headerBoundsUs": {
+          "min": 10140,
+          "median": 10190.5,
+          "max": 10241
+        },
+        "headerDecryptedBytes": {
+          "min": 130257,
+          "median": 130257.0,
+          "max": 130257
+        },
+        "headerExpandedBytes": {
+          "min": 731136,
+          "median": 731136.0,
+          "max": 731136
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 197,
+          "median": 208.0,
+          "max": 219
+        },
+        "scoredDocuments": {
+          "min": 77265,
+          "median": 77265.0,
+          "max": 77265
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "archive import",
+      "source": "group:email",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 222.673,
+      "medianMs": 302.5505,
+      "maxMs": 382.428,
+      "preparationMedianMs": 390.2235,
+      "profiles": {
+        "candidateMs": {
+          "min": 46,
+          "median": 52.0,
+          "max": 58
+        },
+        "candidateHeaderReads": {
+          "min": 17,
+          "median": 17.0,
+          "max": 17
+        },
+        "headerSqlUs": {
+          "min": 802,
+          "median": 895.0,
+          "max": 988
+        },
+        "headerDecryptUs": {
+          "min": 10534,
+          "median": 10691.5,
+          "max": 10849
+        },
+        "headerGzipUs": {
+          "min": 6946,
+          "median": 6971.0,
+          "max": 6996
+        },
+        "headerBoundsUs": {
+          "min": 16473,
+          "median": 17178.0,
+          "max": 17883
+        },
+        "headerDecryptedBytes": {
+          "min": 130257,
+          "median": 130257.0,
+          "max": 130257
+        },
+        "headerExpandedBytes": {
+          "min": 731136,
+          "median": 731136.0,
+          "max": 731136
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 146,
+          "median": 149.5,
+          "max": 153
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "archive import",
+      "source": "group:email",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 217.202,
+      "medianMs": 217.7375,
+      "maxMs": 218.273,
+      "preparationMedianMs": 390.2235,
+      "profiles": {
+        "candidateMs": {
+          "min": 38,
+          "median": 40.5,
+          "max": 43
+        },
+        "candidateHeaderReads": {
+          "min": 17,
+          "median": 17.0,
+          "max": 17
+        },
+        "headerSqlUs": {
+          "min": 670,
+          "median": 708.0,
+          "max": 746
+        },
+        "headerDecryptUs": {
+          "min": 10610,
+          "median": 10761.0,
+          "max": 10912
+        },
+        "headerGzipUs": {
+          "min": 6844,
+          "median": 7011.0,
+          "max": 7178
+        },
+        "headerBoundsUs": {
+          "min": 9471,
+          "median": 10469.5,
+          "max": 11468
+        },
+        "headerDecryptedBytes": {
+          "min": 130257,
+          "median": 130257.0,
+          "max": 130257
+        },
+        "headerExpandedBytes": {
+          "min": 731136,
+          "median": 731136.0,
+          "max": 731136
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 152,
+          "median": 155.5,
+          "max": 159
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "archive import",
+      "source": "imap",
+      "stage": "prepared",
+      "samples": 2,
+      "minMs": 228.099,
+      "medianMs": 228.3355,
+      "maxMs": 228.572,
+      "preparationMedianMs": 352.3,
+      "profiles": {
+        "candidateMs": {
+          "min": 46,
+          "median": 46.5,
+          "max": 47
+        },
+        "candidateHeaderReads": {
+          "min": 17,
+          "median": 17.0,
+          "max": 17
+        },
+        "headerSqlUs": {
+          "min": 698,
+          "median": 743.0,
+          "max": 788
+        },
+        "headerDecryptUs": {
+          "min": 10795,
+          "median": 11020.5,
+          "max": 11246
+        },
+        "headerGzipUs": {
+          "min": 6929,
+          "median": 6994.5,
+          "max": 7060
+        },
+        "headerBoundsUs": {
+          "min": 16500,
+          "median": 16795.0,
+          "max": 17090
+        },
+        "headerDecryptedBytes": {
+          "min": 130257,
+          "median": 130257.0,
+          "max": 130257
+        },
+        "headerExpandedBytes": {
+          "min": 731136,
+          "median": 731136.0,
+          "max": 731136
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 157,
+          "median": 158.5,
+          "max": 160
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    },
+    {
+      "chunkPages": 256,
+      "query": "archive import",
+      "source": "imap",
+      "stage": "warm",
+      "samples": 2,
+      "minMs": 218.643,
+      "medianMs": 223.162,
+      "maxMs": 227.681,
+      "preparationMedianMs": 352.3,
+      "profiles": {
+        "candidateMs": {
+          "min": 40,
+          "median": 42.5,
+          "max": 45
+        },
+        "candidateHeaderReads": {
+          "min": 17,
+          "median": 17.0,
+          "max": 17
+        },
+        "headerSqlUs": {
+          "min": 755,
+          "median": 796.0,
+          "max": 837
+        },
+        "headerDecryptUs": {
+          "min": 10568,
+          "median": 10892.0,
+          "max": 11216
+        },
+        "headerGzipUs": {
+          "min": 6909,
+          "median": 7035.0,
+          "max": 7161
+        },
+        "headerBoundsUs": {
+          "min": 10205,
+          "median": 11252.0,
+          "max": 12299
+        },
+        "headerDecryptedBytes": {
+          "min": 130257,
+          "median": 130257.0,
+          "max": 130257
+        },
+        "headerExpandedBytes": {
+          "min": 731136,
+          "median": 731136.0,
+          "max": 731136
+        },
+        "scorePostingReads": {
+          "min": 1666,
+          "median": 1666.0,
+          "max": 1666
+        },
+        "numericMs": {
+          "min": 157,
+          "median": 158.0,
+          "max": 159
+        },
+        "scoredDocuments": {
+          "min": 15436,
+          "median": 15436.0,
+          "max": 15436
+        }
+      }
+    }
+  ],
+  "memoryByRun": [
+    {
+      "width": 16,
+      "pass": 0,
+      "peakRss": 82706432,
+      "memoryMax": "1999998976",
+      "memoryPeak": "90746880",
+      "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+      "invocationId": "0006b36a1e314c78a12d2748067147ee"
+    },
+    {
+      "width": 16,
+      "pass": 1,
+      "peakRss": 83095552,
+      "memoryMax": "1999998976",
+      "memoryPeak": "75853824",
+      "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+      "invocationId": "c2c1559b48e34a85b30cf7869f12d1d3"
+    },
+    {
+      "width": 64,
+      "pass": 0,
+      "peakRss": 81616896,
+      "memoryMax": "1999998976",
+      "memoryPeak": "74362880",
+      "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+      "invocationId": "388a10947d4642f3834be3d1c0bfa98d"
+    },
+    {
+      "width": 64,
+      "pass": 1,
+      "peakRss": 82046976,
+      "memoryMax": "1999998976",
+      "memoryPeak": "75116544",
+      "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+      "invocationId": "73042071a8d446379729a402efb93781"
+    },
+    {
+      "width": 256,
+      "pass": 0,
+      "peakRss": 84676608,
+      "memoryMax": "1999998976",
+      "memoryPeak": "77500416",
+      "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+      "invocationId": "5ef1d9b7faca490d857601c135776387"
+    },
+    {
+      "width": 256,
+      "pass": 1,
+      "peakRss": 85024768,
+      "memoryMax": "1999998976",
+      "memoryPeak": "78364672",
+      "memoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+      "invocationId": "701c9649806c40cea2b5b60bc4022759"
+    }
+  ],
+  "orderedResultDigests": [
+    {
+      "query": "search",
+      "source": null,
+      "orderedTop100Sha256": "901c519da60bfeacf204b8bece253630b849ce141bc793cae8786f496c2260c9"
+    },
+    {
+      "query": "search",
+      "source": "group:email",
+      "orderedTop100Sha256": "0f72eb6775444912217a6977de80ee0d5fea267208318915924b27c39c3ff171"
+    },
+    {
+      "query": "search",
+      "source": "imap",
+      "orderedTop100Sha256": "0f72eb6775444912217a6977de80ee0d5fea267208318915924b27c39c3ff171"
+    },
+    {
+      "query": "metadata",
+      "source": null,
+      "orderedTop100Sha256": "da55c8facb494c06eed346afb572b68d1ec6821a72a99931efe29ca5164b3aee"
+    },
+    {
+      "query": "metadata",
+      "source": "group:email",
+      "orderedTop100Sha256": "b9d4bb34943fe98d120e60a4d8b3d740d63a16fabb658b6236576700106309b3"
+    },
+    {
+      "query": "metadata",
+      "source": "imap",
+      "orderedTop100Sha256": "b9d4bb34943fe98d120e60a4d8b3d740d63a16fabb658b6236576700106309b3"
+    },
+    {
+      "query": "create",
+      "source": null,
+      "orderedTop100Sha256": "0c1c716af66e35466c5b96110346f54141b8905c64437e3485cd049fd25564b8"
+    },
+    {
+      "query": "create",
+      "source": "group:email",
+      "orderedTop100Sha256": "f80c28b06e71e8cd95c17e8ce71841cbb35c287d71950ee7ce91e0076b21e6d5"
+    },
+    {
+      "query": "create",
+      "source": "imap",
+      "orderedTop100Sha256": "f80c28b06e71e8cd95c17e8ce71841cbb35c287d71950ee7ce91e0076b21e6d5"
+    },
+    {
+      "query": "archive import",
+      "source": null,
+      "orderedTop100Sha256": "1d5ec4ee68c3cecb9bbc168ab6acac149ecba688d6e6929a4d768738bdda678b"
+    },
+    {
+      "query": "archive import",
+      "source": "group:email",
+      "orderedTop100Sha256": "a88fc56b108c59957ad57baaa76d6617d548806765a36e3890eb36c083409a8d"
+    },
+    {
+      "query": "archive import",
+      "source": "imap",
+      "orderedTop100Sha256": "a88fc56b108c59957ad57baaa76d6617d548806765a36e3890eb36c083409a8d"
+    }
+  ],
+  "artifacts": {
+    "executableSha256": "69f94a99befa47d47d552d15c95475411b9a0ab1874c5614f6a0429e1da4a20f",
+    "probeSourceSha256": "34f4dade48221556dc1183f56d6671b5f46576ead3f1fd7497be3b2e4a5f4439",
+    "frozenSourceArchive": "app/build/benchmarks/two-million-managed-source-20261029/app",
+    "scratchPatch": "--- frozen/lib/services/disk_search_index_io.dart\n+++ scratch/lib/services/disk_search_index_io.dart\n@@ -1333,6 +1333,50 @@\n       List<int>? allowedPages,\n     ) async {\n       final impact = rankingQuery.term(term, word);\n+      final chunkPages = int.parse(Platform.environment['CANDIDATE_CHUNK_PAGES'] ?? '16');\n+      if (![16, 64, 256].contains(chunkPages)) throw StateError('Invalid scratch chunk width');\n+      final headerClock = Stopwatch()..start();\n+      final compact = database.select(\n+        'SELECT page, payload FROM candidateheaders_$chunkPages WHERE term = ? ORDER BY page',\n+        [term],\n+      );\n+      _searchProfile.update('headerSqlUs', (n) => n + headerClock.elapsedMicroseconds, ifAbsent: () => headerClock.elapsedMicroseconds);\n+      if (compact.isNotEmpty) {\n+        final allowed = allowedPages?.toSet();\n+        final allowedChunks = allowed?.map((page) => page ~/ chunkPages).toSet();\n+        for (final row in compact) {\n+          if (generation != searchGeneration) return;\n+          final chunk = row['page'] as int;\n+          if (allowedChunks != null && !allowedChunks.contains(chunk)) continue;\n+          headerClock.reset();\n+          final compressed = await unsealBytes(row['payload'] as List<int>);\n+          _searchProfile.update('headerDecryptUs', (n) => n + headerClock.elapsedMicroseconds, ifAbsent: () => headerClock.elapsedMicroseconds);\n+          headerClock.reset();\n+          final data = _managedDecode(compressed);\n+          _searchProfile.update('headerGzipUs', (n) => n + headerClock.elapsedMicroseconds, ifAbsent: () => headerClock.elapsedMicroseconds);\n+          _searchProfile.update('headerDecryptedBytes', (n) => n + compressed.length, ifAbsent: () => compressed.length);\n+          _searchProfile.update('headerExpandedBytes', (n) => n + data.length, ifAbsent: () => data.length);\n+          if (data.length != chunkPages * _DiskRanking.postingBytes) throw StateError('Invalid candidate header chunk');\n+          _searchProfile.update('candidateHeaderReads', (n) => n + 1, ifAbsent: () => 1);\n+          headerClock.reset();\n+          for (var n = 0; n < chunkPages && (chunk * chunkPages + n) * postingPageSize < nextDocument; n++) {\n+            final pageNumber = chunk * chunkPages + n;\n+            if (allowed != null && !allowed.contains(pageNumber)) continue;\n+            if (sourcePages != null && !Iterable<int>.generate(8, (n) => pageNumber * 8 + n).any(sourcePages.contains)) continue;\n+            final header = Uint8List.sublistView(data, n * _DiskRanking.postingBytes, (n + 1) * _DiskRanking.postingBytes);\n+            if (!Uint8List.sublistView(header, 0, _DiskRanking.bitmapBytes).any((v) => v != 0)) continue;\n+            if (impact != null) await rankingQuery.posting(pageNumber, header, impact);\n+            _searchProfile.update('postingReads', (n) => n + 1, ifAbsent: () => 1);\n+            final start = pageNumber * _DiskRanking.bitmapBytes;\n+            for (var byte = 0; byte < _DiskRanking.bitmapBytes && start + byte < bits.length; byte++) {\n+              bits[start + byte] |= header[byte];\n+            }\n+          }\n+          _searchProfile.update('headerBoundsUs', (n) => n + headerClock.elapsedMicroseconds, ifAbsent: () => headerClock.elapsedMicroseconds);\n+          await Future<void>.delayed(Duration.zero);\n+        }\n+        return;\n+      }\n       var after = -1;\n       var offset = 0;\n       while (true) {\n--- frozen/lib/services/disk_search_ranking.dart\n+++ scratch/lib/services/disk_search_ranking.dart\n@@ -509,7 +509,7 @@\n   }\n \n   Future<void> posting(int page, Uint8List payload, _Term info) async {\n-    if (payload.length <= _DiskRanking.postingBytes) {\n+    if (payload.length < _DiskRanking.postingBytes) {\n       throw StateError('Incomplete search ranking index.');\n     }\n     final impact = ByteData.sublistView(payload);\n",
+    "rawReports": {
+      "width-16-pass-0.json": {
+        "path": "app/build/benchmarks/candidate-header-100k-audit-20261029/width-16-pass-0.json",
+        "sha256": "f5451ab51d4bd4b824e0577e9a2a46f18f5ef52f751130a9e4f7566ffdd499a6"
+      },
+      "width-16-pass-1.json": {
+        "path": "app/build/benchmarks/candidate-header-100k-audit-20261029/width-16-pass-1.json",
+        "sha256": "9f81b31ac71feb1234a4647ead04540d6ef4cd908891462e0255625461027e20"
+      },
+      "width-64-pass-0.json": {
+        "path": "app/build/benchmarks/candidate-header-100k-audit-20261029/width-64-pass-0.json",
+        "sha256": "e6fa6de1f00f79471c53cb452d7b8445372b328f098844080e6f8e40dabf6ce8"
+      },
+      "width-64-pass-1.json": {
+        "path": "app/build/benchmarks/candidate-header-100k-audit-20261029/width-64-pass-1.json",
+        "sha256": "35d556dc2ca04dbe1185cbf93fd3c8305b0cd89b5b1b21d6ff9b7241d53ac04c"
+      },
+      "width-256-pass-0.json": {
+        "path": "app/build/benchmarks/candidate-header-100k-audit-20261029/width-256-pass-0.json",
+        "sha256": "f04d4a01f4e87bd39fb5bfabe9d2c99e0c31bbaa14bbb97bbd95bf9e1b00d1ec"
+      },
+      "width-256-pass-1.json": {
+        "path": "app/build/benchmarks/candidate-header-100k-audit-20261029/width-256-pass-1.json",
+        "sha256": "e945986db540274c5464ffe0cd1b7a4d0cf8f879509a45c8c85118e6748f37be"
+      }
+    }
+  }
+}

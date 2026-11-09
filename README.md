@@ -1,73 +1,130 @@
-Lifenezier (Life orginizer) is a program that helps to organize and search ALL your information.
+# Lifenizer Next
 
-1. Import data from some source (google, whatsapp, PDF, Scanned Image, minecraft chats ...)
-2. Search through all of it to find something you only remember partially (Conversation, a name, someones birthday)
+New Flutter + ASP.NET Core implementation. The legacy prototype remains in the repository root folders.
 
-## Motivation
-Its very hard to remember stuff. I and wanted a way to save all of my data and make it searchable.
+## Backend
 
-## Installation
-### Development
-1. Get docker
-2. Get dotnet runtime
-2. Clone this repo
-4. `cd lifenizer`
-3. `dotnet run`
+```bash
+cd backend
+dotnet restore LifenizerNext.slnx --ignore-failed-sources
+dotnet test LifenizerNext.slnx --no-restore
+../scripts/run-api.sh
+```
 
-### Usage
-1. Install docker
-2. execute with docker
+The backend exposes:
 
+- `POST /api/auth/register` and `POST /api/auth/login`
+- `POST /api/auth/firebase` (explicit opt-in only)
+- `POST /api/auth/dev-login` for local/e2e when enabled
+- `/api/pairing/*` for one-link enrollment, device approval and session refresh
+- `POST /api/sync/push`
+- `GET /api/sync/pull?since=0`
+- `GET /api/imports/capabilities`
+- `POST /api/imports/{source}` for normalized plaintext import previews
+- `POST /api/analysis/relations/extract`
+- `POST /api/usage/events`
 
+Provider imports currently cover IMAP email, Paperless, WhatsApp, Telegram, Signal, Discord export/API, Slack, Teams, Facebook Messenger, Instagram DM, iMessage/SMS text exports, local mbox exports, git history, browser extension capture payloads, Google search history, bookmarks, browser history, YouTube transcripts, scanned OCR text, Lifenizer backup bundles, and self-hosted whisper-trained audio transcription. Production secrets are supplied through request metadata or configuration, while tests use placeholder secrets and mock servers.
 
-## Terms
-Stay consistant and use these words to avoid confusion
-- `conversation` any kind of information exchange, can be single word to whole groupchat history. 
-- `importer` gets external data into the system and feeds it to an `converter`
-- `converter` is the system that takes some data and converts it to a `conversation`
-- `searcher` is the system for indexing and searching `conversations`
+## Flutter
 
+```bash
+cd app
+flutter analyze
+flutter test
+flutter build web
+flutter build apk --release
+flutter run -d web-server --web-hostname 127.0.0.1 --web-port 5174
+```
 
-## Start To Finish
+The app derives a vault key locally from the passphrase and backend-provided vault salt, encrypts entities with AES-GCM, and syncs ciphertext envelopes through the backend.
 
-Lets say you have some data, eg a letter, and you want to import it. How does it work?
-1. You need an importer, eg. `Scan`. It will get your document into the system by scanning it and saving it to the filesystem.
-2. You need an converter, eg. `ImageOcr`. This will take the scanned image and get the interesting content out of the data (create a [`conversation`](#terms)). In this case whatever is written on the letter.
-3. You need a `searcher`, eg. `FileBased`. It takes care of saving and indexing the data in a way that it can be searched quickly.
-4. The search engine can be queried for the text in the letter and will return the scanned image.
+Android builds are configured as a share target for text/files/backups, so users can share content directly into importer routes once the vault is unlocked.
 
-### Planed/available
-#### Importers
-* Scan 
-* download 
-* http (post)
+Local organization features run after decryption in the client: imported conversations receive searchable tags, Search supports source/participant/tag facets, saved searches sync as encrypted entities, and the Insights tab summarizes timeline, source, participant, artifact, segment, and tag coverage without exposing plaintext to the backend.
 
-#### Converter
-* Speech2Text
-* Ocr PDF
-* Ocr Image
-* E-Mails
-* Chats
-    * Discord
-    * Whatsapp
-    * Telegram
-    * Skype
-    * Signal
-    * Steam
-    * Minecraft
-    * Facebook
-* Twitter
-* Youtube 
-    * comments
-    * text in video 
-    * speach in video / subtitles
-    * Description
-* Websites (Browserhistory)
-* Speech recognition
-    * Cloud Providers
-    * Locally via DeepSepeach
+## Landing Pages
 
+Static landing pages live in `landing/` and can be served by any static web server.
 
-#### Searchers
-* `LuenceSearch` 
-* `ElasticSearch` 
+## Notes
+
+See `docs/ARCHITECTURE.md`, `docs/IMPORTERS.md`, and `docs/PLACEHOLDERS.md` for architecture, importer setup examples, and current provider placeholders.
+
+## Daily use on KDE and Android
+
+Deploy the mail server with `./scripts/deploy-compose.py`, following
+[deployment](docs/DEPLOYMENT.md). Installation prints a connection link and QR code.
+Open that link on KDE and Android: it configures the server, account and encrypted
+vault without typing passwords. Keep the first device unlocked while adding the next.
+Connections are automatic for one hour, then require approval in **Sync** on a
+connected device. Native credentials stay in Android secure storage or KDE Wallet.
+
+For local development, `./scripts/run-api.sh` keeps its database, artifacts and
+signing key under `~/.local/state/lifenizer/`; development login is disabled.
+The optional manual account flow uses a separate account password and vault
+passphrase, with the latter staying on-device.
+
+Build `app/` with `flutter build linux --release`, then run
+`./integrations/kde/install.sh` from the repository root. Open Lifenizer and unlock it.
+Use KRunner `life Alice holiday` to find conversations, or Ctrl+K inside the app.
+Android builds provide launcher Search/Capture/Imports shortcuts, selected-text search,
+`ACTION_SEARCH`, and share targets. See [integration setup](docs/INTEGRATIONS.md).
+
+Use **Sync → Make backup** on Android or desktop to save password-encrypted
+`.lfb` files, each at most 5 GB (5,000,000,000 bytes). Keep every part and the
+separate backup password. **Sync → Restore backup** checks all selected parts
+before adding missing library items; existing IDs and local recordings are kept.
+Recordings and uploaded photos are included by default and must be reachable;
+uncheck media for an offline library-only backup. Pending recordings restore as
+saved recordings. Restored photos use online storage; restored audio stays local
+until online sync is enabled. Account credentials and device pairing are excluded.
+The files are streamed on Android and desktop; web and iOS backups are not supported.
+
+Drag legacy JSON backups onto **Imports**, or choose a file there. Discord data packages are
+read locally, including large ZIPs; enable **Watch this Discord export for changes**
+to import replacements automatically while the desktop app is open and unlocked.
+This does not fetch messages from Discord. See [supported imports](docs/IMPORTERS.md).
+For IMAP, use **Imports → Connect email** with your email username and app password;
+[email setup](docs/EMAIL.md) explains remembered credentials and automatic checks.
+
+People are detected from provider IDs and email addresses. In **People**, use
+**Link identity** or **Merge people** to connect a Discord account with an email
+contact. Matching names alone do not merge two known identities. Linked identities,
+aliases and conversation references sync encrypted; future imports reuse the person.
+
+Encrypted local snapshots and an encrypted retry queue survive app restarts. Paired
+devices unlock from their OS keyring, including offline. Manual accounts provide
+**Unlock this device offline** after an initial online unlock.
+Sync checks on resume and every 30 seconds while active. Edits save to the
+encrypted local outbox immediately; automatic uploads collect at least 20 seconds
+of changes (normally 20–50 seconds until the next check). Repeated edits to the
+same item coalesce, and edits made during an upload wait for the next batch.
+**Sync now** sends waiting changes immediately. The server stores new encrypted
+sync batches, photos and opted-in recordings through a private R2/S3 object adapter
+(or persistent local files when unconfigured), with SQLite holding the cursor and
+object index. Committed sync envelope IDs are deduplicated on retry. Legacy inline
+sync data and local media remain readable. Photos and explicitly enabled online
+recordings use separate uploads outside the change batches. Recording storage
+requests survive offline failures and restart; ordinary sync retries while unlocked
+and the recording player shows pending upload/removal. Online removal keeps local
+audio. For the planned Fleet deployment, configure R2 through
+`../ansible/scripts/configure-lifenizer-r2.sh`; see
+[cluster migration](docs/DEPLOYMENT.md#fleet-cluster-migration).
+The Compose installer also accepts a protected `--service-config` JSON file.
+Capture typed text offline;
+recordings are saved encrypted locally until you explicitly send them to Whisper.
+Provider imports, transcription and relation extraction require the configured server;
+local Discord ZIP imports can be saved offline and synced later.
+New image attachments are encrypted; historical plaintext image uploads require
+re-uploading to encrypt them. Image downloads currently require a connection.
+
+Search handles German/Unicode names, partial words, spelling mistakes, combined
+person/topic queries and local-calendar date phrases. [Search details and the
+repeatable load benchmarks](docs/SEARCH.md) explain ranking, the encrypted native
+disk index, the 100-result cap and the million-conversation memory test.
+
+Run `./scripts/verify.sh` for the normal checks. With the real Whisper service forwarded,
+run `./scripts/verify.sh --live-whisper`; this requires the service and cannot silently
+skip the audio test. [Database upgrades](docs/DATABASE.md), [account authentication](docs/AUTH.md),
+and [remaining provider boundaries](docs/PLACEHOLDERS.md) cover deployment details.

@@ -2,23 +2,21 @@
     "version": "0.2.0",
     "configurations": [
         {
-            // Use IntelliSense to find out which attributes exist for C# debugging
-            // Use hover for the description of the existing attributes
-            // For further information visit https://github.com/OmniSharp/omnisharp-vscode/blob/master/debugger-launchjson.md
-            "name": ".NET Core Launch (console)",
+            "name": ".NET: Lifenizer.Api (Development)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
-            // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/Tests/bin/Debug/net6.0/Tests.dll",
+            "preLaunchTask": "backend: build",
+            "program": "${workspaceFolder}/backend/Lifenizer.Api/bin/Debug/net10.0/Lifenizer.Api.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/Tests",
-            // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
+            "cwd": "${workspaceFolder}/backend/Lifenizer.Api",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
             "console": "internalConsole",
             "stopAtEntry": false
         },
         {
-            "name": ".NET Core Attach",
+            "name": ".NET: Attach",
             "type": "coreclr",
             "request": "attach"
         }

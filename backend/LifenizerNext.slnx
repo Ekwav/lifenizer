@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Lifenizer.Api/Lifenizer.Api.csproj" />
+  <Project Path="Lifenizer.Core/Lifenizer.Core.csproj" />
+  <Project Path="Lifenizer.Tests/Lifenizer.Tests.csproj" />
+</Solution>

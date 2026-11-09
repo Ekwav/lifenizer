@@ -1,0 +1,93 @@
+{
+  "scope": "AOT native SQLite append probe; each run appends 2048 new 200-word, ten-segment conversations with the real 1723-word benchmark vocabulary. No retained large summary catalog; this is not the million-item memory proof.",
+  "sourceDatabase": "app/build/benchmarks/million-search-20261028/search.sqlite",
+  "sourceCommittedRows": 724480,
+  "method": "Two private ext4 copies were fsynced before timing. Baseline cache variants start at 724480 rows; transaction variants reuse those respective clones at 726528 rows. Durability settings unchanged. Single runs include different warm-up; the warmed cache-only difference is small.",
+  "decision": "Keep 16 MiB cache; increase new-only transactions to 1024 with 128-document fallback whenever any input ID already exists. Physical encrypted pages stay at 128 documents.",
+  "results": [
+    {
+      "label": "cache16",
+      "initial": 724480,
+      "added": 2048,
+      "vocabulary": 1723,
+      "elapsedSeconds": 25.036549,
+      "docsPerSecond": 81.8004110710306,
+      "batchSeconds": [
+        1.026219,
+        1.856394,
+        1.397465,
+        1.902306,
+        2.613196,
+        1.550462,
+        2.246978,
+        1.549271,
+        1.536094,
+        1.486307,
+        1.115402,
+        0.797081,
+        2.295301,
+        1.153144,
+        1.303669,
+        1.167323
+      ],
+      "rssBytes": 73588736,
+      "peakRssBytes": 93995008
+    },
+    {
+      "label": "cache128",
+      "initial": 724480,
+      "added": 2048,
+      "vocabulary": 1723,
+      "elapsedSeconds": 26.843112,
+      "docsPerSecond": 76.29517769772744,
+      "batchSeconds": [
+        6.245098,
+        1.389969,
+        2.073606,
+        1.295475,
+        1.571361,
+        1.550693,
+        1.703562,
+        1.350896,
+        1.390903,
+        1.277178,
+        1.179262,
+        1.140038,
+        1.455137,
+        1.077966,
+        1.079208,
+        1.013702
+      ],
+      "rssBytes": 106754048,
+      "peakRssBytes": 113221632
+    },
+    {
+      "label": "cache16-batch1024",
+      "initial": 726528,
+      "added": 2048,
+      "vocabulary": 1723,
+      "elapsedSeconds": 5.075668,
+      "docsPerSecond": 403.49368792442687,
+      "batchSeconds": [
+        2.799294,
+        2.238157
+      ],
+      "rssBytes": 89411584,
+      "peakRssBytes": 97755136
+    },
+    {
+      "label": "cache128-batch1024",
+      "initial": 726528,
+      "added": 2048,
+      "vocabulary": 1723,
+      "elapsedSeconds": 4.437213,
+      "docsPerSecond": 461.5509780576231,
+      "batchSeconds": [
+        2.231841,
+        2.164962
+      ],
+      "rssBytes": 130117632,
+      "peakRssBytes": 129863680
+    }
+  ]
+}

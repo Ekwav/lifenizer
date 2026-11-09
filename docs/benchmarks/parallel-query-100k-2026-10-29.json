@@ -1,0 +1,498 @@
+{
+  "passed": true,
+  "count": 100000,
+  "canonicalChecks": 0,
+  "mergedOrderChecks": 100,
+  "baselineOrderChecks": 100,
+  "nextDocument": 100099,
+  "boundaries": [
+    0,
+    24576,
+    50176,
+    74752,
+    100099
+  ],
+  "coverage": [
+    {
+      "globalN": 100000,
+      "globalTotalLength": 20460302,
+      "nextDocument": 100099,
+      "ownedDocumentCount": 24573,
+      "start": 0,
+      "end": 24576,
+      "queryNorm": 0.0,
+      "numericCachedPages": 24,
+      "numericCachedBytes": 983040
+    },
+    {
+      "globalN": 100000,
+      "globalTotalLength": 20460302,
+      "nextDocument": 100099,
+      "ownedDocumentCount": 25600,
+      "start": 24576,
+      "end": 50176,
+      "queryNorm": 0.0,
+      "numericCachedPages": 25,
+      "numericCachedBytes": 1024000
+    },
+    {
+      "globalN": 100000,
+      "globalTotalLength": 20460302,
+      "nextDocument": 100099,
+      "ownedDocumentCount": 24576,
+      "start": 50176,
+      "end": 74752,
+      "queryNorm": 0.0,
+      "numericCachedPages": 24,
+      "numericCachedBytes": 983040
+    },
+    {
+      "globalN": 100000,
+      "globalTotalLength": 20460302,
+      "nextDocument": 100099,
+      "ownedDocumentCount": 25251,
+      "start": 74752,
+      "end": 100099,
+      "queryNorm": 0.0,
+      "numericCachedPages": 25,
+      "numericCachedBytes": 1024000
+    }
+  ],
+  "numericCachePagesAcrossShards": 98,
+  "peakRssBytes": 92815360,
+  "masterIntegrity": {
+    "fixture": "app/build/benchmarks/ranking-record-cache-audit-20261029/search.sqlite",
+    "size": 351772672,
+    "beforeSha256": "36506c2a327ee8762330035e69e93bb59cfc12a9235358a84c63f5fb69199331",
+    "afterSha256": "36506c2a327ee8762330035e69e93bb59cfc12a9235358a84c63f5fb69199331",
+    "unchanged": true
+  },
+  "warmRounds": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "baseline": {
+    "wallMs": {
+      "sum": 5027.054,
+      "median": 55.73350000000001,
+      "p95": 107.993,
+      "max": 132.735
+    },
+    "cpuTicks": {
+      "sum": 501,
+      "median": 5.5,
+      "p95": 11,
+      "max": 13
+    },
+    "readBytes": {
+      "sum": 0,
+      "median": 0.0,
+      "p95": 0,
+      "max": 0
+    },
+    "majorFaults": {
+      "sum": 0,
+      "median": 0.0,
+      "p95": 0,
+      "max": 0
+    },
+    "rss": {
+      "sum": 6428229632,
+      "median": 80351232.0,
+      "p95": 90058752,
+      "max": 93245440
+    }
+  },
+  "parallel": {
+    "wallMs": {
+      "sum": 3444.033,
+      "median": 40.9825,
+      "p95": 64.097,
+      "max": 88.079
+    },
+    "cpuTicks": {
+      "sum": 1179,
+      "median": 14.0,
+      "p95": 21,
+      "max": 23
+    },
+    "readBytes": {
+      "sum": 0,
+      "median": 0.0,
+      "p95": 0,
+      "max": 0
+    },
+    "majorFaults": {
+      "sum": 0,
+      "median": 0.0,
+      "p95": 0,
+      "max": 0
+    },
+    "rss": {
+      "sum": 6549577728,
+      "median": 81659904.0,
+      "p95": 84983808,
+      "max": 85549056
+    }
+  },
+  "cases": [
+    {
+      "case": 0,
+      "query": "archive",
+      "source": null,
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 42.01349999999999,
+        "sumWallMs": 167.301,
+        "cpuTicks": 17
+      },
+      "parallel": {
+        "medianWallMs": 34.236000000000004,
+        "sumWallMs": 137.166,
+        "cpuTicks": 46
+      }
+    },
+    {
+      "case": 1,
+      "query": "archive",
+      "source": "group:email",
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 36.3425,
+        "sumWallMs": 149.81799999999998,
+        "cpuTicks": 16
+      },
+      "parallel": {
+        "medianWallMs": 33.8925,
+        "sumWallMs": 137.404,
+        "cpuTicks": 46
+      }
+    },
+    {
+      "case": 2,
+      "query": "import",
+      "source": null,
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 65.695,
+        "sumWallMs": 264.465,
+        "cpuTicks": 27
+      },
+      "parallel": {
+        "medianWallMs": 39.789500000000004,
+        "sumWallMs": 161.853,
+        "cpuTicks": 58
+      }
+    },
+    {
+      "case": 3,
+      "query": "import",
+      "source": "group:email",
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 50.963499999999996,
+        "sumWallMs": 205.13,
+        "cpuTicks": 19
+      },
+      "parallel": {
+        "medianWallMs": 39.623999999999995,
+        "sumWallMs": 163.371,
+        "cpuTicks": 60
+      }
+    },
+    {
+      "case": 4,
+      "query": "archive import",
+      "source": null,
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 107.22049999999999,
+        "sumWallMs": 453.303,
+        "cpuTicks": 45
+      },
+      "parallel": {
+        "medianWallMs": 59.7315,
+        "sumWallMs": 243.037,
+        "cpuTicks": 80
+      }
+    },
+    {
+      "case": 5,
+      "query": "archive import",
+      "source": "group:email",
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 89.804,
+        "sumWallMs": 359.601,
+        "cpuTicks": 36
+      },
+      "parallel": {
+        "medianWallMs": 54.979,
+        "sumWallMs": 229.848,
+        "cpuTicks": 81
+      }
+    },
+    {
+      "case": 6,
+      "query": "archive search",
+      "source": null,
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 81.332,
+        "sumWallMs": 330.21,
+        "cpuTicks": 32
+      },
+      "parallel": {
+        "medianWallMs": 47.2285,
+        "sumWallMs": 185.703,
+        "cpuTicks": 66
+      }
+    },
+    {
+      "case": 7,
+      "query": "archive search",
+      "source": "group:email",
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 69.01249999999999,
+        "sumWallMs": 291.565,
+        "cpuTicks": 31
+      },
+      "parallel": {
+        "medianWallMs": 48.1435,
+        "sumWallMs": 230.414,
+        "cpuTicks": 69
+      }
+    },
+    {
+      "case": 8,
+      "query": "oliver thompson",
+      "source": null,
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 41.623000000000005,
+        "sumWallMs": 167.824,
+        "cpuTicks": 16
+      },
+      "parallel": {
+        "medianWallMs": 37.441,
+        "sumWallMs": 148.428,
+        "cpuTicks": 51
+      }
+    },
+    {
+      "case": 9,
+      "query": "oliver thompson",
+      "source": "group:email",
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 38.175,
+        "sumWallMs": 151.786,
+        "cpuTicks": 14
+      },
+      "parallel": {
+        "medianWallMs": 33.958,
+        "sumWallMs": 135.207,
+        "cpuTicks": 45
+      }
+    },
+    {
+      "case": 10,
+      "query": "olivr thompson",
+      "source": null,
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 26.154,
+        "sumWallMs": 104.243,
+        "cpuTicks": 11
+      },
+      "parallel": {
+        "medianWallMs": 30.612000000000002,
+        "sumWallMs": 122.44900000000001,
+        "cpuTicks": 41
+      }
+    },
+    {
+      "case": 11,
+      "query": "olivr thompson",
+      "source": "group:email",
+      "returned": 93,
+      "baseline": {
+        "medianWallMs": 23.234,
+        "sumWallMs": 93.673,
+        "cpuTicks": 10
+      },
+      "parallel": {
+        "medianWallMs": 19.734,
+        "sumWallMs": 77.53,
+        "cpuTicks": 24
+      }
+    },
+    {
+      "case": 12,
+      "query": "rchive imp",
+      "source": null,
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 109.1095,
+        "sumWallMs": 437.73,
+        "cpuTicks": 43
+      },
+      "parallel": {
+        "medianWallMs": 59.387,
+        "sumWallMs": 237.906,
+        "cpuTicks": 82
+      }
+    },
+    {
+      "case": 13,
+      "query": "rchive imp",
+      "source": "group:email",
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 90.2945,
+        "sumWallMs": 363.104,
+        "cpuTicks": 37
+      },
+      "parallel": {
+        "medianWallMs": 54.010999999999996,
+        "sumWallMs": 221.494,
+        "cpuTicks": 81
+      }
+    },
+    {
+      "case": 14,
+      "query": "archive impor",
+      "source": null,
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 93.387,
+        "sumWallMs": 372.741,
+        "cpuTicks": 37
+      },
+      "parallel": {
+        "medianWallMs": 50.573,
+        "sumWallMs": 210.921,
+        "cpuTicks": 75
+      }
+    },
+    {
+      "case": 15,
+      "query": "archive impor",
+      "source": "group:email",
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 77.888,
+        "sumWallMs": 311.127,
+        "cpuTicks": 32
+      },
+      "parallel": {
+        "medianWallMs": 47.8885,
+        "sumWallMs": 201.606,
+        "cpuTicks": 69
+      }
+    },
+    {
+      "case": 16,
+      "query": "archive archive",
+      "source": null,
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 57.519000000000005,
+        "sumWallMs": 231.21300000000002,
+        "cpuTicks": 23
+      },
+      "parallel": {
+        "medianWallMs": 36.120000000000005,
+        "sumWallMs": 147.068,
+        "cpuTicks": 52
+      }
+    },
+    {
+      "case": 17,
+      "query": "archive archive",
+      "source": "group:email",
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 41.557,
+        "sumWallMs": 178.464,
+        "cpuTicks": 17
+      },
+      "parallel": {
+        "medianWallMs": 31.8035,
+        "sumWallMs": 131.522,
+        "cpuTicks": 45
+      }
+    },
+    {
+      "case": 18,
+      "query": "grocery shopping",
+      "source": null,
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 54.5625,
+        "sumWallMs": 222.541,
+        "cpuTicks": 21
+      },
+      "parallel": {
+        "medianWallMs": 39.5805,
+        "sumWallMs": 161.303,
+        "cpuTicks": 54
+      }
+    },
+    {
+      "case": 19,
+      "query": "grocery shopping",
+      "source": "group:email",
+      "returned": 100,
+      "baseline": {
+        "medianWallMs": 42.0075,
+        "sumWallMs": 171.215,
+        "cpuTicks": 17
+      },
+      "parallel": {
+        "medianWallMs": 40.875,
+        "sumWallMs": 159.803,
+        "cpuTicks": 54
+      }
+    }
+  ],
+  "wallReductionPercent": 31.490033725517975,
+  "cpuChangePercent": 135.32934131736525,
+  "nativeAeadAll": true,
+  "limitations": [
+    "100k proof, not a2M latency or full-catalog memory gate.",
+    "Baseline and parallel phases run sequentially, each with five rotated case rounds; no interleaved variantABBA.",
+    "Baseline closed before parallel workers open; no full conversation catalog loaded.",
+    "Warm excludes first round;80queries pervariant.",
+    "Parallel timing includes score-exportIPC and global merge; profiling requests occur outside timed intervals."
+  ],
+  "seedProof": {
+    "canonicalOrderChecks": 24,
+    "mergedExactOrderAndScoreChecks": 24,
+    "liveDocumentCount": 1024,
+    "highwater": 5120,
+    "numericCachedPages": 5,
+    "trap": "Exact spectral exists onlymanual/other first shard; prefix spectrality exists in other four sources. All nonempty shard query norms equal global baseline."
+  },
+  "systemd": {
+    "unit": "lifenizer-parallel-100k-proof-20261029",
+    "result": "success",
+    "runtimeSeconds": 11.6,
+    "cpuSeconds": 22.05,
+    "memoryPeak": "81.2M",
+    "swapBytes": 0,
+    "MemoryMax": "2GiB",
+    "MemorySwapMax": 0
+  },
+  "compiledSourceSha256": {
+    "probe-compiled.dart": "9a82afacce59d18a92c6c358f3626866ef233817ab9b863786e15153d1844ce3",
+    "engine/disk_search_index_io.dart": "8215dcee8fabfb045984c82d145cf504829f466bfacdf42d37739fdc2c13cfda",
+    "engine/disk_search_ranking.dart": "d475a2aa37b23af6479dfb1009ae88b8b1e5cedec4691ef963a3ba2fef827d80",
+    "engine/disk_search_filters.dart": "a9d0add7756af94696aa9874f597278dd0df9cabb1f88903667beb9043c515e8",
+    "engine/native_sidecar_aead.dart": "00529ef89394701930723faad32c0a896f88ce41a41410545cab38c5687b2021"
+  },
+  "minimumReturned": 93
+}

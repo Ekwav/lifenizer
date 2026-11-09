@@ -1,0 +1,20 @@
+[
+  {
+    "type": "message",
+    "user": "U01A",
+    "text": "Team, importer rollout starts today.",
+    "ts": "1780200000.000100",
+    "user_profile": {
+      "display_name": "Nina"
+    }
+  },
+  {
+    "type": "message",
+    "user": "U01B",
+    "text": "I will validate zip and html variants.",
+    "ts": "1780200060.000200",
+    "user_profile": {
+      "display_name": "Omar"
+    }
+  }
+]

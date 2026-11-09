@@ -1,0 +1,12 @@
+Approved artwork generated with the built-in imagegen tool. This is the original creation prompt; its references were the two superseded bookmark-L concepts.
+
+Use case: logo-brand
+Asset type: new draft of a bookmark + L Android launcher icon for Lifenizer; square 1024x1024.
+Input images: Reference 1 is the original folded-L icon; reference 2 is the later bookmark-L draft. These explain the chosen concept only. The user likes bookmark + L but feels both existing drawings are off. Explore the exact requested variation with fresh drawing, proportions, and construction. Do not just reproduce a reference.
+Identity to preserve: both a capital L and a recognizable bookmark idea in one simple coherent emblem. Lifenizer privately collects and helps rediscover life's documents, recordings and conversations.
+Color palette: opaque perfectly uniform deep teal #0F766E full bleed square background; ivory #F8F9F5 main mark. Pale mint #A8DCC1 only if explicitly requested in subject.
+Composition: one optically centered emblem taking about 58–65% of the canvas. Ample consistent margins. Straight-on graphic view.
+Style: deliberate professional logo exploration, clean flat vector-like shapes, clear proportions and negative space, legible small. Every construction choice should be intentional. Favor lighter visual weight than the chunky references except where subject specifies otherwise.
+Avoid: gradients, textures, lighting, glossy effects, cast shadows, mockups, wordmarks, captions, labels, contact sheets, unrelated symbols, lock, magnifier, stars. No rounded-square tile or outer frame; background fills square edge to edge.
+
+Subject: A clever minimal ivory capital L assembled from exactly two closely related flat pieces. The tall vertical stem is itself a long bookmark ribbon with a familiar V-notched lower end. Directly beneath it, separated by a narrow clean teal gap, a short thick horizontal ivory bar forms the foot of the L, starting aligned with the upright's left edge and extending right. The two shapes immediately read together as L while the stem unmistakably reads as a bookmark. Compact, medium weight, softly squared corners, no mint, no fold shading.

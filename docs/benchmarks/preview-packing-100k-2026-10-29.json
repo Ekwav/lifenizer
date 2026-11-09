@@ -1,0 +1,272 @@
+{
+  "passed": true,
+  "focusedTestsPassed": 7,
+  "clockTicksPerSecond": 100,
+  "noForcedGc": true,
+  "count": 100000,
+  "rows": [
+    {
+      "label": "real-baseline-a",
+      "passed": true,
+      "mode": "baseline",
+      "input": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/ranking-record-cache-audit-20261029/search.sqlite",
+      "count": 100000,
+      "inputAllFieldSha256": "93120a3e2df4c6323a927e80569f4c8933e69bd9d709bae8cfdb2987e5c94c0b",
+      "retainedAllFieldSha256": "93120a3e2df4c6323a927e80569f4c8933e69bd9d709bae8cfdb2987e5c94c0b",
+      "beforeRssBytes": 8126464,
+      "afterLoadRssBytes": 129290240,
+      "afterChecksRssBytes": 130093056,
+      "peakRssBytes": 130867200,
+      "loadMs": 3004.442,
+      "loadProc": {
+        "cpuTicks": 305,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeProc": {
+        "cpuTicks": 122,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "getterProc": {
+        "cpuTicks": 1,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeAllFieldsMs": 1236.682,
+      "previewGetter10000Ms": 6.881,
+      "previewChecksum": 178033205,
+      "packedSummaries": 0,
+      "systemdMemoryPeak": "117.8M (swap: 0B)"
+    },
+    {
+      "label": "real-candidate-a",
+      "passed": true,
+      "mode": "candidate",
+      "input": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/ranking-record-cache-audit-20261029/search.sqlite",
+      "count": 100000,
+      "inputAllFieldSha256": "93120a3e2df4c6323a927e80569f4c8933e69bd9d709bae8cfdb2987e5c94c0b",
+      "retainedAllFieldSha256": "93120a3e2df4c6323a927e80569f4c8933e69bd9d709bae8cfdb2987e5c94c0b",
+      "beforeRssBytes": 8138752,
+      "afterLoadRssBytes": 107282432,
+      "afterChecksRssBytes": 107483136,
+      "peakRssBytes": 109182976,
+      "loadMs": 4362.185,
+      "loadProc": {
+        "cpuTicks": 439,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeProc": {
+        "cpuTicks": 172,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "getterProc": {
+        "cpuTicks": 6,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeAllFieldsMs": 1728.503,
+      "previewGetter10000Ms": 56.934,
+      "previewChecksum": 178033205,
+      "packedSummaries": 100000,
+      "systemdMemoryPeak": "97.2M (swap: 0B)"
+    },
+    {
+      "label": "real-candidate-b",
+      "passed": true,
+      "mode": "candidate",
+      "input": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/ranking-record-cache-audit-20261029/search.sqlite",
+      "count": 100000,
+      "inputAllFieldSha256": "93120a3e2df4c6323a927e80569f4c8933e69bd9d709bae8cfdb2987e5c94c0b",
+      "retainedAllFieldSha256": "93120a3e2df4c6323a927e80569f4c8933e69bd9d709bae8cfdb2987e5c94c0b",
+      "beforeRssBytes": 8183808,
+      "afterLoadRssBytes": 108400640,
+      "afterChecksRssBytes": 107024384,
+      "peakRssBytes": 110551040,
+      "loadMs": 4702.532,
+      "loadProc": {
+        "cpuTicks": 474,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeProc": {
+        "cpuTicks": 167,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "getterProc": {
+        "cpuTicks": 4,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeAllFieldsMs": 1702.433,
+      "previewGetter10000Ms": 39.47,
+      "previewChecksum": 178033205,
+      "packedSummaries": 100000,
+      "systemdMemoryPeak": "98M (swap: 0B)"
+    },
+    {
+      "label": "real-baseline-b",
+      "passed": true,
+      "mode": "baseline",
+      "input": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/ranking-record-cache-audit-20261029/search.sqlite",
+      "count": 100000,
+      "inputAllFieldSha256": "93120a3e2df4c6323a927e80569f4c8933e69bd9d709bae8cfdb2987e5c94c0b",
+      "retainedAllFieldSha256": "93120a3e2df4c6323a927e80569f4c8933e69bd9d709bae8cfdb2987e5c94c0b",
+      "beforeRssBytes": 8216576,
+      "afterLoadRssBytes": 122384384,
+      "afterChecksRssBytes": 119926784,
+      "peakRssBytes": 122208256,
+      "loadMs": 3057.238,
+      "loadProc": {
+        "cpuTicks": 316,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeProc": {
+        "cpuTicks": 119,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "getterProc": {
+        "cpuTicks": 1,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeAllFieldsMs": 1207.738,
+      "previewGetter10000Ms": 6.556,
+      "previewChecksum": 178033205,
+      "packedSummaries": 0,
+      "systemdMemoryPeak": "109.6M (swap: 0B)"
+    },
+    {
+      "label": "entropy-baseline",
+      "passed": true,
+      "mode": "baseline",
+      "input": "entropy",
+      "count": 100000,
+      "inputAllFieldSha256": "12f0f1726765f4ffbe27f814dd6dc30cb7795a79f0eba39a4ec8b5af801dbc70",
+      "retainedAllFieldSha256": "12f0f1726765f4ffbe27f814dd6dc30cb7795a79f0eba39a4ec8b5af801dbc70",
+      "beforeRssBytes": 8294400,
+      "afterLoadRssBytes": 107884544,
+      "afterChecksRssBytes": 109985792,
+      "peakRssBytes": 109285376,
+      "loadMs": 1883.251,
+      "loadProc": {
+        "cpuTicks": 201,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeProc": {
+        "cpuTicks": 150,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "getterProc": {
+        "cpuTicks": 0,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeAllFieldsMs": 1536.189,
+      "previewGetter10000Ms": 5.254,
+      "previewChecksum": 143210556,
+      "packedSummaries": 0,
+      "systemdMemoryPeak": "99.4M (swap: 0B)"
+    },
+    {
+      "label": "entropy-candidate",
+      "passed": true,
+      "mode": "candidate",
+      "input": "entropy",
+      "count": 100000,
+      "inputAllFieldSha256": "12f0f1726765f4ffbe27f814dd6dc30cb7795a79f0eba39a4ec8b5af801dbc70",
+      "retainedAllFieldSha256": "12f0f1726765f4ffbe27f814dd6dc30cb7795a79f0eba39a4ec8b5af801dbc70",
+      "beforeRssBytes": 8175616,
+      "afterLoadRssBytes": 85188608,
+      "afterChecksRssBytes": 86286336,
+      "peakRssBytes": 85405696,
+      "loadMs": 2493.301,
+      "loadProc": {
+        "cpuTicks": 262,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeProc": {
+        "cpuTicks": 151,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "getterProc": {
+        "cpuTicks": 1,
+        "majorFaults": 0,
+        "readBytes": 0
+      },
+      "serializeAllFieldsMs": 1543.006,
+      "previewGetter10000Ms": 4.899,
+      "previewChecksum": 143210556,
+      "packedSummaries": 0,
+      "systemdMemoryPeak": "76.5M (swap: 0B)"
+    }
+  ],
+  "masterIntegrity": {
+    "path": "app/build/benchmarks/ranking-record-cache-audit-20261029/search.sqlite",
+    "size": 351772672,
+    "beforeSha256": "36506c2a327ee8762330035e69e93bb59cfc12a9235358a84c63f5fb69199331",
+    "afterSha256": "36506c2a327ee8762330035e69e93bb59cfc12a9235358a84c63f5fb69199331",
+    "unchanged": true
+  },
+  "limitations": [
+    "100k prototype evidence, not actual2M savings or acceptance gate.",
+    "RSS and peak include transient loading/serialization objects and allocator retention; no forcedGC.",
+    "SeparateABBA real processes; entropy controls oneprocess pervariant."
+  ],
+  "sourceSha256": {
+    "app/build/benchmarks/preview-packing-preparation-20261029/candidate_catalog.dart": "78cb1090de1b555f167131820d42980bfae453b7ae2261a532dc8a48d7f25c47",
+    "app/build/benchmarks/preview-packing-preparation-20261029/baseline_catalog.dart": "3a9aff5c56843758a5513da969fe73178f23a386cc582d283147d26414367ef6",
+    "app/build/benchmarks/preview-packing-preparation-20261029/probe.dart": "1a850db25829fa7709e5dbbf0fdcad9a78adfab2f21179500f9c635f355d1307",
+    "app/build/benchmarks/preview-packing-preparation-20261029/perf-aot/bundle/bin/probe": "308e653c68c9e3757da983a922a9b74c7213eb56b5d885f03608fff9dc4ba784"
+  },
+  "realMeans": {
+    "baseline": {
+      "afterLoadRssBytes": 125837312,
+      "afterChecksRssBytes": 125009920,
+      "peakRssBytes": 126537728,
+      "loadMs": 3030.84,
+      "serializeAllFieldsMs": 1222.21,
+      "previewGetter10000Ms": 6.718500000000001
+    },
+    "candidate": {
+      "afterLoadRssBytes": 107841536,
+      "afterChecksRssBytes": 107253760,
+      "peakRssBytes": 109867008,
+      "loadMs": 4532.3585,
+      "serializeAllFieldsMs": 1715.4679999999998,
+      "previewGetter10000Ms": 48.202
+    }
+  },
+  "realCpuTicks": {
+    "baseline": {
+      "loadProc": 621,
+      "serializeProc": 241,
+      "getterProc": 2
+    },
+    "candidate": {
+      "loadProc": 913,
+      "serializeProc": 339,
+      "getterProc": 10
+    }
+  },
+  "decision": "Correctness passes; compact representation is promising, but100kRSS measurements are GC-confounded. Do not infer2M headroom or promote without primary review and actual retained-catalog memory evidence.",
+  "gcConfound": "Entropy control packed0 summaries and preserves ordinaryConversation/originalString representation, yet candidateRSS dropped22.70MB afterload. Allocation/GC/allocator state therefore materially affects measured RSS; realABBA RSS deltas alone cannot quantify causal compression savings.",
+  "tradeoffs": {
+    "loadMeanIncreasePercent": 49.5413317760093,
+    "serializationMeanIncreasePercent": 40.35787630603578,
+    "previewGetterMeanMicrosecondsPerAccess": {
+      "baseline": 0.6718500000000001,
+      "candidate": 4.8202
+    }
+  },
+  "actualJobs": "All six capped units and Python orchestrator terminalSUCCESS; no additional trials or forcedGC."
+}

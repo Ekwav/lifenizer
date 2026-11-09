@@ -1,0 +1,401 @@
+:root{
+  color-scheme:light dark;
+  --paper:#f8f9f5;
+  --panel:#fff;
+  --ink:#202c28;
+  --muted:#68746d;
+  --line:#dfe5dc;
+  --brand:#28634b;
+  --tint:#e9efe5;
+  --button-ink:#fff}
+  *{
+    box-sizing:border-box}
+    html{
+      scroll-behavior:smooth;
+      scroll-padding-top:24px}
+      body{
+        margin:0;
+        background:var(--paper);
+        color:var(--ink);
+        font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+        font-size:15px;
+        line-height:1.65}
+        a{
+          color:inherit;
+          text-underline-offset:4px}
+          a:focus-visible,summary:focus-visible{
+            outline:3px solid var(--brand);
+            outline-offset:5px}
+            a:hover{
+              color:var(--brand)}
+              .site-header,main,.footer{
+                max-width:1200px;
+                margin:auto}
+                .site-header{
+                  padding:28px 40px;
+                  display:flex;
+                  align-items:center;
+                  justify-content:space-between;
+                  gap:24px}
+                  .logo{
+                    display:inline-flex;
+                    gap:10px;
+                    align-items:center;
+                    font-size:19px;
+                    font-weight:750;
+                    letter-spacing:-.5px;
+                    text-decoration:none}
+                    .logo-mark{
+                      display:block;
+                      width:32px;
+                      height:32px;
+                      object-fit:contain}
+                      .nav{
+                        display:flex;
+                        gap:28px;
+                        font-size:13px}
+                        .nav a{
+                          text-decoration:none}
+                          .hero{
+                            display:grid;
+                            grid-template-columns:1.15fr 1fr;
+                            align-items:center;
+                            gap:65px;
+                            padding:82px 40px 76px}
+                            .eyebrow{
+                              font-size:10px;
+                              font-weight:750;
+                              letter-spacing:1.9px;
+                              color:var(--brand);
+                              margin:0 0 20px}
+                              .hero h1{
+                                margin:0;
+                                font-family:Georgia,"Times New Roman",serif;
+                                font-size:clamp(40px,4.8vw,63px);
+                                font-weight:400;
+                                letter-spacing:-2.5px;
+                                line-height:1.1}
+                                .hero h1 span{
+                                  color:var(--brand)}
+                                  .lede{
+                                    color:var(--muted);
+                                    font-size:16px;
+                                    max-width:470px;
+                                    margin:24px 0;
+                                    line-height:1.8}
+                                    .actions{
+                                      display:flex;
+                                      flex-wrap:wrap;
+                                      gap:12px;
+                                      margin-top:28px}
+                                      .button{
+                                        display:inline-flex;
+                                        justify-content:center;
+                                        align-items:center;
+                                        gap:20px;
+                                        padding:11px 19px;
+                                        min-height:46px;
+                                        border:1px solid var(--line);
+                                        border-radius:7px;
+                                        background:var(--panel);
+                                        text-decoration:none;
+                                        font-size:13px;
+                                        font-weight:650;
+                                        cursor:pointer}
+                                        .button.primary,.button.dark{
+                                          background:var(--brand);
+                                          color:var(--button-ink);
+                                          border-color:var(--brand)}
+                                          .button:hover{
+                                            box-shadow:0 3px 12px #20352a12}
+                                            .button[aria-disabled=true]{
+                                              cursor:default;
+                                              opacity:.55}
+                                              .connection{
+                                                font-size:12px;
+                                                color:var(--muted);
+                                                margin:17px 0 0;
+                                                min-height:20px}
+                                                .archive-preview{
+                                                  padding:25px;
+                                                  border:1px solid var(--line);
+                                                  border-radius:15px;
+                                                  background:var(--panel);
+                                                  box-shadow:0 20px 65px #284d3010;
+                                                  transform:rotate(-1deg)}
+                                                  .preview-heading{
+                                                    display:flex;
+                                                    align-items:center;
+                                                    gap:9px;
+                                                    font-size:12px;
+                                                    color:var(--muted);
+                                                    padding-bottom:22px}
+                                                    .status-dot{
+                                                      width:6px;
+                                                      height:6px;
+                                                      border-radius:100%;
+                                                      background:var(--brand)}
+                                                      .source-row{
+                                                        display:flex;
+                                                        align-items:center;
+                                                        gap:12px;
+                                                        padding:20px 0;
+                                                        border-top:1px solid var(--line)}
+                                                        .source-row div{
+                                                          flex:1}
+                                                          .source-row strong{
+                                                            display:block;
+                                                            font-size:12px;
+                                                            font-weight:600}
+                                                            .source-row div span{
+                                                              display:block;
+                                                              color:var(--muted);
+                                                              font-size:10px;
+                                                              margin-top:4px}
+                                                              .source-icon{
+                                                                display:grid;
+                                                                place-items:center;
+                                                                flex-shrink:0;
+                                                                width:33px;
+                                                                height:38px;
+                                                                background:var(--tint);
+                                                                color:var(--brand);
+                                                                border-radius:7px;
+                                                                font-size:21px}
+                                                                .source-tag{
+                                                                  font-size:9px;
+                                                                  color:var(--muted);
+                                                                  padding:2px 7px;
+                                                                  border:1px solid var(--line);
+                                                                  border-radius:4px}
+                                                                  .preview-footer{
+                                                                    border-top:1px solid var(--line);
+                                                                    padding-top:16px;
+                                                                    font-size:10px;
+                                                                    color:var(--muted)}
+                                                                    .features{
+                                                                      display:grid;
+                                                                      grid-template-columns:repeat(3,1fr);
+                                                                      gap:44px;
+                                                                      padding:36px 40px 64px}
+                                                                      .features article{
+                                                                        border-top:1px solid var(--line);
+                                                                        padding-top:24px}
+                                                                        .features .eyebrow{
+                                                                          font-size:9px;
+                                                                          margin-bottom:10px}
+                                                                          .features h2{
+                                                                            font-size:16px;
+                                                                            font-weight:600;
+                                                                            margin:0 0 10px}
+                                                                            .features p{
+                                                                              font-size:13px;
+                                                                              color:var(--muted);
+                                                                              margin:0 0 12px}
+                                                                              .features a{
+                                                                                font-size:12px;
+                                                                                color:var(--brand)}
+                                                                                .section{
+                                                                                  padding:45px 40px 64px}
+                                                                                  .downloads{
+                                                                                    border-top:1px solid var(--line)}
+                                                                                    .section-heading{
+                                                                                      display:flex;
+                                                                                      justify-content:space-between;
+                                                                                      align-items:center;
+                                                                                      gap:25px}
+                                                                                      .section h2{
+                                                                                        font-family:Georgia,"Times New Roman",serif;
+                                                                                        font-size:34px;
+                                                                                        line-height:1.2;
+                                                                                        font-weight:400;
+                                                                                        letter-spacing:-.8px;
+                                                                                        margin:0 0 22px}
+                                                                                        .section .eyebrow{
+                                                                                          margin-bottom:10px}
+                                                                                          .section-heading>p{
+                                                                                            color:var(--muted);
+                                                                                            font-size:12px}
+                                                                                            .download-status{
+                                                                                              font-size:12px;
+                                                                                              color:var(--muted);
+                                                                                              margin:0 0 17px}
+                                                                                              .grid{
+                                                                                                display:grid;
+                                                                                                grid-template-columns:1fr 1fr 1.25fr;
+                                                                                                gap:16px}
+                                                                                                .card{
+                                                                                                  border:1px solid var(--line);
+                                                                                                  border-radius:10px;
+                                                                                                  background:var(--panel);
+                                                                                                  padding:24px}
+                                                                                                  .platform{
+                                                                                                    color:var(--brand);
+                                                                                                    font-size:25px}
+                                                                                                    .card h3{
+                                                                                                      font-size:17px;
+                                                                                                      font-weight:650;
+                                                                                                      margin:10px 0}
+                                                                                                      .card p{
+                                                                                                        font-size:12px;
+                                                                                                        color:var(--muted);
+                                                                                                        margin:0 0 22px}
+                                                                                                        .card .button{
+                                                                                                          width:100%;
+                                                                                                          font-size:12px;
+                                                                                                          padding:9px;
+                                                                                                          min-height:42px;
+                                                                                                          gap:8px}
+                                                                                                          .format{
+                                                                                                            display:block;
+                                                                                                            color:var(--muted);
+                                                                                                            font-size:10px;
+                                                                                                            margin-top:10px}
+                                                                                                            .extension-links{
+                                                                                                              display:flex;
+                                                                                                              gap:8px}
+                                                                                                              details{
+                                                                                                                font-size:11px;
+                                                                                                                color:var(--muted);
+                                                                                                                margin-top:15px}
+                                                                                                                summary{
+                                                                                                                  cursor:pointer;
+                                                                                                                  color:var(--ink)}
+                                                                                                                  details p{
+                                                                                                                    margin:12px 0!important;
+                                                                                                                    font-size:11px!important;
+                                                                                                                    overflow-wrap:anywhere}
+                                                                                                                    code{
+                                                                                                                      font-size:.95em}
+                                                                                                                      .download-note{
+                                                                                                                        font-size:11px;
+                                                                                                                        color:var(--muted);
+                                                                                                                        margin:22px 0 0}
+                                                                                                                        .footer{
+                                                                                                                          padding:30px 40px;
+                                                                                                                          border-top:1px solid var(--line);
+                                                                                                                          display:flex;
+                                                                                                                          align-items:center;
+                                                                                                                          gap:30px;
+                                                                                                                          color:var(--muted);
+                                                                                                                          font-size:11px}
+                                                                                                                          .footer .logo{
+                                                                                                                            color:var(--ink);
+                                                                                                                            font-size:15px}
+                                                                                                                            .footer nav{
+                                                                                                                              display:flex;
+                                                                                                                              gap:20px;
+                                                                                                                              margin-left:auto}
+                                                                                                                              .footer nav a{
+                                                                                                                                text-decoration:none}
+                                                                                                                                .band{
+                                                                                                                                  display:grid;
+                                                                                                                                  grid-template-columns:1fr 1fr;
+                                                                                                                                  gap:24px}
+                                                                                                                                  .section>.grid{
+                                                                                                                                    margin-top:20px}
+                                                                                                                                    @media(prefers-color-scheme:dark){
+                                                                                                                                      :root{
+                                                                                                                                        --paper:#151d19;
+                                                                                                                                        --panel:#1d2821;
+                                                                                                                                        --ink:#e6eee5;
+                                                                                                                                        --muted:#a6b2a7;
+                                                                                                                                        --line:#344237;
+                                                                                                                                        --brand:#a5d1af;
+                                                                                                                                        --tint:#2b3d30;
+                                                                                                                                        --button-ink:#18271d}
+                                                                                                                                        .archive-preview{
+                                                                                                                                          box-shadow:0 20px 65px #0002}
+                                                                                                                                        }
+                                                                                                                                        @media(max-width:850px){
+                                                                                                                                          .hero{
+                                                                                                                                            gap:28px;
+                                                                                                                                            padding-top:48px}
+                                                                                                                                            .archive-preview{
+                                                                                                                                              padding:18px}
+                                                                                                                                              .source-tag{
+                                                                                                                                                display:none}
+                                                                                                                                                .grid{
+                                                                                                                                                  grid-template-columns:1fr 1fr}
+                                                                                                                                                  .extension-card{
+                                                                                                                                                    grid-column:1/-1}
+                                                                                                                                                    .features{
+                                                                                                                                                      gap:24px}
+                                                                                                                                                      .hero h1{
+                                                                                                                                                        font-size:44px}
+                                                                                                                                                      }
+                                                                                                                                                      @media(max-width:600px){
+                                                                                                                                                        .site-header{
+                                                                                                                                                          padding:22px}
+                                                                                                                                                          .nav{
+                                                                                                                                                            gap:15px;
+                                                                                                                                                            font-size:11px}
+                                                                                                                                                            .hero{
+                                                                                                                                                              grid-template-columns:1fr;
+                                                                                                                                                              padding:35px 22px 45px;
+                                                                                                                                                              gap:35px}
+                                                                                                                                                              .hero h1{
+                                                                                                                                                                font-size:46px;
+                                                                                                                                                                letter-spacing:-2px}
+                                                                                                                                                                .hero .lede{
+                                                                                                                                                                  font-size:15px}
+                                                                                                                                                                  .archive-preview{
+                                                                                                                                                                    transform:none}
+                                                                                                                                                                    .source-tag{
+                                                                                                                                                                      display:block}
+                                                                                                                                                                      .features{
+                                                                                                                                                                        grid-template-columns:1fr;
+                                                                                                                                                                        gap:25px;
+                                                                                                                                                                        padding:12px 22px 40px}
+                                                                                                                                                                        .features article{
+                                                                                                                                                                          padding-top:18px}
+                                                                                                                                                                          .section{
+                                                                                                                                                                            padding:36px 22px}
+                                                                                                                                                                            .section-heading{
+                                                                                                                                                                              display:block}
+                                                                                                                                                                              .section-heading>p{
+                                                                                                                                                                                margin-top:0}
+                                                                                                                                                                                .section h2{
+                                                                                                                                                                                  font-size:30px}
+                                                                                                                                                                                  .grid,.band{
+                                                                                                                                                                                    grid-template-columns:1fr}
+                                                                                                                                                                                    .extension-card{
+                                                                                                                                                                                      grid-column:auto}
+                                                                                                                                                                                      .footer{
+                                                                                                                                                                                        padding:24px 22px;
+                                                                                                                                                                                        flex-wrap:wrap;
+                                                                                                                                                                                        gap:15px}
+                                                                                                                                                                                        .footer>span{
+                                                                                                                                                                                          width:100%;
+                                                                                                                                                                                          order:3}
+                                                                                                                                                                                          .footer nav{
+                                                                                                                                                                                            margin-left:auto}
+                                                                                                                                                                                            .nav a:last-child{
+                                                                                                                                                                                              display:none}
+                                                                                                                                                                                            }
+                                                                                                                                                                                            @media(prefers-reduced-motion:reduce){
+                                                                                                                                                                                              html{
+                                                                                                                                                                                                scroll-behavior:auto}
+                                                                                                                                                                                              }
+                                                                                                                                                                                              .article-intro{
+                                                                                                                                                                                                padding-bottom:0}
+                                                                                                                                                                                                .article-intro h1{
+                                                                                                                                                                                                  font-family:Georgia,"Times New Roman",serif;
+                                                                                                                                                                                                  font-size:clamp(34px,5vw,54px);
+                                                                                                                                                                                                  font-weight:400;
+                                                                                                                                                                                                  line-height:1.15;
+                                                                                                                                                                                                  letter-spacing:-1.5px;
+                                                                                                                                                                                                  margin:0}
+                                                                                                                                                                                                  .article-intro>a{
+                                                                                                                                                                                                    font-size:12px;
+                                                                                                                                                                                                    color:var(--brand)}
+                                                                                                                                                                                                    .information-grid{
+                                                                                                                                                                                                      grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+
+.extension-setup{max-width:1000px}
+.extension-setup .band{margin-bottom:36px}
+.extension-setup ol{padding-left:22px}
+.extension-setup li{margin-bottom:12px}
+.extension-setup p,.extension-setup li{font-size:14px;color:var(--muted)}
+.extension-setup code{overflow-wrap:anywhere}
+.article-intro .download-status{margin-top:12px}

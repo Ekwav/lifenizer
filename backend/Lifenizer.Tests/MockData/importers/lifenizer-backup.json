@@ -1,0 +1,24 @@
+{
+  "conversations": [
+    {
+      "title": "Recovered planning thread",
+      "source": "whatsapp",
+      "participantNames": ["Alice", "Bob"],
+      "artifactNames": ["plan.pdf"],
+      "segments": [
+        {
+          "participantName": "Alice",
+          "text": "Let's keep importer compatibility strict.",
+          "offsetMs": 0,
+          "createdAt": "2026-05-20T09:00:00Z"
+        },
+        {
+          "participantName": "Bob",
+          "text": "Agree. We should test against realistic payloads.",
+          "offsetMs": 1500,
+          "createdAt": "2026-05-20T09:00:01Z"
+        }
+      ]
+    }
+  ]
+}

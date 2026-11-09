@@ -1,0 +1,2437 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show TextEditingValue;
+import 'package:uuid/uuid.dart';
+import 'package:cryptography/cryptography.dart';
+
+import 'api_client.dart';
+import 'crypto_service.dart';
+import 'package:image_picker/image_picker.dart';
+
+import 'image_service.dart';
+import 'models.dart';
+import 'services/search_criteria.dart';
+import 'services/device_pairing.dart';
+import 'services/imap_import_service.dart';
+import 'services/pairing_store.dart';
+import 'services/sync_progress.dart';
+import 'services/local_vault_store.dart';
+import 'services/shared_import_source.dart';
+import 'services/source_categories.dart';
+import 'services/transcript_enrichment.dart';
+import 'services/discord_archive.dart';
+import 'services/export_file_reader.dart';
+import 'services/discord_bot_import_service.dart';
+import 'services/document_import_service.dart';
+import 'services/document_credentials.dart';
+import 'services/paperless_client.dart';
+import 'services/browser_history_watch_service.dart';
+import 'services/browser_extension_receiver_service.dart';
+import 'services/camera_roll_watch_service.dart';
+import 'services/recording_controller.dart';
+import 'services/recording_relay_service.dart';
+import 'services/request_cancellation.dart';
+import 'services/audio_payload_codec.dart';
+import 'services/audio_format.dart';
+import 'services/recording_codec.dart';
+import 'services/audio_cache_io.dart'
+    if (dart.library.js_interop) 'services/audio_cache_web.dart'
+    as audio_cache;
+import 'services/wav_audio.dart';
+import 'services/vault_chunks.dart';
+import 'services/vault_chunk_store.dart';
+import 'services/backup_archive.dart';
+import 'services/vault_chunk_store_sembast.dart';
+import 'services/vault_chunk_store_platform_io.dart'
+    if (dart.library.js_interop) 'services/vault_chunk_store_platform_web.dart';
+import 'services/vault_worker_io.dart'
+    if (dart.library.js_interop) 'services/vault_worker_web.dart'
+    show vaultWorkerCount;
+
+import 'services/conversation_search_index.dart';
+import 'services/conversation_catalog.dart';
+import 'services/search_index_worker_io.dart'
+    if (dart.library.js_interop) 'services/search_index_worker_web.dart';
+import 'services/temporal_intent.dart';
+import 'services/search_scorer.dart';
+import 'services/search_service.dart';
+import 'services/disk_search_index_io.dart'
+    if (dart.library.js_interop) 'services/disk_search_index_web.dart';
+
+part 'services/vault_sync.dart';
+part 'services/vault_imports.dart';
+part 'services/vault_email.dart';
+part 'services/vault_training.dart';
+part 'services/vault_recordings.dart';
+part 'services/vault_search_cache.dart';
+part 'services/vault_disk_search.dart';
+part 'services/vault_backup.dart';
+
+class LifenizerAppState extends ChangeNotifier {
+  LifenizerAppState({
+    this._localStore,
+    this._chunkStore,
+    this.apiFactory,
+    PairingCredentialStore? pairingStore,
+    ImapCredentialStore? imapStore,
+    DocumentCredentialStore? documentStore,
+    PaperlessClient? paperlessClient,
+    DiscordBotCredentialStore? discordStore,
+    DateTime Function()? syncClock,
+  }) : _syncClock = syncClock ?? DateTime.now {
+    recording = RecordingController(this);
+    recordingRelay = RecordingRelayService(this);
+    stopRecording = recording.stop;
+    pairing = DevicePairingService(this, store: pairingStore);
+    pairing.addListener(_notifyChanged);
+    emailImport = EmailImportService(this, store: imapStore);
+    emailImport.addListener(_notifyChanged);
+    documentImport = DocumentImportService(
+      this,
+      store: documentStore,
+      client: paperlessClient,
+    );
+    documentImport.addListener(_notifyChanged);
+    cameraRoll = CameraRollWatchService(this, store: documentStore);
+    cameraRoll.addListener(_notifyChanged);
+    browserHistory = BrowserHistoryWatchService(this, store: documentStore);
+    browserHistory.addListener(_notifyChanged);
+    browserExtension = BrowserExtensionReceiverService(
+      this,
+      store: documentStore,
+      onImported: browserHistory.afterExternalImport,
+    );
+    browserExtension.addListener(_notifyChanged);
+    discordImport = DiscordBotImportService(
+      ingest: importDiscordBotBatch,
+      store: discordStore,
+    );
+    discordImport.addListener(_notifyChanged);
+    addListener(_updateDiscordIdentity);
+  }
+
+  late final DevicePairingService pairing;
+  late final EmailImportService emailImport;
+  late final DocumentImportService documentImport;
+  late final CameraRollWatchService cameraRoll;
+  late final BrowserHistoryWatchService browserHistory;
+  late final BrowserExtensionReceiverService browserExtension;
+  late final DiscordBotImportService discordImport;
+  late final RecordingController recording;
+  late final RecordingRelayService recordingRelay;
+
+  void _updateDiscordIdentity() => discordImport.setIdentity(
+    isAuthenticated && session != null
+        ? jsonEncode([apiBaseUrl, rememberedEmail, session!.userId])
+        : null,
+  );
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _audioTranscription?.cancel();
+    unawaited(_diskSearch?.close());
+    recording.dispose();
+    recordingRelay.dispose();
+    _syncProgressTicker?.cancel();
+    _progressStageClock?.stop();
+    removeListener(_updateDiscordIdentity);
+    discordImport.dispose();
+    documentImport.dispose();
+    browserExtension.dispose();
+    browserHistory.dispose();
+    cameraRoll.dispose();
+    emailImport.dispose();
+    pairing.dispose();
+    super.dispose();
+  }
+
+  final LifenizerApiClient Function(String)? apiFactory;
+  LocalVaultStore? _localStore;
+  VaultChunkStore? _chunkStore;
+  // Set when the loaded chunks live in another store than the current one: the
+  // next save rewrites them there, then removes the old records.
+  int? _chunkMigrationFrom;
+  String rememberedEmail = '';
+
+  /// Search typed on the lock screen. The unlocked search field takes it over
+  /// with its cursor and IME composing range intact.
+  TextEditingValue pendingSearch = TextEditingValue.empty;
+  String get pendingSearchQuery => pendingSearch.text;
+  String? _localVaultKey;
+  final List<SyncEnvelope> _pendingSync = [];
+  final Map<String, bool> _pendingRecordingSync = {};
+  final DateTime Function() _syncClock;
+  DateTime? _lastSyncUploadAt;
+  int _vaultBatchDepth = 0;
+  Future<void>? _syncInFlight;
+  Future<void> _storageTail = Future.value();
+  String? syncError;
+  SyncProgress? syncProgress;
+  final Stopwatch _syncProgressClock = Stopwatch()..start();
+  Stopwatch? _progressStageClock;
+  Timer? _syncProgressTicker;
+  int _snapshotWriteRevision = 0;
+  String? _searchSnapshotNonce;
+  int _searchRevision = 0;
+  int _savedSearchRevision = -1;
+  final Set<int> _unloadedChunks = {};
+  final Map<int, Future<void>> _chunkLoads = {};
+
+  /// Metadata of the pending recording (`recordedAt`, `title`,
+  /// `participantNames`, `detailsPrompted`, `payloadBytes`, `payloadNonce`). The
+  /// WAV itself is stored separately; see [loadAudioDraftPayload].
+  Map<String, dynamic>? audioDraft;
+  // Bytes not yet written to their own encrypted record (a fresh recording or a
+  // draft restored from an older vault that kept the payload in the core).
+  List<int>? _pendingDraftPayload;
+  // Decoded bytes kept while a draft exists (a recording was already held in
+  // memory before); avoids re-decrypting the stored payload for each use.
+  List<int>? _draftPayloadCache;
+  Future<void> Function()? stopRecording;
+  DateTime? lastSyncedAt;
+  bool _unlocking = false;
+  bool _disposed = false;
+  int get pendingSyncCount => _pendingSync.length;
+
+  final Uuid _uuid = const Uuid();
+  final VaultCrypto _crypto = VaultCrypto();
+
+  String apiBaseUrl = const String.fromEnvironment(
+    'LIFENIZER_API_URL',
+    defaultValue: 'http://127.0.0.1:5075',
+  );
+  String deviceId = const Uuid().v4();
+  AuthSession? session;
+  LifenizerApiClient? _api;
+  int syncCursor = 0;
+  bool busy = false;
+  // Set while an audio upload waits for the server; see importAudioBytes.
+  RequestCancellation? _audioTranscription;
+  // The whole audio import operation, so lock() can wait for it.
+  Future<void>? _audioImport;
+  String? status;
+  String? error;
+  bool startupLoading = false;
+  final Stopwatch _startupClock = Stopwatch()..start();
+  final Map<String, int> startupTimingsMs = {};
+
+  void markStartup(String phase) => startupTimingsMs.putIfAbsent(
+    phase,
+    () => _startupClock.elapsedMilliseconds,
+  );
+  final Stopwatch _unlockClock = Stopwatch();
+  final Map<String, int> unlockTimingsMs = {};
+
+  void beginUnlockTiming() {
+    unlockTimingsMs.clear();
+    _unlockClock
+      ..reset()
+      ..start();
+    markUnlock('started');
+  }
+
+  void markUnlock(String phase) {
+    if (!_unlockClock.isRunning) return;
+    final elapsed = _unlockClock.elapsedMilliseconds;
+    unlockTimingsMs[phase] = elapsed;
+    debugPrint('Lifenizer unlock $phase ${elapsed}ms');
+  }
+
+  bool startupUnlockPending = false;
+
+  void finishStartup([Object? failure]) {
+    startupLoading = false;
+    if (failure != null) error = 'Could not open this device: $failure';
+    _notifyChanged();
+  }
+
+  final List<Participant> participants = [];
+  final List<Conversation> conversations = ConversationCatalog();
+  final List<RelationEdge> relations = [];
+  final List<SavedSearch> savedSearches = [];
+  final List<ImportCapability> importCapabilities = [];
+
+  ConversationSearchIndex? _searchIndex;
+  DiskSearchIndex? _diskSearch;
+  Future<void>? _diskQuery;
+  String? _diskQueryKey;
+  List<Conversation> _diskResults = const [];
+  (int, int, int)? _filterFacetRevision;
+  List<String> _filterSources = const [];
+  List<String> _filterTags = const [];
+  List<RecordingLocation> _filterLocations = const [];
+  ({List<String> towns, List<String> places}) _filterLocationOptions = (
+    towns: const [],
+    places: const [],
+  );
+  bool _locking = false;
+  String? searchError;
+
+  Future<void> retrySearch() => _run(() async {
+    try {
+      await _recoverDiskSearch();
+    } catch (_) {
+      searchError =
+          'Search could not be rebuilt. Retry when storage is available.';
+      rethrow;
+    }
+  });
+  List<String> _searchDetailNonces = [];
+  List<String> _searchPostingNonces = [];
+  final Map<(bool, int), Future<void>> _searchCacheLoads = {};
+  // Conversations whose index entry is stale, plus a flag for changes (people,
+  // relations, a missing index) that only a full rebuild can reflect.
+  final Set<String> _searchDirtyIds = <String>{};
+  bool _searchFullRebuildNeeded = true;
+  int _searchGeneration = 0;
+  Future<void>? _searchBuild;
+  bool _searchBuildScheduled = false;
+  int fullSearchBuilds = 0;
+  int incrementalSearchUpdates = 0;
+
+  // Chunked local vault (format v2) bookkeeping. A conversation lives in chunk
+  // stableHash(id) % _chunkCount; only chunks containing a conversation that
+  // changed since the last successful save are re-encrypted and rewritten.
+  int _chunkCount = 0;
+  List<Map<String, dynamic>> _obsoleteChunkLayouts = [];
+  String? _chunkGeneration;
+  String get _conversationStorageKey => _chunkGeneration == null
+      ? _localVaultKey!
+      : '$_localVaultKey:chunks:$_chunkGeneration';
+  List<String?> _chunkNonces = <String?>[];
+  List<int> _chunkConversationCounts = <int>[];
+  List<int> _chunkMessageCounts = <int>[];
+  int _savedCursor = 0;
+  // Nonces of chunk files written (or about to be) by saves whose final core
+  // never landed; the core lists them as pendingChunkNonces.
+  final Map<int, List<String>> _unconfirmedChunkNonces = {};
+  final Map<String, int> _dirtyConversations = <String, int>{};
+  int _dirtyRevision = 0;
+  int _indexedConversationCount = -1;
+  int _indexedRelationCount = -1;
+  int _indexedParticipantCount = -1;
+
+  /// True while no search index exists yet (for example during the first
+  /// background build after unlocking) and results come from a plain scan.
+  bool get searchIndexPreparing =>
+      _searchIndex == null && _diskSearch == null && isAuthenticated;
+
+  bool get searchDetailsLoading =>
+      _searchCacheLoads.isNotEmpty || _diskQuery != null;
+
+  String? _lastSearchQuery;
+  DateTime? _lastSearchAt;
+  List<String> _lastSearchTopConversationIds = const [];
+  final Map<String, int> _sessionQueryFrequency = <String, int>{};
+
+  /// Summary of the most recent import, or null before the first one.
+  ImportSummary? lastImportSummary;
+
+  QuotaStatus? quotaStatus;
+  final List<ImageItem> images = [];
+
+  bool get isAuthenticated =>
+      session != null && _crypto.isUnlocked && !_unlocking;
+
+  Future<Conversation> loadConversation(String id) => _loadConversation(id);
+
+  void _notifyChanged() {
+    if (!_disposed) notifyListeners();
+  }
+
+  void reportError(String message) {
+    error = message;
+    _notifyChanged();
+  }
+
+  void reportUnlockProgress(String? message) {
+    if (message == null) {
+      _clearSyncProgress();
+      _notifyChanged();
+    } else {
+      _setSyncProgress(
+        SyncStage.authenticating,
+        detail: message,
+        downloaded: 0,
+        uploaded: 0,
+        batch: 0,
+      );
+    }
+  }
+
+  /// Test-only hook: unlocks the local vault crypto and installs an
+  /// already-authenticated API [client] directly, without [login]'s network
+  /// round trips (dev-login, capability fetch, initial sync pull).
+  ///
+  /// This lets tests exercise real app-state methods (e.g.
+  /// [importAudioBytes]) against a stubbed `http.Client` — see
+  /// `package:http/testing.dart`'s `MockClient` — instead of a live
+  /// backend. Not used by production code paths.
+  Future<void> debugAuthenticateForTesting(
+    LifenizerApiClient client, {
+    String email = 'test@example.test',
+    String passphrase = 'test-passphrase',
+    String vaultSalt = 'test-salt',
+  }) async {
+    await _crypto.unlock(
+      email: email,
+      passphrase: passphrase,
+      vaultSalt: vaultSalt,
+    );
+    _api = client;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Quota & images
+  // ---------------------------------------------------------------------------
+
+  Future<void> refreshQuota() async {
+    final api = _requireApi();
+    final previous = quotaStatus;
+    try {
+      final fetched = await api.getQuotaStatus();
+      if (!identical(api, _api) ||
+          !_crypto.isUnlocked ||
+          !identical(previous, quotaStatus)) {
+        return;
+      }
+      quotaStatus = fetched;
+      notifyListeners();
+    } catch (_) {
+      // Non-fatal: quota info will be unavailable but app continues.
+    }
+  }
+
+  Future<void> refreshImages({String? conversationId}) async {
+    final api = _requireApi();
+    final fetched = await api.listImages(conversationId: conversationId);
+    if (!identical(api, _api) || !_crypto.isUnlocked) return;
+    if (conversationId == null) {
+      images
+        ..clear()
+        ..addAll(fetched);
+    } else {
+      images.removeWhere((img) => img.conversationId == conversationId);
+      images.addAll(fetched);
+    }
+    notifyListeners();
+  }
+
+  /// Picks an image from [source], compresses it, checks local quota, uploads
+  /// it, and refreshes quota.  Throws [QuotaExceededException] if the local
+  /// quota check fails before the upload is attempted.
+  Future<ImageItem?> captureAndUploadImage({
+    required ImageSource source,
+    String? conversationId,
+  }) async {
+    final captured = source == ImageSource.camera
+        ? await ImageService.captureFromCamera()
+        : await ImageService.pickFromGallery();
+    if (captured == null) return null;
+
+    return uploadCapturedImage(captured, conversationId: conversationId);
+  }
+
+  Future<ImageItem> uploadCapturedImage(
+    CapturedImage captured, {
+    String? conversationId,
+  }) async {
+    final api = _requireApi();
+    final encrypted = await ImageService.encryptImage(captured, _crypto);
+    final quota = quotaStatus;
+    if (quota != null &&
+        quota.usedBytes + encrypted.length > quota.limitBytes) {
+      throw QuotaExceededException(
+        'Storage quota exceeded. Please upgrade your plan.',
+      );
+    }
+    if (!identical(api, _api) || !_crypto.isUnlocked) {
+      throw StateError('Vault is locked.');
+    }
+    final item = await api.uploadImage(
+      encrypted,
+      '${_uuid.v4()}.bin',
+      'application/octet-stream',
+      conversationId: conversationId,
+    );
+    if (!identical(api, _api) || !_crypto.isUnlocked) {
+      throw StateError('Vault is locked.');
+    }
+    images.add(item);
+    notifyListeners();
+    refreshQuota().ignore();
+    return item;
+  }
+
+  Future<CapturedImage> decryptedImage(ImageItem image) async {
+    final api = _requireApi();
+    if (!_crypto.isUnlocked) throw StateError('Vault is locked.');
+    final bytes = await api.downloadImage(image.id);
+    if (!identical(api, _api) || !_crypto.isUnlocked) {
+      throw StateError('Vault is locked.');
+    }
+    // Older image/* uploads were stored raw. Display them in memory with a
+    // gallery notice; new uploads always contain authenticated ciphertext.
+    final decoded = image.contentType.startsWith('image/')
+        ? CapturedImage(
+            bytes: bytes,
+            fileName: image.fileName,
+            contentType: image.contentType,
+          )
+        : await ImageService.decryptImage(bytes, _crypto);
+    if (!identical(api, _api) || !_crypto.isUnlocked) {
+      throw StateError('Vault is locked.');
+    }
+    return decoded;
+  }
+
+  Future<void> deleteImage(String id) async {
+    final api = _requireApi();
+    await api.deleteImage(id);
+    images.removeWhere((img) => img.id == id);
+    notifyListeners();
+    refreshQuota().ignore();
+  }
+
+  Map<String, String> get authHeaders {
+    final token = session?.authToken;
+    if (token == null) return const {};
+    return {'authorization': 'Bearer $token'};
+  }
+
+  Future<String> checkoutUrl(String plan) =>
+      _requireApi().createCheckoutUrl(plan);
+
+  Future<void> activateFreePremium() => _changeFreePremium(activate: true);
+
+  Future<void> cancelFreePremium() => _changeFreePremium(activate: false);
+
+  Future<void> submitCancellationFeedback(String feedback) {
+    if (!isAuthenticated) throw StateError('Sign in to send feedback.');
+    return _requireApi().submitCancellationFeedback(feedback.trim());
+  }
+
+  Future<void> _changeFreePremium({required bool activate}) async {
+    if (!isAuthenticated) throw StateError('Sign in to manage Premium.');
+    final api = _requireApi();
+    final quota = await (activate
+        ? api.activateFreePremium()
+        : api.cancelFreePremium());
+    if (!identical(api, _api) || !isAuthenticated) return;
+    quotaStatus = quota;
+    _notifyChanged();
+  }
+
+  /// Searches conversations based on query and optional filters.
+  ///
+  /// Supports temporal intent parsing (e.g., "today", "last week"), semantic
+  /// token filtering, vector similarity scoring, and search continuity
+  /// (carry-over tokens from the previous search if related).
+  ///
+  /// Parameters:
+  /// - [query]: Search query string (normalized internally)
+  /// - [source]: Optional source filter (e.g., "slack", "email")
+  /// - [participantId]: Optional participant ID filter
+  /// - [tag]: Optional tag filter
+  /// - [favoritesOnly]: If true, only return favorited conversations
+  /// - [useVector]: If true, include TF-IDF vector similarity in scoring
+  /// - [from]/[to]: Optional inclusive date-range filter (calendar dates in
+  ///   the caller's local timezone). A conversation matches when its time
+  ///   span overlaps the range.
+  ///
+  /// Returns: Sorted list of matching conversations (highest relevance first)
+  List<Conversation> search(
+    String query, {
+    String? source,
+    String? participantId,
+    String? tag,
+    bool favoritesOnly = false,
+    bool useVector = true,
+    DateTime? from,
+    DateTime? to,
+    bool includeConsumed = true,
+    int? maxResults,
+  }) {
+    maxResults = (maxResults ?? 100).clamp(1, 100);
+    _ensureSearchIndex();
+    final index = _searchIndex;
+    if (index == null && _diskSearch == null) {
+      return _linearSearch(
+        query,
+        source: source,
+        participantId: participantId,
+        tag: tag,
+        favoritesOnly: favoritesOnly,
+        from: from,
+        to: to,
+        includeConsumed: includeConsumed,
+        maxResults: maxResults,
+      );
+    }
+
+    // Build search criteria and scorer
+    final criteria = SearchCriteria(
+      query: query,
+      source: source,
+      participantId: participantId == null
+          ? null
+          : resolveParticipantId(participantId),
+      tag: tag,
+      favoritesOnly: favoritesOnly,
+      useVector: useVector,
+      from: from,
+      to: to,
+      includeConsumed: includeConsumed,
+    );
+
+    final now = DateTime.now().toUtc();
+    final temporalIntent = TemporalIntent.tryParse(criteria.normalized, now);
+
+    // Prepare query tokens
+    final queryTokens = ConversationSearchIndex.tokenize(
+      TemporalIntent.lexicalQuery(criteria.normalized),
+    );
+    final semanticQuery = queryTokens.join(' ');
+
+    // Determine which previous tokens to carry over
+    final previousQuery = _lastSearchQuery;
+    final previousTokens = previousQuery == null
+        ? const <String>[]
+        : ConversationSearchIndex.tokenize(
+            TemporalIntent.lexicalQuery(previousQuery),
+          );
+
+    final scorer = SearchScorer(
+      temporalIntent: temporalIntent,
+      normalizedQuery: criteria.normalized,
+      now: now,
+      previousQuery: previousQuery,
+      lastSearchAt: _lastSearchAt,
+      lastSearchTopIds: _lastSearchTopConversationIds,
+      sessionQueryFrequency: _sessionQueryFrequency,
+    );
+
+    final carryPrevious = scorer.shouldCarryPreviousQuery(
+      previousTokens,
+      queryTokens,
+    );
+    final effectiveTokens = <String>{
+      ...queryTokens,
+      if (carryPrevious) ...previousTokens,
+    }.toList(growable: false);
+
+    if (_diskSearch != null) {
+      return _searchDisk(
+        criteria,
+        scorer,
+        effectiveTokens,
+        semanticQuery,
+        maxResults: maxResults,
+        contextQuery: carryPrevious
+            ? effectiveTokens.join(' ')
+            : criteria.normalized,
+      );
+    }
+
+    // Execute search using service
+    final searchService = SearchService(
+      index!,
+      onTerms: queryTokens.isEmpty ? null : _requestSearchPostings,
+      onCandidates: queryTokens.isEmpty ? null : _requestSearchDetails,
+    );
+    final ranked = searchService
+        .rankConversations(
+          criteria,
+          scorer,
+          effectiveTokens,
+          semanticQuery,
+          maxResults: maxResults,
+        )
+        .cast<Conversation>();
+    final current = busy
+        ? {
+            for (final conversation in conversations)
+              conversation.id: conversation,
+          }
+        : null;
+    final results = current == null
+        ? ranked
+        : ranked
+              .where((conversation) => current.containsKey(conversation.id))
+              .map((conversation) => current[conversation.id]!)
+              .toList();
+
+    _updateSearchContext(
+      carryPrevious ? effectiveTokens.join(' ') : criteria.normalized,
+      results,
+      now,
+    );
+    return results;
+  }
+
+  static const int _linearSearchLimit = 500;
+
+  /// Index-free search used until the first index exists: every query word has
+  /// to appear in the title, a participant name or a message; newest first.
+  List<Conversation> _linearSearch(
+    String query, {
+    String? source,
+    String? participantId,
+    String? tag,
+    bool favoritesOnly = false,
+    DateTime? from,
+    DateTime? to,
+    bool includeConsumed = true,
+    int? maxResults,
+  }) {
+    if (conversations.isEmpty) return const [];
+    final criteria = SearchCriteria(
+      query: query,
+      source: source,
+      participantId: participantId == null
+          ? null
+          : resolveParticipantId(participantId),
+      tag: tag,
+      favoritesOnly: favoritesOnly,
+      from: from,
+      to: to,
+      includeConsumed: includeConsumed,
+    );
+    final now = DateTime.now().toUtc();
+    final lexical = TemporalIntent.lexicalQuery(criteria.normalized);
+    final words = <List<String>>[
+      for (final word in lexical.split(RegExp(r'\s+')))
+        if (word.isNotEmpty)
+          {word, ...ConversationSearchIndex.tokenize(word)}.toList(),
+    ];
+    final participantFilter = criteria.normalizedParticipantId;
+    final tagFilter = criteria.normalizedTag;
+    final fromFilter = criteria.normalizedFrom;
+    final toFilter = criteria.normalizedTo;
+    final limit = maxResults != null && maxResults > 0
+        ? maxResults
+        : _linearSearchLimit;
+    final matches = <Conversation>[];
+    for (final conversation in conversations) {
+      if (!criteria.matchesLocation(conversation.location)) continue;
+      if (!criteria.matchesSource(conversation.source)) {
+        continue;
+      }
+      if (participantFilter != null &&
+          !conversation.participantIds
+              .map(resolveParticipantId)
+              .contains(participantFilter)) {
+        continue;
+      }
+      if (tagFilter != null &&
+          !conversation.tags.any((item) => item.toLowerCase() == tagFilter)) {
+        continue;
+      }
+      if (criteria.favoritesOnly && !conversation.isFavorite) continue;
+      if (!criteria.includeConsumed &&
+          categoryForSource(conversation.source) == SourceCategory.consumed) {
+        continue;
+      }
+      if (fromFilter != null || toFilter != null) {
+        final a = conversation.startedAt.toUtc();
+        final b = conversation.endedAt.toUtc();
+        final start = a.isBefore(b) ? a : b;
+        final end = a.isAfter(b) ? a : b;
+        if (fromFilter != null && end.isBefore(fromFilter)) continue;
+        if (toFilter != null && start.isAfter(toFilter)) continue;
+      }
+      if (words.isNotEmpty && !_linearMatches(conversation, words)) continue;
+      matches.add(conversation);
+    }
+    matches.sort((left, right) {
+      final byDate = right.startedAt.compareTo(left.startedAt);
+      return byDate != 0 ? byDate : left.id.compareTo(right.id);
+    });
+    final results = matches.length > limit
+        ? matches.sublist(0, limit)
+        : matches;
+    _updateSearchContext(criteria.normalized, results, now);
+    return results;
+  }
+
+  bool _linearMatches(Conversation conversation, List<List<String>> words) {
+    final header = StringBuffer(conversation.title)
+      ..write(' ${conversation.location?.searchableText ?? ''}');
+    for (final id in conversation.participantIds) {
+      header
+        ..write(' ')
+        ..write(participantById(id)?.searchableText ?? id);
+    }
+    final remaining = [...words];
+    // Titles and names are short enough to fold accents; message text is
+    // matched as typed (lower-cased) to keep the scan cheap on huge vaults.
+    final head = ConversationSearchIndex.fold(header.toString());
+    remaining.removeWhere((forms) => forms.any(head.contains));
+    if (remaining.isEmpty) return true;
+    for (final segment in conversation.segments) {
+      final text = segment.text.toLowerCase();
+      remaining.removeWhere((forms) => forms.any(text.contains));
+      if (remaining.isEmpty) return true;
+    }
+    return false;
+  }
+
+  /// Page-friendly view of [search]. Returns the slice of results for the
+  /// requested [page] (1-based) using [pageSize] entries per page, along with
+  /// the total number of matches so the UI can render pagers/counters.
+  ConversationSearchPage searchPaged(
+    String query, {
+    String? source,
+    String? participantId,
+    String? tag,
+    bool favoritesOnly = false,
+    bool useVector = true,
+    DateTime? from,
+    DateTime? to,
+    int page = 1,
+    int pageSize = 10,
+  }) {
+    final results = search(
+      query,
+      source: source,
+      participantId: participantId == null
+          ? null
+          : resolveParticipantId(participantId),
+      tag: tag,
+      favoritesOnly: favoritesOnly,
+      useVector: useVector,
+      from: from,
+      to: to,
+    );
+    if (pageSize <= 0) {
+      return ConversationSearchPage(
+        items: results,
+        total: results.length,
+        page: 1,
+        pageSize: results.length,
+      );
+    }
+    final clampedPage = page < 1 ? 1 : page;
+    final start = (clampedPage - 1) * pageSize;
+    if (start >= results.length) {
+      return ConversationSearchPage(
+        items: const [],
+        total: results.length,
+        page: clampedPage,
+        pageSize: pageSize,
+      );
+    }
+    final end = (start + pageSize) > results.length
+        ? results.length
+        : start + pageSize;
+    return ConversationSearchPage(
+      items: results.sublist(start, end),
+      total: results.length,
+      page: clampedPage,
+      pageSize: pageSize,
+    );
+  }
+
+  void _refreshFilterFacets() {
+    if (busy || syncProgress?.active == true) return;
+    final revision = (conversations.length, _dirtyRevision, _searchRevision);
+    if (_filterFacetRevision == revision) return;
+    final sources = <String>{}, tags = <String>{};
+    final locations = <String, RecordingLocation>{};
+    final towns = <String>{}, places = <String>{};
+    for (final conversation in conversations) {
+      sources.add(conversation.source);
+      tags.addAll(conversation.tags);
+      final location = conversation.location;
+      if (location == null) continue;
+      final text = location.searchableText;
+      locations[text] = location;
+      if (location.town.isNotEmpty) towns.add(location.town);
+      if (location.venue.isNotEmpty || location.address.isNotEmpty) {
+        places.add(text);
+      }
+    }
+    _filterSources = List.unmodifiable(sources.toList()..sort());
+    _filterTags = List.unmodifiable(tags.toList()..sort());
+    _filterLocations = List.unmodifiable(locations.values);
+    _filterLocationOptions = (
+      towns: List.unmodifiable(towns.toList()..sort()),
+      places: List.unmodifiable(places.toList()..sort()),
+    );
+    _filterFacetRevision = revision;
+  }
+
+  List<String> get availableSources {
+    _refreshFilterFacets();
+    return _filterSources;
+  }
+
+  List<String> get allTags {
+    _refreshFilterFacets();
+    return _filterTags;
+  }
+
+  List<RecordingLocation> get availableLocations {
+    _refreshFilterFacets();
+    return _filterLocations;
+  }
+
+  ({List<String> towns, List<String> places}) get locationFilterOptions {
+    _refreshFilterFacets();
+    return _filterLocationOptions;
+  }
+
+  VaultInsights get insights {
+    final sourceCounts = <String, int>{};
+    final participantCounts = <String, int>{};
+    final timelineCounts = <DateTime, int>{};
+    var totalSegments = 0;
+    var totalArtifacts = 0;
+
+    for (final conversation in conversations) {
+      sourceCounts.update(
+        conversation.source,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+      totalSegments += conversation.segmentCount;
+      totalArtifacts += conversation.artifactNames.length;
+      final day = DateTime.utc(
+        conversation.startedAt.toUtc().year,
+        conversation.startedAt.toUtc().month,
+        conversation.startedAt.toUtc().day,
+      );
+      timelineCounts.update(day, (count) => count + 1, ifAbsent: () => 1);
+      for (final participantId
+          in conversation.participantIds.map(resolveParticipantId).toSet()) {
+        participantCounts.update(
+          participantId,
+          (count) => count + 1,
+          ifAbsent: () => 1,
+        );
+      }
+    }
+
+    final sourceFacets =
+        sourceCounts.entries
+            .map((entry) => SourceFacet(source: entry.key, count: entry.value))
+            .toList()
+          ..sort((left, right) => right.count.compareTo(left.count));
+    final participantFacets =
+        participantCounts.entries
+            .map(
+              (entry) => ParticipantFacet(
+                participant: participants.firstWhere(
+                  (participant) => participant.id == entry.key,
+                  orElse: () =>
+                      Participant(id: entry.key, displayName: entry.key),
+                ),
+                count: entry.value,
+              ),
+            )
+            .toList()
+          ..sort((left, right) => right.count.compareTo(left.count));
+    final timeline =
+        timelineCounts.entries
+            .map((entry) => TimelineBucket(day: entry.key, count: entry.value))
+            .toList()
+          ..sort((left, right) => right.day.compareTo(left.day));
+
+    return VaultInsights(
+      totalConversations: conversations.length,
+      totalSegments: totalSegments,
+      totalArtifacts: totalArtifacts,
+      sourceFacets: sourceFacets,
+      participantFacets: participantFacets,
+      timeline: timeline,
+      tags: allTags,
+    );
+  }
+
+  Map<String, Participant>? _participantLookup;
+  final Map<String, String> _resolvedParticipantIds = {};
+  final Set<String> _participantCycles = {};
+  final Map<String, Set<String>> _identityPeople = {};
+  final Map<String, Set<String>> _namePeople = {};
+  bool _hasParticipantRedirects = false;
+
+  void _invalidateParticipantLookup() {
+    _participantLookup = null;
+    _resolvedParticipantIds.clear();
+    _participantCycles.clear();
+    _identityPeople.clear();
+    _namePeople.clear();
+  }
+
+  Map<String, Participant> get _people {
+    if (_participantLookup == null ||
+        _participantLookup!.length != participants.length) {
+      _invalidateParticipantLookup();
+      _participantLookup = {
+        for (final person in participants) person.id: person,
+      };
+      _hasParticipantRedirects = participants.any(
+        (person) => person.mergedInto != null,
+      );
+      for (final person in participants) {
+        final id = resolveParticipantId(person.id);
+        for (final identifier in person.identifiers) {
+          _identityPeople
+              .putIfAbsent(
+                Participant.normalizeIdentifier(identifier),
+                () => <String>{},
+              )
+              .add(id);
+        }
+        for (final name in [person.displayName, ...person.aliases]) {
+          _namePeople
+              .putIfAbsent(_personNameKey(name), () => <String>{})
+              .add(id);
+        }
+      }
+    }
+    return _participantLookup!;
+  }
+
+  List<Participant> get activeParticipants {
+    final people = _people;
+    return people.values
+        .where(
+          (person) =>
+              person.mergedInto == null ||
+              _participantCycles.contains(person.id),
+        )
+        .toList();
+  }
+
+  String resolveParticipantId(String id) {
+    final people = _people;
+    if (!_hasParticipantRedirects) return id;
+    final path = <String>[];
+    var current = id;
+    while (true) {
+      final cached = _resolvedParticipantIds[current];
+      if (cached != null) {
+        current = cached;
+        break;
+      }
+      final cycleStart = path.indexOf(current);
+      if (cycleStart >= 0) {
+        final cycle = path.skip(cycleStart).toList()..sort();
+        current = cycle.first;
+        _participantCycles.add(current);
+        break;
+      }
+      path.add(current);
+      final target = people[current]?.mergedInto;
+      if (target == null) break;
+      current = target;
+    }
+    for (final source in path) {
+      _resolvedParticipantIds[source] = current;
+    }
+    return current;
+  }
+
+  Participant? participantById(String id) => _people[resolveParticipantId(id)];
+
+  String participantName(String id) => participantById(id)?.displayName ?? id;
+  static String _personNameKey(String name) =>
+      name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+  Future<List<String>> ensureParticipants(String input) =>
+      ensureParticipantNames(input.split(','));
+
+  /// Explicit suggestions identify people by ID, even when names are shared.
+  Future<List<String>> ensureParticipantSelection(
+    String input,
+    List<String> selected,
+  ) async {
+    final ids = selected.map(resolveParticipantId).toSet();
+    if (ids.any((id) => participantById(id) == null)) {
+      throw StateError(
+        'A selected participant is no longer available. Select them again.',
+      );
+    }
+    final labels = ids
+        .expand((id) {
+          final person = participantById(id)!;
+          return [person.displayName, ...person.aliases];
+        })
+        .map((name) => name.toLowerCase())
+        .toSet();
+    return {
+      ...ids,
+      ...await ensureParticipantNames(
+        input
+            .split(',')
+            .where((name) => !labels.contains(name.trim().toLowerCase())),
+      ),
+    }.toList();
+  }
+
+  Future<List<String>> ensureParticipantNames(Iterable<String> input) =>
+      batchVaultChanges(() async {
+        final ids = <String>{};
+        for (final name
+            in input
+                .map((name) => name.trim())
+                .where((name) => name.isNotEmpty)
+                .toSet()) {
+          ids.add((await ensureParticipantIdentity(name)).id);
+        }
+        return ids.toList();
+      });
+
+  Future<Participant> ensureExternalParticipant({
+    required String provider,
+    required String externalId,
+    String? displayName,
+    Iterable<String> aliases = const [],
+    bool persist = true,
+  }) => ensureParticipantIdentity(
+    displayName ?? '$provider:$externalId',
+    identifiers: ['$provider:$externalId'],
+    aliases: aliases,
+    persist: persist,
+  );
+
+  Future<Participant> ensureParticipantIdentity(
+    String displayName, {
+    Iterable<String> identifiers = const [],
+    Iterable<String> aliases = const [],
+    bool persist = true,
+  }) async {
+    final name = displayName.trim();
+    final identities = identifiers
+        .map(Participant.normalizeIdentifier)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (RegExp(r'^[^\s@]+@[^\s@]+$').hasMatch(name) ||
+        RegExp(r'^(?:discord|email):', caseSensitive: false).hasMatch(name)) {
+      final identifier = Participant.normalizeIdentifier(name);
+      if (identifier.isNotEmpty) identities.add(identifier);
+    }
+    if (name.isEmpty && identities.isEmpty) {
+      throw ArgumentError('A name or identity is required.');
+    }
+    final people = _people;
+    final exact = <String>{
+      for (final identity in identities) ...?_identityPeople[identity],
+    };
+    Participant? existing;
+    if (exact.isNotEmpty) {
+      final ordered = exact.toList()..sort();
+      for (final id in ordered.skip(1)) {
+        await _mergeParticipantRecords(id, ordered.first, persist: persist);
+      }
+      existing = participantById(ordered.first);
+    } else {
+      final byName = (_namePeople[_personNameKey(name)] ?? const <String>{})
+          .map((id) => people[id])
+          .whereType<Participant>()
+          .toList();
+      // A known provider identity must never attach to a different known ID just
+      // because the display names match. Ambiguous name-only imports stay separate.
+      if (byName.length == 1 &&
+          (identities.isEmpty || byName.single.identifiers.isEmpty)) {
+        existing = byName.single;
+      } else if (identities.isEmpty) {
+        final unknown = byName
+            .where((person) => person.identifiers.isEmpty)
+            .toList();
+        if (unknown.length == 1) existing = unknown.single;
+      }
+    }
+    final id =
+        existing?.id ??
+        (identities.isEmpty
+            ? _uuid.v4()
+            : _uuid.v5(
+                Namespace.url.value,
+                'lifenizer:person:${(identities.toList()..sort()).first}',
+              ));
+    final names = <String>{
+      ...?existing?.aliases,
+      ...aliases
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty),
+    };
+    if (existing != null && name.isNotEmpty && name != existing.displayName) {
+      names.add(name);
+    }
+    final person = Participant(
+      id: id,
+      displayName:
+          existing?.displayName ?? (name.isEmpty ? identities.first : name),
+      identifiers: {...?existing?.identifiers, ...identities}.toList()..sort(),
+      aliases: names.toList()..sort(),
+    );
+    if (existing == null ||
+        jsonEncode(existing.toJson()) != jsonEncode(person.toJson())) {
+      participants.removeWhere((item) => item.id == id);
+      participants.add(person);
+      _invalidateParticipantLookup();
+      _markSearchIndexDirty();
+      if (persist) await _pushEntity('participant', id, person.toJson());
+      if (_vaultBatchDepth == 0) notifyListeners();
+    }
+    return person;
+  }
+
+  Future<void> addParticipantIdentity(String personId, String identifier) =>
+      _run(
+        () => batchVaultChanges(() async {
+          final person = participantById(personId);
+          if (person == null) throw ArgumentError('Choose an existing person.');
+          final canonical = Participant.normalizeIdentifier(identifier);
+          if (canonical.isEmpty ||
+              !RegExp(r'^[a-z][a-z0-9_-]*:[^\s]+$').hasMatch(canonical) ||
+              canonical.startsWith('email:') &&
+                  !RegExp(r'^email:[^\s@]+@[^\s@]+$').hasMatch(canonical)) {
+            throw ArgumentError('Enter a valid email or provider:id.');
+          }
+          final matched = await ensureParticipantIdentity(
+            person.displayName,
+            identifiers: [...person.identifiers, canonical],
+            aliases: person.aliases,
+          );
+          if (matched.id != person.id) {
+            await _mergeParticipantRecords(person.id, matched.id);
+          }
+          status = 'Identity linked; future imports use this person';
+        }),
+      );
+
+  Future<void> mergeParticipants(String sourceId, String targetId) => _run(
+    () => batchVaultChanges(() async {
+      await _mergeParticipantRecords(sourceId, targetId);
+      status = 'People merged; future imports use the same person';
+    }),
+  );
+
+  Future<void> _mergeParticipantRecords(
+    String sourceId,
+    String targetId, {
+    bool persist = true,
+    bool rewriteReferences = true,
+  }) async {
+    sourceId = resolveParticipantId(sourceId);
+    targetId = resolveParticipantId(targetId);
+    if (sourceId == targetId) return;
+    final source = participantById(sourceId);
+    final target = participantById(targetId);
+    if (source == null || target == null) {
+      throw ArgumentError('Choose two existing people.');
+    }
+    if (rewriteReferences && _diskSearch == null) {
+      await _loadAllConversations();
+    }
+    final combined = Participant(
+      id: target.id,
+      displayName: target.displayName,
+      identifiers: {...target.identifiers, ...source.identifiers}.toList()
+        ..sort(),
+      aliases: {
+        ...target.aliases,
+        ...source.aliases,
+        source.displayName,
+      }.where((name) => name != target.displayName).toList()..sort(),
+    );
+    final redirect = Participant(
+      id: source.id,
+      displayName: source.displayName,
+      identifiers: source.identifiers,
+      aliases: source.aliases,
+      mergedInto: target.id,
+    );
+    participants.removeWhere(
+      (person) => person.id == source.id || person.id == target.id,
+    );
+    participants.addAll([combined, redirect]);
+    _invalidateParticipantLookup();
+    final changed = rewriteReferences
+        ? _rewriteParticipantReferences()
+        : const <Conversation>[];
+    _markSearchIndexDirty();
+    if (persist) {
+      await _pushEntity('participant', combined.id, combined.toJson());
+      await _pushEntity('participant', redirect.id, redirect.toJson());
+      for (final conversation in changed) {
+        await _pushEntity(
+          'conversation',
+          conversation.id,
+          conversation.toJson(),
+        );
+      }
+    }
+    if (_vaultBatchDepth == 0) notifyListeners();
+  }
+
+  Future<void> _coalesceParticipantIdentities() async {
+    _people;
+    final duplicates = _identityPeople.entries
+        .where((entry) => entry.key.contains(':') && entry.value.length > 1)
+        .map((entry) => entry.value.toList())
+        .toList();
+    if (duplicates.isEmpty) return;
+    var changed = false;
+    // The caller persists these envelopes with the pulled cursor. Syncing here
+    // would await our own in-flight pull; references are rewritten once per page.
+    _vaultBatchDepth++;
+    try {
+      for (final group in duplicates) {
+        final ids = group.map(resolveParticipantId).toSet().toList()..sort();
+        for (final source in ids.skip(1)) {
+          await _mergeParticipantRecords(
+            source,
+            ids.first,
+            rewriteReferences: false,
+          );
+          changed = true;
+        }
+      }
+      if (changed) {
+        if (_diskSearch == null) await _loadAllConversations();
+        for (final conversation in _rewriteParticipantReferences()) {
+          await _pushEntity(
+            'conversation',
+            conversation.id,
+            conversation.toJson(),
+          );
+        }
+      }
+    } finally {
+      _vaultBatchDepth--;
+    }
+  }
+
+  final Map<String, Conversation> _importedConversationRepairs = {};
+
+  Conversation _mergeImportedConversation(
+    Conversation previous,
+    Conversation incoming, {
+    bool preferPrevious = false,
+  }) {
+    final preferred = preferPrevious ? previous : incoming;
+    final fallback = preferPrevious ? incoming : previous;
+    String messageKey(ConversationSegment segment) =>
+        segment.sourceMessageId == null
+        ? 'local:${segment.id}'
+        : 'source:${segment.sourceMessageId}';
+    final incomingMessageKeys = incoming.segments.map(messageKey).toSet();
+    final messages = {
+      for (final segment in previous.segments) messageKey(segment): segment,
+    };
+    for (final segment in incoming.segments) {
+      final old = messages[messageKey(segment)];
+      messages[messageKey(segment)] = old == null
+          ? segment
+          : ConversationSegment.fromJson({
+              ...(preferPrevious ? old : segment).toJson(),
+              'id': old.id,
+              'participantId': preferPrevious
+                  ? old.participantId ?? segment.participantId
+                  : segment.participantId ?? old.participantId,
+              'attachmentUrls': {
+                ...old.attachmentUrls,
+                ...segment.attachmentUrls,
+              }.toList()..sort(),
+            });
+    }
+    final segments = messages.values.toList()
+      ..sort((a, b) {
+        final date = a.createdAt.compareTo(b.createdAt);
+        if (date != 0) return date;
+        final offset = a.offsetMs.compareTo(b.offsetMs);
+        return offset != 0 ? offset : messageKey(a).compareTo(messageKey(b));
+      });
+    final starts = [
+      previous.startedAt,
+      incoming.startedAt,
+      if (segments.isNotEmpty) segments.first.createdAt,
+    ]..sort();
+    final ends = [
+      previous.endedAt,
+      incoming.endedAt,
+      if (segments.isNotEmpty) segments.last.createdAt,
+    ]..sort();
+    return _canonicalConversation(
+      Conversation.fromJson({
+        ...preferred.toJson(),
+        'id': previous.id,
+        'sourceUrl': preferred.sourceUrl ?? fallback.sourceUrl,
+        'metadata': {...fallback.metadata, ...preferred.metadata},
+        'participantIds': {
+          ...previous.participantIds,
+          ...incoming.participantIds,
+        }.toList()..sort(),
+        'segments': segments.map((segment) => segment.toJson()).toList(),
+        'artifactNames': {
+          ...previous.artifactNames,
+          ...incoming.artifactNames,
+        }.toList()..sort(),
+        'tags': {...previous.tags, ...incoming.tags}.toList()..sort(),
+        'isFavorite': preferPrevious
+            ? previous.isFavorite
+            : previous.segments.every(
+                (segment) => incomingMessageKeys.contains(messageKey(segment)),
+              )
+            ? incoming.isFavorite
+            : previous.isFavorite || incoming.isFavorite,
+        'startedAt': starts.first.toUtc().toIso8601String(),
+        'endedAt': ends.last.toUtc().toIso8601String(),
+      }),
+    );
+  }
+
+  bool _sameImportedConversation(Conversation left, Conversation right) {
+    Map<String, dynamic> comparable(Conversation conversation) {
+      final json = conversation.toJson();
+      json['participantIds'] =
+          conversation.participantIds.map(resolveParticipantId).toSet().toList()
+            ..sort();
+      json['tags'] = conversation.tags.toSet().toList()..sort();
+      json['artifactNames'] = conversation.artifactNames.toSet().toList()
+        ..sort();
+      final segments =
+          conversation.segments.map((segment) {
+            final value = segment.toJson();
+            // The local ID stays stable for UI references; the provider message ID
+            // determines equality so old random local IDs cannot cause repair loops.
+            if (segment.sourceMessageId != null) value.remove('id');
+            value['attachmentUrls'] = segment.attachmentUrls.toSet().toList()
+              ..sort();
+            if (segment.participantId != null) {
+              value['participantId'] = resolveParticipantId(
+                segment.participantId!,
+              );
+            }
+            return value;
+          }).toList()..sort(
+            (a, b) => '${a['sourceMessageId'] ?? a['id']}'.compareTo(
+              '${b['sourceMessageId'] ?? b['id']}',
+            ),
+          );
+      json['segments'] = segments;
+      return json;
+    }
+
+    return jsonEncode(comparable(left)) == jsonEncode(comparable(right));
+  }
+
+  Future<void> _queueImportedConversationRepairs() async {
+    if (_importedConversationRepairs.isEmpty) return;
+    final incoming = Map<String, Conversation>.from(
+      _importedConversationRepairs,
+    );
+    _importedConversationRepairs.clear();
+    final currentById = {
+      for (final conversation in conversations) conversation.id: conversation,
+    };
+    final pendingById = {
+      for (final envelope in _pendingSync.where(
+        (e) => e.entityType == 'conversation',
+      ))
+        envelope.entityId: envelope,
+    };
+    _vaultBatchDepth++;
+    try {
+      for (final entry in incoming.entries) {
+        final current = currentById[entry.key];
+        if (current == null ||
+            _sameImportedConversation(current, entry.value)) {
+          continue;
+        }
+        final pending = pendingById[entry.key];
+        if (pending != null) {
+          final decoded = await _crypto.decryptJson(
+            cipherText: pending.cipherText,
+            nonce: pending.nonce,
+          );
+          if (_sameImportedConversation(
+            current,
+            Conversation.fromJson(decoded),
+          )) {
+            continue;
+          }
+        }
+        await _pushEntity('conversation', current.id, current.toJson());
+      }
+    } finally {
+      _vaultBatchDepth--;
+    }
+  }
+
+  Conversation _canonicalConversation(Conversation conversation) {
+    _people;
+    if (!_hasParticipantRedirects) return conversation;
+    final ids = conversation.participantIds
+        .map(resolveParticipantId)
+        .toSet()
+        .toList();
+    if (!conversation.isLoaded) {
+      if (listEquals(ids, conversation.participantIds)) return conversation;
+      return Conversation.fromSummaryJson({
+        ...conversation.toSummaryJson(
+          previewLength: conversation.previewText.length,
+        ),
+        'participantIds': ids,
+      });
+    }
+    final segments = conversation.segments.map((segment) {
+      final id = segment.participantId;
+      if (id == null || resolveParticipantId(id) == id) return segment;
+      return ConversationSegment.fromJson({
+        ...segment.toJson(),
+        'participantId': resolveParticipantId(id),
+      });
+    }).toList();
+    if (listEquals(ids, conversation.participantIds) &&
+        listEquals(segments, conversation.segments)) {
+      return conversation;
+    }
+    return Conversation.fromJson({
+      ...conversation.toJson(),
+      'participantIds': ids,
+      'segments': segments.map((segment) => segment.toJson()).toList(),
+    });
+  }
+
+  List<Conversation> _rewriteParticipantReferences() {
+    _people;
+    if (!_hasParticipantRedirects) return const [];
+    final changed = <Conversation>[];
+    for (var i = 0; i < conversations.length; i++) {
+      final canonical = _canonicalConversation(conversations[i]);
+      if (!identical(canonical, conversations[i])) {
+        conversations[i] = canonical;
+        // Native bodies resolve through the authoritative participant redirect;
+        // only the bounded search rebuild needs to rewrite their cached form.
+        if (_diskSearch == null) {
+          _markConversationChanged(canonical.id);
+          changed.add(canonical);
+        }
+      }
+    }
+    return changed;
+  }
+
+  Future<void> importSharedPayload({
+    String? fileName,
+    String? mimeType,
+    String? text,
+    List<int>? bytes,
+    Map<String, String> metadata = const {},
+  }) async {
+    var normalizedName = (fileName ?? '').trim();
+    var normalizedMime = (mimeType ?? '').trim().toLowerCase();
+    final normalizedText = text?.trim();
+    final hints = _fileNameHints();
+    // A Takeout or TikTok ZIP is reduced to its watch-history entry rather
+    // than the first text file inside.
+    if (bytes != null &&
+        (normalizedName.toLowerCase().endsWith('.zip') ||
+            normalizedMime.contains('zip') ||
+            (bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4b))) {
+      if (isPaperlessExportZip(bytes)) {
+        if (bytes.length > 25 * 1024 * 1024) {
+          reportError('Choose a Paperless ZIP of at most 25 MiB.');
+          return;
+        }
+        return importSource(
+          source: 'paperless-export',
+          title: normalizedName.isEmpty ? 'Paperless export' : normalizedName,
+          originalFileName: normalizedName.isEmpty ? null : normalizedName,
+          mimeType: 'application/zip',
+          payloadBase64: base64Encode(bytes),
+          metadata: {...metadata, 'shared': 'true'},
+        );
+      }
+      final entry = selectWatchHistoryZipEntry(bytes, fileNameHints: hints);
+      if (entry != null) {
+        bytes = entry.bytes;
+        normalizedName = entry.name;
+        normalizedMime = entry.name.toLowerCase().endsWith('.json')
+            ? 'application/json'
+            : entry.name.toLowerCase().endsWith('.html')
+            ? 'text/html'
+            : 'text/plain';
+      }
+    }
+    final lowerName = normalizedName.toLowerCase();
+    final extension = lowerName.split('.').last;
+    final isEmail = isEmailExport(lowerName, normalizedMime);
+    final isPhoto = isPhotoFile(lowerName, normalizedMime);
+
+    final isScannedFile =
+        isPhoto ||
+        normalizedMime.startsWith('image/') ||
+        normalizedMime == 'application/pdf' ||
+        const {
+          'pdf',
+          'png',
+          'jpg',
+          'jpeg',
+          'webp',
+          'gif',
+          'heic',
+          'avif',
+          'bmp',
+          'tif',
+          'tiff',
+        }.contains(extension);
+    final isAudio =
+        normalizedMime.startsWith('audio/') ||
+        VaultImports._audioMimeTypesByExtension.containsKey(extension);
+    String source;
+    String? decodedText = normalizedText;
+    try {
+      final isZip =
+          lowerName.endsWith('.zip') ||
+          normalizedMime.contains('zip') ||
+          (bytes != null &&
+              bytes.length >= 4 &&
+              bytes[0] == 0x50 &&
+              bytes[1] == 0x4b);
+      if (!isEmail &&
+          !isAudio &&
+          !isZip &&
+          !isScannedFile &&
+          decodedText == null &&
+          bytes != null) {
+        decodedText = utf8.decode(bytes);
+      }
+      source = isEmail
+          ? 'mbox'
+          : isAudio
+          ? 'audio'
+          : isPhoto
+          ? 'photo'
+          : isScannedFile
+          ? 'scanned-pdf'
+          : detectSharedImportSource(
+              fileName: normalizedName,
+              mimeType: isZip ? 'application/zip' : normalizedMime,
+              text: decodedText,
+              fileNameHints: hints,
+            );
+    } on FormatException catch (exception) {
+      reportError(exception.message);
+      return;
+    }
+
+    if (source == 'audio' && bytes != null && bytes.isNotEmpty) {
+      await importAudioBytes(
+        bytes: bytes,
+        fileName: normalizedName.isEmpty
+            ? 'shared-recording.wav'
+            : normalizedName,
+        mimeType: normalizedMime.isEmpty ? null : normalizedMime,
+      );
+      return;
+    }
+    if (source == 'manual-text' || source == 'browser-capture') {
+      return addManualText(
+        title: normalizedName.isEmpty ? 'Shared conversation' : normalizedName,
+        participantNames: '',
+        source: source,
+        text: decodedText ?? '',
+      );
+    }
+    final payloadBase64 = bytes == null || bytes.isEmpty
+        ? null
+        : base64Encode(bytes);
+
+    await importSource(
+      source: source,
+      title: source == 'telegram'
+          ? null
+          : normalizedName.isEmpty
+          ? 'Shared import'
+          : normalizedName,
+      text: payloadBase64 == null || isScannedFile ? decodedText : null,
+      originalFileName: normalizedName.isEmpty ? null : normalizedName,
+      mimeType: normalizedMime.isEmpty ? null : normalizedMime,
+      metadata: {
+        ...metadata,
+        'shared': 'true',
+        if (source == 'photo')
+          'utcOffsetMinutes': '${DateTime.now().timeZoneOffset.inMinutes}',
+      },
+      payloadBase64: payloadBase64,
+    );
+  }
+
+  /// `fileNameHints` of the server's capabilities, falling back to the
+  /// built-in defaults until capabilities were fetched.
+  Map<String, List<String>> _fileNameHints() {
+    final hints = <String, List<String>>{
+      for (final capability in importCapabilities)
+        if (capability.fileNameHints.isNotEmpty)
+          capability.source: capability.fileNameHints,
+    };
+    return hints.isEmpty
+        ? defaultFileNameHints
+        : {...defaultFileNameHints, ...hints};
+  }
+
+  Future<void> addManualText({
+    required String title,
+    required String participantNames,
+    required String text,
+    String source = 'manual-text',
+    List<String> participantIds = const [],
+  }) async {
+    if (text.trim().isEmpty) return;
+    await _run(() async {
+      final people = await ensureParticipantSelection(
+        participantNames,
+        participantIds,
+      );
+      final conversation = Conversation(
+        id: _uuid.v4(),
+        title: title.trim().isEmpty ? 'Imported conversation' : title.trim(),
+        source: source,
+        participantIds: people,
+        tags: _suggestTags(source: source, title: title, text: text),
+        segments: [ConversationSegment(id: _uuid.v4(), text: text.trim())],
+      );
+      conversations.add(conversation);
+      _markConversationChanged(conversation.id);
+      await _pushEntity('conversation', conversation.id, conversation.toJson());
+      status = 'Conversation saved encrypted; queued for sync';
+    });
+  }
+
+  Future<void> addFileArtifact({
+    required String participantNames,
+    required PlatformFile file,
+  }) async {
+    await _run(() async {
+      final participantIds = await ensureParticipants(participantNames);
+      final conversation = Conversation(
+        id: _uuid.v4(),
+        title: file.name,
+        source: file.extension == 'pdf' ? 'scanned-pdf' : 'audio',
+        participantIds: participantIds,
+        artifactNames: [file.name],
+        tags: _suggestTags(
+          source: file.extension == 'pdf' ? 'scanned-pdf' : 'audio',
+          title: file.name,
+          artifactNames: [file.name],
+        ),
+        segments: [
+          ConversationSegment(
+            id: _uuid.v4(),
+            text: 'Imported artifact ${file.name} (${file.size} bytes)',
+          ),
+        ],
+      );
+      conversations.add(conversation);
+      _markConversationChanged(conversation.id);
+      await _pushEntity('conversation', conversation.id, conversation.toJson());
+      status = 'Artifact metadata saved encrypted; queued for sync';
+    });
+  }
+
+  /// Imports a service capture only after unlock; completion permits deletion
+  /// of the Android recovery copy.
+  Future<void> importPendingRecording(
+    List<int> bytes,
+    DateTime recordedAt,
+    String captureId, {
+    RecordingLocation? location,
+  }) =>
+      _importPendingRecording(bytes, recordedAt, captureId, location: location);
+
+  Future<void> transcribeRecording(String id) => _transcribeRecording(id);
+
+  /// Whether an audio upload is waiting for the server and can be cancelled.
+  bool get isTranscribingAudio => _audioTranscription != null;
+
+  /// Aborts the running audio upload. The server stops transcribing, the
+  /// draft or saved recording is kept, and no error is reported.
+  void cancelAudioTranscription() {
+    final cancellation = _audioTranscription;
+    if (cancellation == null || cancellation.isCancelled) return;
+    cancellation.cancel();
+    status = 'Cancelling transcription…';
+    _notifyChanged();
+  }
+
+  Future<void> addRecordingConversation({
+    required String title,
+    required String participantNames,
+    required List<String> segmentTexts,
+    List<String> participantIds = const [],
+  }) async {
+    final cleaned = segmentTexts
+        .map((segment) => segment.trim())
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    if (cleaned.isEmpty) return;
+    await _run(() async {
+      final people = await ensureParticipantSelection(
+        participantNames,
+        participantIds,
+      );
+      final conversation = Conversation(
+        id: _uuid.v4(),
+        title: title.trim().isEmpty ? 'Live recording session' : title.trim(),
+        source: 'live-recording',
+        participantIds: people,
+        tags: _suggestTags(
+          source: 'live-recording',
+          title: title,
+          text: cleaned.join('\n'),
+        ),
+        segments: [
+          for (var i = 0; i < cleaned.length; i++)
+            ConversationSegment(
+              id: _uuid.v4(),
+              text: cleaned[i],
+              offsetMs: i * 15000,
+            ),
+        ],
+      );
+      conversations.add(conversation);
+      _markConversationChanged(conversation.id);
+      await _pushEntity('conversation', conversation.id, conversation.toJson());
+      status = 'Recording session saved encrypted; queued for sync';
+    });
+  }
+
+  Future<void> extractRelations(Conversation conversation) async {
+    await _run(() async {
+      conversation = await loadConversation(conversation.id);
+      final api = _requireApi();
+      final extracted = await api.extractRelations(
+        text: conversation.segments.map((segment) => segment.text).join('\n'),
+        conversationId: conversation.id,
+      );
+      var addedRelation = false;
+      for (final relation in extracted) {
+        if (relations.any((existing) => existing.id == relation.id)) continue;
+        relations.add(relation);
+        addedRelation = true;
+        await _pushEntity('relation', relation.id, relation.toJson());
+      }
+      if (addedRelation) {
+        _markSearchIndexDirty();
+      }
+      status = extracted.isEmpty
+          ? 'No relations detected'
+          : '${extracted.length} relation(s) saved encrypted; queued for sync';
+    });
+  }
+
+  Future<void> addSavedSearch({
+    required String title,
+    String query = '',
+    String? source,
+    String? participantId,
+    String? tag,
+    DateTime? from,
+    DateTime? to,
+    bool hideConsumed = false,
+  }) async {
+    await _run(() async {
+      final savedSearch = SavedSearch(
+        id: _uuid.v4(),
+        title: title.trim().isEmpty ? 'Saved search' : title.trim(),
+        query: query.trim(),
+        source: _cleanFilter(source),
+        participantId: _cleanFilter(participantId),
+        tag: _cleanFilter(tag),
+        from: from,
+        to: to,
+        hideConsumed: hideConsumed,
+      );
+      savedSearches.removeWhere((item) => item.id == savedSearch.id);
+      savedSearches.add(savedSearch);
+      await _pushEntity('saved-search', savedSearch.id, savedSearch.toJson());
+      status = 'Search saved and encrypted';
+    });
+  }
+
+  Future<void> _applyEntity(
+    String entityType,
+    Map<String, dynamic> json, {
+    bool preserveLocalChanges = false,
+    Map<String, int>? conversationPositions,
+  }) async {
+    switch (entityType) {
+      case 'participant':
+        final incoming = Participant.fromJson(json);
+        if (incoming.mergedInto != null && _diskSearch == null) {
+          await _loadAllConversations();
+        }
+        final previous = _people[incoming.id];
+        final participant = Participant(
+          id: incoming.id,
+          displayName: previous?.displayName ?? incoming.displayName,
+          identifiers: {
+            ...?previous?.identifiers,
+            ...incoming.identifiers,
+          }.toList()..sort(),
+          aliases: {
+            ...?previous?.aliases,
+            ...incoming.aliases,
+            if (previous != null &&
+                previous.displayName != incoming.displayName)
+              incoming.displayName,
+          }.toList()..sort(),
+          mergedInto: previous?.mergedInto == null
+              ? incoming.mergedInto
+              : incoming.mergedInto == null
+              ? previous!.mergedInto
+              : ([previous!.mergedInto!, incoming.mergedInto!]..sort()).first,
+        );
+        participants.removeWhere((item) => item.id == participant.id);
+        participants.add(participant);
+        _invalidateParticipantLookup();
+        if (participant.mergedInto != null) {
+          final target = participantById(participant.id);
+          if (target != null && target.id != participant.id) {
+            final combined = Participant(
+              id: target.id,
+              displayName: target.displayName,
+              identifiers: {
+                ...target.identifiers,
+                ...participant.identifiers,
+              }.toList()..sort(),
+              aliases: {
+                ...target.aliases,
+                ...participant.aliases,
+                participant.displayName,
+              }.where((name) => name != target.displayName).toList()..sort(),
+            );
+            participants.removeWhere((item) => item.id == target.id);
+            participants.add(combined);
+            _invalidateParticipantLookup();
+          }
+        }
+        if (participant.mergedInto != null) _rewriteParticipantReferences();
+        _markSearchIndexDirty();
+        break;
+      case 'conversation':
+        final incoming = _canonicalConversation(Conversation.fromJson(json));
+        int? slot() {
+          if (conversationPositions == null) {
+            final n = conversations.indexWhere((c) => c.id == incoming.id);
+            return n < 0 ? null : n;
+          }
+          final positions = conversationPositions;
+          if (positions.length != conversations.length) {
+            positions.clear();
+            for (var n = 0; n < conversations.length; n++) {
+              positions[conversations[n].id] = n;
+            }
+          }
+          final n = positions[incoming.id];
+          if (n == null ||
+              (n < conversations.length &&
+                  conversations[n].id == incoming.id)) {
+            return n;
+          }
+          final found = conversations.indexWhere((c) => c.id == incoming.id);
+          if (found < 0) return null;
+          positions[incoming.id] = found;
+          return found;
+        }
+        final previousSlot = slot();
+        var previous = previousSlot == null
+            ? null
+            : conversations[previousSlot];
+        if (incoming.sourceThreadId != null &&
+            previous != null &&
+            !previous.isLoaded) {
+          previous = await loadConversation(incoming.id);
+        }
+        final importedThread =
+            previous != null &&
+            incoming.sourceThreadId != null &&
+            previous.sourceThreadId == incoming.sourceThreadId &&
+            previous.source == incoming.source;
+        final conversation = importedThread
+            ? _mergeImportedConversation(
+                previous,
+                incoming,
+                // Merge new remote messages without erasing a queued edit
+                // when the repaired snapshot replaces its pending envelope.
+                preferPrevious: preserveLocalChanges,
+              )
+            : incoming;
+        if (importedThread &&
+            !_sameImportedConversation(conversation, incoming)) {
+          _importedConversationRepairs[conversation.id] = incoming;
+        } else {
+          _importedConversationRepairs.remove(conversation.id);
+        }
+        if (conversationPositions == null) {
+          conversations.removeWhere((item) => item.id == conversation.id);
+          conversations.add(conversation);
+        } else {
+          final n = slot();
+          if (n == null) {
+            conversationPositions[conversation.id] = conversations.length;
+            conversations.add(conversation);
+          } else {
+            conversations[n] = conversation;
+          }
+        }
+        _markConversationChanged(conversation.id);
+        break;
+      case 'relation':
+        final relation = RelationEdge.fromJson(json);
+        relations.removeWhere((item) => item.id == relation.id);
+        relations.add(relation);
+        _markSearchIndexDirty();
+        break;
+      case 'saved-search':
+        final savedSearch = SavedSearch.fromJson(json);
+        savedSearches.removeWhere((item) => item.id == savedSearch.id);
+        savedSearches.add(savedSearch);
+        break;
+    }
+  }
+
+  List<String> _suggestTags({
+    required String source,
+    String? title,
+    String? text,
+    Iterable<String> artifactNames = const [],
+  }) {
+    final content = [
+      source,
+      title,
+      text,
+      ...artifactNames,
+    ].whereType<String>().join(' ').toLowerCase();
+    final tags = <String>{source};
+    if (source.contains('whatsapp') ||
+        source.contains('telegram') ||
+        source.contains('signal') ||
+        source.contains('discord') ||
+        source == 'manual-text') {
+      tags.add('chat');
+    }
+    if (source.contains('audio') || source.contains('recording')) {
+      tags.add('recording');
+    }
+    if (source.contains('pdf') ||
+        source.contains('paperless') ||
+        content.contains('invoice')) {
+      tags.add('documents');
+    }
+    if (source.contains('youtube') || content.contains('transcript')) {
+      tags.add('transcript');
+    }
+    if (source.contains('browser') || content.contains('http')) {
+      tags.add('web');
+    }
+    if (content.contains('relation') ||
+        content.contains('brother') ||
+        content.contains('sister')) {
+      tags.add('people');
+    }
+    return tags
+        .map(_normalizeTag)
+        .where((tag) => tag.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
+  String _normalizeTag(String value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+  }
+
+  /// A change only a full rebuild can reflect (people, relations).
+  void _markSearchIndexDirty() {
+    _searchFullRebuildNeeded = true;
+  }
+
+  /// Record that [id] was inserted, replaced or removed: its encrypted chunk
+  /// must be rewritten and its search entry refreshed.
+  void _markConversationChanged(String id) {
+    _dirtyConversations[id] = ++_dirtyRevision;
+    _searchDirtyIds.add(id);
+  }
+
+  String? _cleanFilter(String? value) {
+    final cleaned = value?.trim();
+    return cleaned == null || cleaned.isEmpty ? null : cleaned;
+  }
+
+  void _updateSearchContext(
+    String normalized,
+    List<Conversation> results,
+    DateTime now,
+  ) {
+    if (normalized.isEmpty) {
+      return;
+    }
+
+    _lastSearchQuery = normalized;
+    _lastSearchAt = now;
+    _lastSearchTopConversationIds = results
+        .take(5)
+        .map((item) => item.id)
+        .toList(growable: false);
+    _sessionQueryFrequency.update(
+      normalized,
+      (count) => count + 1,
+      ifAbsent: () => 1,
+    );
+  }
+
+  bool get _needsSearchIndex =>
+      (_searchIndex == null && _diskSearch == null) ||
+      _searchFullRebuildNeeded ||
+      _searchDirtyIds.isNotEmpty ||
+      _indexedConversationCount != conversations.length ||
+      _indexedRelationCount != relations.length ||
+      _indexedParticipantCount != participants.length;
+
+  /// Above this size the UI isolate never builds a whole index itself.
+  @visibleForTesting
+  static int synchronousIndexLimit = 1000;
+  static const int _incrementalDirtyLimit = 300;
+
+  /// Incremental updates are possible when the index exists and only
+  /// conversation contents changed, and not so many that a rebuild is cheaper.
+  bool get _canUpdateSearchIndexIncrementally {
+    final index = _searchIndex;
+    if (index == null ||
+        _searchFullRebuildNeeded ||
+        _indexedRelationCount != relations.length ||
+        _indexedParticipantCount != participants.length) {
+      return false;
+    }
+    final limit = math.max(
+      _incrementalDirtyLimit,
+      (conversations.length * 0.05).ceil(),
+    );
+    return _searchDirtyIds.length <= limit;
+  }
+
+  (List<Conversation>, Map<String, String>, Map<String, String>)
+  _searchIndexInputs({bool includeConversations = true}) {
+    final participantSearchText = <String, String>{
+      for (final participant in participants)
+        participant.id:
+            participantById(participant.id)?.searchableText ??
+            participant.searchableText,
+    };
+    final relationTextByConversation = <String, StringBuffer>{};
+    for (final relation in relations) {
+      final conversationId = relation.evidenceConversationId;
+      if (conversationId == null || conversationId.isEmpty) {
+        continue;
+      }
+      final bucket = relationTextByConversation.putIfAbsent(
+        conversationId,
+        StringBuffer.new,
+      );
+      if (bucket.isNotEmpty) {
+        bucket.write(' ');
+      }
+      bucket
+        ..write(relation.subject)
+        ..write(' ')
+        ..write(relation.relation)
+        ..write(' ')
+        ..write(relation.object);
+    }
+
+    return (
+      includeConversations ? conversations.toList() : const <Conversation>[],
+      participantSearchText,
+      relationTextByConversation.map(
+        (key, value) => MapEntry(key, value.toString().toLowerCase()),
+      ),
+    );
+  }
+
+  void _installSearchIndex(
+    ConversationSearchIndex index, {
+    required int conversationCount,
+    required int relationCount,
+    required int participantCount,
+  }) {
+    _searchIndex = index;
+    _indexedConversationCount = conversationCount;
+    _indexedRelationCount = relationCount;
+    _indexedParticipantCount = participantCount;
+    _searchRevision++;
+  }
+
+  /// Applies pending conversation changes to the existing index on this
+  /// isolate, yielding between batches when [yielding]. Returns false when the
+  /// index turned out to be inconsistent and needs a full rebuild.
+  Future<bool> _applyIncrementalSearchUpdates({
+    required bool yielding,
+    required int generation,
+  }) async {
+    final index = _searchIndex!;
+    final inputs = _searchIndexInputs(includeConversations: false);
+    var rounds = 0;
+    while (_searchDirtyIds.isNotEmpty && rounds++ < 5) {
+      if (generation != _searchGeneration) return true;
+      final ids = _searchDirtyIds.toList();
+      final byId = {
+        for (final conversation in conversations) conversation.id: conversation,
+      };
+      var done = 0;
+      for (final id in ids) {
+        _searchDirtyIds.remove(id);
+        final conversation = byId[id];
+        if (conversation == null) {
+          index.remove(id, refresh: false);
+        } else {
+          index.upsert(
+            conversation,
+            participantById: inputs.$2,
+            relationTextByConversation: inputs.$3,
+            refresh: false,
+          );
+        }
+        done++;
+        if (yielding && done % 25 == 0) {
+          if (ids.length > 50) {
+            _setSyncProgress(
+              SyncStage.indexing,
+              completed: done,
+              total: ids.length,
+              detail: 'Updating search',
+              force: false,
+            );
+          }
+          await Future<void>.delayed(Duration.zero);
+          if (generation != _searchGeneration) return true;
+        }
+      }
+      index.refreshStatistics();
+    }
+    incrementalSearchUpdates++;
+    _searchRevision++;
+    _indexedConversationCount = conversations.length;
+    return index.documents.length == conversations.length &&
+        _searchDirtyIds.isEmpty;
+  }
+
+  void _ensureSearchIndex() {
+    if (_diskSearch != null) return;
+    // Progress rebuilds keep the previous results while an import changes the
+    // vault. The final index is prepared off the UI isolate before busy clears.
+    if (!_needsSearchIndex) return;
+    if ((busy || _syncInFlight != null) &&
+        (_searchIndex != null ||
+            conversations.length > synchronousIndexLimit)) {
+      return;
+    }
+    if ((_searchIndex?.postingsLoaded ?? true) &&
+        conversations.length <= synchronousIndexLimit &&
+        _unloadedChunks.isEmpty) {
+      final index = _searchIndex;
+      if (index != null && _canUpdateSearchIndexIncrementally) {
+        final inputs = _searchIndexInputs(includeConversations: false);
+        final byId = {
+          for (final conversation in conversations)
+            conversation.id: conversation,
+        };
+        for (final id in _searchDirtyIds.toList()) {
+          final conversation = byId[id];
+          if (conversation == null) {
+            index.remove(id, refresh: false);
+          } else {
+            index.upsert(
+              conversation,
+              participantById: inputs.$2,
+              relationTextByConversation: inputs.$3,
+              refresh: false,
+            );
+          }
+        }
+        _searchDirtyIds.clear();
+        index.refreshStatistics();
+        incrementalSearchUpdates++;
+        _searchRevision++;
+        _indexedConversationCount = conversations.length;
+        if (index.documents.length == conversations.length) return;
+      }
+      final inputs = _searchIndexInputs();
+      _searchDirtyIds.clear();
+      _searchFullRebuildNeeded = false;
+      fullSearchBuilds++;
+      _installSearchIndex(
+        _buildConversationSearchIndex(inputs),
+        conversationCount: inputs.$1.length,
+        relationCount: relations.length,
+        participantCount: participants.length,
+      );
+      return;
+    }
+    // Large vaults never block the UI isolate: keep using the previous index
+    // (or the linear fallback) and let the background preparation catch up.
+    if (_searchBuild == null && !_searchBuildScheduled && isAuthenticated) {
+      _searchBuildScheduled = true;
+      Timer(Duration.zero, () {
+        _searchBuildScheduled = false;
+        if (_disposed || !isAuthenticated || busy || _syncInFlight != null) {
+          return;
+        }
+        _prepareSearchIndex().catchError((_) {});
+      });
+    }
+  }
+
+  Future<void> _prepareSearchIndex({bool complete = true}) async {
+    if (!_crypto.isUnlocked) return;
+    final running = _searchBuild;
+    if (running != null) {
+      await running;
+      return;
+    }
+    final operation = _prepareSearchIndexNow(complete: complete);
+    _searchBuild = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_searchBuild, operation)) _searchBuild = null;
+    }
+  }
+
+  Future<void> _prepareSearchIndexNow({required bool complete}) async {
+    if (await _openDiskSearch()) {
+      await _diskSearch!.prepare();
+      for (var pass = 0; pass < 3 && _needsSearchIndex; pass++) {
+        await _prepareDiskSearch();
+      }
+      return;
+    }
+    var worked = false;
+    for (var pass = 0; pass < 3 && _needsSearchIndex; pass++) {
+      if (!_crypto.isUnlocked) return;
+      final generation = _searchGeneration;
+      if (_searchIndex != null && _canUpdateSearchIndexIncrementally) {
+        try {
+          await _loadSearchBuckets(
+            _searchIndex!.unloadedPostingTerms,
+            postings: true,
+          );
+        } catch (_) {
+          _searchFullRebuildNeeded = true;
+        }
+        if (generation != _searchGeneration || !_crypto.isUnlocked) return;
+      }
+      if (_searchIndex != null && _canUpdateSearchIndexIncrementally) {
+        // No isolate copy: update the live index in yielding batches.
+        worked = true;
+        final consistent = await _applyIncrementalSearchUpdates(
+          yielding: true,
+          generation: generation,
+        );
+        if (generation != _searchGeneration) return;
+        if (consistent) continue;
+        _searchFullRebuildNeeded = true;
+      }
+      worked = true;
+      await _loadAllConversations();
+      if (generation != _searchGeneration || !_crypto.isUnlocked) return;
+      final inputs = _searchIndexInputs();
+      final relationCount = relations.length;
+      final participantCount = participants.length;
+      // The build covers the state captured here; later edits mark themselves.
+      _searchDirtyIds.clear();
+      _searchFullRebuildNeeded = false;
+      _setSyncProgress(SyncStage.indexing, total: inputs.$1.length);
+      ConversationSearchIndex index;
+      try {
+        fullSearchBuilds++;
+        index = await prepareSearchIndex(inputs, (progress) {
+          if (generation != _searchGeneration || !_crypto.isUnlocked) return;
+          _setSyncProgress(
+            SyncStage.indexing,
+            completed: progress.completed,
+            total: progress.total,
+            detail: progress.finalizing ? 'Finalizing search' : null,
+            force: progress.completed == 0,
+          );
+        });
+      } catch (_) {
+        _searchFullRebuildNeeded = true;
+        if (generation == _searchGeneration && _crypto.isUnlocked) {
+          _setSyncProgress(SyncStage.failed);
+        }
+        rethrow;
+      }
+      if (generation != _searchGeneration || !_crypto.isUnlocked) return;
+      index.rebind({
+        for (final conversation in conversations) conversation.id: conversation,
+      });
+      _installSearchIndex(
+        index,
+        conversationCount: inputs.$1.length,
+        relationCount: relationCount,
+        participantCount: participantCount,
+      );
+    }
+    if (worked && _crypto.isUnlocked && complete) {
+      _setSyncProgress(SyncStage.complete);
+    }
+  }
+
+  Future<void> _run(
+    Future<void> Function() action, {
+    bool prepareIndex = true,
+  }) async {
+    if (busy) return;
+    busy = true;
+    error = null;
+    notifyListeners();
+    try {
+      await action();
+    } catch (exception) {
+      error = exception.toString();
+    } finally {
+      try {
+        if (prepareIndex && _vaultBatchDepth == 0) await _prepareSearchIndex();
+      } catch (exception) {
+        error ??= 'Could not prepare search: $exception';
+      }
+      busy = false;
+      if (_pendingSync.isNotEmpty && syncError != null) {
+        status =
+            'Saved encrypted on this device · ${_pendingSync.length} change(s) waiting to sync';
+      }
+      _notifyChanged();
+    }
+  }
+
+  LifenizerApiClient _requireApi() {
+    final api = _api;
+    if (api == null) throw StateError('Not logged in.');
+    return api;
+  }
+}
+
+ConversationSearchIndex _buildConversationSearchIndex(
+  (List<Conversation>, Map<String, String>, Map<String, String>) inputs,
+) => ConversationSearchIndex.build(
+  conversations: inputs.$1,
+  participantById: inputs.$2,
+  relationTextByConversation: inputs.$3,
+);

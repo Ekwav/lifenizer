@@ -1,0 +1,121 @@
+{
+  "manifest_version": 3,
+  "name": "Lifenizer Browser Sync",
+  "version": "0.1.0",
+  "description": "Sync selected watch history and optionally newly rendered WhatsApp Web and Discord Web messages to your local Lifenizer app.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://www.tiktok.com/*",
+    "http://127.0.0.1/*",
+    "https://web.whatsapp.com/*",
+    "https://discord.com/*",
+    "https://lifenizer.coflnet.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "scripts": [
+      "src/lib/headers.js",
+      "src/lib/youtube.js",
+      "src/lib/tiktok.js",
+      "src/lib/payload.js",
+      "src/lib/sync.js",
+      "src/lib/messages.js",
+      "src/lib/debug.js",
+      "src/lib/pair.js",
+      "src/background.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://www.tiktok.com/*"
+      ],
+      "js": [
+        "src/lib/accounts.js",
+        "src/content/hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://www.tiktok.com/*"
+      ],
+      "js": [
+        "src/lib/accounts.js",
+        "src/lib/headers.js",
+        "src/lib/youtube.js",
+        "src/lib/tiktok.js",
+        "src/lib/payload.js",
+        "src/content/collector.js",
+        "src/content/debug.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://web.whatsapp.com/*",
+        "https://discord.com/channels/*"
+      ],
+      "js": [
+        "src/lib/messages.js",
+        "src/content/messages.js",
+        "src/content/debug.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://lifenizer.coflnet.com/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "src/lib/pair.js",
+        "src/content/pair.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Lifenizer History Sync",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "history-sync@lifenizer.app",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "browsingActivity"
+        ]
+      }
+    }
+  },
+  "minimum_chrome_version": "111",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:47616"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

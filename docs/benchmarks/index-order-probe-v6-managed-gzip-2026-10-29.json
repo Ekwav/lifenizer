@@ -1,0 +1,5687 @@
+{
+  "benchmarkDate": "2026-10-29",
+  "engineRankingVersion": 6,
+  "postingFormat": 5,
+  "compression": "Managed archive 4.3 GZipEncoderWeb/GZipDecoderWeb with CRC verification; on-disk gzip framing and schema unchanged.",
+  "processCompletions": {
+    "default": {
+      "exitCode": 0,
+      "startedAtUnix": 1793270657.6058488,
+      "completedAtUnix": 1793270780.7778416
+    },
+    "mixed": {
+      "exitCode": 0,
+      "startedAtUnix": 1793270812.9873226,
+      "completedAtUnix": 1793270940.0270154
+    }
+  },
+  "referenceOrderingChecks": 120,
+  "referenceOrderingPassed": true,
+  "goldenOrderIdenticalToNativeV6": true,
+  "allQueriesAtMost500Ms": true,
+  "overallPreparedMaxMs": 59.19,
+  "overallWarmMaxMs": 69.38,
+  "overallColdOpenMaxMs": 0.91,
+  "overallColdPrepareMaxMs": 78.459,
+  "over500MsSamples": [],
+  "twoMillionLatencyEvaluated": false,
+  "productCapacityEvaluated": false,
+  "scope": {
+    "purpose": "Independent final 20,000-conversation insertion-order/mixed-field AOT regression gate after managed-gzip memory fix; not the 2M acceptance run.",
+    "runtime": "AOT Dart, production encrypted SQLite search, same frozen binary for both fixtures.",
+    "environment": "Shared development machine; parent full-suite/release validation could overlap. No CPU isolation or competing large-corpus producer.",
+    "databaseFilesystem": "tmpfs",
+    "memoryLimitBytes": null,
+    "memory": "Probe retains full synthetic conversations and exhaustive in-memory reference. Process peak RSS is diagnostic, not product working-memory or 2M capacity proof.",
+    "timing": "Each prepared query follows a fresh worker open and explicit prepare outside query timing. Its immediately repeated query is warm. Startup is reported separately.",
+    "percentiles": "Three samples per query/order/stage. Nearest-rank empirical p95 therefore equals the observed maximum; descriptive only, not a statistical estimate of production p95.",
+    "correctness": "All 120 returned ordered ID lists matched exhaustive SearchService top 100. Both fixture golden maps exactly match prior native-v6. Mixed project queries additionally assert all 100 winners contain Project in title.",
+    "isolation": "Only newly created synthetic /tmp databases opened. Actual large-corpus databases and binaries untouched.",
+    "comparison": "Native-v6 baseline uses identical ranking/schema/fixture but native gzip and different shared-machine load. Comparisons are observational, not controlled speedup measurements.",
+    "limit": "All measured 20k cases pass 500 ms; no claim about 2M latency, universal queries, or the 2GB product limit."
+  },
+  "fixture": {
+    "count": 20000,
+    "transcriptWordsPerConversation": 200,
+    "segmentsPerConversation": 10,
+    "sourceRunLength": 128,
+    "sources": [
+      "manual",
+      "email",
+      "discord",
+      "scanned-pdf",
+      "browser-history"
+    ],
+    "dates": "2026-10-29T00:00:00Z minus conversation index in minutes",
+    "insertionOrders": [
+      "chronological",
+      "Dart Random(42) shuffle of identical conversations"
+    ],
+    "nameMatches": 100,
+    "default": "Same corpus/query fixture as index-order-probe-v4-2026-10-29.json.",
+    "mixed": "Project is present in every body and in exactly 200 titles (1%). Adds project and project grocery queries; keeps every transcript at 200 words.",
+    "goldens": "Computed once per fixture, shared by chronological/shuffled runs and all samples, and retained in each raw report."
+  },
+  "baseline": "index-order-probe-v6-2026-10-29.json",
+  "artifacts": {
+    "source": "app/tool/search_order_probe.dart",
+    "sourceManifestSha256": "c9f2d538d10e7898967dc256f1b41d2be467bcb2520b23ca0ab120d17796b5e6",
+    "sourceFileCount": 142,
+    "sourcesUnchangedDuringBuild": true,
+    "sourcesUnchangedAfterProbes": true,
+    "binarySha256BeforeProbes": "ff524ae1889706d2d68d2125b293fe3fa38e2544b3d3250e60d72dbece360105",
+    "binarySha256AfterProbes": "ff524ae1889706d2d68d2125b293fe3fa38e2544b3d3250e60d72dbece360105",
+    "fixtureInputsUnchangedAfterProbes": true,
+    "fixtureInputSha256": {
+      "../docs/ARCHITECTURE.md": "2a522e032687ad7f9b81ab1ee888451a36b91f2fc243f7178f237fc48d2e171e",
+      "../docs/IMPORTERS.md": "12fcdf059fbf16d31fa2788287192444bc2f576a46a1e89763b3eac181e22861",
+      "../docs/AUTH.md": "816696642e981321f0c9a9c2eba0fae17191f3b1251fdf92f03520b02218a84f",
+      "../docs/DATABASE.md": "a5d18ad5c031ae2638827592866842a96d2930025877fcbc3de1415f882a45fb"
+    },
+    "sourceManifest": {
+      "lib/api_client.dart": "ec21ff389033bd265dfac6cc8e03b4c63da10ed5a463736cd28fd48150d9992d",
+      "lib/app_state.dart": "b5a7c40cceb87123928b4fc03183b7e488c87d2fb916bb148917f3a2b9ab3776",
+      "lib/crypto_service.dart": "1a8fc71fb449d8aab82782eaa13745d00d189bb7597dbd216ac9666f452e7b54",
+      "lib/e2e_bridge.dart": "aed9070077847e6aa28171b0b5e813877a68095c41d14009f74c181474ec2e12",
+      "lib/e2e_bridge_stub.dart": "3c3578ce36791232af6fc969753b8e93185d4d902ab5e97bbc3df60501b09ea9",
+      "lib/e2e_bridge_web.dart": "03d995a9e87a9abde5042f5b4bdc5c2a3eeff24f33c97a2b9e99792890925dd2",
+      "lib/image_service.dart": "9a3845a279e23461bfaf8924c96566742e2caad2a0ea1892f86299ebe655eca4",
+      "lib/image_widgets.dart": "c522e0da7445e1cf810521f78f95a1391759c58b8d4d017056128ff491903268",
+      "lib/main.dart": "ac1adcb064f4e533a395341f54213dc97a248cba74d6df92e83832333c46c16b",
+      "lib/models.dart": "42869e28767a5320f108bd49907621f9c46b246a177f84a2fa496aa54820055a",
+      "lib/models/app_page.dart": "eba82f46f0fd89b2ee46de6e9ed3ce975a93304e7242c3e6123f278d6ffa05e3",
+      "lib/pages/capture_page.dart": "6ce518b3ced88d1c7911bbd15d6a6f1f94b0a24aa6d2d545ec18e44bbdb63551",
+      "lib/pages/connection_scanner_page.dart": "b85f2e47aa3ddbb9860fcebcf37d5f29903692a5e7a6ec4e961941354386a55a",
+      "lib/pages/imports_page.dart": "4bb302de50c7f3e8c266a198cc29a3816ddcdb95eea48e777c3572a32e066ca0",
+      "lib/pages/insights_page.dart": "ce4cf727c999ef0b9b63bf4fe78888847652a951a384c8e46b0f6a0ac47a024b",
+      "lib/pages/login_page.dart": "7f9a97395c0576c8381634f5e6727df4f9310aadd93e481ddaffc545aa2feaa1",
+      "lib/pages/page_frame.dart": "9d65a8627c27af7ef8d122645a13f42c60fbc4d0498e96338bc2ec371e91e199",
+      "lib/pages/participants_page.dart": "378810732a726dcc7c2453798fda09c68240ff40f9e78c5037708359f6031db4",
+      "lib/pages/relations_page.dart": "3c29a8d6cc7ed405fd8bf137ba90be5f48181fa1b27b11f012882d86592a04da",
+      "lib/pages/search/search_filters.dart": "e49bcce5574644aab76e790853298e9203845bedfc507b13acf4c7cd03cd48af",
+      "lib/pages/search/search_input_field.dart": "1b0c7f872bffdaf4ea501c728c62df70fe12c3a4eb39e712c140710e4f31919d",
+      "lib/pages/search/search_results_list.dart": "a0d013d6a9a5a14e996e73abc2d4345898d2959a42e65bd038c800d8605fb41e",
+      "lib/pages/search_page.dart": "eaa8809a1fbcc7c3787eb941529bae1042c8ad9f3beb82f17f887eb8e66b439e",
+      "lib/pages/sync_page.dart": "7852cb1e47634e78a5c66fd6693c382d428edcf8d28ac6af985e0bf62b705840",
+      "lib/pricing_page.dart": "09b0b3a4f98ba8e069619c5289403161bb1ad11fc5d699beab9cd98444a5b7f2",
+      "lib/services/audio_cache_io.dart": "5a065f381ce23b4e203f20ba856ef8fda3615fe55096f6d92cbb36c01dc60e1d",
+      "lib/services/audio_cache_web.dart": "6e56ea395c0531692a4ac61add878e6c781bfbb634613852a4fe235c0a800b00",
+      "lib/services/backup_archive.dart": "9ad50e47b03ebca4529f77bc589704b2a3f9a347af3c68abf7aa793e7f5e6eee",
+      "lib/services/backup_files.dart": "b30fa9e3f4dcd3c66097a0922219f21b28d9cd7bbca9b587ef8fec558e910eb1",
+      "lib/services/backup_files_native.dart": "237ef08beea57b5494120b2081efa797965f058739080e0c3d774ea61bd3d387",
+      "lib/services/backup_files_stub.dart": "99f1e5c75a04b0661f9a653777de0983a0f9f7fe9472b85f72061f162c58a9ca",
+      "lib/services/browser_extension_receiver_native.dart": "b145b69dec680836acda59c12f1570cb2127a4ade7f46a43b76046fad311dc5f",
+      "lib/services/browser_extension_receiver_service.dart": "22a0bd57c7d2d33fe8d96e5b976574d8245270d54d7c7f90d069133a26196a84",
+      "lib/services/browser_extension_receiver_stub.dart": "38888741cc371e08334af72cde546b30c814c1868b3f071e5e612049f280ed55",
+      "lib/services/browser_history_reader.dart": "cd12a14071836b910c79de136d5c6b2c8bd73ca5364cc7455b9cb418bc5f29a4",
+      "lib/services/browser_history_types.dart": "a436ccaaa95f56d7cec69acef540ffc2be2f3c09d6b25d39b7dd720075e04f83",
+      "lib/services/browser_history_watch_native.dart": "321606c9b4aec921a968bafd7a02a444bda8350f83dfec17db2eeaca916b3d9a",
+      "lib/services/browser_history_watch_service.dart": "49a47be3082cc923bd074a117211d72e6cfabc929dff8230d5b8d9ca867c0077",
+      "lib/services/browser_history_watch_stub.dart": "0642f68ed190474bdb7249f0332038f8188a15a7f22320aa555c47b56cd42e45",
+      "lib/services/camera_roll_types.dart": "f87f33d3f90c8323d573b0319f323bbc1d46d1e145a53d0dbd9e0405d553ae1a",
+      "lib/services/camera_roll_watch_native.dart": "5bb16ffab982a4807dfa1dc6b350a49de2ed96df0e358975ef3a1e0501b033d1",
+      "lib/services/camera_roll_watch_service.dart": "b66fb05c5ba1574bc3f636625b9a925b2acacf29a7f88204159a9b66c1d34f0e",
+      "lib/services/camera_roll_watch_stub.dart": "d9592648602fc435c34028348755c1d18837e30be82fd59b087d5324ff2059f9",
+      "lib/services/conversation_catalog.dart": "4c59530382046b5a5d1382f475a9e7f13a99c2314a7aa212ca749a8bd7b91ab2",
+      "lib/services/conversation_search_index.dart": "f7e6f650d05fa3b011af8240b2bc66f46bfe5ade7fed1538b0bc304789d1199d",
+      "lib/services/device_environment_io.dart": "d4d819c32e4e6c4f87f38b3cca33cdbbb0748f41b74087f6a744c093f9d39e31",
+      "lib/services/device_environment_stub.dart": "f96e73b581d0cfb9bfceeef7040d279e00c3c2d22dbba6766cf1993c7fc9ac39",
+      "lib/services/device_pairing.dart": "96f75841eaa0c7f51b35e1629d07eea577914080285b1b459797e7585d6f151f",
+      "lib/services/discord_archive.dart": "e42dda5c9a08c4956147531813a71dfbe62e24acd9e2e35c28d00508ed0b08a5",
+      "lib/services/discord_archive_io.dart": "f76e2861406a88dac101bf5595aa152c9ab78505e3aff113bdae085376494826",
+      "lib/services/discord_archive_stub.dart": "bb63f58b3aa1580d528472b71b0c949afb0470b6426d6057777d5a8b20804337",
+      "lib/services/discord_bot_gateway.dart": "ee6dc719752cec1d937622c89a7ae2bae30c3ac1da69d1422fa0e2a0a35ca79f",
+      "lib/services/discord_bot_gateway_io.dart": "2fa56aeb91ad5cc69f25796ab301afebf7e0c1c619059dd1aef4b0990ff4cf6a",
+      "lib/services/discord_bot_gateway_stub.dart": "06443406231c26123cd4ebee6dd5c2f432d7da09400b642a122e240aa7480ce2",
+      "lib/services/discord_bot_import_service.dart": "2fced3ed15a6a32fae1bb1f2230440ae25ef69da68687d50dacb7a885565a857",
+      "lib/services/disk_search_filters.dart": "a9d0add7756af94696aa9874f597278dd0df9cabb1f88903667beb9043c515e8",
+      "lib/services/disk_search_index_io.dart": "63da42970e726b6f933238ee5a18dac6b1523dd655595901514f6de153160f77",
+      "lib/services/disk_search_index_web.dart": "abfe7a40ff64dc35f5903a7a0ff1303c1760d65c26c9a9f06baa8895d8306781",
+      "lib/services/disk_search_ranking.dart": "fcf9f7344952a8483f20b3334a4afa04dd9bb708ffc370dcf5c619d3f10cc85f",
+      "lib/services/document_credentials.dart": "a1629669954dda1162f3babe50b671156b11847a7bc55d71cdf376e39eae1807",
+      "lib/services/document_folder_watch_native.dart": "14acf3d6bed8ec05d7888bd5714846012197cac98a4145fa1adcf3589c70ac9c",
+      "lib/services/document_folder_watch_service.dart": "552bebe2355825eda9dd5a0e99281fe9ea4dcd3b846d9cb3c538e6ae0389516c",
+      "lib/services/document_folder_watch_stub.dart": "c49d3d6fc718ca6b4e4858b33a887c0539bf5c580a417e00b0e2cadc9351887f",
+      "lib/services/document_import_service.dart": "092f2922e5ad4c44dba032672e405520b32a1252e6fb8e787b98f5c820b608d6",
+      "lib/services/export_file_reader.dart": "55a29ad82d268376a54e62c7002e49cc0e5d0dd26056a3783594019c9bba66b8",
+      "lib/services/export_watch_native.dart": "cb6eb75ab6757b2e7bdbc4a4809e5228cf234ae4b971d89856c83a1c0ed15a19",
+      "lib/services/export_watch_service.dart": "2b32b091c77ec820dff36e92ff38971e071485657e044ab67b5bfe5fd5ff1aba",
+      "lib/services/export_watch_stub.dart": "a4240111035d23cab1a282a17efa064dcd13e31c56a00f96386fa7d461aadde3",
+      "lib/services/imap_import_service.dart": "665639d43e043f7c219922e3c3aeb65541a6d5a9a8bdfe842da30286c02869cb",
+      "lib/services/local_vault_store.dart": "0a9c608c870f352eb67b7f8a23ae225bce83bcd3d973f0ddbeead31a1a8b9e59",
+      "lib/services/local_vault_store_io.dart": "2fa901a422449de52ecbd6b7769818e1cc2498c4117c49b7fe7ce0f34ab1cb7b",
+      "lib/services/local_vault_store_web.dart": "116e8908f87c1591b63685d905eac47e1cfd4258b0b58720089e160f6d0826b3",
+      "lib/services/pairing_crypto.dart": "dcaaec281fd5e20ec0da13d270b4b37aa61ac04755b5b08887d69760b8a57b53",
+      "lib/services/pairing_store.dart": "ab325f617ce4b32c90c6ed660cc03c472a5876bea8e40941c06f798803025115",
+      "lib/services/paperless_client.dart": "f23cd6aa4a140ff4ec0af29b33ee35bd700d5dcb9b1aa2d2d8ede76917999108",
+      "lib/services/quick_action_desktop.dart": "0411f1f42d80a0549639e912be76f8f21c51f885122f8cac2714c47e45f83cf1",
+      "lib/services/quick_action_desktop_stub.dart": "3af7b5af5af0d2c64da029ac56a9bdb156a8342c00a2afbd594ec8db7ef0d482",
+      "lib/services/quick_action_service.dart": "e34aa301bd9d39bbadf723eaadc8b17cbbb9063476544e3146b55039b31d279a",
+      "lib/services/recording_controller.dart": "392e56d442dde203e6c65985399f1572130b403f5c0065b63eda81b2c7c8b958",
+      "lib/services/recording_location_service.dart": "91720f0d1e2190a8c3431168a55f2c6142b2c24a9a223f035bbf78d13a0c2119",
+      "lib/services/recording_playback.dart": "38b2be5cb9f2b925796efee67502e837cf9dff0f7c0c1f9cf5650ef1f219d674",
+      "lib/services/recording_relay_service.dart": "08f15fe87f37981d6d9723bdb4309995392fe8acca9d05d1bcd5564073a318f8",
+      "lib/services/recording_suggestions.dart": "43a980ac225c562ad445617def84917de06838997e67a8d6f32829276b3dd406",
+      "lib/services/search_criteria.dart": "da3e4e397caf2a27974c9b57f5e5e19e047917ff8f379bae1b0a5f3129fddbb4",
+      "lib/services/search_index_worker_io.dart": "c3d04a8ea413435cec622c90be6473197f61d9a2a3ac28bc07a353bf65eed2be",
+      "lib/services/search_index_worker_web.dart": "52ff3fe70d26ed1fc9da124212e40c9d4727daec68675f19a13d63168af622a5",
+      "lib/services/search_lexicon_routes.dart": "25097116f251b475787995e63d0479bc3584cba0c85e6fb3e3e51237c10e7e6b",
+      "lib/services/search_posting_positions.dart": "33c0356521f3ac2337236329505e3209ac6a53e7d4a11ea44fd08879dde16ed8",
+      "lib/services/search_scorer.dart": "a1c8db4c795a155d018fc03fdbfef4fd7ca8aca405b2c7e2a68d2d098c7d4772",
+      "lib/services/search_service.dart": "f4c5b9e20cb49e1779b9422935b424458b3b92e6344a4a1bdab97205118d1ced",
+      "lib/services/search_source_groups.dart": "f1b3a3a3dfe94cb140aa6efbd5de8469ef121dee57c2679d946cabc908afa3eb",
+      "lib/services/shared_import_source.dart": "8fb1cbf8fe76e5e2f01cc91b6205a749df4cfe5d62a01f7bf2fd9a282a68937a",
+      "lib/services/source_categories.dart": "f3ed1c4ef4c00bdff577ddb733c60ca0efd74f85273fc2ccb42f1ec9a5af568c",
+      "lib/services/source_links.dart": "331804606116a0fb06554651d8f5d936968a36891d515c1ee15c39132673842e",
+      "lib/services/storage_location.dart": "0380a4be704c216ba6150596273b705732e43f0b85276ea621fd116c27b510cd",
+      "lib/services/storage_location_io.dart": "4c0b108e23a81e5be46390393fd011b1a16171e5a738498bf50ca31e763dab9b",
+      "lib/services/storage_location_web.dart": "92e3e79d840433f1369cd42c009e67bdcea2ae6d562eb2ba855093289488a0cc",
+      "lib/services/string_distance_service.dart": "a16e205c134a9866fdb2466dcfea58851bbd744ae5261ab9f6ea7e7b833f75bc",
+      "lib/services/sync_progress.dart": "bfb8e37e5d468e53b3b3ab03d301e78960e428f8d4f17bf8453aa085e879a412",
+      "lib/services/temporal_intent.dart": "bac1191abfb981cdb9f9e633d26617f833dc954c5d8c6703fde0441263da0863",
+      "lib/services/transcript_enrichment.dart": "2a2c714bf6b0658aca2655d427a4525b9038b27495bcc2c960a319e1f01e85f3",
+      "lib/services/vault_backup.dart": "f6fbccb310b8f58aa5fe00a4b2676a44eab63ae37961b89caa275f42f3a3116a",
+      "lib/services/vault_chunk_file_store.dart": "34febf90fbad979386ee3ef0c1de79cf1f096b3619499839f64741149affc76e",
+      "lib/services/vault_chunk_store.dart": "fb35eb1e3933f1472e5ccd492639889bc59cb49ca99f8774a23393bf520a36a4",
+      "lib/services/vault_chunk_store_platform_io.dart": "6e08bc07601016e8f6728e600606a76823a039d515776baa28fd6f5c3d00553d",
+      "lib/services/vault_chunk_store_platform_web.dart": "4104f7d1e45bf36abbcf5345f2b4cf45e00fcf6e9eed34f25a1d76e1dae84a42",
+      "lib/services/vault_chunk_store_sembast.dart": "19353b5463e4fef6546de1aef60fcc3224a253d5d428d4ca5662b6926ba38bac",
+      "lib/services/vault_chunks.dart": "c002a527cd4b2c970e5b1a0d644db676e1c5d17a529356074c2e85dc6357a31a",
+      "lib/services/vault_database_worker.dart": "513efbca3fe31eec11f865d85f3a64ce9ae44e9fe1922f00082ba308c300d504",
+      "lib/services/vault_disk_search.dart": "defcdc9ce7b0a69470fdc3965a9f08147a0df6372eaa3b1652e6e6afa300d6bd",
+      "lib/services/vault_email.dart": "e6cb79594d1a876081fe392ac4e8e056ec180e3b098142d0cdf56f1fb7997680",
+      "lib/services/vault_imports.dart": "1d902e2edebf23ff93737d78504a81ed52255ea3547b4cb19d51b87654348ea8",
+      "lib/services/vault_recordings.dart": "6326e501b5927617afb5448b74c6b126ab6c9da24405a122de84df19992ba1f6",
+      "lib/services/vault_search_cache.dart": "76b950b0a1a987ec6ef67d9f4654f518ce67527d3cad1f348b89948dd15ef19d",
+      "lib/services/vault_sync.dart": "9c1fac1f30f8b8621e34eff5722469b3dcbff017d61f5015de3c6b997f09d85c",
+      "lib/services/vault_training.dart": "8ab5b5ac728115fde4268d4ee10c0f444768f9aae2eb174cdcbc94a61f7a0ca1",
+      "lib/services/vault_worker_io.dart": "110a13f46dc9d882e9e9852a9a719a6d97ff6a3fe05c6d3c71dd053063a558c4",
+      "lib/services/vault_worker_web.dart": "03c03f08659cc17e713c329883426f357fb203d361631fee5d4c12b9cd07e0fc",
+      "lib/services/wav_audio.dart": "cc71a7e331e8534abe2b9880d4d165a4a72b45725b6f27b571d8cb94093d2829",
+      "lib/share_intent_service.dart": "5e8951b9ec9fd2ae0a8d339af459c1227c06f97cd4cc48f50d61658d36a11b43",
+      "lib/widgets/backup_dialog.dart": "a68fee83406a279775048b047871867b9003e0a2cb5b0c220404bcab1951e916",
+      "lib/widgets/browser_extension_section.dart": "fda43c04770102eee3a44d042bfb7193729682217a06c287619b47c1ee1f60a0",
+      "lib/widgets/browser_history_section.dart": "d9a5b1856e0d5492e4244e50ee0f9f7c481938fdef85f8c9448da6190b792f84",
+      "lib/widgets/camera_photos_panel.dart": "442489a156fc88810741e9edc05a450795c2096a59d698c2fba648c76cbdbcae",
+      "lib/widgets/device_security_dialog.dart": "3a6718e575e41906f4886e728597285be0fc39b5008d2fb4657ca3107c64d59b",
+      "lib/widgets/discord_bot_import_panel.dart": "52e4e359b1b087d87328043de4ebb7195cfd9ba87eac52ebe300bb2fbeb6f545",
+      "lib/widgets/document_import_panel.dart": "d3e188954e3a2a9b1769edf4d20aea6a9a7d9ba358c1558778d0a13679fb5d5c",
+      "lib/widgets/imap_import_panel.dart": "ad8344be337735022230718ced08b6fa7bb886cb28f7f53748d01d9584c39df4",
+      "lib/widgets/microphone_panel.dart": "59a620379cc9e61e356ec31b6f8fd8eb1bc67c2ea6ea2f17fd20b93b3566358e",
+      "lib/widgets/paperless_import_panel.dart": "8a024b75e7d9b211981e3d6587fdb4909745f3d7c2f1a3fa3965dc977739f857",
+      "lib/widgets/participant_picker.dart": "55cefaf7d443f4fe8acb2715289e081ebef52a221e5ad7b20c745d4b153db5e9",
+      "lib/widgets/recording_audio_player.dart": "927360024df53866153eccc99144c64ddda2cdd6e89f98a05234b884a01a0a51",
+      "lib/widgets/recording_context_editor.dart": "b42af3886dc1b9072c31f567fb7cd19690a261f39291e530db12e1009570122d",
+      "lib/widgets/recording_details_sheet.dart": "d3d72e2ce706bde75ff55f93a6ce6ea024ac93b3b9c858747c76d59518d0575a",
+      "lib/widgets/recording_location_fields.dart": "06279fc7fe84537ec2d8d3e2f226ee08ae761de282743754f94779a9551a9ca4",
+      "lib/widgets/sync_progress_indicator.dart": "927f9b12fcfd7a04f9a83ccba5adbdcdf98d6172a29f715e7d313003d03e91a3",
+      "lib/widgets/transcription_correction_dialog.dart": "6b2672c02cbd85861c39690643318686ffbe100d966cd662ac243c97dc35e085",
+      "lib/widgets/vault_shell.dart": "65529aa3fa6c241a53bc82d349679487284731d7ef69dc5a3ae0f11c97a9fe46",
+      "lib/widgets/viewing_history_panel.dart": "7387a4482c00ca4b0838c5a883e7223ed48cf2d151308b097e1cdfddc9b20ade",
+      "pubspec.lock": "53f9e757b425685779bcd09ae8f4f39091a156d7625310dd5f2450e636f65181",
+      "pubspec.yaml": "2ff3ede8826f0ead2652fc03ba476071fd77d6f97797713d7cf48b134c721455",
+      "tool/search_order_probe.dart": "7271c2d4ade2769aa148ab799f13a15fcd3157db27a748c3a864cea3c9dffe58"
+    }
+  },
+  "peakRssBytes": {
+    "default": {
+      "managedGzip": 617426944,
+      "nativeV6": 1670246400
+    },
+    "mixed": {
+      "managedGzip": 673730560,
+      "nativeV6": 1647648768
+    }
+  },
+  "buildMilliseconds": {
+    "default": {
+      "chronological": 43676,
+      "shuffled": 69799
+    },
+    "mixed": {
+      "chronological": 42328,
+      "shuffled": 73149
+    }
+  },
+  "nativeV6BuildMilliseconds": {
+    "default": {
+      "chronological": 33812,
+      "shuffled": 52470
+    },
+    "mixed": {
+      "chronological": 34624,
+      "shuffled": 58848
+    }
+  },
+  "summary": {
+    "default / chronological / archive": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 13.845,
+      "preparedMaxMs": 14.895,
+      "preparedEmpiricalP95Ms": 14.895,
+      "warmSampleCount": 3,
+      "warmMinMs": 12.226,
+      "warmMaxMs": 18.311,
+      "warmEmpiricalP95Ms": 18.311,
+      "coldOpenMinMs": 0.488,
+      "coldOpenMaxMs": 0.67,
+      "coldPrepareMinMs": 65.104,
+      "coldPrepareMaxMs": 68.195,
+      "numericMaxMs": 0,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        8
+      ],
+      "scoredDocuments": [
+        1024
+      ],
+      "numericPostingPages": [
+        1
+      ],
+      "scoretilesReads": [
+        38
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        20
+      ],
+      "positionReads": [
+        0
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 14.328,
+        "warmMaxMs": 15.223,
+        "coldPrepareMaxMs": 75.554,
+        "numericMaxMs": 0,
+        "scoredDocuments": [
+          1024
+        ],
+        "scoretilesReads": [
+          38
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "default / chronological / alice mueller": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 30.061,
+      "preparedMaxMs": 32.419,
+      "preparedEmpiricalP95Ms": 32.419,
+      "warmSampleCount": 3,
+      "warmMinMs": 30.503,
+      "warmMaxMs": 32.516,
+      "warmEmpiricalP95Ms": 32.516,
+      "coldOpenMinMs": 0.481,
+      "coldOpenMaxMs": 0.57,
+      "coldPrepareMinMs": 65.296,
+      "coldPrepareMaxMs": 66.168,
+      "numericMaxMs": 2,
+      "candidateBlocks": [
+        100
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        100
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        40
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 37.257,
+        "warmMaxMs": 34.632,
+        "coldPrepareMaxMs": 76.419,
+        "numericMaxMs": 3,
+        "scoredDocuments": [
+          100
+        ],
+        "scoretilesReads": [
+          100
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "default / chronological / ali muell": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 27.745,
+      "preparedMaxMs": 29.359,
+      "preparedEmpiricalP95Ms": 29.359,
+      "warmSampleCount": 3,
+      "warmMinMs": 25.904,
+      "warmMaxMs": 29.315,
+      "warmEmpiricalP95Ms": 29.315,
+      "coldOpenMinMs": 0.506,
+      "coldOpenMaxMs": 0.547,
+      "coldPrepareMinMs": 63.697,
+      "coldPrepareMaxMs": 66.354,
+      "numericMaxMs": 3,
+      "candidateBlocks": [
+        100
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        100
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        20
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 30.178,
+        "warmMaxMs": 24.785,
+        "coldPrepareMaxMs": 86.276,
+        "numericMaxMs": 3,
+        "scoredDocuments": [
+          100
+        ],
+        "scoretilesReads": [
+          100
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "default / chronological / archive grocery": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 38.119,
+      "preparedMaxMs": 40.832,
+      "preparedEmpiricalP95Ms": 40.832,
+      "warmSampleCount": 3,
+      "warmMinMs": 36.468,
+      "warmMaxMs": 37.684,
+      "warmEmpiricalP95Ms": 37.684,
+      "coldOpenMinMs": 0.541,
+      "coldOpenMaxMs": 0.729,
+      "coldPrepareMinMs": 64.372,
+      "coldPrepareMaxMs": 65.895,
+      "numericMaxMs": 19,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        20000
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        40
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        40
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 39.658,
+        "warmMaxMs": 38.664,
+        "coldPrepareMaxMs": 85.525,
+        "numericMaxMs": 22,
+        "scoredDocuments": [
+          20000
+        ],
+        "scoretilesReads": [
+          40
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "default / shuffled / archive": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 30.112,
+      "preparedMaxMs": 31.698,
+      "preparedEmpiricalP95Ms": 31.698,
+      "warmSampleCount": 3,
+      "warmMinMs": 29.403,
+      "warmMaxMs": 31.766,
+      "warmEmpiricalP95Ms": 31.766,
+      "coldOpenMinMs": 0.486,
+      "coldOpenMaxMs": 0.91,
+      "coldPrepareMinMs": 64.766,
+      "coldPrepareMaxMs": 65.971,
+      "numericMaxMs": 5,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        20000
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        20
+      ],
+      "positionReads": [
+        0
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 64.369,
+        "warmMaxMs": 39.35,
+        "coldPrepareMaxMs": 105.668,
+        "numericMaxMs": 20,
+        "scoredDocuments": [
+          20000
+        ],
+        "scoretilesReads": [
+          100
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "default / shuffled / alice mueller": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 31.019,
+      "preparedMaxMs": 31.384,
+      "preparedEmpiricalP95Ms": 31.384,
+      "warmSampleCount": 3,
+      "warmMinMs": 29.72,
+      "warmMaxMs": 30.681,
+      "warmEmpiricalP95Ms": 30.681,
+      "coldOpenMinMs": 0.48,
+      "coldOpenMaxMs": 0.504,
+      "coldPrepareMinMs": 65.31,
+      "coldPrepareMaxMs": 68.686,
+      "numericMaxMs": 2,
+      "candidateBlocks": [
+        75
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        100
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        98
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        40
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 36.451,
+        "warmMaxMs": 33.846,
+        "coldPrepareMaxMs": 95.935,
+        "numericMaxMs": 3,
+        "scoredDocuments": [
+          100
+        ],
+        "scoretilesReads": [
+          98
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "default / shuffled / ali muell": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 26.862,
+      "preparedMaxMs": 29.644,
+      "preparedEmpiricalP95Ms": 29.644,
+      "warmSampleCount": 3,
+      "warmMinMs": 26.328,
+      "warmMaxMs": 30.777,
+      "warmEmpiricalP95Ms": 30.777,
+      "coldOpenMinMs": 0.491,
+      "coldOpenMaxMs": 0.573,
+      "coldPrepareMinMs": 64.935,
+      "coldPrepareMaxMs": 67.439,
+      "numericMaxMs": 2,
+      "candidateBlocks": [
+        75
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        100
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        98
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        20
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 33.564,
+        "warmMaxMs": 32.023,
+        "coldPrepareMaxMs": 78.679,
+        "numericMaxMs": 4,
+        "scoredDocuments": [
+          100
+        ],
+        "scoretilesReads": [
+          98
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "default / shuffled / archive grocery": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 48.405,
+      "preparedMaxMs": 50.844,
+      "preparedEmpiricalP95Ms": 50.844,
+      "warmSampleCount": 3,
+      "warmMinMs": 47.634,
+      "warmMaxMs": 69.38,
+      "warmEmpiricalP95Ms": 69.38,
+      "coldOpenMinMs": 0.534,
+      "coldOpenMaxMs": 0.59,
+      "coldPrepareMinMs": 64.598,
+      "coldPrepareMaxMs": 67.004,
+      "numericMaxMs": 35,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        20000
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        40
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 50.713,
+        "warmMaxMs": 52.586,
+        "coldPrepareMaxMs": 88.789,
+        "numericMaxMs": 23,
+        "scoredDocuments": [
+          20000
+        ],
+        "scoretilesReads": [
+          100
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / chronological / archive": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 14.704,
+      "preparedMaxMs": 16.026,
+      "preparedEmpiricalP95Ms": 16.026,
+      "warmSampleCount": 3,
+      "warmMinMs": 12.885,
+      "warmMaxMs": 13.071,
+      "warmEmpiricalP95Ms": 13.071,
+      "coldOpenMinMs": 0.6,
+      "coldOpenMaxMs": 0.646,
+      "coldPrepareMinMs": 64.195,
+      "coldPrepareMaxMs": 67.519,
+      "numericMaxMs": 0,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        8
+      ],
+      "scoredDocuments": [
+        1024
+      ],
+      "numericPostingPages": [
+        1
+      ],
+      "scoretilesReads": [
+        41
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        20
+      ],
+      "positionReads": [
+        0
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 19.488,
+        "warmMaxMs": 17.515,
+        "coldPrepareMaxMs": 70.795,
+        "numericMaxMs": 0,
+        "scoredDocuments": [
+          1024
+        ],
+        "scoretilesReads": [
+          41
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / chronological / alice mueller": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 31.128,
+      "preparedMaxMs": 32.44,
+      "preparedEmpiricalP95Ms": 32.44,
+      "warmSampleCount": 3,
+      "warmMinMs": 28.368,
+      "warmMaxMs": 30.978,
+      "warmEmpiricalP95Ms": 30.978,
+      "coldOpenMinMs": 0.49,
+      "coldOpenMaxMs": 0.506,
+      "coldPrepareMinMs": 64.391,
+      "coldPrepareMaxMs": 73.452,
+      "numericMaxMs": 2,
+      "candidateBlocks": [
+        100
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        100
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        40
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 32.144,
+        "warmMaxMs": 29.527,
+        "coldPrepareMaxMs": 73.997,
+        "numericMaxMs": 3,
+        "scoredDocuments": [
+          100
+        ],
+        "scoretilesReads": [
+          100
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / chronological / ali muell": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 26.785,
+      "preparedMaxMs": 29.659,
+      "preparedEmpiricalP95Ms": 29.659,
+      "warmSampleCount": 3,
+      "warmMinMs": 24.962,
+      "warmMaxMs": 29.585,
+      "warmEmpiricalP95Ms": 29.585,
+      "coldOpenMinMs": 0.469,
+      "coldOpenMaxMs": 0.519,
+      "coldPrepareMinMs": 63.443,
+      "coldPrepareMaxMs": 66.105,
+      "numericMaxMs": 3,
+      "candidateBlocks": [
+        100
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        100
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        20
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 28.851,
+        "warmMaxMs": 27.567,
+        "coldPrepareMaxMs": 73.04,
+        "numericMaxMs": 3,
+        "scoredDocuments": [
+          100
+        ],
+        "scoretilesReads": [
+          100
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / chronological / archive grocery": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 37.023,
+      "preparedMaxMs": 44.788,
+      "preparedEmpiricalP95Ms": 44.788,
+      "warmSampleCount": 3,
+      "warmMinMs": 35.802,
+      "warmMaxMs": 41.337,
+      "warmEmpiricalP95Ms": 41.337,
+      "coldOpenMinMs": 0.495,
+      "coldOpenMaxMs": 0.607,
+      "coldPrepareMinMs": 63.816,
+      "coldPrepareMaxMs": 69.143,
+      "numericMaxMs": 20,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        20000
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        43
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        40
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 42.889,
+        "warmMaxMs": 57.148,
+        "coldPrepareMaxMs": 76.1,
+        "numericMaxMs": 26,
+        "scoredDocuments": [
+          20000
+        ],
+        "scoretilesReads": [
+          43
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / chronological / project": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 28.723,
+      "preparedMaxMs": 33.447,
+      "preparedEmpiricalP95Ms": 33.447,
+      "warmSampleCount": 3,
+      "warmMinMs": 27.442,
+      "warmMaxMs": 29.835,
+      "warmEmpiricalP95Ms": 29.835,
+      "coldOpenMinMs": 0.492,
+      "coldOpenMaxMs": 0.739,
+      "coldPrepareMinMs": 64.191,
+      "coldPrepareMaxMs": 69.244,
+      "numericMaxMs": 5,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        144
+      ],
+      "scoredDocuments": [
+        18432
+      ],
+      "numericPostingPages": [
+        18
+      ],
+      "scoretilesReads": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        20
+      ],
+      "positionReads": [
+        0
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 31.773,
+        "warmMaxMs": 44.118,
+        "coldPrepareMaxMs": 76.951,
+        "numericMaxMs": 7,
+        "scoredDocuments": [
+          18432
+        ],
+        "scoretilesReads": [
+          100
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / chronological / project grocery": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 45.011,
+      "preparedMaxMs": 56.239,
+      "preparedEmpiricalP95Ms": 56.239,
+      "warmSampleCount": 3,
+      "warmMinMs": 45.35,
+      "warmMaxMs": 52.296,
+      "warmEmpiricalP95Ms": 52.296,
+      "coldOpenMinMs": 0.494,
+      "coldOpenMaxMs": 0.566,
+      "coldPrepareMinMs": 66.1,
+      "coldPrepareMaxMs": 69.261,
+      "numericMaxMs": 18,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        144
+      ],
+      "scoredDocuments": [
+        18432
+      ],
+      "numericPostingPages": [
+        18
+      ],
+      "scoretilesReads": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        36
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 47.226,
+        "warmMaxMs": 49.366,
+        "coldPrepareMaxMs": 73.015,
+        "numericMaxMs": 21,
+        "scoredDocuments": [
+          18432
+        ],
+        "scoretilesReads": [
+          100
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / shuffled / archive": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 31.863,
+      "preparedMaxMs": 37.888,
+      "preparedEmpiricalP95Ms": 37.888,
+      "warmSampleCount": 3,
+      "warmMinMs": 31.364,
+      "warmMaxMs": 40.213,
+      "warmEmpiricalP95Ms": 40.213,
+      "coldOpenMinMs": 0.509,
+      "coldOpenMaxMs": 0.696,
+      "coldPrepareMinMs": 68.485,
+      "coldPrepareMaxMs": 73.502,
+      "numericMaxMs": 8,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        20000
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        20
+      ],
+      "positionReads": [
+        0
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 33.408,
+        "warmMaxMs": 29.499,
+        "coldPrepareMaxMs": 76.252,
+        "numericMaxMs": 6,
+        "scoredDocuments": [
+          20000
+        ],
+        "scoretilesReads": [
+          100
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / shuffled / alice mueller": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 33.062,
+      "preparedMaxMs": 38.928,
+      "preparedEmpiricalP95Ms": 38.928,
+      "warmSampleCount": 3,
+      "warmMinMs": 31.368,
+      "warmMaxMs": 37.898,
+      "warmEmpiricalP95Ms": 37.898,
+      "coldOpenMinMs": 0.683,
+      "coldOpenMaxMs": 0.849,
+      "coldPrepareMinMs": 74.884,
+      "coldPrepareMaxMs": 78.459,
+      "numericMaxMs": 2,
+      "candidateBlocks": [
+        75
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        100
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        98
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        40
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 32.509,
+        "warmMaxMs": 29.349,
+        "coldPrepareMaxMs": 71.862,
+        "numericMaxMs": 3,
+        "scoredDocuments": [
+          100
+        ],
+        "scoretilesReads": [
+          98
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / shuffled / ali muell": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 27.822,
+      "preparedMaxMs": 38.367,
+      "preparedEmpiricalP95Ms": 38.367,
+      "warmSampleCount": 3,
+      "warmMinMs": 27.894,
+      "warmMaxMs": 31.194,
+      "warmEmpiricalP95Ms": 31.194,
+      "coldOpenMinMs": 0.504,
+      "coldOpenMaxMs": 0.601,
+      "coldPrepareMinMs": 67.162,
+      "coldPrepareMaxMs": 77.043,
+      "numericMaxMs": 2,
+      "candidateBlocks": [
+        75
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        100
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        98
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        20
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 28.657,
+        "warmMaxMs": 25.172,
+        "coldPrepareMaxMs": 78.979,
+        "numericMaxMs": 3,
+        "scoredDocuments": [
+          100
+        ],
+        "scoretilesReads": [
+          98
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / shuffled / archive grocery": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 49.953,
+      "preparedMaxMs": 59.19,
+      "preparedEmpiricalP95Ms": 59.19,
+      "warmSampleCount": 3,
+      "warmMinMs": 49.878,
+      "warmMaxMs": 53.225,
+      "warmEmpiricalP95Ms": 53.225,
+      "coldOpenMinMs": 0.526,
+      "coldOpenMaxMs": 0.693,
+      "coldPrepareMinMs": 68.89,
+      "coldPrepareMaxMs": 73.827,
+      "numericMaxMs": 23,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        20000
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        100
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        40
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 56.238,
+        "warmMaxMs": 52.49,
+        "coldPrepareMaxMs": 90.543,
+        "numericMaxMs": 23,
+        "scoredDocuments": [
+          20000
+        ],
+        "scoretilesReads": [
+          100
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / shuffled / project": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 32.013,
+      "preparedMaxMs": 34.175,
+      "preparedEmpiricalP95Ms": 34.175,
+      "warmSampleCount": 3,
+      "warmMinMs": 28.358,
+      "warmMaxMs": 32.167,
+      "warmEmpiricalP95Ms": 32.167,
+      "coldOpenMinMs": 0.529,
+      "coldOpenMaxMs": 0.55,
+      "coldPrepareMinMs": 67.815,
+      "coldPrepareMaxMs": 71.881,
+      "numericMaxMs": 6,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        20000
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        98
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        20
+      ],
+      "positionReads": [
+        0
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 31.228,
+        "warmMaxMs": 29.791,
+        "coldPrepareMaxMs": 74.301,
+        "numericMaxMs": 6,
+        "scoredDocuments": [
+          20000
+        ],
+        "scoretilesReads": [
+          98
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    },
+    "mixed / shuffled / project grocery": {
+      "preparedSampleCount": 3,
+      "preparedMinMs": 49.923,
+      "preparedMaxMs": 52.367,
+      "preparedEmpiricalP95Ms": 52.367,
+      "warmSampleCount": 3,
+      "warmMinMs": 49.472,
+      "warmMaxMs": 54.04,
+      "warmEmpiricalP95Ms": 54.04,
+      "coldOpenMinMs": 0.482,
+      "coldOpenMaxMs": 0.683,
+      "coldPrepareMinMs": 64.824,
+      "coldPrepareMaxMs": 70.396,
+      "numericMaxMs": 20,
+      "candidateBlocks": [
+        157
+      ],
+      "scoredBlocks": [
+        160
+      ],
+      "scoredDocuments": [
+        20000
+      ],
+      "numericPostingPages": [
+        20
+      ],
+      "scoretilesReads": [
+        98
+      ],
+      "docpagesReads": [
+        0
+      ],
+      "summarypagesReads": [
+        0
+      ],
+      "fallbackDocuments": [
+        0
+      ],
+      "postingReads": [
+        40
+      ],
+      "positionReads": [
+        40
+      ],
+      "nativeV6Baseline": {
+        "preparedMaxMs": 51.287,
+        "warmMaxMs": 52.835,
+        "coldPrepareMaxMs": 77.078,
+        "numericMaxMs": 22,
+        "scoredDocuments": [
+          20000
+        ],
+        "scoretilesReads": [
+          98
+        ],
+        "docpagesReads": [
+          0
+        ],
+        "fallbackDocuments": [
+          0
+        ]
+      }
+    }
+  },
+  "reports": {
+    "default": {
+      "count": 20000,
+      "words": 200,
+      "fillerVocabulary": 1710,
+      "mixedFields": false,
+      "prepareQueries": true,
+      "goldenTopIds": {
+        "archive": [
+          "00000000-0000-4000-8000-000000000080",
+          "00000000-0000-4000-8000-000000000202",
+          "00000000-0000-4000-8000-000000000044",
+          "00000000-0000-4000-8000-000000000087",
+          "00000000-0000-4000-8000-000000000183",
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-000000000333",
+          "00000000-0000-4000-8000-000000000247",
+          "00000000-0000-4000-8000-000000000254",
+          "00000000-0000-4000-8000-000000000086",
+          "00000000-0000-4000-8000-000000000191",
+          "00000000-0000-4000-8000-000000000236",
+          "00000000-0000-4000-8000-000000000025",
+          "00000000-0000-4000-8000-000000000028",
+          "00000000-0000-4000-8000-000000000019",
+          "00000000-0000-4000-8000-000000000139",
+          "00000000-0000-4000-8000-000000000243",
+          "00000000-0000-4000-8000-000000000266",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000014",
+          "00000000-0000-4000-8000-000000000034",
+          "00000000-0000-4000-8000-000000000056",
+          "00000000-0000-4000-8000-000000000063",
+          "00000000-0000-4000-8000-000000000067",
+          "00000000-0000-4000-8000-000000000089",
+          "00000000-0000-4000-8000-000000000097",
+          "00000000-0000-4000-8000-000000000102",
+          "00000000-0000-4000-8000-000000000131",
+          "00000000-0000-4000-8000-000000000180",
+          "00000000-0000-4000-8000-000000000225",
+          "00000000-0000-4000-8000-000000000238",
+          "00000000-0000-4000-8000-000000000239",
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000012",
+          "00000000-0000-4000-8000-000000000015",
+          "00000000-0000-4000-8000-000000000055",
+          "00000000-0000-4000-8000-000000000291",
+          "00000000-0000-4000-8000-000000000311",
+          "00000000-0000-4000-8000-000000000328",
+          "00000000-0000-4000-8000-000000000081",
+          "00000000-0000-4000-8000-000000000152",
+          "00000000-0000-4000-8000-000000000176",
+          "00000000-0000-4000-8000-000000000177",
+          "00000000-0000-4000-8000-000000000016",
+          "00000000-0000-4000-8000-000000000272",
+          "00000000-0000-4000-8000-000000000274",
+          "00000000-0000-4000-8000-000000000299",
+          "00000000-0000-4000-8000-000000000071",
+          "00000000-0000-4000-8000-000000000079",
+          "00000000-0000-4000-8000-000000000085",
+          "00000000-0000-4000-8000-000000000103",
+          "00000000-0000-4000-8000-000000000146",
+          "00000000-0000-4000-8000-000000000201",
+          "00000000-0000-4000-8000-000000000226",
+          "00000000-0000-4000-8000-000000000229",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000031",
+          "00000000-0000-4000-8000-000000000042",
+          "00000000-0000-4000-8000-000000000047",
+          "00000000-0000-4000-8000-000000000051",
+          "00000000-0000-4000-8000-000000000054",
+          "00000000-0000-4000-8000-000000000059",
+          "00000000-0000-4000-8000-000000000109",
+          "00000000-0000-4000-8000-000000000116",
+          "00000000-0000-4000-8000-000000000321",
+          "00000000-0000-4000-8000-000000000329",
+          "00000000-0000-4000-8000-000000000331",
+          "00000000-0000-4000-8000-000000000346",
+          "00000000-0000-4000-8000-000000000141",
+          "00000000-0000-4000-8000-000000000143",
+          "00000000-0000-4000-8000-000000000167",
+          "00000000-0000-4000-8000-000000000178",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000021",
+          "00000000-0000-4000-8000-000000000032",
+          "00000000-0000-4000-8000-000000000039",
+          "00000000-0000-4000-8000-000000000250",
+          "00000000-0000-4000-8000-000000000278",
+          "00000000-0000-4000-8000-000000000282",
+          "00000000-0000-4000-8000-000000000287",
+          "00000000-0000-4000-8000-000000000289",
+          "00000000-0000-4000-8000-000000000292",
+          "00000000-0000-4000-8000-000000000294",
+          "00000000-0000-4000-8000-000000000295",
+          "00000000-0000-4000-8000-000000000064",
+          "00000000-0000-4000-8000-000000000076",
+          "00000000-0000-4000-8000-000000000077",
+          "00000000-0000-4000-8000-000000000082",
+          "00000000-0000-4000-8000-000000000095",
+          "00000000-0000-4000-8000-000000000098",
+          "00000000-0000-4000-8000-000000000101",
+          "00000000-0000-4000-8000-000000000360",
+          "00000000-0000-4000-8000-000000000186",
+          "00000000-0000-4000-8000-000000000204",
+          "00000000-0000-4000-8000-000000000228",
+          "00000000-0000-4000-8000-000000000230",
+          "00000000-0000-4000-8000-000000000018",
+          "00000000-0000-4000-8000-000000000715",
+          "00000000-0000-4000-8000-000000000090"
+        ],
+        "alice mueller": [
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000200",
+          "00000000-0000-4000-8000-000000001000",
+          "00000000-0000-4000-8000-000000000800",
+          "00000000-0000-4000-8000-000000002000",
+          "00000000-0000-4000-8000-000000001600",
+          "00000000-0000-4000-8000-000000002200",
+          "00000000-0000-4000-8000-000000001400",
+          "00000000-0000-4000-8000-000000002800",
+          "00000000-0000-4000-8000-000000002600",
+          "00000000-0000-4000-8000-000000003200",
+          "00000000-0000-4000-8000-000000003400",
+          "00000000-0000-4000-8000-000000004000",
+          "00000000-0000-4000-8000-000000004200",
+          "00000000-0000-4000-8000-000000004600",
+          "00000000-0000-4000-8000-000000005200",
+          "00000000-0000-4000-8000-000000004800",
+          "00000000-0000-4000-8000-000000005800",
+          "00000000-0000-4000-8000-000000005400",
+          "00000000-0000-4000-8000-000000006000",
+          "00000000-0000-4000-8000-000000006600",
+          "00000000-0000-4000-8000-000000006400",
+          "00000000-0000-4000-8000-000000007200",
+          "00000000-0000-4000-8000-000000007400",
+          "00000000-0000-4000-8000-000000008000",
+          "00000000-0000-4000-8000-000000007800",
+          "00000000-0000-4000-8000-000000008400",
+          "00000000-0000-4000-8000-000000009000",
+          "00000000-0000-4000-8000-000000009200",
+          "00000000-0000-4000-8000-000000009800",
+          "00000000-0000-4000-8000-000000008600",
+          "00000000-0000-4000-8000-000000009600",
+          "00000000-0000-4000-8000-000000010400",
+          "00000000-0000-4000-8000-000000010600",
+          "00000000-0000-4000-8000-000000011600",
+          "00000000-0000-4000-8000-000000011200",
+          "00000000-0000-4000-8000-000000011000",
+          "00000000-0000-4000-8000-000000012200",
+          "00000000-0000-4000-8000-000000011800",
+          "00000000-0000-4000-8000-000000012800",
+          "00000000-0000-4000-8000-000000012400",
+          "00000000-0000-4000-8000-000000013000",
+          "00000000-0000-4000-8000-000000013600",
+          "00000000-0000-4000-8000-000000013800",
+          "00000000-0000-4000-8000-000000014400",
+          "00000000-0000-4000-8000-000000014800",
+          "00000000-0000-4000-8000-000000014200",
+          "00000000-0000-4000-8000-000000015000",
+          "00000000-0000-4000-8000-000000015600",
+          "00000000-0000-4000-8000-000000015400",
+          "00000000-0000-4000-8000-000000016000",
+          "00000000-0000-4000-8000-000000016800",
+          "00000000-0000-4000-8000-000000017000",
+          "00000000-0000-4000-8000-000000017400",
+          "00000000-0000-4000-8000-000000017600",
+          "00000000-0000-4000-8000-000000016200",
+          "00000000-0000-4000-8000-000000018800",
+          "00000000-0000-4000-8000-000000018000",
+          "00000000-0000-4000-8000-000000018200",
+          "00000000-0000-4000-8000-000000018600",
+          "00000000-0000-4000-8000-000000019200",
+          "00000000-0000-4000-8000-000000019400",
+          "00000000-0000-4000-8000-000000000400",
+          "00000000-0000-4000-8000-000000002400",
+          "00000000-0000-4000-8000-000000003000",
+          "00000000-0000-4000-8000-000000003600",
+          "00000000-0000-4000-8000-000000005600",
+          "00000000-0000-4000-8000-000000006200",
+          "00000000-0000-4000-8000-000000006800",
+          "00000000-0000-4000-8000-000000008800",
+          "00000000-0000-4000-8000-000000009400",
+          "00000000-0000-4000-8000-000000010000",
+          "00000000-0000-4000-8000-000000012000",
+          "00000000-0000-4000-8000-000000012600",
+          "00000000-0000-4000-8000-000000013200",
+          "00000000-0000-4000-8000-000000015200",
+          "00000000-0000-4000-8000-000000015800",
+          "00000000-0000-4000-8000-000000016400",
+          "00000000-0000-4000-8000-000000018400",
+          "00000000-0000-4000-8000-000000019000",
+          "00000000-0000-4000-8000-000000019600",
+          "00000000-0000-4000-8000-000000000600",
+          "00000000-0000-4000-8000-000000001200",
+          "00000000-0000-4000-8000-000000001800",
+          "00000000-0000-4000-8000-000000003800",
+          "00000000-0000-4000-8000-000000004400",
+          "00000000-0000-4000-8000-000000005000",
+          "00000000-0000-4000-8000-000000007600",
+          "00000000-0000-4000-8000-000000007000",
+          "00000000-0000-4000-8000-000000008200",
+          "00000000-0000-4000-8000-000000010200",
+          "00000000-0000-4000-8000-000000010800",
+          "00000000-0000-4000-8000-000000011400",
+          "00000000-0000-4000-8000-000000013400",
+          "00000000-0000-4000-8000-000000014000",
+          "00000000-0000-4000-8000-000000014600",
+          "00000000-0000-4000-8000-000000016600",
+          "00000000-0000-4000-8000-000000017800",
+          "00000000-0000-4000-8000-000000017200",
+          "00000000-0000-4000-8000-000000019800"
+        ],
+        "ali muell": [
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000200",
+          "00000000-0000-4000-8000-000000000800",
+          "00000000-0000-4000-8000-000000001000",
+          "00000000-0000-4000-8000-000000001400",
+          "00000000-0000-4000-8000-000000001600",
+          "00000000-0000-4000-8000-000000002000",
+          "00000000-0000-4000-8000-000000002200",
+          "00000000-0000-4000-8000-000000002600",
+          "00000000-0000-4000-8000-000000002800",
+          "00000000-0000-4000-8000-000000003200",
+          "00000000-0000-4000-8000-000000003400",
+          "00000000-0000-4000-8000-000000004000",
+          "00000000-0000-4000-8000-000000004200",
+          "00000000-0000-4000-8000-000000004600",
+          "00000000-0000-4000-8000-000000004800",
+          "00000000-0000-4000-8000-000000005200",
+          "00000000-0000-4000-8000-000000005400",
+          "00000000-0000-4000-8000-000000005800",
+          "00000000-0000-4000-8000-000000006000",
+          "00000000-0000-4000-8000-000000006400",
+          "00000000-0000-4000-8000-000000006600",
+          "00000000-0000-4000-8000-000000007200",
+          "00000000-0000-4000-8000-000000007400",
+          "00000000-0000-4000-8000-000000007800",
+          "00000000-0000-4000-8000-000000008000",
+          "00000000-0000-4000-8000-000000008400",
+          "00000000-0000-4000-8000-000000008600",
+          "00000000-0000-4000-8000-000000009000",
+          "00000000-0000-4000-8000-000000009200",
+          "00000000-0000-4000-8000-000000009600",
+          "00000000-0000-4000-8000-000000009800",
+          "00000000-0000-4000-8000-000000010400",
+          "00000000-0000-4000-8000-000000010600",
+          "00000000-0000-4000-8000-000000011000",
+          "00000000-0000-4000-8000-000000011200",
+          "00000000-0000-4000-8000-000000011600",
+          "00000000-0000-4000-8000-000000011800",
+          "00000000-0000-4000-8000-000000012200",
+          "00000000-0000-4000-8000-000000012400",
+          "00000000-0000-4000-8000-000000012800",
+          "00000000-0000-4000-8000-000000013000",
+          "00000000-0000-4000-8000-000000013600",
+          "00000000-0000-4000-8000-000000013800",
+          "00000000-0000-4000-8000-000000014200",
+          "00000000-0000-4000-8000-000000014400",
+          "00000000-0000-4000-8000-000000014800",
+          "00000000-0000-4000-8000-000000015000",
+          "00000000-0000-4000-8000-000000015400",
+          "00000000-0000-4000-8000-000000015600",
+          "00000000-0000-4000-8000-000000016000",
+          "00000000-0000-4000-8000-000000016200",
+          "00000000-0000-4000-8000-000000016800",
+          "00000000-0000-4000-8000-000000017000",
+          "00000000-0000-4000-8000-000000017400",
+          "00000000-0000-4000-8000-000000017600",
+          "00000000-0000-4000-8000-000000018000",
+          "00000000-0000-4000-8000-000000018200",
+          "00000000-0000-4000-8000-000000018600",
+          "00000000-0000-4000-8000-000000018800",
+          "00000000-0000-4000-8000-000000019200",
+          "00000000-0000-4000-8000-000000019400",
+          "00000000-0000-4000-8000-000000000400",
+          "00000000-0000-4000-8000-000000002400",
+          "00000000-0000-4000-8000-000000003000",
+          "00000000-0000-4000-8000-000000003600",
+          "00000000-0000-4000-8000-000000005600",
+          "00000000-0000-4000-8000-000000006200",
+          "00000000-0000-4000-8000-000000006800",
+          "00000000-0000-4000-8000-000000008800",
+          "00000000-0000-4000-8000-000000009400",
+          "00000000-0000-4000-8000-000000010000",
+          "00000000-0000-4000-8000-000000012000",
+          "00000000-0000-4000-8000-000000012600",
+          "00000000-0000-4000-8000-000000013200",
+          "00000000-0000-4000-8000-000000015200",
+          "00000000-0000-4000-8000-000000015800",
+          "00000000-0000-4000-8000-000000016400",
+          "00000000-0000-4000-8000-000000018400",
+          "00000000-0000-4000-8000-000000019000",
+          "00000000-0000-4000-8000-000000019600",
+          "00000000-0000-4000-8000-000000000600",
+          "00000000-0000-4000-8000-000000001200",
+          "00000000-0000-4000-8000-000000001800",
+          "00000000-0000-4000-8000-000000003800",
+          "00000000-0000-4000-8000-000000004400",
+          "00000000-0000-4000-8000-000000005000",
+          "00000000-0000-4000-8000-000000007000",
+          "00000000-0000-4000-8000-000000007600",
+          "00000000-0000-4000-8000-000000008200",
+          "00000000-0000-4000-8000-000000010200",
+          "00000000-0000-4000-8000-000000010800",
+          "00000000-0000-4000-8000-000000011400",
+          "00000000-0000-4000-8000-000000013400",
+          "00000000-0000-4000-8000-000000014000",
+          "00000000-0000-4000-8000-000000014600",
+          "00000000-0000-4000-8000-000000016600",
+          "00000000-0000-4000-8000-000000017200",
+          "00000000-0000-4000-8000-000000017800",
+          "00000000-0000-4000-8000-000000019800"
+        ],
+        "archive grocery": [
+          "00000000-0000-4000-8000-000000000202",
+          "00000000-0000-4000-8000-000000000080",
+          "00000000-0000-4000-8000-000000000044",
+          "00000000-0000-4000-8000-000000000087",
+          "00000000-0000-4000-8000-000000000333",
+          "00000000-0000-4000-8000-000000000183",
+          "00000000-0000-4000-8000-000000000247",
+          "00000000-0000-4000-8000-000000000254",
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-000000000191",
+          "00000000-0000-4000-8000-000000000236",
+          "00000000-0000-4000-8000-000000000086",
+          "00000000-0000-4000-8000-000000000243",
+          "00000000-0000-4000-8000-000000000266",
+          "00000000-0000-4000-8000-000000000139",
+          "00000000-0000-4000-8000-000000000025",
+          "00000000-0000-4000-8000-000000000028",
+          "00000000-0000-4000-8000-000000000019",
+          "00000000-0000-4000-8000-000000000311",
+          "00000000-0000-4000-8000-000000000328",
+          "00000000-0000-4000-8000-000000000180",
+          "00000000-0000-4000-8000-000000000225",
+          "00000000-0000-4000-8000-000000000238",
+          "00000000-0000-4000-8000-000000000239",
+          "00000000-0000-4000-8000-000000000063",
+          "00000000-0000-4000-8000-000000000067",
+          "00000000-0000-4000-8000-000000000089",
+          "00000000-0000-4000-8000-000000000097",
+          "00000000-0000-4000-8000-000000000102",
+          "00000000-0000-4000-8000-000000000291",
+          "00000000-0000-4000-8000-000000000131",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000014",
+          "00000000-0000-4000-8000-000000000034",
+          "00000000-0000-4000-8000-000000000056",
+          "00000000-0000-4000-8000-000000000272",
+          "00000000-0000-4000-8000-000000000274",
+          "00000000-0000-4000-8000-000000000299",
+          "00000000-0000-4000-8000-000000000152",
+          "00000000-0000-4000-8000-000000000176",
+          "00000000-0000-4000-8000-000000000177",
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000012",
+          "00000000-0000-4000-8000-000000000015",
+          "00000000-0000-4000-8000-000000000055",
+          "00000000-0000-4000-8000-000000000715",
+          "00000000-0000-4000-8000-000000000081",
+          "00000000-0000-4000-8000-000000000321",
+          "00000000-0000-4000-8000-000000000329",
+          "00000000-0000-4000-8000-000000000331",
+          "00000000-0000-4000-8000-000000000346",
+          "00000000-0000-4000-8000-000000000201",
+          "00000000-0000-4000-8000-000000000226",
+          "00000000-0000-4000-8000-000000000229",
+          "00000000-0000-4000-8000-000000000878",
+          "00000000-0000-4000-8000-000000000071",
+          "00000000-0000-4000-8000-000000000079",
+          "00000000-0000-4000-8000-000000000085",
+          "00000000-0000-4000-8000-000000000103",
+          "00000000-0000-4000-8000-000000000146",
+          "00000000-0000-4000-8000-000000000016",
+          "00000000-0000-4000-8000-000000000360",
+          "00000000-0000-4000-8000-000000000250",
+          "00000000-0000-4000-8000-000000000278",
+          "00000000-0000-4000-8000-000000000282",
+          "00000000-0000-4000-8000-000000000287",
+          "00000000-0000-4000-8000-000000000289",
+          "00000000-0000-4000-8000-000000000292",
+          "00000000-0000-4000-8000-000000000294",
+          "00000000-0000-4000-8000-000000000295",
+          "00000000-0000-4000-8000-000000000141",
+          "00000000-0000-4000-8000-000000000143",
+          "00000000-0000-4000-8000-000000000167",
+          "00000000-0000-4000-8000-000000000178",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000031",
+          "00000000-0000-4000-8000-000000000042",
+          "00000000-0000-4000-8000-000000000047",
+          "00000000-0000-4000-8000-000000000051",
+          "00000000-0000-4000-8000-000000000054",
+          "00000000-0000-4000-8000-000000000059",
+          "00000000-0000-4000-8000-000000000109",
+          "00000000-0000-4000-8000-000000000116",
+          "00000000-0000-4000-8000-000000000186",
+          "00000000-0000-4000-8000-000000000204",
+          "00000000-0000-4000-8000-000000000228",
+          "00000000-0000-4000-8000-000000000230",
+          "00000000-0000-4000-8000-000000000373",
+          "00000000-0000-4000-8000-000000000064",
+          "00000000-0000-4000-8000-000000000076",
+          "00000000-0000-4000-8000-000000000077",
+          "00000000-0000-4000-8000-000000000082",
+          "00000000-0000-4000-8000-000000000095",
+          "00000000-0000-4000-8000-000000000098",
+          "00000000-0000-4000-8000-000000000101",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000021",
+          "00000000-0000-4000-8000-000000000032",
+          "00000000-0000-4000-8000-000000000039"
+        ]
+      },
+      "samples": [
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.611,
+          "prepareMs": 68.195,
+          "ms": 13.845,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 38,
+            "scoreMs": 7
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 12.226,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 38,
+            "scoreMs": 7
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.481,
+          "prepareMs": 66.168,
+          "ms": 32.419,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 30.503,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.506,
+          "prepareMs": 63.697,
+          "ms": 28.382,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 26.762,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.629,
+          "prepareMs": 64.819,
+          "ms": 38.181,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 19,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 40,
+            "scoreMs": 26
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 36.949,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 18,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 40,
+            "scoreMs": 27
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.488,
+          "prepareMs": 65.104,
+          "ms": 14.397,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 38,
+            "scoreMs": 8
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 12.265,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 38,
+            "scoreMs": 7
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.503,
+          "prepareMs": 65.296,
+          "ms": 30.061,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 20
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 32.451,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 23
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.547,
+          "prepareMs": 66.354,
+          "ms": 29.359,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 22
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 29.315,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 3,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 23
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.541,
+          "prepareMs": 65.895,
+          "ms": 38.119,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 18,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 40,
+            "scoreMs": 27
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 36.468,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 19,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 40,
+            "scoreMs": 27
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.67,
+          "prepareMs": 65.891,
+          "ms": 14.895,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 38,
+            "scoreMs": 8
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 18.311,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 38,
+            "scoreMs": 11
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.57,
+          "prepareMs": 66.102,
+          "ms": 32.024,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 32.516,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 24
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.516,
+          "prepareMs": 65.348,
+          "ms": 27.745,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 25.904,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 20
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.729,
+          "prepareMs": 64.372,
+          "ms": 40.832,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 11,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 19,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 40,
+            "scoreMs": 28
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 37.684,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 19,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 40,
+            "scoreMs": 26
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.91,
+          "prepareMs": 64.766,
+          "ms": 30.265,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 4,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 24
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 29.927,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 5,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 24
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.504,
+          "prepareMs": 65.31,
+          "ms": 31.384,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 29.875,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 7,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.573,
+          "prepareMs": 67.439,
+          "ms": 27.966,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 28.239,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 23
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.534,
+          "prepareMs": 64.598,
+          "ms": 48.405,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 18,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 38
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 47.634,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 18,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 38
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.486,
+          "prepareMs": 65.971,
+          "ms": 31.698,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 5,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 25
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 29.403,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 5,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 24
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.484,
+          "prepareMs": 68.686,
+          "ms": 31.151,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 29.72,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.491,
+          "prepareMs": 67.415,
+          "ms": 29.644,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 7,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 30.777,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 22
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.57,
+          "prepareMs": 66.305,
+          "ms": 50.445,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 19,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 38
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 51.826,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 12,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 19,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 39
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.804,
+          "prepareMs": 65.338,
+          "ms": 30.112,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 4,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 24
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 31.766,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 4,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 27
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.48,
+          "prepareMs": 65.674,
+          "ms": 31.019,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 30.681,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 22
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.494,
+          "prepareMs": 64.935,
+          "ms": 26.862,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 20
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 26.328,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 40,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.59,
+          "prepareMs": 67.004,
+          "ms": 50.844,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 19,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 40
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 69.38,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 35,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 60
+          }
+        }
+      ],
+      "referenceOrderingPassed": true,
+      "peakRss": 617426944
+    },
+    "mixed": {
+      "count": 20000,
+      "words": 200,
+      "fillerVocabulary": 1706,
+      "mixedFields": true,
+      "prepareQueries": true,
+      "projectTitleMatches": 200,
+      "goldenTopIds": {
+        "archive": [
+          "00000000-0000-4000-8000-000000000158",
+          "00000000-0000-4000-8000-000000000086",
+          "00000000-0000-4000-8000-000000000089",
+          "00000000-0000-4000-8000-000000000092",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000029",
+          "00000000-0000-4000-8000-000000000057",
+          "00000000-0000-4000-8000-000000000345",
+          "00000000-0000-4000-8000-000000000153",
+          "00000000-0000-4000-8000-000000000073",
+          "00000000-0000-4000-8000-000000000039",
+          "00000000-0000-4000-8000-000000000130",
+          "00000000-0000-4000-8000-000000000077",
+          "00000000-0000-4000-8000-000000000109",
+          "00000000-0000-4000-8000-000000000196",
+          "00000000-0000-4000-8000-000000000226",
+          "00000000-0000-4000-8000-000000000024",
+          "00000000-0000-4000-8000-000000000040",
+          "00000000-0000-4000-8000-000000000052",
+          "00000000-0000-4000-8000-000000000063",
+          "00000000-0000-4000-8000-000000000128",
+          "00000000-0000-4000-8000-000000000142",
+          "00000000-0000-4000-8000-000000000148",
+          "00000000-0000-4000-8000-000000000149",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000090",
+          "00000000-0000-4000-8000-000000000093",
+          "00000000-0000-4000-8000-000000000102",
+          "00000000-0000-4000-8000-000000000183",
+          "00000000-0000-4000-8000-000000000197",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000012",
+          "00000000-0000-4000-8000-000000000051",
+          "00000000-0000-4000-8000-000000000056",
+          "00000000-0000-4000-8000-000000000058",
+          "00000000-0000-4000-8000-000000000059",
+          "00000000-0000-4000-8000-000000000087",
+          "00000000-0000-4000-8000-000000000124",
+          "00000000-0000-4000-8000-000000000365",
+          "00000000-0000-4000-8000-000000000127",
+          "00000000-0000-4000-8000-000000000002",
+          "00000000-0000-4000-8000-000000000021",
+          "00000000-0000-4000-8000-000000000299",
+          "00000000-0000-4000-8000-000000000061",
+          "00000000-0000-4000-8000-000000000079",
+          "00000000-0000-4000-8000-000000000099",
+          "00000000-0000-4000-8000-000000000114",
+          "00000000-0000-4000-8000-000000000163",
+          "00000000-0000-4000-8000-000000000191",
+          "00000000-0000-4000-8000-000000000205",
+          "00000000-0000-4000-8000-000000000230",
+          "00000000-0000-4000-8000-000000000231",
+          "00000000-0000-4000-8000-000000000015",
+          "00000000-0000-4000-8000-000000000017",
+          "00000000-0000-4000-8000-000000000023",
+          "00000000-0000-4000-8000-000000000025",
+          "00000000-0000-4000-8000-000000000049",
+          "00000000-0000-4000-8000-000000000214",
+          "00000000-0000-4000-8000-000000000098",
+          "00000000-0000-4000-8000-000000000335",
+          "00000000-0000-4000-8000-000000000156",
+          "00000000-0000-4000-8000-000000000032",
+          "00000000-0000-4000-8000-000000000060",
+          "00000000-0000-4000-8000-000000000076",
+          "00000000-0000-4000-8000-000000000081",
+          "00000000-0000-4000-8000-000000000106",
+          "00000000-0000-4000-8000-000000000113",
+          "00000000-0000-4000-8000-000000000208",
+          "00000000-0000-4000-8000-000000000218",
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000016",
+          "00000000-0000-4000-8000-000000000022",
+          "00000000-0000-4000-8000-000000000035",
+          "00000000-0000-4000-8000-000000000037",
+          "00000000-0000-4000-8000-000000000041",
+          "00000000-0000-4000-8000-000000000042",
+          "00000000-0000-4000-8000-000000000053",
+          "00000000-0000-4000-8000-000000000055",
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000244",
+          "00000000-0000-4000-8000-000000000250",
+          "00000000-0000-4000-8000-000000000278",
+          "00000000-0000-4000-8000-000000000280",
+          "00000000-0000-4000-8000-000000000078",
+          "00000000-0000-4000-8000-000000000082",
+          "00000000-0000-4000-8000-000000000085",
+          "00000000-0000-4000-8000-000000000308",
+          "00000000-0000-4000-8000-000000000313",
+          "00000000-0000-4000-8000-000000000157",
+          "00000000-0000-4000-8000-000000000169",
+          "00000000-0000-4000-8000-000000000178",
+          "00000000-0000-4000-8000-000000000654",
+          "00000000-0000-4000-8000-000000000658",
+          "00000000-0000-4000-8000-000000000222",
+          "00000000-0000-4000-8000-000000000234",
+          "00000000-0000-4000-8000-000000000036",
+          "00000000-0000-4000-8000-000000000038",
+          "00000000-0000-4000-8000-000000000046",
+          "00000000-0000-4000-8000-000000000245"
+        ],
+        "alice mueller": [
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000200",
+          "00000000-0000-4000-8000-000000000800",
+          "00000000-0000-4000-8000-000000001000",
+          "00000000-0000-4000-8000-000000001400",
+          "00000000-0000-4000-8000-000000001600",
+          "00000000-0000-4000-8000-000000002200",
+          "00000000-0000-4000-8000-000000002600",
+          "00000000-0000-4000-8000-000000002000",
+          "00000000-0000-4000-8000-000000002800",
+          "00000000-0000-4000-8000-000000003200",
+          "00000000-0000-4000-8000-000000004000",
+          "00000000-0000-4000-8000-000000003400",
+          "00000000-0000-4000-8000-000000004200",
+          "00000000-0000-4000-8000-000000004600",
+          "00000000-0000-4000-8000-000000004800",
+          "00000000-0000-4000-8000-000000005200",
+          "00000000-0000-4000-8000-000000005400",
+          "00000000-0000-4000-8000-000000005800",
+          "00000000-0000-4000-8000-000000006000",
+          "00000000-0000-4000-8000-000000006600",
+          "00000000-0000-4000-8000-000000006400",
+          "00000000-0000-4000-8000-000000007400",
+          "00000000-0000-4000-8000-000000007200",
+          "00000000-0000-4000-8000-000000008000",
+          "00000000-0000-4000-8000-000000007800",
+          "00000000-0000-4000-8000-000000008400",
+          "00000000-0000-4000-8000-000000008600",
+          "00000000-0000-4000-8000-000000009000",
+          "00000000-0000-4000-8000-000000009200",
+          "00000000-0000-4000-8000-000000009600",
+          "00000000-0000-4000-8000-000000009800",
+          "00000000-0000-4000-8000-000000010400",
+          "00000000-0000-4000-8000-000000010600",
+          "00000000-0000-4000-8000-000000011000",
+          "00000000-0000-4000-8000-000000011200",
+          "00000000-0000-4000-8000-000000011600",
+          "00000000-0000-4000-8000-000000011800",
+          "00000000-0000-4000-8000-000000012200",
+          "00000000-0000-4000-8000-000000012800",
+          "00000000-0000-4000-8000-000000013000",
+          "00000000-0000-4000-8000-000000012400",
+          "00000000-0000-4000-8000-000000014200",
+          "00000000-0000-4000-8000-000000013600",
+          "00000000-0000-4000-8000-000000013800",
+          "00000000-0000-4000-8000-000000014400",
+          "00000000-0000-4000-8000-000000014800",
+          "00000000-0000-4000-8000-000000016000",
+          "00000000-0000-4000-8000-000000015400",
+          "00000000-0000-4000-8000-000000015600",
+          "00000000-0000-4000-8000-000000015000",
+          "00000000-0000-4000-8000-000000016200",
+          "00000000-0000-4000-8000-000000017000",
+          "00000000-0000-4000-8000-000000016800",
+          "00000000-0000-4000-8000-000000017400",
+          "00000000-0000-4000-8000-000000017600",
+          "00000000-0000-4000-8000-000000018000",
+          "00000000-0000-4000-8000-000000018600",
+          "00000000-0000-4000-8000-000000019200",
+          "00000000-0000-4000-8000-000000018200",
+          "00000000-0000-4000-8000-000000018800",
+          "00000000-0000-4000-8000-000000019400",
+          "00000000-0000-4000-8000-000000000400",
+          "00000000-0000-4000-8000-000000002400",
+          "00000000-0000-4000-8000-000000003000",
+          "00000000-0000-4000-8000-000000003600",
+          "00000000-0000-4000-8000-000000005600",
+          "00000000-0000-4000-8000-000000006200",
+          "00000000-0000-4000-8000-000000006800",
+          "00000000-0000-4000-8000-000000008800",
+          "00000000-0000-4000-8000-000000009400",
+          "00000000-0000-4000-8000-000000010000",
+          "00000000-0000-4000-8000-000000012000",
+          "00000000-0000-4000-8000-000000012600",
+          "00000000-0000-4000-8000-000000013200",
+          "00000000-0000-4000-8000-000000015200",
+          "00000000-0000-4000-8000-000000016400",
+          "00000000-0000-4000-8000-000000015800",
+          "00000000-0000-4000-8000-000000018400",
+          "00000000-0000-4000-8000-000000019000",
+          "00000000-0000-4000-8000-000000019600",
+          "00000000-0000-4000-8000-000000000600",
+          "00000000-0000-4000-8000-000000001200",
+          "00000000-0000-4000-8000-000000001800",
+          "00000000-0000-4000-8000-000000003800",
+          "00000000-0000-4000-8000-000000004400",
+          "00000000-0000-4000-8000-000000005000",
+          "00000000-0000-4000-8000-000000007000",
+          "00000000-0000-4000-8000-000000007600",
+          "00000000-0000-4000-8000-000000008200",
+          "00000000-0000-4000-8000-000000010200",
+          "00000000-0000-4000-8000-000000010800",
+          "00000000-0000-4000-8000-000000011400",
+          "00000000-0000-4000-8000-000000013400",
+          "00000000-0000-4000-8000-000000014600",
+          "00000000-0000-4000-8000-000000014000",
+          "00000000-0000-4000-8000-000000016600",
+          "00000000-0000-4000-8000-000000017200",
+          "00000000-0000-4000-8000-000000017800",
+          "00000000-0000-4000-8000-000000019800"
+        ],
+        "ali muell": [
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000200",
+          "00000000-0000-4000-8000-000000000800",
+          "00000000-0000-4000-8000-000000001000",
+          "00000000-0000-4000-8000-000000001400",
+          "00000000-0000-4000-8000-000000001600",
+          "00000000-0000-4000-8000-000000002000",
+          "00000000-0000-4000-8000-000000002200",
+          "00000000-0000-4000-8000-000000002600",
+          "00000000-0000-4000-8000-000000002800",
+          "00000000-0000-4000-8000-000000003200",
+          "00000000-0000-4000-8000-000000003400",
+          "00000000-0000-4000-8000-000000004000",
+          "00000000-0000-4000-8000-000000004200",
+          "00000000-0000-4000-8000-000000004600",
+          "00000000-0000-4000-8000-000000004800",
+          "00000000-0000-4000-8000-000000005200",
+          "00000000-0000-4000-8000-000000005400",
+          "00000000-0000-4000-8000-000000005800",
+          "00000000-0000-4000-8000-000000006000",
+          "00000000-0000-4000-8000-000000006400",
+          "00000000-0000-4000-8000-000000006600",
+          "00000000-0000-4000-8000-000000007200",
+          "00000000-0000-4000-8000-000000007400",
+          "00000000-0000-4000-8000-000000007800",
+          "00000000-0000-4000-8000-000000008000",
+          "00000000-0000-4000-8000-000000008400",
+          "00000000-0000-4000-8000-000000008600",
+          "00000000-0000-4000-8000-000000009000",
+          "00000000-0000-4000-8000-000000009200",
+          "00000000-0000-4000-8000-000000009600",
+          "00000000-0000-4000-8000-000000009800",
+          "00000000-0000-4000-8000-000000010400",
+          "00000000-0000-4000-8000-000000010600",
+          "00000000-0000-4000-8000-000000011000",
+          "00000000-0000-4000-8000-000000011200",
+          "00000000-0000-4000-8000-000000011600",
+          "00000000-0000-4000-8000-000000011800",
+          "00000000-0000-4000-8000-000000012200",
+          "00000000-0000-4000-8000-000000012400",
+          "00000000-0000-4000-8000-000000012800",
+          "00000000-0000-4000-8000-000000013000",
+          "00000000-0000-4000-8000-000000013600",
+          "00000000-0000-4000-8000-000000013800",
+          "00000000-0000-4000-8000-000000014200",
+          "00000000-0000-4000-8000-000000014400",
+          "00000000-0000-4000-8000-000000014800",
+          "00000000-0000-4000-8000-000000015000",
+          "00000000-0000-4000-8000-000000015400",
+          "00000000-0000-4000-8000-000000015600",
+          "00000000-0000-4000-8000-000000016000",
+          "00000000-0000-4000-8000-000000016200",
+          "00000000-0000-4000-8000-000000016800",
+          "00000000-0000-4000-8000-000000017000",
+          "00000000-0000-4000-8000-000000017400",
+          "00000000-0000-4000-8000-000000017600",
+          "00000000-0000-4000-8000-000000018000",
+          "00000000-0000-4000-8000-000000018200",
+          "00000000-0000-4000-8000-000000018600",
+          "00000000-0000-4000-8000-000000018800",
+          "00000000-0000-4000-8000-000000019200",
+          "00000000-0000-4000-8000-000000019400",
+          "00000000-0000-4000-8000-000000000400",
+          "00000000-0000-4000-8000-000000002400",
+          "00000000-0000-4000-8000-000000003000",
+          "00000000-0000-4000-8000-000000003600",
+          "00000000-0000-4000-8000-000000005600",
+          "00000000-0000-4000-8000-000000006200",
+          "00000000-0000-4000-8000-000000006800",
+          "00000000-0000-4000-8000-000000008800",
+          "00000000-0000-4000-8000-000000009400",
+          "00000000-0000-4000-8000-000000010000",
+          "00000000-0000-4000-8000-000000012000",
+          "00000000-0000-4000-8000-000000012600",
+          "00000000-0000-4000-8000-000000013200",
+          "00000000-0000-4000-8000-000000015200",
+          "00000000-0000-4000-8000-000000015800",
+          "00000000-0000-4000-8000-000000016400",
+          "00000000-0000-4000-8000-000000018400",
+          "00000000-0000-4000-8000-000000019000",
+          "00000000-0000-4000-8000-000000019600",
+          "00000000-0000-4000-8000-000000000600",
+          "00000000-0000-4000-8000-000000001200",
+          "00000000-0000-4000-8000-000000001800",
+          "00000000-0000-4000-8000-000000003800",
+          "00000000-0000-4000-8000-000000004400",
+          "00000000-0000-4000-8000-000000005000",
+          "00000000-0000-4000-8000-000000007000",
+          "00000000-0000-4000-8000-000000007600",
+          "00000000-0000-4000-8000-000000008200",
+          "00000000-0000-4000-8000-000000010200",
+          "00000000-0000-4000-8000-000000010800",
+          "00000000-0000-4000-8000-000000011400",
+          "00000000-0000-4000-8000-000000013400",
+          "00000000-0000-4000-8000-000000014000",
+          "00000000-0000-4000-8000-000000014600",
+          "00000000-0000-4000-8000-000000016600",
+          "00000000-0000-4000-8000-000000017200",
+          "00000000-0000-4000-8000-000000017800",
+          "00000000-0000-4000-8000-000000019800"
+        ],
+        "archive grocery": [
+          "00000000-0000-4000-8000-000000000158",
+          "00000000-0000-4000-8000-000000000345",
+          "00000000-0000-4000-8000-000000000086",
+          "00000000-0000-4000-8000-000000000089",
+          "00000000-0000-4000-8000-000000000092",
+          "00000000-0000-4000-8000-000000000153",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000029",
+          "00000000-0000-4000-8000-000000000057",
+          "00000000-0000-4000-8000-000000000073",
+          "00000000-0000-4000-8000-000000000130",
+          "00000000-0000-4000-8000-000000000039",
+          "00000000-0000-4000-8000-000000000196",
+          "00000000-0000-4000-8000-000000000226",
+          "00000000-0000-4000-8000-000000000077",
+          "00000000-0000-4000-8000-000000000109",
+          "00000000-0000-4000-8000-000000000128",
+          "00000000-0000-4000-8000-000000000142",
+          "00000000-0000-4000-8000-000000000148",
+          "00000000-0000-4000-8000-000000000149",
+          "00000000-0000-4000-8000-000000000024",
+          "00000000-0000-4000-8000-000000000040",
+          "00000000-0000-4000-8000-000000000052",
+          "00000000-0000-4000-8000-000000000063",
+          "00000000-0000-4000-8000-000000000365",
+          "00000000-0000-4000-8000-000000000183",
+          "00000000-0000-4000-8000-000000000197",
+          "00000000-0000-4000-8000-000000000090",
+          "00000000-0000-4000-8000-000000000093",
+          "00000000-0000-4000-8000-000000000102",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000299",
+          "00000000-0000-4000-8000-000000000124",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000012",
+          "00000000-0000-4000-8000-000000000051",
+          "00000000-0000-4000-8000-000000000056",
+          "00000000-0000-4000-8000-000000000058",
+          "00000000-0000-4000-8000-000000000059",
+          "00000000-0000-4000-8000-000000000087",
+          "00000000-0000-4000-8000-000000000127",
+          "00000000-0000-4000-8000-000000000335",
+          "00000000-0000-4000-8000-000000000191",
+          "00000000-0000-4000-8000-000000000205",
+          "00000000-0000-4000-8000-000000000230",
+          "00000000-0000-4000-8000-000000000231",
+          "00000000-0000-4000-8000-000000000061",
+          "00000000-0000-4000-8000-000000000079",
+          "00000000-0000-4000-8000-000000000099",
+          "00000000-0000-4000-8000-000000000114",
+          "00000000-0000-4000-8000-000000000163",
+          "00000000-0000-4000-8000-000000000654",
+          "00000000-0000-4000-8000-000000000658",
+          "00000000-0000-4000-8000-000000000002",
+          "00000000-0000-4000-8000-000000000021",
+          "00000000-0000-4000-8000-000000000214",
+          "00000000-0000-4000-8000-000000000156",
+          "00000000-0000-4000-8000-000000000015",
+          "00000000-0000-4000-8000-000000000017",
+          "00000000-0000-4000-8000-000000000023",
+          "00000000-0000-4000-8000-000000000025",
+          "00000000-0000-4000-8000-000000000049",
+          "00000000-0000-4000-8000-000000000098",
+          "00000000-0000-4000-8000-000000000308",
+          "00000000-0000-4000-8000-000000000313",
+          "00000000-0000-4000-8000-000000000208",
+          "00000000-0000-4000-8000-000000000218",
+          "00000000-0000-4000-8000-000000000060",
+          "00000000-0000-4000-8000-000000000076",
+          "00000000-0000-4000-8000-000000000081",
+          "00000000-0000-4000-8000-000000000106",
+          "00000000-0000-4000-8000-000000000113",
+          "00000000-0000-4000-8000-000000000244",
+          "00000000-0000-4000-8000-000000000250",
+          "00000000-0000-4000-8000-000000000278",
+          "00000000-0000-4000-8000-000000000280",
+          "00000000-0000-4000-8000-000000000032",
+          "00000000-0000-4000-8000-000000000367",
+          "00000000-0000-4000-8000-000000000245",
+          "00000000-0000-4000-8000-000000000259",
+          "00000000-0000-4000-8000-000000000264",
+          "00000000-0000-4000-8000-000000000282",
+          "00000000-0000-4000-8000-000000000157",
+          "00000000-0000-4000-8000-000000000169",
+          "00000000-0000-4000-8000-000000000178",
+          "00000000-0000-4000-8000-000000000344",
+          "00000000-0000-4000-8000-000000000347",
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000016",
+          "00000000-0000-4000-8000-000000000022",
+          "00000000-0000-4000-8000-000000000035",
+          "00000000-0000-4000-8000-000000000037",
+          "00000000-0000-4000-8000-000000000041",
+          "00000000-0000-4000-8000-000000000042",
+          "00000000-0000-4000-8000-000000000053",
+          "00000000-0000-4000-8000-000000000055",
+          "00000000-0000-4000-8000-000000000222",
+          "00000000-0000-4000-8000-000000000234",
+          "00000000-0000-4000-8000-000000000078",
+          "00000000-0000-4000-8000-000000000082"
+        ],
+        "project": [
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000100",
+          "00000000-0000-4000-8000-000000000200",
+          "00000000-0000-4000-8000-000000000700",
+          "00000000-0000-4000-8000-000000000300",
+          "00000000-0000-4000-8000-000000000800",
+          "00000000-0000-4000-8000-000000001500",
+          "00000000-0000-4000-8000-000000001000",
+          "00000000-0000-4000-8000-000000001400",
+          "00000000-0000-4000-8000-000000001600",
+          "00000000-0000-4000-8000-000000000900",
+          "00000000-0000-4000-8000-000000001300",
+          "00000000-0000-4000-8000-000000002100",
+          "00000000-0000-4000-8000-000000002200",
+          "00000000-0000-4000-8000-000000002600",
+          "00000000-0000-4000-8000-000000002000",
+          "00000000-0000-4000-8000-000000002300",
+          "00000000-0000-4000-8000-000000002800",
+          "00000000-0000-4000-8000-000000002900",
+          "00000000-0000-4000-8000-000000002700",
+          "00000000-0000-4000-8000-000000003500",
+          "00000000-0000-4000-8000-000000003200",
+          "00000000-0000-4000-8000-000000004000",
+          "00000000-0000-4000-8000-000000003400",
+          "00000000-0000-4000-8000-000000004500",
+          "00000000-0000-4000-8000-000000003900",
+          "00000000-0000-4000-8000-000000004100",
+          "00000000-0000-4000-8000-000000003300",
+          "00000000-0000-4000-8000-000000004200",
+          "00000000-0000-4000-8000-000000004600",
+          "00000000-0000-4000-8000-000000004700",
+          "00000000-0000-4000-8000-000000004800",
+          "00000000-0000-4000-8000-000000005200",
+          "00000000-0000-4000-8000-000000005300",
+          "00000000-0000-4000-8000-000000005900",
+          "00000000-0000-4000-8000-000000005400",
+          "00000000-0000-4000-8000-000000007100",
+          "00000000-0000-4000-8000-000000005800",
+          "00000000-0000-4000-8000-000000006700",
+          "00000000-0000-4000-8000-000000005500",
+          "00000000-0000-4000-8000-000000007700",
+          "00000000-0000-4000-8000-000000006600",
+          "00000000-0000-4000-8000-000000006500",
+          "00000000-0000-4000-8000-000000006000",
+          "00000000-0000-4000-8000-000000006100",
+          "00000000-0000-4000-8000-000000006400",
+          "00000000-0000-4000-8000-000000007400",
+          "00000000-0000-4000-8000-000000007900",
+          "00000000-0000-4000-8000-000000007300",
+          "00000000-0000-4000-8000-000000008000",
+          "00000000-0000-4000-8000-000000007200",
+          "00000000-0000-4000-8000-000000007800",
+          "00000000-0000-4000-8000-000000008700",
+          "00000000-0000-4000-8000-000000008400",
+          "00000000-0000-4000-8000-000000008500",
+          "00000000-0000-4000-8000-000000009000",
+          "00000000-0000-4000-8000-000000008600",
+          "00000000-0000-4000-8000-000000009100",
+          "00000000-0000-4000-8000-000000009200",
+          "00000000-0000-4000-8000-000000009700",
+          "00000000-0000-4000-8000-000000009300",
+          "00000000-0000-4000-8000-000000010300",
+          "00000000-0000-4000-8000-000000009600",
+          "00000000-0000-4000-8000-000000010500",
+          "00000000-0000-4000-8000-000000009800",
+          "00000000-0000-4000-8000-000000010900",
+          "00000000-0000-4000-8000-000000010400",
+          "00000000-0000-4000-8000-000000009900",
+          "00000000-0000-4000-8000-000000010600",
+          "00000000-0000-4000-8000-000000011000",
+          "00000000-0000-4000-8000-000000011700",
+          "00000000-0000-4000-8000-000000011100",
+          "00000000-0000-4000-8000-000000011900",
+          "00000000-0000-4000-8000-000000011200",
+          "00000000-0000-4000-8000-000000011600",
+          "00000000-0000-4000-8000-000000011800",
+          "00000000-0000-4000-8000-000000012200",
+          "00000000-0000-4000-8000-000000012800",
+          "00000000-0000-4000-8000-000000012300",
+          "00000000-0000-4000-8000-000000013000",
+          "00000000-0000-4000-8000-000000013100",
+          "00000000-0000-4000-8000-000000012500",
+          "00000000-0000-4000-8000-000000012400",
+          "00000000-0000-4000-8000-000000014200",
+          "00000000-0000-4000-8000-000000013600",
+          "00000000-0000-4000-8000-000000013700",
+          "00000000-0000-4000-8000-000000013500",
+          "00000000-0000-4000-8000-000000014300",
+          "00000000-0000-4000-8000-000000014400",
+          "00000000-0000-4000-8000-000000013800",
+          "00000000-0000-4000-8000-000000012900",
+          "00000000-0000-4000-8000-000000014800",
+          "00000000-0000-4000-8000-000000014100",
+          "00000000-0000-4000-8000-000000015100",
+          "00000000-0000-4000-8000-000000016000",
+          "00000000-0000-4000-8000-000000015400",
+          "00000000-0000-4000-8000-000000014900",
+          "00000000-0000-4000-8000-000000015600",
+          "00000000-0000-4000-8000-000000015000",
+          "00000000-0000-4000-8000-000000015500"
+        ],
+        "project grocery": [
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000100",
+          "00000000-0000-4000-8000-000000000200",
+          "00000000-0000-4000-8000-000000000700",
+          "00000000-0000-4000-8000-000000000300",
+          "00000000-0000-4000-8000-000000000800",
+          "00000000-0000-4000-8000-000000001500",
+          "00000000-0000-4000-8000-000000001400",
+          "00000000-0000-4000-8000-000000001000",
+          "00000000-0000-4000-8000-000000001600",
+          "00000000-0000-4000-8000-000000000900",
+          "00000000-0000-4000-8000-000000001300",
+          "00000000-0000-4000-8000-000000002200",
+          "00000000-0000-4000-8000-000000002100",
+          "00000000-0000-4000-8000-000000002600",
+          "00000000-0000-4000-8000-000000002800",
+          "00000000-0000-4000-8000-000000002300",
+          "00000000-0000-4000-8000-000000002000",
+          "00000000-0000-4000-8000-000000002900",
+          "00000000-0000-4000-8000-000000002700",
+          "00000000-0000-4000-8000-000000003500",
+          "00000000-0000-4000-8000-000000004000",
+          "00000000-0000-4000-8000-000000003200",
+          "00000000-0000-4000-8000-000000004500",
+          "00000000-0000-4000-8000-000000003400",
+          "00000000-0000-4000-8000-000000003900",
+          "00000000-0000-4000-8000-000000004100",
+          "00000000-0000-4000-8000-000000004200",
+          "00000000-0000-4000-8000-000000004600",
+          "00000000-0000-4000-8000-000000003300",
+          "00000000-0000-4000-8000-000000004700",
+          "00000000-0000-4000-8000-000000004800",
+          "00000000-0000-4000-8000-000000005200",
+          "00000000-0000-4000-8000-000000005900",
+          "00000000-0000-4000-8000-000000005300",
+          "00000000-0000-4000-8000-000000007100",
+          "00000000-0000-4000-8000-000000005400",
+          "00000000-0000-4000-8000-000000006700",
+          "00000000-0000-4000-8000-000000005800",
+          "00000000-0000-4000-8000-000000007700",
+          "00000000-0000-4000-8000-000000005500",
+          "00000000-0000-4000-8000-000000006600",
+          "00000000-0000-4000-8000-000000006500",
+          "00000000-0000-4000-8000-000000006100",
+          "00000000-0000-4000-8000-000000006000",
+          "00000000-0000-4000-8000-000000006400",
+          "00000000-0000-4000-8000-000000007400",
+          "00000000-0000-4000-8000-000000007900",
+          "00000000-0000-4000-8000-000000008000",
+          "00000000-0000-4000-8000-000000007300",
+          "00000000-0000-4000-8000-000000007200",
+          "00000000-0000-4000-8000-000000007800",
+          "00000000-0000-4000-8000-000000008700",
+          "00000000-0000-4000-8000-000000008400",
+          "00000000-0000-4000-8000-000000008500",
+          "00000000-0000-4000-8000-000000009000",
+          "00000000-0000-4000-8000-000000009100",
+          "00000000-0000-4000-8000-000000008600",
+          "00000000-0000-4000-8000-000000009700",
+          "00000000-0000-4000-8000-000000009200",
+          "00000000-0000-4000-8000-000000010300",
+          "00000000-0000-4000-8000-000000009300",
+          "00000000-0000-4000-8000-000000010500",
+          "00000000-0000-4000-8000-000000009600",
+          "00000000-0000-4000-8000-000000010900",
+          "00000000-0000-4000-8000-000000009800",
+          "00000000-0000-4000-8000-000000010400",
+          "00000000-0000-4000-8000-000000010600",
+          "00000000-0000-4000-8000-000000009900",
+          "00000000-0000-4000-8000-000000011000",
+          "00000000-0000-4000-8000-000000011700",
+          "00000000-0000-4000-8000-000000011100",
+          "00000000-0000-4000-8000-000000011900",
+          "00000000-0000-4000-8000-000000011200",
+          "00000000-0000-4000-8000-000000011600",
+          "00000000-0000-4000-8000-000000012200",
+          "00000000-0000-4000-8000-000000011800",
+          "00000000-0000-4000-8000-000000012800",
+          "00000000-0000-4000-8000-000000013000",
+          "00000000-0000-4000-8000-000000013100",
+          "00000000-0000-4000-8000-000000012300",
+          "00000000-0000-4000-8000-000000014200",
+          "00000000-0000-4000-8000-000000012500",
+          "00000000-0000-4000-8000-000000012400",
+          "00000000-0000-4000-8000-000000013600",
+          "00000000-0000-4000-8000-000000013700",
+          "00000000-0000-4000-8000-000000013500",
+          "00000000-0000-4000-8000-000000014300",
+          "00000000-0000-4000-8000-000000014400",
+          "00000000-0000-4000-8000-000000014800",
+          "00000000-0000-4000-8000-000000013800",
+          "00000000-0000-4000-8000-000000015100",
+          "00000000-0000-4000-8000-000000012900",
+          "00000000-0000-4000-8000-000000014100",
+          "00000000-0000-4000-8000-000000016000",
+          "00000000-0000-4000-8000-000000015400",
+          "00000000-0000-4000-8000-000000014900",
+          "00000000-0000-4000-8000-000000015600",
+          "00000000-0000-4000-8000-000000015000",
+          "00000000-0000-4000-8000-000000015500"
+        ]
+      },
+      "samples": [
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.646,
+          "prepareMs": 64.195,
+          "ms": 15.048,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 41,
+            "scoreMs": 8
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 12.885,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 41,
+            "scoreMs": 8
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.506,
+          "prepareMs": 67.003,
+          "ms": 31.181,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 20
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 30.978,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.483,
+          "prepareMs": 63.688,
+          "ms": 27.852,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 20
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 25.955,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.495,
+          "prepareMs": 69.143,
+          "ms": 44.788,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 11,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 20,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 43,
+            "scoreMs": 32
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 41.337,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 20,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 43,
+            "scoreMs": 30
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.62,
+          "prepareMs": 69.244,
+          "ms": 33.447,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 7,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 5,
+            "scorePostingReads": 18,
+            "positionReads": 0,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 25
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 29.835,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 4,
+            "scorePostingReads": 18,
+            "positionReads": 0,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 23
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project grocery",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.566,
+          "prepareMs": 66.1,
+          "ms": 47.219,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 11,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 16,
+            "scorePostingReads": 36,
+            "positionReads": 36,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 35
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project grocery",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 45.35,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 16,
+            "scorePostingReads": 36,
+            "positionReads": 36,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 35
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.6,
+          "prepareMs": 67.519,
+          "ms": 16.026,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 7,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 41,
+            "scoreMs": 8
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 13.054,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 41,
+            "scoreMs": 8
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.49,
+          "prepareMs": 64.391,
+          "ms": 31.128,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 28.368,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 7,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 20
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.469,
+          "prepareMs": 63.443,
+          "ms": 26.785,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 20
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 24.962,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 20
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.523,
+          "prepareMs": 63.816,
+          "ms": 39.3,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 20,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 43,
+            "scoreMs": 28
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 35.802,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 18,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 43,
+            "scoreMs": 26
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.739,
+          "prepareMs": 64.191,
+          "ms": 30.02,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 4,
+            "scorePostingReads": 18,
+            "positionReads": 0,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 23
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 27.442,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 4,
+            "scorePostingReads": 18,
+            "positionReads": 0,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 22
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project grocery",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.494,
+          "prepareMs": 69.261,
+          "ms": 56.239,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 12,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 18,
+            "scorePostingReads": 36,
+            "positionReads": 36,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 43
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project grocery",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 52.296,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 13,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 18,
+            "scorePostingReads": 36,
+            "positionReads": 36,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 38
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.631,
+          "prepareMs": 66.851,
+          "ms": 14.704,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 41,
+            "scoreMs": 8
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 13.071,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 0,
+            "scorePostingReads": 1,
+            "positionReads": 0,
+            "scoredDocuments": 1024,
+            "numericPostingPages": 1,
+            "scoredBlocks": 8,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 41,
+            "scoreMs": 8
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.491,
+          "prepareMs": 73.452,
+          "ms": 32.44,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "alice mueller",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 30.563,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.519,
+          "prepareMs": 66.105,
+          "ms": 29.659,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 23
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "ali muell",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 29.585,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 100,
+            "numericMs": 3,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 24
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.607,
+          "prepareMs": 68.156,
+          "ms": 37.023,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 18,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 43,
+            "scoreMs": 26
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "archive grocery",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 35.821,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 18,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 43,
+            "scoreMs": 26
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.492,
+          "prepareMs": 65.483,
+          "ms": 28.723,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 4,
+            "scorePostingReads": 18,
+            "positionReads": 0,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 22
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 27.923,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 4,
+            "scorePostingReads": 18,
+            "positionReads": 0,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 22
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project grocery",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.536,
+          "prepareMs": 66.351,
+          "ms": 45.011,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 16,
+            "scorePostingReads": 36,
+            "positionReads": 36,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 34
+          }
+        },
+        {
+          "order": "chronological",
+          "query": "project grocery",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 47.893,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 16,
+            "scorePostingReads": 36,
+            "positionReads": 36,
+            "scoredDocuments": 18432,
+            "numericPostingPages": 18,
+            "scoredBlocks": 144,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 38
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.696,
+          "prepareMs": 71.878,
+          "ms": 32.23,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 5,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 25
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 33.953,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 5,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 28
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.849,
+          "prepareMs": 78.459,
+          "ms": 35.452,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 11,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 23
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 37.898,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 28
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.601,
+          "prepareMs": 77.043,
+          "ms": 38.367,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 29
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 31.194,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 24
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.693,
+          "prepareMs": 73.827,
+          "ms": 50.799,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 20,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 39
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 53.225,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 21,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 43
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.529,
+          "prepareMs": 68.399,
+          "ms": 32.242,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 4,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 25
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 29.573,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 4,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 24
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project grocery",
+          "sample": 0,
+          "stage": "prepared",
+          "openMs": 0.618,
+          "prepareMs": 70.004,
+          "ms": 49.923,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 11,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 18,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 38
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project grocery",
+          "sample": 0,
+          "stage": "warm",
+          "ms": 49.719,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 18,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 39
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.509,
+          "prepareMs": 68.485,
+          "ms": 31.863,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 5,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 25
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 31.364,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 5,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 26
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.707,
+          "prepareMs": 74.893,
+          "ms": 33.062,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 23
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 31.368,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 22
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.504,
+          "prepareMs": 67.317,
+          "ms": 27.822,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 28.393,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 23
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.526,
+          "prepareMs": 68.89,
+          "ms": 49.953,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 19,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 39
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 50.695,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 20,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 40
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.55,
+          "prepareMs": 67.815,
+          "ms": 34.175,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 7,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 5,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 26
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 28.358,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 4,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 23
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project grocery",
+          "sample": 1,
+          "stage": "prepared",
+          "openMs": 0.482,
+          "prepareMs": 64.824,
+          "ms": 52.296,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 10,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 20,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 41
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project grocery",
+          "sample": 1,
+          "stage": "warm",
+          "ms": 54.04,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 20,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 44
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.621,
+          "prepareMs": 73.502,
+          "ms": 37.888,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 7,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 30
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 40.213,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 7,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 8,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 32
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.683,
+          "prepareMs": 74.884,
+          "ms": 38.928,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 11,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 26
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "alice mueller",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 31.667,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 21
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.53,
+          "prepareMs": 67.162,
+          "ms": 29.105,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 22
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "ali muell",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 27.894,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 40,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 75,
+            "numericMs": 2,
+            "scorePostingReads": 40,
+            "positionReads": 20,
+            "scoredDocuments": 100,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 22
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.561,
+          "prepareMs": 69.5,
+          "ms": 59.19,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 11,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 23,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 47
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "archive grocery",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 49.878,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 19,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 39
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.529,
+          "prepareMs": 71.881,
+          "ms": 32.013,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 6,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 5,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 24
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 32.167,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7,
+            "postingReads": 20,
+            "candidateMs": 5,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 6,
+            "scorePostingReads": 20,
+            "positionReads": 0,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 26
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project grocery",
+          "sample": 2,
+          "stage": "prepared",
+          "openMs": 0.683,
+          "prepareMs": 70.396,
+          "ms": 52.367,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 11,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 20,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 40
+          }
+        },
+        {
+          "order": "shuffled",
+          "query": "project grocery",
+          "sample": 2,
+          "stage": "warm",
+          "ms": 49.472,
+          "returned": 100,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 40,
+            "candidateMs": 9,
+            "boundMs": 0,
+            "candidateBlocks": 157,
+            "numericMs": 19,
+            "scorePostingReads": 40,
+            "positionReads": 40,
+            "scoredDocuments": 20000,
+            "numericPostingPages": 20,
+            "scoredBlocks": 160,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 98,
+            "scoreMs": 39
+          }
+        }
+      ],
+      "referenceOrderingPassed": true,
+      "peakRss": 673730560
+    }
+  }
+}

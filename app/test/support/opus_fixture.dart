@@ -1,0 +1,13 @@
+import 'dart:convert';
+
+/// 0.1 s of a 440 Hz tone, muxed by ffmpeg/libopus (pre-skip 312).
+final ffmpegOgg = base64Decode(
+  'T2dnUwACAAAAAAAAAAAAAAAAAAAAAEkq9qABE09wdXNIZWFkAQE4AYA+AAAAAABPZ2dTAA'
+  'AAAAAAAAAAAAAAAAABAAAASZW+VAEuT3B1c1RhZ3MGAAAAZmZtcGVnAQAAABQAAABlbmNv'
+  'ZGVyPUxhdmMgbGlib3B1c09nZ1MABPgTAAAAAAAAAAAAAAIAAADr5NvGBj8qKSwzF0iCLg'
+  'NsfkDmAAAQEzzEcqiX1WluBsp7Y87TDnbbG/mEn9gRDSI3elGXPM5PpTJHSyEg8YpGhO9D'
+  'owhkVEZ0wEih95esmIUDXAWnE71revx0l6A5m2Qp/Vwp2bj8ogC0ktv8reb+sGaxeEibKx'
+  '91nPxLVGBmNVk2fV3NXPRdjgG04SUqhErv+Hn8H2uRBVjaoprYSJsq0bOjvJEzhq2mNt2N'
+  'qhoYMaDRMTPVSuI5m6BkbbZvDKyROmgVZwm1syBImysfdZz8STOyXelrKumXBm4r194yB+'
+  'h+XUnO6O3CGwydhXfMHD6KB+TtUiCusl5ikppIBdM18BHm3h2K/cA8ohl4h6l31mCiQA==',
+);

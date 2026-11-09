@@ -1,0 +1,16 @@
+**/bin/
+**/obj/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.db-journal
+**/*.sqlite
+**/*.sqlite3
+**/.env
+**/.env.*
+**/appsettings.Local.json
+**/appsettings.*.Local.json
+**/*.pem
+**/*.key
+**/*.pfx
+**/secrets.json

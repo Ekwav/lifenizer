@@ -1,0 +1,158 @@
+{
+  "schema": 1,
+  "date": "2026-10-29",
+  "experiment": "Dense phrase position slots and sorted intersection",
+  "status": "100k CPU experiment; not a 2M latency gate",
+  "implementation": {
+    "baseline": "Native AEAD, bounded gzip allocation hint, synchronous bounded ranking-page cache hits; phrase starts use per-component document maps and sets.",
+    "candidate": "Per-component 1024-document slot arrays retain sorted visitor-owned position lists; expansion lists merge with sorted union; phrase offsets intersect with monotonic cursors.",
+    "properties": [
+      "Visitor-owned position lists are retained without mutation.",
+      "Position decoding and validation, canonical fallback, scoring and ordering remain unchanged.",
+      "No new permanent cache, storage format, schema or public API."
+    ]
+  },
+  "provenance": {
+    "privateDirectory": "app/build/benchmarks/phrase-slots-audit-20261029",
+    "fixture": {
+      "path": "app/build/benchmarks/ranking-record-cache-audit-20261029/search.sqlite",
+      "documentCount": 100000,
+      "origin": "Existing exclusive private copy of the completed managed-codec audit fixture; no live producer database access."
+    },
+    "baselineSourceSha256": {
+      "app/lib/services/disk_search_index_io.dart": "dbb0fb8753045967729b2409d10e3f5860b8e95066167d27699b7520d8de74c8",
+      "app/lib/services/disk_search_ranking.dart": "9b27d0169c841b495e9207d8df2d6eeceff9e375420c11532055402f3a8c5a86",
+      "app/lib/services/disk_search_filters.dart": "a9d0add7756af94696aa9874f597278dd0df9cabb1f88903667beb9043c515e8",
+      "app/lib/services/native_sidecar_aead.dart": "00529ef89394701930723faad32c0a896f88ce41a41410545cab38c5687b2021"
+    },
+    "candidateRankingSha256": "d9ecd6ee2117f8019e61146782edcbf838bd2921f143bc39617088fc9a3a788e",
+    "sodium": "4.0.4",
+    "compilation": "AOT native-asset bundles; depfiles confirm private implementation imports and sodium 4.0.4.",
+    "privateEvidenceSha256": {
+      "result.json": "40d00d1243b3350e916ef23221fc99e95c69645a2abd99b834a96fa1d20bf0a2",
+      "expanded-result.json": "99844de6ae6e7492033a085aea73a59cf35f9b1353687f19cb559d0036c7f8c3",
+      "dense-unapplied.patch": "c6698ffee819e2dc911b972f4d3835adb64f76e13678ef38db515a507f58b684",
+      "tests.log": "8697c66784127987bf93229388349627b55711d039d90245fa1296229abe8f23"
+    }
+  },
+  "method": {
+    "limits": {
+      "memoryMax": "2GiB",
+      "memorySwapMax": 0
+    },
+    "variantsRunInRotatedOrder": true,
+    "rounds": 5,
+    "warmRounds": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "initialCriteria": 22,
+    "expandedCriteria": 24,
+    "queries": "Broad terms and phrases, names, fuzzy matches, prefix/suffix edges and repeated words, each unfiltered and restricted to group:email.",
+    "instrumentation": "/proc/self/stat CPU ticks and faults, /proc/self/io deltas around each query; 100 clock ticks per second.",
+    "memoryComparison": "Four separate single-worker runs in baseline,dense,dense,baseline order."
+  },
+  "correctness": {
+    "fullPrivateExperimentOrderedChecks": 690,
+    "fullPrivateExperimentRuns": [
+      330,
+      360
+    ],
+    "denseVariantOrderedChecks": 230,
+    "baselineOrderedChecks": 230,
+    "countClarification": "The 690 full-experiment checks also include 230 checks from an excluded private control; dense claims use its 230 exact baseline-ordered results.",
+    "nativeAeadActiveForAll690Queries": true,
+    "privateTestsPassed": 65,
+    "privateTests": "Both candidate ranking suites plus editorial relevance and posting validation; added canonical top 100 checks on long repeated transcripts, repeated components, expansion unions, fuzzy and unsupported numeric/short boundaries.",
+    "integrationValidationReportedByPrimaryAgent": {
+      "focusedTestsPassed": 69,
+      "fullTestsPassed": 855,
+      "fullTestsSkipped": 2,
+      "analyze": "clean"
+    }
+  },
+  "expandedWarmResults": {
+    "queriesPerVariant": 96,
+    "baseline": {
+      "wallMs": 6443.693,
+      "cpuTicks": 659,
+      "numericMs": 3989,
+      "positionReads": 44652,
+      "readBytes": 0,
+      "majorFaults": 0
+    },
+    "dense": {
+      "wallMs": 5664.744,
+      "cpuTicks": 565,
+      "numericMs": 3199,
+      "positionReads": 44652,
+      "readBytes": 0,
+      "majorFaults": 0
+    },
+    "wallReductionPercent": 12.09,
+    "cpuReductionPercent": 14.26,
+    "numericReductionPercent": 19.8
+  },
+  "initialWarmResults": {
+    "queriesPerVariant": 88,
+    "baselineWallMs": 5894.767,
+    "denseWallMs": 5113.463,
+    "baselineP95Ms": 130.85,
+    "denseP95Ms": 104.526,
+    "p95Method": "Sorted floor((n-1)*0.95)"
+  },
+  "isolatedMemory": [
+    {
+      "label": "baseline-a",
+      "peakRssBytes": 88358912,
+      "systemdPeak": "77M (swap: 0B)",
+      "warmCpuTicks": 588,
+      "warmWallMs": 5763.126,
+      "nativeAeadAll": true,
+      "warmMajorFaults": 0,
+      "warmReadBytes": 0
+    },
+    {
+      "label": "dense-a",
+      "peakRssBytes": 87273472,
+      "systemdPeak": "75.3M (swap: 0B)",
+      "warmCpuTicks": 509,
+      "warmWallMs": 5044.642,
+      "nativeAeadAll": true,
+      "warmMajorFaults": 0,
+      "warmReadBytes": 0
+    },
+    {
+      "label": "dense-b",
+      "peakRssBytes": 87203840,
+      "systemdPeak": "75.5M (swap: 0B)",
+      "warmCpuTicks": 504,
+      "warmWallMs": 4983.469,
+      "nativeAeadAll": true,
+      "warmMajorFaults": 0,
+      "warmReadBytes": 0
+    },
+    {
+      "label": "baseline-b",
+      "peakRssBytes": 88842240,
+      "systemdPeak": "77.8M (swap: 0B)",
+      "warmCpuTicks": 587,
+      "warmWallMs": 5753.509,
+      "nativeAeadAll": true,
+      "warmMajorFaults": 0,
+      "warmReadBytes": 0
+    }
+  ],
+  "review": {
+    "productionDifferenceFromBenchmarkedCandidate": "Only braces added around the merged-position duplicate guard; no behavioral difference.",
+    "correctness": "Sorted union preserves expansion OR semantics. Component offsets are applied during monotonic intersection; shared repeated-component lists are never modified. Unsupported phrase boundaries retain canonical fallback and posting validation."
+  },
+  "limits": [
+    "Generated 100k fixture on a shared host; does not establish the 500 ms p95 goal at 2M documents.",
+    "CPU tick measurements are quantized to 10 ms; aggregate differences are more reliable than individual queries.",
+    "Warm physical read bytes and major faults were zero; this measures cached CPU behavior.",
+    "Peak-memory reduction is modest; process RSS and systemd accounting differ."
+  ]
+}

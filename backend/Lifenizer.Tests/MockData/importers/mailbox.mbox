@@ -1,0 +1,17 @@
+From sender@example.test Tue May 28 11:15:00 2026
+From: Sender Name <sender@example.test>
+To: Receiver Name <receiver@example.test>
+Subject: Importer verification mail
+Date: Tue, 28 May 2026 11:15:00 +0000
+Message-Id: <msg-1@example.test>
+
+This is a realistic mbox fixture body.
+
+From sender2@example.test Tue May 28 11:20:00 2026
+From: Sender Two <sender2@example.test>
+To: Receiver Name <receiver@example.test>
+Subject: Follow-up
+Date: Tue, 28 May 2026 11:20:00 +0000
+Message-Id: <msg-2@example.test>
+
+Second email in same mbox file.

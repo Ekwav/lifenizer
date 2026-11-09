@@ -1,0 +1,3366 @@
+{
+  "format": 1,
+  "date": "2026-10-29",
+  "runtime": "Dart JIT with VM-service heap telemetry; production failure was AOT",
+  "source": "unchanged v6 native search implementation",
+  "fixture": "actual benchmark generator,200 words,real ConversationCatalog,shuffled dates",
+  "memoryMaxBytes": 2000000000,
+  "memorySwapMaxBytes": 0,
+  "diagnosticOnly": "Forced GC, malloc_trim, and MALLOC_ARENA_MAX=2 are diagnostic operations, not implemented production policy.",
+  "conclusion": "After GC no zlib filter objects remain; malloc_trim returns roughly1GB of retained native allocator pages. Reducing arenas to2 did not prevent the high RSS.",
+  "cases": {
+    "heap": {
+      "events": [
+        {
+          "event": "memory",
+          "count": 0,
+          "gc": false,
+          "isolate": "main",
+          "rss": 290435072,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 264928,
+            "heapCapacity": 26042368,
+            "heapUsage": 23606176
+          }
+        },
+        {
+          "event": "memory",
+          "count": 0,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 290455552,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 265072,
+            "heapCapacity": 26042368,
+            "heapUsage": 23655008
+          }
+        },
+        {
+          "event": "memory",
+          "count": 4096,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1160638464,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1424208,
+            "heapCapacity": 108691456,
+            "heapUsage": 87720432
+          }
+        },
+        {
+          "event": "memory",
+          "count": 4096,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1160650752,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1424352,
+            "heapCapacity": 108691456,
+            "heapUsage": 87732784
+          }
+        },
+        {
+          "event": "memory",
+          "count": 8192,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1363017728,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 2025696,
+            "heapCapacity": 123035648,
+            "heapUsage": 105199696
+          }
+        },
+        {
+          "event": "memory",
+          "count": 8192,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1363030016,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 2025840,
+            "heapCapacity": 123035648,
+            "heapUsage": 105211872
+          }
+        },
+        {
+          "event": "memory",
+          "count": 12288,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1463803904,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 7728048,
+            "heapCapacity": 239222784,
+            "heapUsage": 234991488
+          }
+        },
+        {
+          "event": "memory",
+          "count": 12288,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1463803904,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 7728192,
+            "heapCapacity": 239222784,
+            "heapUsage": 235003888
+          }
+        },
+        {
+          "event": "memory",
+          "count": 16384,
+          "gc": true,
+          "isolate": "main",
+          "rss": 1460199424,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 5164768,
+            "heapCapacity": 242786304,
+            "heapUsage": 238447280
+          }
+        },
+        {
+          "event": "gc",
+          "count": 16384,
+          "isolate": "main",
+          "rss": 1346387968,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 242786304,
+            "heapUsage": 36562224
+          },
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 10560800,
+              "instances": 110517
+            },
+            {
+              "name": "_List",
+              "bytes": 7827232,
+              "instances": 74098
+            },
+            {
+              "name": "Conversation",
+              "bytes": 2785280,
+              "instances": 17408
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2366000,
+              "instances": 4040
+            },
+            {
+              "name": "Function",
+              "bytes": 1911168,
+              "instances": 14931
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 1461872,
+              "instances": 11060
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 1202416,
+              "instances": 55
+            },
+            {
+              "name": "ICData",
+              "bytes": 957120,
+              "instances": 14955
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812000,
+              "instances": 10150
+            },
+            {
+              "name": "Code",
+              "bytes": 711040,
+              "instances": 4040
+            },
+            {
+              "name": "_TwoByteString",
+              "bytes": 621200,
+              "instances": 4
+            }
+          ]
+        },
+        {
+          "event": "memory",
+          "count": 16384,
+          "gc": true,
+          "isolate": "_serve",
+          "rss": 1346392064,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 85069824,
+            "heapUsage": 55259488
+          }
+        },
+        {
+          "event": "gc",
+          "count": 16384,
+          "isolate": "_serve",
+          "rss": 1331171328,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 58855424,
+            "heapUsage": 46586624
+          },
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 15015520,
+              "instances": 237943
+            },
+            {
+              "name": "_List",
+              "bytes": 10246912,
+              "instances": 89863
+            },
+            {
+              "name": "Conversation",
+              "bytes": 2785280,
+              "instances": 17408
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 2594928,
+              "instances": 14565
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2390672,
+              "instances": 4092
+            },
+            {
+              "name": "Function",
+              "bytes": 1911168,
+              "instances": 14931
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 1465664,
+              "instances": 11119
+            },
+            {
+              "name": "ICData",
+              "bytes": 964224,
+              "instances": 15066
+            },
+            {
+              "name": "_Map",
+              "bytes": 930432,
+              "instances": 14538
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812000,
+              "instances": 10150
+            },
+            {
+              "name": "Code",
+              "bytes": 720192,
+              "instances": 4092
+            }
+          ]
+        },
+        {
+          "event": "memory",
+          "count": 20480,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1469505536,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 4704032,
+            "heapCapacity": 244199424,
+            "heapUsage": 240086896
+          }
+        },
+        {
+          "event": "memory",
+          "count": 20480,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1469505536,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 4704176,
+            "heapCapacity": 244199424,
+            "heapUsage": 240099296
+          }
+        },
+        {
+          "event": "memory",
+          "count": 24576,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1448431616,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 6084688,
+            "heapCapacity": 152834048,
+            "heapUsage": 149264016
+          }
+        },
+        {
+          "event": "memory",
+          "count": 24576,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1448431616,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 6084832,
+            "heapCapacity": 152834048,
+            "heapUsage": 149276416
+          }
+        },
+        {
+          "event": "memory",
+          "count": 28672,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1367191552,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 974080,
+            "heapCapacity": 120950784,
+            "heapUsage": 95652704
+          }
+        },
+        {
+          "event": "memory",
+          "count": 28672,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1367191552,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 974224,
+            "heapCapacity": 120950784,
+            "heapUsage": 95665088
+          }
+        },
+        {
+          "event": "memory",
+          "count": 32768,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1378553856,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1424992,
+            "heapCapacity": 133025792,
+            "heapUsage": 110506480
+          }
+        },
+        {
+          "event": "memory",
+          "count": 32768,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1378553856,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1425136,
+            "heapCapacity": 133025792,
+            "heapUsage": 110519040
+          }
+        },
+        {
+          "event": "memory",
+          "count": 32768,
+          "gc": true,
+          "isolate": "main",
+          "rss": 1378553856,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1427136,
+            "heapCapacity": 133025792,
+            "heapUsage": 110555728
+          }
+        },
+        {
+          "event": "gc",
+          "count": 32768,
+          "isolate": "main",
+          "rss": 1351610368,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 133550080,
+            "heapUsage": 49583968
+          },
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 16273968,
+              "instances": 174331
+            },
+            {
+              "name": "_List",
+              "bytes": 10729072,
+              "instances": 90968
+            },
+            {
+              "name": "Conversation",
+              "bytes": 5406720,
+              "instances": 33792
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2391408,
+              "instances": 4112
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 2129568,
+              "instances": 11200
+            },
+            {
+              "name": "Function",
+              "bytes": 1911168,
+              "instances": 14931
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 1726960,
+              "instances": 55
+            },
+            {
+              "name": "DateTime",
+              "bytes": 1081376,
+              "instances": 33793
+            },
+            {
+              "name": "ICData",
+              "bytes": 964224,
+              "instances": 15066
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812000,
+              "instances": 10150
+            },
+            {
+              "name": "Code",
+              "bytes": 723712,
+              "instances": 4112
+            }
+          ]
+        },
+        {
+          "event": "memory",
+          "count": 32768,
+          "gc": true,
+          "isolate": "_serve",
+          "rss": 1351610368,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 83886080,
+            "heapUsage": 68403888
+          }
+        },
+        {
+          "event": "gc",
+          "count": 32768,
+          "isolate": "_serve",
+          "rss": 1347756032,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 70778880,
+            "heapUsage": 59531552
+          },
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 20728656,
+              "instances": 301756
+            },
+            {
+              "name": "_List",
+              "bytes": 13124112,
+              "instances": 106302
+            },
+            {
+              "name": "Conversation",
+              "bytes": 5406720,
+              "instances": 33792
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 3119472,
+              "instances": 14565
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2394800,
+              "instances": 4119
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 2133216,
+              "instances": 11250
+            },
+            {
+              "name": "Function",
+              "bytes": 1911168,
+              "instances": 14931
+            },
+            {
+              "name": "DateTime",
+              "bytes": 1081376,
+              "instances": 33793
+            },
+            {
+              "name": "ICData",
+              "bytes": 964224,
+              "instances": 15066
+            },
+            {
+              "name": "_Map",
+              "bytes": 930432,
+              "instances": 14538
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812000,
+              "instances": 10150
+            }
+          ]
+        }
+      ],
+      "logPath": "/tmp/worker-heap-diagnostic.log"
+    },
+    "native_trim": {
+      "events": [
+        {
+          "event": "memory",
+          "count": 0,
+          "gc": false,
+          "isolate": "main",
+          "rss": 286253056,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 264928,
+            "heapCapacity": 26042368,
+            "heapUsage": 23875104
+          }
+        },
+        {
+          "event": "memory",
+          "count": 0,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 286269440,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 265072,
+            "heapCapacity": 26042368,
+            "heapUsage": 23923936
+          }
+        },
+        {
+          "event": "memory",
+          "count": 4096,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1306423296,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1424208,
+            "heapCapacity": 108691456,
+            "heapUsage": 87726832
+          }
+        },
+        {
+          "event": "memory",
+          "count": 4096,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1306439680,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1424352,
+            "heapCapacity": 108691456,
+            "heapUsage": 87739184
+          }
+        },
+        {
+          "event": "memory",
+          "count": 8192,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1396973568,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 2025696,
+            "heapCapacity": 123035648,
+            "heapUsage": 105466064
+          }
+        },
+        {
+          "event": "memory",
+          "count": 8192,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1396985856,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 2025840,
+            "heapCapacity": 123035648,
+            "heapUsage": 105478624
+          }
+        },
+        {
+          "event": "memory",
+          "count": 12288,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1541382144,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 3849408,
+            "heapCapacity": 238698496,
+            "heapUsage": 234615152
+          }
+        },
+        {
+          "event": "memory",
+          "count": 12288,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1541382144,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 3849552,
+            "heapCapacity": 238698496,
+            "heapUsage": 234627552
+          }
+        },
+        {
+          "event": "memory",
+          "count": 16384,
+          "gc": true,
+          "isolate": "main",
+          "rss": 1436045312,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1124672,
+            "heapCapacity": 112701440,
+            "heapUsage": 89626928
+          }
+        },
+        {
+          "event": "gc",
+          "count": 16384,
+          "isolate": "main",
+          "rss": 1413861376,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 112701440,
+            "heapUsage": 36564032
+          },
+          "filterClasses": [
+            {
+              "name": "_DiskFilters",
+              "bytes": 32,
+              "instances": 1
+            },
+            {
+              "name": "RawZLibFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterSink",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterStatus",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibInflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibDeflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterWrites",
+              "bytes": 0,
+              "instances": 0
+            }
+          ],
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 10561440,
+              "instances": 110521
+            },
+            {
+              "name": "_List",
+              "bytes": 7827152,
+              "instances": 74110
+            },
+            {
+              "name": "Conversation",
+              "bytes": 2785280,
+              "instances": 17408
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2366240,
+              "instances": 4040
+            },
+            {
+              "name": "Function",
+              "bytes": 1911424,
+              "instances": 14933
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 1460464,
+              "instances": 11039
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 1202464,
+              "instances": 55
+            },
+            {
+              "name": "ICData",
+              "bytes": 958272,
+              "instances": 14973
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812160,
+              "instances": 10152
+            },
+            {
+              "name": "Code",
+              "bytes": 711040,
+              "instances": 4040
+            },
+            {
+              "name": "_TwoByteString",
+              "bytes": 621200,
+              "instances": 4
+            }
+          ]
+        },
+        {
+          "event": "memory",
+          "count": 16384,
+          "gc": true,
+          "isolate": "_serve",
+          "rss": 1413877760,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 71376896,
+            "heapUsage": 53572000
+          }
+        },
+        {
+          "event": "gc",
+          "count": 16384,
+          "isolate": "_serve",
+          "rss": 1408696320,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 56696832,
+            "heapUsage": 46595712
+          },
+          "filterClasses": [
+            {
+              "name": "_DiskFilters",
+              "bytes": 32,
+              "instances": 1
+            },
+            {
+              "name": "RawZLibFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterSink",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterStatus",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibInflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibDeflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterWrites",
+              "bytes": 0,
+              "instances": 0
+            }
+          ],
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 15016192,
+              "instances": 237948
+            },
+            {
+              "name": "_List",
+              "bytes": 10248928,
+              "instances": 89890
+            },
+            {
+              "name": "Conversation",
+              "bytes": 2785280,
+              "instances": 17408
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 2594976,
+              "instances": 14565
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2392864,
+              "instances": 4092
+            },
+            {
+              "name": "Function",
+              "bytes": 1911424,
+              "instances": 14933
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 1466128,
+              "instances": 11126
+            },
+            {
+              "name": "ICData",
+              "bytes": 965568,
+              "instances": 15087
+            },
+            {
+              "name": "_Map",
+              "bytes": 930432,
+              "instances": 14538
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812160,
+              "instances": 10152
+            },
+            {
+              "name": "Code",
+              "bytes": 720192,
+              "instances": 4092
+            }
+          ]
+        },
+        {
+          "event": "memory",
+          "count": 16384,
+          "gc": true,
+          "isolate": "main",
+          "rss": 1408704512,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1761024,
+            "heapCapacity": 71376896,
+            "heapUsage": 65455904
+          }
+        },
+        {
+          "event": "gc",
+          "count": 16384,
+          "isolate": "main",
+          "rss": 1398759424,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 71376896,
+            "heapUsage": 36599968
+          },
+          "filterClasses": [
+            {
+              "name": "_DiskFilters",
+              "bytes": 32,
+              "instances": 1
+            },
+            {
+              "name": "RawZLibFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterSink",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterStatus",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibInflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibDeflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterWrites",
+              "bytes": 0,
+              "instances": 0
+            }
+          ],
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 10506096,
+              "instances": 108800
+            },
+            {
+              "name": "_List",
+              "bytes": 7843648,
+              "instances": 74578
+            },
+            {
+              "name": "Conversation",
+              "bytes": 2785280,
+              "instances": 17408
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2394080,
+              "instances": 4094
+            },
+            {
+              "name": "Function",
+              "bytes": 1911424,
+              "instances": 14933
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 1467648,
+              "instances": 11146
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 1202464,
+              "instances": 55
+            },
+            {
+              "name": "ICData",
+              "bytes": 965568,
+              "instances": 15087
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812160,
+              "instances": 10152
+            },
+            {
+              "name": "Code",
+              "bytes": 720544,
+              "instances": 4094
+            },
+            {
+              "name": "_TwoByteString",
+              "bytes": 621200,
+              "instances": 4
+            }
+          ]
+        },
+        {
+          "event": "memory",
+          "count": 16384,
+          "gc": true,
+          "isolate": "_serve",
+          "rss": 1398759424,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 56172544,
+            "heapUsage": 53785584
+          }
+        },
+        {
+          "event": "gc",
+          "count": 16384,
+          "isolate": "_serve",
+          "rss": 1398882304,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 56172544,
+            "heapUsage": 46548416
+          },
+          "filterClasses": [
+            {
+              "name": "_DiskFilters",
+              "bytes": 32,
+              "instances": 1
+            },
+            {
+              "name": "RawZLibFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterSink",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterStatus",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibInflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibDeflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterWrites",
+              "bytes": 0,
+              "instances": 0
+            }
+          ],
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 14960784,
+              "instances": 236225
+            },
+            {
+              "name": "_List",
+              "bytes": 10238464,
+              "instances": 89915
+            },
+            {
+              "name": "Conversation",
+              "bytes": 2785280,
+              "instances": 17408
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 2594976,
+              "instances": 14565
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2397728,
+              "instances": 4103
+            },
+            {
+              "name": "Function",
+              "bytes": 1911424,
+              "instances": 14933
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 1471424,
+              "instances": 11198
+            },
+            {
+              "name": "ICData",
+              "bytes": 965568,
+              "instances": 15087
+            },
+            {
+              "name": "_Map",
+              "bytes": 930432,
+              "instances": 14538
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812160,
+              "instances": 10152
+            },
+            {
+              "name": "Code",
+              "bytes": 722128,
+              "instances": 4103
+            }
+          ]
+        },
+        {
+          "event": "malloc_trim",
+          "beforeRss": 1398882304,
+          "afterRss": 368746496,
+          "result": 1
+        }
+      ],
+      "logPath": "/tmp/worker-native-trim.log"
+    },
+    "arena2_native_trim": {
+      "events": [
+        {
+          "event": "memory",
+          "count": 0,
+          "gc": false,
+          "isolate": "main",
+          "rss": 290189312,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 264928,
+            "heapCapacity": 26042368,
+            "heapUsage": 23894144
+          }
+        },
+        {
+          "event": "memory",
+          "count": 0,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 290201600,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 265072,
+            "heapCapacity": 26042368,
+            "heapUsage": 23942976
+          }
+        },
+        {
+          "event": "memory",
+          "count": 4096,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1215975424,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1273984,
+            "heapCapacity": 106991616,
+            "heapUsage": 84670624
+          }
+        },
+        {
+          "event": "memory",
+          "count": 4096,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1215991808,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1274128,
+            "heapCapacity": 106991616,
+            "heapUsage": 84682976
+          }
+        },
+        {
+          "event": "memory",
+          "count": 8192,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1357651968,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 2025696,
+            "heapCapacity": 123035648,
+            "heapUsage": 105213200
+          }
+        },
+        {
+          "event": "memory",
+          "count": 8192,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1357664256,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 2025840,
+            "heapCapacity": 123035648,
+            "heapUsage": 105225760
+          }
+        },
+        {
+          "event": "memory",
+          "count": 12288,
+          "gc": false,
+          "isolate": "main",
+          "rss": 1469677568,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 5098288,
+            "heapCapacity": 238698496,
+            "heapUsage": 234726592
+          }
+        },
+        {
+          "event": "memory",
+          "count": 12288,
+          "gc": false,
+          "isolate": "_serve",
+          "rss": 1469677568,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 5098432,
+            "heapCapacity": 238698496,
+            "heapUsage": 234738992
+          }
+        },
+        {
+          "event": "memory",
+          "count": 16384,
+          "gc": true,
+          "isolate": "main",
+          "rss": 1372676096,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1124672,
+            "heapCapacity": 113750016,
+            "heapUsage": 89393744
+          }
+        },
+        {
+          "event": "gc",
+          "count": 16384,
+          "isolate": "main",
+          "rss": 1350602752,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 113225728,
+            "heapUsage": 36577744
+          },
+          "filterClasses": [
+            {
+              "name": "_DiskFilters",
+              "bytes": 32,
+              "instances": 1
+            },
+            {
+              "name": "RawZLibFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterSink",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterStatus",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibInflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibDeflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterWrites",
+              "bytes": 0,
+              "instances": 0
+            }
+          ],
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 10561440,
+              "instances": 110522
+            },
+            {
+              "name": "_List",
+              "bytes": 7829088,
+              "instances": 74114
+            },
+            {
+              "name": "Conversation",
+              "bytes": 2785280,
+              "instances": 17408
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2370416,
+              "instances": 4043
+            },
+            {
+              "name": "Function",
+              "bytes": 1911424,
+              "instances": 14933
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 1465120,
+              "instances": 11104
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 1202464,
+              "instances": 55
+            },
+            {
+              "name": "ICData",
+              "bytes": 958272,
+              "instances": 14973
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812160,
+              "instances": 10152
+            },
+            {
+              "name": "Code",
+              "bytes": 711568,
+              "instances": 4043
+            },
+            {
+              "name": "_TwoByteString",
+              "bytes": 621200,
+              "instances": 4
+            }
+          ]
+        },
+        {
+          "event": "memory",
+          "count": 16384,
+          "gc": true,
+          "isolate": "_serve",
+          "rss": 1350676480,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 71962624,
+            "heapUsage": 55390000
+          }
+        },
+        {
+          "event": "gc",
+          "count": 16384,
+          "isolate": "_serve",
+          "rss": 1346625536,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 59379712,
+            "heapUsage": 46609536
+          },
+          "filterClasses": [
+            {
+              "name": "_DiskFilters",
+              "bytes": 32,
+              "instances": 1
+            },
+            {
+              "name": "RawZLibFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterSink",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterStatus",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibInflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibDeflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterWrites",
+              "bytes": 0,
+              "instances": 0
+            }
+          ],
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 15016192,
+              "instances": 237949
+            },
+            {
+              "name": "_List",
+              "bytes": 10250976,
+              "instances": 89895
+            },
+            {
+              "name": "Conversation",
+              "bytes": 2785280,
+              "instances": 17408
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 2594976,
+              "instances": 14565
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2397040,
+              "instances": 4095
+            },
+            {
+              "name": "Function",
+              "bytes": 1911424,
+              "instances": 14933
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 1470784,
+              "instances": 11191
+            },
+            {
+              "name": "ICData",
+              "bytes": 965568,
+              "instances": 15087
+            },
+            {
+              "name": "_Map",
+              "bytes": 930432,
+              "instances": 14538
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812160,
+              "instances": 10152
+            },
+            {
+              "name": "Code",
+              "bytes": 720720,
+              "instances": 4095
+            }
+          ]
+        },
+        {
+          "event": "memory",
+          "count": 16384,
+          "gc": true,
+          "isolate": "main",
+          "rss": 1346625536,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 1761072,
+            "heapCapacity": 72425472,
+            "heapUsage": 65470208
+          }
+        },
+        {
+          "event": "gc",
+          "count": 16384,
+          "isolate": "main",
+          "rss": 1336418304,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 72425472,
+            "heapUsage": 36613792
+          },
+          "filterClasses": [
+            {
+              "name": "_DiskFilters",
+              "bytes": 32,
+              "instances": 1
+            },
+            {
+              "name": "RawZLibFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterSink",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterStatus",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibInflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibDeflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterWrites",
+              "bytes": 0,
+              "instances": 0
+            }
+          ],
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 10506096,
+              "instances": 108801
+            },
+            {
+              "name": "_List",
+              "bytes": 7845696,
+              "instances": 74583
+            },
+            {
+              "name": "Conversation",
+              "bytes": 2785280,
+              "instances": 17408
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2398256,
+              "instances": 4097
+            },
+            {
+              "name": "Function",
+              "bytes": 1911424,
+              "instances": 14933
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 1472304,
+              "instances": 11211
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 1202464,
+              "instances": 55
+            },
+            {
+              "name": "ICData",
+              "bytes": 965568,
+              "instances": 15087
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812160,
+              "instances": 10152
+            },
+            {
+              "name": "Code",
+              "bytes": 721072,
+              "instances": 4097
+            },
+            {
+              "name": "_TwoByteString",
+              "bytes": 621200,
+              "instances": 4
+            }
+          ]
+        },
+        {
+          "event": "memory",
+          "count": 16384,
+          "gc": true,
+          "isolate": "_serve",
+          "rss": 1336418304,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 58269696,
+            "heapUsage": 53858848
+          }
+        },
+        {
+          "event": "gc",
+          "count": 16384,
+          "isolate": "_serve",
+          "rss": 1336750080,
+          "memory": {
+            "type": "MemoryUsage",
+            "externalUsage": 80,
+            "heapCapacity": 58269696,
+            "heapUsage": 46562240
+          },
+          "filterClasses": [
+            {
+              "name": "_DiskFilters",
+              "bytes": 32,
+              "instances": 1
+            },
+            {
+              "name": "RawZLibFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterSink",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterStatus",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibInflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_ZLibDeflateFilter",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_SecureFilterImpl",
+              "bytes": 0,
+              "instances": 0
+            },
+            {
+              "name": "_FilterWrites",
+              "bytes": 0,
+              "instances": 0
+            }
+          ],
+          "classes": [
+            {
+              "name": "_OneByteString",
+              "bytes": 14960784,
+              "instances": 236226
+            },
+            {
+              "name": "_List",
+              "bytes": 10240512,
+              "instances": 89920
+            },
+            {
+              "name": "Conversation",
+              "bytes": 2785280,
+              "instances": 17408
+            },
+            {
+              "name": "_Uint32List",
+              "bytes": 2594976,
+              "instances": 14565
+            },
+            {
+              "name": "Instructions",
+              "bytes": 2401904,
+              "instances": 4106
+            },
+            {
+              "name": "Function",
+              "bytes": 1911424,
+              "instances": 14933
+            },
+            {
+              "name": "_Uint8List",
+              "bytes": 1476080,
+              "instances": 11263
+            },
+            {
+              "name": "ICData",
+              "bytes": 965568,
+              "instances": 15087
+            },
+            {
+              "name": "_Map",
+              "bytes": 930432,
+              "instances": 14538
+            },
+            {
+              "name": "ConversationSegment",
+              "bytes": 819200,
+              "instances": 10240
+            },
+            {
+              "name": "_FunctionType",
+              "bytes": 812160,
+              "instances": 10152
+            },
+            {
+              "name": "Code",
+              "bytes": 722656,
+              "instances": 4106
+            }
+          ]
+        },
+        {
+          "event": "malloc_trim",
+          "beforeRss": 1336750080,
+          "afterRss": 361738240,
+          "result": 1
+        }
+      ],
+      "logPath": "/tmp/worker-arena2.log"
+    }
+  },
+  "scratchAotTrim100k": {
+    "productionCodeChanged": false,
+    "forcedGC": false,
+    "allocatorEnvironmentOverride": false,
+    "hook": "optional Linux malloc_trim(0) after each successful upsert/remove RPC",
+    "sourceHashes": {
+      "disk_search_ranking.dart": "3a4b92ad120c61338b27e0c53e725d0779f0f481ca84344c96b44e5cf5cb2af6",
+      "disk_search_index_io.dart": "ceecc15e8117a665aa43b356085f947e05e603e03990b88fb0ea3f5161791eab",
+      "search_relevance_fixtures.dart": "98c46e70ae8366dfe8607e932617b97729393b08bba945bc17b2146756b87e95",
+      "disk_search_filters.dart": "a9d0add7756af94696aa9874f597278dd0df9cabb1f88903667beb9043c515e8",
+      "million_search_benchmark.dart": "dedfa80b574826de2432128b07232a3466b9fc54028b2c8d9167cd7839ab7756",
+      "aot/bundle/bin/million_search_benchmark": "847a9a3bd7b7fbe2fefa93dcc82b7864b19956ffd500f96177e558981fcabd5b"
+    },
+    "build": {
+      "schemaVersion": 2,
+      "phase": "build-only",
+      "targetConversations": 2000000,
+      "targetLatencyMs": 500,
+      "requestedConversations": 100000,
+      "wordsPerConversation": 200,
+      "segmentsPerConversation": 10,
+      "previewCharacters": 180,
+      "fillerVocabulary": 1723,
+      "database": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/native-trim-100k-20261029/search.sqlite",
+      "actualFileSystemType": "ext4",
+      "invocationId": "53b95fc9fe644d31ab8b06315a935230",
+      "queries": {},
+      "lastCompletedPhase": "complete",
+      "recoveredRelevanceDocuments": 0,
+      "conversations": 100000,
+      "fixtureDateLayout": {
+        "layout": "new-date-permutation-v1",
+        "start": 0,
+        "span": 100000
+      },
+      "fixtureDateLayoutScope": "all 100000 conversations permuted across 100000 minutes",
+      "fixtureSourceStart": 0,
+      "fixtureSourceLayout": "source-runs-128-v1",
+      "fixtureNamesStart": 0,
+      "fixtureNamesLayout": "20-firstnames-10-surnames-v1",
+      "fixtureNamePlacement": "Final two body words; Alice/Bob participant labels retained.",
+      "resumedConversations": 0,
+      "searchPreparationBeforeAppendMs": 3446,
+      "buildProgress": {
+        "invocationId": "53b95fc9fe644d31ab8b06315a935230",
+        "conversations": 100000,
+        "newlyCommittedConversations": 100000,
+        "currentRssBytes": 228855808,
+        "maxRssBytes": 662900736,
+        "cgroupMemoryCurrentBytes": 588349440,
+        "elapsedMs": 516245
+      },
+      "buildMs": 517006,
+      "plaintextConversationBytes": 305567021,
+      "builtCatalogChecksum": 53525036541844,
+      "builtRssBytes": 229515264,
+      "sourcePartitionCounts": {
+        "consumed": 20096,
+        "documents": 20000,
+        "email": 19968,
+        "chat": 19968,
+        "other": 19968
+      },
+      "reopenAndCatalogMs": 2316,
+      "reopenedRssBytes": 182079488,
+      "update100Ms": 3085,
+      "searchPreparationMs": 2359,
+      "finalCatalogChecksum": 53531428005150,
+      "catalogLength": 100000,
+      "databaseBytes": 351563776,
+      "peakRssBytes": 662900736,
+      "cgroupMemoryMax": "1999998976",
+      "cgroupMemoryPeakBytes": 952451072,
+      "cgroupMemoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "latencyTargetPassed": false,
+      "targetMet": false,
+      "passed": true
+    },
+    "queryParity": {
+      "count": 100000,
+      "peakRss": 178630656,
+      "samples": [
+        {
+          "event": "query-complete",
+          "stage": "migration",
+          "query": "zzqxnonexistent",
+          "ms": 3.584,
+          "returned": 0,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 7
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "built",
+          "query": "insurance renewal",
+          "ms": 17.438,
+          "returned": 10,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 16,
+            "postingReads": 20,
+            "candidateMs": 13,
+            "boundMs": 0,
+            "candidateBlocks": 10,
+            "numericMs": 1,
+            "scorePostingReads": 20,
+            "positionReads": 20,
+            "scoredDocuments": 10,
+            "numericPostingPages": 10,
+            "scoredBlocks": 80,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 10,
+            "scoreMs": 3
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "built",
+          "query": "insuranc alice",
+          "ms": 12.13,
+          "returned": 10,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 16,
+            "postingReads": 20,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 10,
+            "numericMs": 1,
+            "scorePostingReads": 20,
+            "positionReads": 10,
+            "scoredDocuments": 10,
+            "numericPostingPages": 10,
+            "scoredBlocks": 80,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 10,
+            "scoreMs": 3
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "built",
+          "query": "ali muell",
+          "ms": 24.851,
+          "returned": 10,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 140,
+            "candidateMs": 13,
+            "boundMs": 0,
+            "candidateBlocks": 10,
+            "numericMs": 8,
+            "scorePostingReads": 140,
+            "positionReads": 10,
+            "scoredDocuments": 10,
+            "numericPostingPages": 10,
+            "scoredBlocks": 80,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 10,
+            "scoreMs": 10
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "built",
+          "query": "M\u00dcLLER",
+          "ms": 7.554,
+          "returned": 10,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 10,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 10,
+            "numericMs": 0,
+            "scorePostingReads": 10,
+            "positionReads": 0,
+            "scoredDocuments": 10,
+            "numericPostingPages": 10,
+            "scoredBlocks": 80,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 10,
+            "scoreMs": 2
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "built",
+          "query": "insurance zxqvbnm",
+          "ms": 4.63,
+          "returned": 0,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "built",
+          "query": "grocery shopping",
+          "ms": 142.946,
+          "returned": 100,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 15,
+            "postingReads": 294,
+            "candidateMs": 20,
+            "boundMs": 1,
+            "candidateBlocks": 783,
+            "numericMs": 104,
+            "scorePostingReads": 294,
+            "positionReads": 196,
+            "scoredDocuments": 99990,
+            "numericPostingPages": 98,
+            "scoredBlocks": 784,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 121
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "built",
+          "query": "archive",
+          "ms": 100.461,
+          "returned": 100,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 392,
+            "candidateMs": 23,
+            "boundMs": 1,
+            "candidateBlocks": 783,
+            "numericMs": 55,
+            "scorePostingReads": 392,
+            "positionReads": 0,
+            "scoredDocuments": 100000,
+            "numericPostingPages": 98,
+            "scoredBlocks": 784,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 75
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "built",
+          "query": "",
+          "ms": 404.513,
+          "returned": 100,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "candidateMs": 0,
+            "boundMs": 0,
+            "candidateBlocks": 300,
+            "summarypagesReads": 300,
+            "scoreMs": 403,
+            "scoredBlocks": 300,
+            "scoredDocuments": 300
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "reopened",
+          "query": "insurance renewal",
+          "ms": 331.297,
+          "returned": 10,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 315,
+            "vocabularyReads": 16,
+            "postingReads": 20,
+            "candidateMs": 13,
+            "boundMs": 0,
+            "candidateBlocks": 10,
+            "numericMs": 1,
+            "scorePostingReads": 20,
+            "positionReads": 20,
+            "scoredDocuments": 10,
+            "numericPostingPages": 10,
+            "scoredBlocks": 80,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 10,
+            "scoreMs": 2
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "reopened",
+          "query": "insuranc alice",
+          "ms": 11.656,
+          "returned": 10,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 16,
+            "postingReads": 20,
+            "candidateMs": 8,
+            "boundMs": 0,
+            "candidateBlocks": 10,
+            "numericMs": 1,
+            "scorePostingReads": 20,
+            "positionReads": 10,
+            "scoredDocuments": 10,
+            "numericPostingPages": 10,
+            "scoredBlocks": 80,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 10,
+            "scoreMs": 2
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "reopened",
+          "query": "ali muell",
+          "ms": 21.789,
+          "returned": 10,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 14,
+            "postingReads": 140,
+            "candidateMs": 11,
+            "boundMs": 0,
+            "candidateBlocks": 10,
+            "numericMs": 7,
+            "scorePostingReads": 140,
+            "positionReads": 10,
+            "scoredDocuments": 10,
+            "numericPostingPages": 10,
+            "scoredBlocks": 80,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 10,
+            "scoreMs": 9
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "reopened",
+          "query": "M\u00dcLLER",
+          "ms": 6.58,
+          "returned": 10,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 10,
+            "candidateMs": 4,
+            "boundMs": 0,
+            "candidateBlocks": 10,
+            "numericMs": 0,
+            "scorePostingReads": 10,
+            "positionReads": 0,
+            "scoredDocuments": 10,
+            "numericPostingPages": 10,
+            "scoredBlocks": 80,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 10,
+            "scoreMs": 2
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "reopened",
+          "query": "insurance zxqvbnm",
+          "ms": 4.137,
+          "returned": 0,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "reopened",
+          "query": "grocery shopping",
+          "ms": 140.708,
+          "returned": 100,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 15,
+            "postingReads": 294,
+            "candidateMs": 18,
+            "boundMs": 2,
+            "candidateBlocks": 783,
+            "numericMs": 104,
+            "scorePostingReads": 294,
+            "positionReads": 196,
+            "scoredDocuments": 99990,
+            "numericPostingPages": 98,
+            "scoredBlocks": 784,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 120
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "reopened",
+          "query": "archive",
+          "ms": 91.083,
+          "returned": 100,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "vocabularyReads": 8,
+            "postingReads": 392,
+            "candidateMs": 24,
+            "boundMs": 1,
+            "candidateBlocks": 783,
+            "numericMs": 49,
+            "scorePostingReads": 392,
+            "positionReads": 0,
+            "scoredDocuments": 100000,
+            "numericPostingPages": 98,
+            "scoredBlocks": 784,
+            "fallbackDocuments": 0,
+            "scoretilesReads": 100,
+            "scoreMs": 64
+          }
+        },
+        {
+          "event": "query-complete",
+          "stage": "reopened",
+          "query": "",
+          "ms": 394.865,
+          "returned": 100,
+          "matchesUnmodifiedEngine": true,
+          "profile": {
+            "prepareMs": 0,
+            "candidateMs": 0,
+            "boundMs": 0,
+            "candidateBlocks": 300,
+            "summarypagesReads": 300,
+            "scoreMs": 394,
+            "scoredBlocks": 300,
+            "scoredDocuments": 300
+          }
+        }
+      ]
+    },
+    "trimSummary": {
+      "calls": 101,
+      "totalMicroseconds": 3631689,
+      "maxBeforeRss": 664076288,
+      "maxAfterRss": 515223552
+    },
+    "batchEvents": [
+      {
+        "event": "native_trim",
+        "count": 1024,
+        "beforeRss": 428027904,
+        "afterRss": 116903936,
+        "peakRss": 427565056,
+        "micros": 27860,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 2048,
+        "beforeRss": 420024320,
+        "afterRss": 116391936,
+        "peakRss": 427565056,
+        "micros": 29785,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 3072,
+        "beforeRss": 453603328,
+        "afterRss": 124751872,
+        "peakRss": 456724480,
+        "micros": 30051,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 4096,
+        "beforeRss": 481570816,
+        "afterRss": 170909696,
+        "peakRss": 480546816,
+        "micros": 30556,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 5120,
+        "beforeRss": 498143232,
+        "afterRss": 154996736,
+        "peakRss": 562565120,
+        "micros": 32387,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 6144,
+        "beforeRss": 410472448,
+        "afterRss": 139407360,
+        "peakRss": 562565120,
+        "micros": 27054,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 7168,
+        "beforeRss": 440000512,
+        "afterRss": 133058560,
+        "peakRss": 562565120,
+        "micros": 28350,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 8192,
+        "beforeRss": 381927424,
+        "afterRss": 175988736,
+        "peakRss": 562565120,
+        "micros": 23225,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 9216,
+        "beforeRss": 444915712,
+        "afterRss": 157040640,
+        "peakRss": 562565120,
+        "micros": 29069,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 10240,
+        "beforeRss": 520310784,
+        "afterRss": 169545728,
+        "peakRss": 562565120,
+        "micros": 33223,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 11264,
+        "beforeRss": 544530432,
+        "afterRss": 262475776,
+        "peakRss": 569384960,
+        "micros": 32686,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 12288,
+        "beforeRss": 509034496,
+        "afterRss": 133042176,
+        "peakRss": 569384960,
+        "micros": 54517,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 13312,
+        "beforeRss": 450433024,
+        "afterRss": 178749440,
+        "peakRss": 569384960,
+        "micros": 29413,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 14336,
+        "beforeRss": 550604800,
+        "afterRss": 178806784,
+        "peakRss": 606998528,
+        "micros": 38017,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 15360,
+        "beforeRss": 509870080,
+        "afterRss": 147734528,
+        "peakRss": 606998528,
+        "micros": 38888,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 16384,
+        "beforeRss": 505479168,
+        "afterRss": 148131840,
+        "peakRss": 606998528,
+        "micros": 38101,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 17408,
+        "beforeRss": 504492032,
+        "afterRss": 149557248,
+        "peakRss": 606998528,
+        "micros": 36220,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 18432,
+        "beforeRss": 507953152,
+        "afterRss": 171696128,
+        "peakRss": 606998528,
+        "micros": 44530,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 19456,
+        "beforeRss": 515338240,
+        "afterRss": 155574272,
+        "peakRss": 606998528,
+        "micros": 38193,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 20480,
+        "beforeRss": 506302464,
+        "afterRss": 150306816,
+        "peakRss": 606998528,
+        "micros": 42594,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 21504,
+        "beforeRss": 498995200,
+        "afterRss": 149831680,
+        "peakRss": 606998528,
+        "micros": 48205,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 22528,
+        "beforeRss": 500842496,
+        "afterRss": 150945792,
+        "peakRss": 606998528,
+        "micros": 40347,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 23552,
+        "beforeRss": 533958656,
+        "afterRss": 183029760,
+        "peakRss": 606998528,
+        "micros": 38040,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 24576,
+        "beforeRss": 528703488,
+        "afterRss": 160145408,
+        "peakRss": 606998528,
+        "micros": 42530,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 25600,
+        "beforeRss": 502370304,
+        "afterRss": 190070784,
+        "peakRss": 606998528,
+        "micros": 39609,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 26624,
+        "beforeRss": 516583424,
+        "afterRss": 154181632,
+        "peakRss": 606998528,
+        "micros": 35267,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 27648,
+        "beforeRss": 494559232,
+        "afterRss": 154591232,
+        "peakRss": 606998528,
+        "micros": 35478,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 28672,
+        "beforeRss": 527618048,
+        "afterRss": 195891200,
+        "peakRss": 606998528,
+        "micros": 32834,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 29696,
+        "beforeRss": 559489024,
+        "afterRss": 188026880,
+        "peakRss": 619761664,
+        "micros": 37353,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 30720,
+        "beforeRss": 477519872,
+        "afterRss": 147189760,
+        "peakRss": 619761664,
+        "micros": 33767,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 31744,
+        "beforeRss": 462872576,
+        "afterRss": 163987456,
+        "peakRss": 619761664,
+        "micros": 31708,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 32768,
+        "beforeRss": 501510144,
+        "afterRss": 156749824,
+        "peakRss": 619761664,
+        "micros": 35231,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 33792,
+        "beforeRss": 537182208,
+        "afterRss": 194486272,
+        "peakRss": 619761664,
+        "micros": 36496,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 34816,
+        "beforeRss": 633409536,
+        "afterRss": 266039296,
+        "peakRss": 632270848,
+        "micros": 43648,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 35840,
+        "beforeRss": 542666752,
+        "afterRss": 171917312,
+        "peakRss": 632270848,
+        "micros": 39000,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 36864,
+        "beforeRss": 512925696,
+        "afterRss": 157847552,
+        "peakRss": 632270848,
+        "micros": 38926,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 37888,
+        "beforeRss": 515362816,
+        "afterRss": 158748672,
+        "peakRss": 632270848,
+        "micros": 38019,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 38912,
+        "beforeRss": 503169024,
+        "afterRss": 157782016,
+        "peakRss": 632270848,
+        "micros": 40807,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 39936,
+        "beforeRss": 505454592,
+        "afterRss": 158896128,
+        "peakRss": 632270848,
+        "micros": 38827,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 40960,
+        "beforeRss": 530882560,
+        "afterRss": 174166016,
+        "peakRss": 632270848,
+        "micros": 38122,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 41984,
+        "beforeRss": 515284992,
+        "afterRss": 158924800,
+        "peakRss": 632270848,
+        "micros": 42498,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 43008,
+        "beforeRss": 507367424,
+        "afterRss": 159227904,
+        "peakRss": 632270848,
+        "micros": 40833,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 44032,
+        "beforeRss": 385765376,
+        "afterRss": 160522240,
+        "peakRss": 632270848,
+        "micros": 26866,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 45056,
+        "beforeRss": 500281344,
+        "afterRss": 170868736,
+        "peakRss": 632270848,
+        "micros": 39357,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 46080,
+        "beforeRss": 466030592,
+        "afterRss": 177520640,
+        "peakRss": 632270848,
+        "micros": 32677,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 47104,
+        "beforeRss": 510459904,
+        "afterRss": 159969280,
+        "peakRss": 632270848,
+        "micros": 32381,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 48128,
+        "beforeRss": 424480768,
+        "afterRss": 173879296,
+        "peakRss": 632270848,
+        "micros": 29036,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 49152,
+        "beforeRss": 551522304,
+        "afterRss": 211210240,
+        "peakRss": 632270848,
+        "micros": 34439,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 50176,
+        "beforeRss": 622313472,
+        "afterRss": 278233088,
+        "peakRss": 632270848,
+        "micros": 35306,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 51200,
+        "beforeRss": 541384704,
+        "afterRss": 204271616,
+        "peakRss": 632270848,
+        "micros": 37272,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 52224,
+        "beforeRss": 605978624,
+        "afterRss": 291221504,
+        "peakRss": 632270848,
+        "micros": 32635,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 53248,
+        "beforeRss": 571191296,
+        "afterRss": 181039104,
+        "peakRss": 632270848,
+        "micros": 40019,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 54272,
+        "beforeRss": 510832640,
+        "afterRss": 164257792,
+        "peakRss": 632270848,
+        "micros": 38186,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 55296,
+        "beforeRss": 509050880,
+        "afterRss": 176529408,
+        "peakRss": 632270848,
+        "micros": 33967,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 56320,
+        "beforeRss": 509767680,
+        "afterRss": 166412288,
+        "peakRss": 632270848,
+        "micros": 39367,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 57344,
+        "beforeRss": 468049920,
+        "afterRss": 177725440,
+        "peakRss": 632270848,
+        "micros": 32309,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 58368,
+        "beforeRss": 534183936,
+        "afterRss": 184135680,
+        "peakRss": 632270848,
+        "micros": 36154,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 59392,
+        "beforeRss": 539344896,
+        "afterRss": 198537216,
+        "peakRss": 632270848,
+        "micros": 35795,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 60416,
+        "beforeRss": 633638912,
+        "afterRss": 294383616,
+        "peakRss": 632627200,
+        "micros": 36696,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 61440,
+        "beforeRss": 550297600,
+        "afterRss": 216940544,
+        "peakRss": 632627200,
+        "micros": 34178,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 62464,
+        "beforeRss": 664076288,
+        "afterRss": 302804992,
+        "peakRss": 662900736,
+        "micros": 35225,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 63488,
+        "beforeRss": 553074688,
+        "afterRss": 189366272,
+        "peakRss": 662900736,
+        "micros": 38873,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 64512,
+        "beforeRss": 557498368,
+        "afterRss": 183033856,
+        "peakRss": 662900736,
+        "micros": 38558,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 65536,
+        "beforeRss": 542773248,
+        "afterRss": 190775296,
+        "peakRss": 662900736,
+        "micros": 36736,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 66560,
+        "beforeRss": 535777280,
+        "afterRss": 191123456,
+        "peakRss": 662900736,
+        "micros": 40049,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 67584,
+        "beforeRss": 529821696,
+        "afterRss": 191492096,
+        "peakRss": 662900736,
+        "micros": 32163,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 68608,
+        "beforeRss": 544636928,
+        "afterRss": 187912192,
+        "peakRss": 662900736,
+        "micros": 42946,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 69632,
+        "beforeRss": 531787776,
+        "afterRss": 187002880,
+        "peakRss": 662900736,
+        "micros": 36572,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 70656,
+        "beforeRss": 542973952,
+        "afterRss": 186490880,
+        "peakRss": 662900736,
+        "micros": 40832,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 71680,
+        "beforeRss": 433594368,
+        "afterRss": 186699776,
+        "peakRss": 662900736,
+        "micros": 28893,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 72704,
+        "beforeRss": 549306368,
+        "afterRss": 188035072,
+        "peakRss": 662900736,
+        "micros": 36950,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 73728,
+        "beforeRss": 524115968,
+        "afterRss": 188227584,
+        "peakRss": 662900736,
+        "micros": 37600,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 74752,
+        "beforeRss": 534294528,
+        "afterRss": 189083648,
+        "peakRss": 662900736,
+        "micros": 38470,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 75776,
+        "beforeRss": 534962176,
+        "afterRss": 190304256,
+        "peakRss": 662900736,
+        "micros": 43768,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 76800,
+        "beforeRss": 411652096,
+        "afterRss": 186843136,
+        "peakRss": 662900736,
+        "micros": 24985,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 77824,
+        "beforeRss": 515706880,
+        "afterRss": 188669952,
+        "peakRss": 662900736,
+        "micros": 49863,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 78848,
+        "beforeRss": 516108288,
+        "afterRss": 190803968,
+        "peakRss": 662900736,
+        "micros": 37437,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 79872,
+        "beforeRss": 537182208,
+        "afterRss": 200052736,
+        "peakRss": 662900736,
+        "micros": 33615,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 80896,
+        "beforeRss": 562561024,
+        "afterRss": 191086592,
+        "peakRss": 662900736,
+        "micros": 40917,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 81920,
+        "beforeRss": 455520256,
+        "afterRss": 196497408,
+        "peakRss": 662900736,
+        "micros": 27302,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 82944,
+        "beforeRss": 514174976,
+        "afterRss": 201453568,
+        "peakRss": 662900736,
+        "micros": 34663,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 83968,
+        "beforeRss": 556650496,
+        "afterRss": 196534272,
+        "peakRss": 662900736,
+        "micros": 40894,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 84992,
+        "beforeRss": 544165888,
+        "afterRss": 202792960,
+        "peakRss": 662900736,
+        "micros": 37091,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 86016,
+        "beforeRss": 548270080,
+        "afterRss": 194039808,
+        "peakRss": 662900736,
+        "micros": 39326,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 87040,
+        "beforeRss": 555995136,
+        "afterRss": 199004160,
+        "peakRss": 662900736,
+        "micros": 37575,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 88064,
+        "beforeRss": 541749248,
+        "afterRss": 204333056,
+        "peakRss": 662900736,
+        "micros": 35078,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 89088,
+        "beforeRss": 561106944,
+        "afterRss": 204193792,
+        "peakRss": 662900736,
+        "micros": 39216,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 90112,
+        "beforeRss": 544661504,
+        "afterRss": 200056832,
+        "peakRss": 662900736,
+        "micros": 38363,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 91136,
+        "beforeRss": 542937088,
+        "afterRss": 206036992,
+        "peakRss": 662900736,
+        "micros": 35576,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 92160,
+        "beforeRss": 571363328,
+        "afterRss": 207646720,
+        "peakRss": 662900736,
+        "micros": 37759,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 93184,
+        "beforeRss": 552775680,
+        "afterRss": 207237120,
+        "peakRss": 662900736,
+        "micros": 40019,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 94208,
+        "beforeRss": 555732992,
+        "afterRss": 207712256,
+        "peakRss": 662900736,
+        "micros": 38443,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 95232,
+        "beforeRss": 553295872,
+        "afterRss": 209453056,
+        "peakRss": 662900736,
+        "micros": 38046,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 96256,
+        "beforeRss": 524316672,
+        "afterRss": 196984832,
+        "peakRss": 662900736,
+        "micros": 38246,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 97280,
+        "beforeRss": 429613056,
+        "afterRss": 203395072,
+        "peakRss": 662900736,
+        "micros": 25596,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 98304,
+        "beforeRss": 551141376,
+        "afterRss": 207941632,
+        "peakRss": 662900736,
+        "micros": 40914,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 99328,
+        "beforeRss": 557092864,
+        "afterRss": 210886656,
+        "peakRss": 662900736,
+        "micros": 36861,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 100000,
+        "beforeRss": 565923840,
+        "afterRss": 228855808,
+        "peakRss": 662900736,
+        "micros": 33327,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 100000,
+        "beforeRss": 563036160,
+        "afterRss": 173305856,
+        "peakRss": 662900736,
+        "micros": 42682,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 99997,
+        "beforeRss": 515403776,
+        "afterRss": 515223552,
+        "peakRss": 662900736,
+        "micros": 1084,
+        "result": 1
+      },
+      {
+        "event": "native_trim",
+        "count": 100000,
+        "beforeRss": 530317312,
+        "afterRss": 363642880,
+        "peakRss": 662900736,
+        "micros": 20272,
+        "result": 1
+      }
+    ]
+  },
+  "productionAotFailure": {
+    "unit": "lifenizer-search-two-million-v6-shuffled-build-20261029.service",
+    "invocationId": "cd551874788c4e0aa7a3706a5f94c484",
+    "committedConversations": 64512,
+    "result": "oom-kill",
+    "exitCode": 137,
+    "memoryMaxBytes": 2000000000,
+    "memorySwapMaxBytes": 0,
+    "memoryPeakBytes": 1999998976,
+    "kernelAnonymousBytes": 1993920512,
+    "kernelFileBytes": 495616,
+    "kernelConstraint": "CONSTRAINT_MEMCG"
+  },
+  "managedGzipAot100k": {
+    "scope": "Private copies of real native disk index and ranking parts with all four gzip encode/decode calls replaced; production package:app models/catalog/shared dependencies, original full benchmark fixture and build/reopen/update/delete/body checks retained",
+    "codec": "archive 4.3.0 GZipEncoderWeb.encodeBytes and GZipDecoderWeb.decodeStream(verify:true); false decode result rejected",
+    "unit": "lifenizer-managed-codec-audit-20261029.service",
+    "invocationId": "5b793aaa61c5405db441ceaeda423ba6",
+    "serviceRuntimeSeconds": 572.227,
+    "cpuSeconds": 260.09,
+    "exitCode": 0,
+    "systemdResult": "success",
+    "requestedMemoryMaxBytes": 2000000000,
+    "requestedMemorySwapMaxBytes": 0,
+    "codecInteroperabilityAndCorruptionPreflightPassed": true,
+    "failureBoundarySample": {
+      "event": "batch-complete",
+      "count": 64512,
+      "elapsedMs": 344460,
+      "rssBytes": 181059584,
+      "peakRssBytes": 283852800,
+      "cgroupBytes": 408576000
+    },
+    "nativeTrimComparison": {
+      "buildMs": 517000,
+      "peakRssBytesApprox": 663000000,
+      "peakCgroupBytesApprox": 952500000,
+      "source": "Peer native-trim probe report; concurrent host, comparison is indicative"
+    },
+    "managedBuildMs": 551247,
+    "managedPeakRssBytes": 292327424,
+    "managedPeakCgroupBytes": 590454784,
+    "databaseBytes": 351772672,
+    "targetClaim": "100k correctness and memory component evidence only; not 2M/500ms target proof",
+    "sourceSnapshots": {
+      "disk_search_index_io.source.txt": "54224867b5c1a66e10132a87fef01d7e32ed142296d6e6c60fb9b43dc2e1dc1a",
+      "disk_search_filters.source.txt": "a9d0add7756af94696aa9874f597278dd0df9cabb1f88903667beb9043c515e8",
+      "disk_search_ranking.source.txt": "f94558eadcb76e63fbac2245508f5f2c6803075a76e8fe6c156ac02332b3f491",
+      "managed_probe.source.txt": "69ece0131bba6bf02e414df78e6d42d731a0d2100e36c2583e0c000f79f73c2f"
+    },
+    "temporaryProjectSourcesRemoved": true
+  },
+  "managedLegacy64512Compatibility": {
+    "source": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/two-million-search-v6-shuffled-20261029/search.sqlite",
+    "copiedDatabase": "/run/media/ekwav/Data/dev/lifenizer/app/build/benchmarks/managed-codec-legacy64k-20261029/legacy.sqlite",
+    "count": 64512,
+    "sourceSha256Before": "bd29d32cb70d9b5ede1b6a651c764350a5fe7c27d0be06c3e9e575b87393c2e7",
+    "copySha256Before": "bd29d32cb70d9b5ede1b6a651c764350a5fe7c27d0be06c3e9e575b87393c2e7",
+    "sourceSha256After": "bd29d32cb70d9b5ede1b6a651c764350a5fe7c27d0be06c3e9e575b87393c2e7",
+    "sourceUnchanged": true,
+    "queryOrderChecks": 17,
+    "fullBodyMatches": [
+      "7a6d31e2-9f84-4b67-82a1-000000000000",
+      "7a6d31e2-9f84-4b67-82a1-000000007e00",
+      "7a6d31e2-9f84-4b67-82a1-00000000fbff"
+    ],
+    "allQueriesMatch": true,
+    "peakRssBytes": 138723328,
+    "maxReturnedPerQuery": 100,
+    "comparedIds": 656
+  },
+  "chosenImplementation": "Use existing archive4.3.0 managed gzip encoder/strict decoder for the four sidecar compression operations; preserve standard gzip framing and existing schema/posting versions. No production malloc_trim or allocator environment overrides.",
+  "twoMillionCapacityAndLatencyProven": false,
+  "diagnosticCasesChangedProduction": false,
+  "diagnosticCasesTouchedPreservedFailureDatabase": false,
+  "selectedManagedFixPromoted": true
+}

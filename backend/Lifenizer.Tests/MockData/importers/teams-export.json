@@ -1,0 +1,16 @@
+{
+  "messages": [
+    {
+      "id": "171",
+      "fromDisplayName": "Lena",
+      "content": "<p>Teams export parser <b>should</b> preserve words and strip tags.</p>",
+      "createdDateTime": "2026-05-28T09:45:00Z"
+    },
+    {
+      "id": "172",
+      "fromDisplayName": "Kai",
+      "content": "<div>Second message in same thread.</div>",
+      "createdDateTime": "2026-05-28T09:46:00Z"
+    }
+  ]
+}

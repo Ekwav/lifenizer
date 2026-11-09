@@ -1,0 +1,33 @@
+# Email import
+
+The API fetches one mailbox using credentials supplied for that request. It never stores the IMAP password or starts a server background job. Email is plaintext on the IMAP/API hosts during normalization; the app encrypts the result before local persistence and vault sync.
+
+The operator configures `Imports:Imap:Host`, `Port` (default `993`) and `UseTls` (default `true`). Port 993 uses TLS immediately. Port 143 requires STARTTLS. An explicit `SocketOptions` may select `SslOnConnect` or mandatory `StartTls`; opportunistic TLS is rejected. Normal certificate validation remains enabled. `UseTls=false` is accepted only for loopback test servers. Request metadata cannot override the host, port, TLS or certificate checks.
+
+In the app, unlock your vault and open Imports → Connect email:
+
+1. Check the configured host and TLS status, then enter your email username and app password. Leave the mailbox as `INBOX` or enter the mailbox you want to import.
+2. Choose **Connect & import**. On Linux/Android, **Remember on this device** is enabled by default and saves the account and UID cursor in the OS credential store, scoped to your API/vault and configured host/mailbox. Web use has no remembered account. The password field clears immediately after submission.
+3. The app checks every five minutes while open and unlocked, with at most 20 pages of 25 messages per run. Larger backlogs continue on later checks; **Check now** runs another batch. **Stop & remove account** stops checks and deletes the saved credentials; already imported conversations remain encrypted in the vault. Locking clears the in-memory account and stops the timer. The scheduler resumes when the vault is unlocked again; it does not run when the app is closed.
+
+An authenticated `GET /api/imports/email/settings` returns `{configured,host,port,tls,useTls}` without credentials. Configure a host before importing. The Compose installation defaults to `mail.coflnet.com:993`; an email account and, where supported, its app password are still required. The account password is independent of the vault password or pairing secret.
+
+`POST /api/imports/email` accepts the existing import request with metadata `username`, `password`, optional `mailbox` (default `INBOX`), and `limit` (default 10, maximum 25). Password whitespace is preserved. MailKit opens the mailbox read-only and fetches `BODY.PEEK[]`, so imports do not mark messages as read. A page downloads at most 25 MiB, checked against reported sizes before fetching and actual transfer progress. Pages automatically shrink to the leading messages that fit. A single oversized message blocks its cursor; move it out of the watched mailbox (export it first if needed), then retry.
+
+Resume with metadata `afterUid` and `uidValidity`, copied from response diagnostics `nextUid` and `uidValidity` after the app has saved the encrypted result. UIDs are fetched in ascending order; `hasMore` indicates another page. If the server changes UIDVALIDITY, import restarts from the beginning with `cursorReset=true`. Message/thread identities allow the app to merge the replay. Expunged messages between search and fetch are skipped safely. The cursor does not track edits to already imported messages, moves between mailboxes, or deletions on the mail server.
+
+Live IMAP and local mbox/RFC822 exports share MimeKit decoding for encoded headers, multipart alternatives, transfer encodings and MIME charsets. Plain text is preferred, with an HTML text fallback. PDF, TXT, CSV, HTML, DOCX and ODT attachments are decoded and their extracted text is indexed alongside the message body. HTML indexing excludes scripts and styles. Digital PDF text is read with Poppler; pages with no text use Tesseract OCR, including scanned pages in mixed digital/scanned PDFs. Attachment text segments retain the sender identity and stable IDs (`Message-ID:pdf:index` for PDFs, `Message-ID:attachment:index` for other supported types). Other attachment types contribute filenames only. Original attachment bytes are not retained as file artifacts or synced; extracted text is encrypted by the app.
+
+For mail imported before its attachment type was supported, choose **Reindex attachments** on the connected account. This resets the saved UID cursor and replays the mailbox without deleting imported mail. Stable message/thread IDs merge existing email and add the attachment text without duplicating it. The regular bounded checks continue the replay if it exceeds one run.
+
+The API image includes `poppler-utils`, `tesseract-ocr` and German/English OCR language data. A bare API installation needs the equivalent tools on its PATH. PDF attachment extraction allows at most 25 MiB per PDF, 100 pages, 4 MiB of extracted text and two minutes per document. Unsupported, unsafe, unreadable or oversized attachments are reported individually in conversation metadata as `attachment-{index}-indexing` (`indexed`, `skipped: reason` or `failed: reason`). The message body still imports; attachment failures do not block the page. The app summarizes attachments not indexed across the run. Use **Reindex attachments** to retry temporary failures or after repairing an attachment. Unsupported types remain skipped. The cursor advances only after encrypted persistence. OCR quality depends on scan quality; extraction does not guarantee recognition of every word. Contacts retain decoded display names and canonical `email:lowercase-address` identifiers. Conversations carry participant identifiers and the first References/In-Reply-To thread identifier; segments carry sender identifiers, Message-ID and message date. Messages without Message-ID use a mailbox/UID identity for live IMAP.
+
+References: [MailKit TLS options](https://mimekit.net/docs/html/T_MailKit_Security_SecureSocketOptions.htm), [UIDVALIDITY](https://mimekit.net/docs/html/P_MailKit_IMailFolder_UidValidity.htm), [MimeParser](https://mimekit.net/docs/html/T_MimeKit_MimeParser.htm).
+
+Attachment indexing shares a two-minute, 32-attempt and 8 MiB text
+budget per import response. Office ZIPs have the same entry, expansion, path and
+CRC protections as Paperless ZIP imports. Only their document XML is read, with
+DTDs and external entity resolution disabled. General ZIP attachments,
+executables, macros and nested archives are not opened or executed. HTML is
+converted to text without fetching remote resources; scripts and styles are
+excluded and malformed-tag matching has linear runtime.

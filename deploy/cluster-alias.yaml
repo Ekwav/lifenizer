@@ -1,0 +1,22 @@
+# Traefik file-provider configuration for the existing mail host.
+# Activate only after the database cutover and stopping the old Compose API.
+http:
+  routers:
+    lifenizer:
+      rule: Host(`mail.coflnet.com`) && (Path(`/lifenizer`) || PathPrefix(`/lifenizer/`))
+      priority: 100
+      entryPoints: [https]
+      tls:
+        certResolver: http
+      middlewares: [lifenizer-prefix]
+      service: lifenizer-cluster
+  middlewares:
+    lifenizer-prefix:
+      stripPrefix:
+        prefixes: [/lifenizer]
+  services:
+    lifenizer-cluster:
+      loadBalancer:
+        passHostHeader: false
+        servers:
+          - url: https://lifenizer.coflnet.com

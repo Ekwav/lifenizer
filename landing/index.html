@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A private place for your recordings, documents, conversations and browser history. Download Lifenizer for Android and Linux.">
+  <title>Lifenizer · Keep the context</title><link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
+  <link rel="stylesheet" href="/styles.css?v=extension">
+  <script src="/landing.js?v=extension" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="logo" href="/" aria-label="Lifenizer home"><img class="logo-mark" src="/icon.png" width="32" height="32" alt=""> Lifenizer</a>
+    <nav class="nav" aria-label="Main navigation"><a href="#downloads">Downloads</a><a href="/extension">Extension</a><a href="/security.html">Security</a></nav>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="hero-content">
+        <p class="eyebrow">YOUR LIFE, WITH CONTEXT</p>
+        <h1>Keep what matters.<br><span>Find it again.</span></h1>
+        <p class="lede">Bring recordings, documents, conversations and browser history into one private, searchable archive.</p>
+        <div class="actions"><a class="button primary" href="lifenizer://connect-extension" data-lifenizer-connect>Open Lifenizer <span aria-hidden="true">↗</span></a><a class="button" href="#downloads">Get the app <span aria-hidden="true">↓</span></a></div>
+        <p class="connection" id="connection-status" role="status">Already installed? Open the app to connect your browser.</p>
+      </div>
+      <aside class="archive-preview" aria-label="Sources you can bring together">
+        <div class="preview-heading"><span class="status-dot"></span> A little less scattered.</div>
+        <div class="source-row"><span class="source-icon" aria-hidden="true">◉</span><div><strong>A conversation worth keeping</strong><span>Recordings & transcripts</span></div><span class="source-tag">Audio</span></div>
+        <div class="source-row"><span class="source-icon" aria-hidden="true">▤</span><div><strong>The details you might need</strong><span>Documents & notes</span></div><span class="source-tag">Files</span></div>
+        <div class="source-row"><span class="source-icon" aria-hidden="true">↗</span><div><strong>That page from the other day</strong><span>Browser history & bookmarks</span></div><span class="source-tag">Web</span></div>
+        <div class="preview-footer">Your sources. One place to look.</div>
+      </aside>
+    </section>
+    <section class="features" aria-label="How Lifenizer works">
+      <article><span class="eyebrow">01 / COLLECT</span><h2>Start with what you have.</h2><p>Record a conversation or import files and chat exports. Add browser history with the companion extension.</p><a href="/imports.html">Explore imports →</a></article>
+      <article><span class="eyebrow">02 / REMEMBER</span><h2>Search with context.</h2><p>Find text across your archive and return to the people, sources and dates behind it.</p></article>
+      <article><span class="eyebrow">03 / KEEP CONTROL</span><h2>Private by design.</h2><p>Search runs on your device. Synced archive contents are encrypted; hosted processing requires sharing the content you choose.</p><a href="/security.html">Read the security model →</a></article>
+    </section>
+    <section class="section downloads" id="downloads">
+      <div class="section-heading"><div><p class="eyebrow">TAKE IT WITH YOU</p><h2>A home for your archive.</h2></div><p>Native apps for Android and Linux.<br>Browser extensions connect to your local app.</p></div>
+      <p class="download-status" id="download-status" role="status">Checking download availability…</p>
+      <div class="grid">
+        <article class="card"><span class="platform" aria-hidden="true">↓</span><h3>Android</h3><p>Download the APK to your Android device, open it and allow installation from your browser when Android asks.</p><a class="button download" data-download="lifenizer.apk" aria-disabled="true">Checking…</a><span class="format">APK · direct installation</span></article>
+        <article class="card"><span class="platform" aria-hidden="true">›_</span><h3>Linux</h3><p>Extract the archive, then run <code>./lifenizer</code> from the extracted folder on a Linux desktop.</p><a class="button download" data-download="lifenizer-linux-x64.tar.gz" aria-disabled="true">Checking…</a><span class="format">tar.gz · x64</span><details><summary>Enable app links</summary><p>From the extracted folder, run <code>bash integrations/kde/install.sh .</code> to install for your user and register <code>lifenizer://</code> links. Then open Lifenizer and unlock your vault.</p></details></article>
+        <article class="card extension-card" id="extensions"><span class="platform" aria-hidden="true">↗</span><h3>Browser extension</h3><p>Bring browsing context into Lifenizer. Install the extension, then open its popup to connect the app.</p><div class="extension-links"><a class="button download" data-download="lifenizer-history-sync-chromium.zip" aria-disabled="true">Checking…</a><a class="button download" data-download="lifenizer-history-sync-firefox.zip" aria-disabled="true">Checking…</a></div><p class="download-note"><a href="/extension">Install and connect the extension →</a></p></article>
+      </div>
+      <noscript><p>JavaScript is needed to check which packages are available. Enable it and reload this page to download.</p></noscript>
+      <p class="download-note">Early software, still evolving. Keep a separate copy of important originals. <a href="/hosted.html">About hosted services</a></p>
+    </section>
+  </main>
+  <footer class="footer"><a class="logo" href="/"><img class="logo-mark" src="/icon.png" width="32" height="32" alt=""> Lifenizer</a><span>A little more of life, within reach.</span><nav aria-label="More information"><a href="/security.html">Security</a><a href="/privacy.html">Privacy</a></nav></footer>
+</body>
+</html>

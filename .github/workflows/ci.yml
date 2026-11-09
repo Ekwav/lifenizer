@@ -1,0 +1,193 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, "feature/**"]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  extension:
+    name: Browser extension
+    runs-on: coflnet-devserver
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: integrations/browser-extension/package-lock.json
+
+      - name: Install ZIP tool if needed
+        run: |
+          if ! command -v zip >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends zip
+          fi
+
+      - name: Test and package extensions
+        working-directory: integrations/browser-extension
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-extension-zips
+          path: integrations/browser-extension/dist/*.zip
+
+  backend:
+    name: Backend (.NET)
+    runs-on: coflnet-devserver
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore backend/LifenizerNext.slnx
+
+      - name: Build
+        run: dotnet build backend/LifenizerNext.slnx --no-restore -c Release /property:GenerateFullPaths=true /consoleloggerparameters:NoSummary
+
+      - name: Install document extraction tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng
+
+      - name: Test
+        run: dotnet test backend/LifenizerNext.slnx --no-build -c Release --logger "trx;LogFileName=test-results.trx" --results-directory ./test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: test-results/**/*.trx
+
+  flutter:
+    name: Flutter App
+    runs-on: coflnet-devserver
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.4"
+          channel: stable
+
+      - name: Get dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: app
+        run: flutter analyze
+
+      # The Opus codec tests load the system libopus and fail on CI without it.
+      - name: Install libopus if needed
+        run: |
+          if ! ldconfig -p | grep -q 'libopus\.so\.0'; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends libopus0
+          fi
+
+      - name: Test
+        working-directory: app
+        run: flutter test --reporter expanded
+
+      - name: Build production web
+        working-directory: app
+        run: flutter build web --release
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: coflnet-devserver
+    needs: [backend, flutter]
+    if: github.event_name == 'pull_request' || contains(fromJSON('["refs/heads/main","refs/heads/master"]'), github.ref)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.4"
+          channel: stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Build Flutter web
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build web --release --dart-define=LIFENIZER_E2E=true
+
+      - name: Build backend
+        run: |
+          dotnet restore backend/LifenizerNext.slnx
+          dotnet build backend/LifenizerNext.slnx -c Release --no-restore
+
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # The real Whisper test is run explicitly by scripts/verify.sh --live-whisper.
+      - name: Run E2E tests
+        working-directory: e2e
+        run: npx playwright test '^(?!.*audio-search\.spec\.ts$).*' --reporter=list
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/test-results/
+
+  container:
+    name: Cluster image
+    needs: [backend, flutter, e2e, extension]
+    if: github.repository == 'Coflnet/Lifenizer' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      security-events: write
+    uses: Coflnet/.github/.github/workflows/container-ci.yml@9590d8eb788df71bb44c9601a3ae2e10b09f1a8a
+    with:
+      runner: '["coflnet-devserver"]'
+      dockerfile: backend/Dockerfile
+      context: .
+      k8s_file: lifenizer/app/chart/values.yaml
+      repo_url: https://github.com/Coflnet/fleet
+    secrets:
+      ARGO_WEBHOOK_SECRET: ${{ secrets.ARGO_WEBHOOK_SECRET }}

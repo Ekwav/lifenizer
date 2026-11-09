@@ -2,40 +2,63 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build",
+            "label": "backend: build",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Tests/Tests.csproj",
+                "${workspaceFolder}/backend/LifenizerNext.slnx",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "publish",
+            "label": "backend: test",
             "command": "dotnet",
             "type": "process",
             "args": [
-                "publish",
-                "${workspaceFolder}/Tests/Tests.csproj",
+                "test",
+                "${workspaceFolder}/backend/LifenizerNext.slnx",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
-            "problemMatcher": "$msCompile"
+            "problemMatcher": "$msCompile",
+            "group": "test"
         },
         {
-            "label": "watch",
+            "label": "backend: watch api",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/Tests/Tests.csproj"
+                "${workspaceFolder}/backend/Lifenizer.Api/Lifenizer.Api.csproj"
             ],
-            "problemMatcher": "$msCompile"
+            "problemMatcher": "$msCompile",
+            "isBackground": true
+        },
+        {
+            "label": "app: flutter analyze",
+            "command": "flutter",
+            "type": "process",
+            "args": ["analyze"],
+            "options": {
+                "cwd": "${workspaceFolder}/app"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "app: flutter test",
+            "command": "flutter",
+            "type": "process",
+            "args": ["test"],
+            "options": {
+                "cwd": "${workspaceFolder}/app"
+            },
+            "problemMatcher": [],
+            "group": "test"
         }
     ]
 }
