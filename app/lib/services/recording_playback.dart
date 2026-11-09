@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
 import '../app_state.dart';
+import 'recording_codec.dart';
 
 abstract class RecordingAudioEngine {
   Future<void> load(RecordingAudio audio);
@@ -26,9 +27,11 @@ class MemoryRecordingAudioEngine implements RecordingAudioEngine {
   Future<void> load(RecordingAudio audio) async {
     if (!_engine.isInitialized) await _engine.init();
     if (_disposed) return;
+    final bytes = await recordingForPlayback(audio.bytes);
+    if (_disposed) return;
     final source = await _engine.loadMem(
       'recording-${_nextId++}-${audio.fileName}',
-      audio.bytes,
+      bytes,
     );
     if (_disposed) {
       await _engine.disposeSource(source);

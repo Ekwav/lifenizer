@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app/app_state.dart';
+import 'package:app/services/wav_audio.dart';
 import 'package:app/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,8 @@ class _State extends LifenizerAppState {
   bool failImport = false;
   final failedIds = <String>{};
   final imported = <String>[];
+  void Function(List<int> bytes) checkAudio = (bytes) =>
+      expect(bytes.sublist(44), [1, 2, 3, 4]);
   @override
   bool get isAuthenticated => unlocked;
   @override
@@ -21,7 +24,7 @@ class _State extends LifenizerAppState {
     RecordingLocation? location,
   }) async {
     if (failImport || failedIds.contains(id)) throw StateError('disk full');
-    expect(bytes.sublist(44), [1, 2, 3, 4]);
+    checkAudio(bytes);
     imported.add(id);
   }
 
@@ -82,6 +85,8 @@ void main() {
       AppLifecycleState.resumed,
     );
     state = _State()..rememberedEmail = 'owner@example.com';
+    // Lifecycle timing only; Opus storage is covered by recording_codec_test.
+    state.recording.encodeAudio = (pcm) async => encodeWav(pcm);
   });
   tearDown(() {
     state.dispose();
@@ -213,6 +218,40 @@ void main() {
       expect(state.imported, ['valid']);
       expect(pending.map((item) => item['id']), ['failed']);
       expect(state.recording.error, contains('disk full'));
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
+    'native captures are stored through the recording encoder',
+    (tester) async {
+      await settle(tester);
+      pending.add({'id': 'opus', 'startedAt': 1000});
+      state.recording.encodeAudio = (pcm) async =>
+          Uint8List.fromList([9, ...pcm]);
+      state.checkAudio = (bytes) => expect(bytes, [9, 1, 2, 3, 4]);
+      state.unlocked = true;
+      state.changed();
+      await settle(tester);
+      expect(state.imported, ['opus']);
+      expect(pending, isEmpty);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
+    'a failed encoding keeps the native capture for the next resume',
+    (tester) async {
+      await settle(tester);
+      pending.add({'id': 'kept', 'startedAt': 1000});
+      state.recording.encodeAudio = (pcm) async => throw StateError('codec');
+      state.unlocked = true;
+      state.changed();
+      await settle(tester);
+      expect(state.imported, isEmpty);
+      expect(pending.map((item) => item['id']), ['kept']);
+      expect(calls, isNot(contains('ack')));
+      expect(state.recording.error, contains('codec'));
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );

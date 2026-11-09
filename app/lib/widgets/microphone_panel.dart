@@ -7,6 +7,7 @@ import 'recording_details_sheet.dart';
 import 'recording_audio_player.dart';
 import 'transcription_progress.dart';
 import '../models.dart';
+import '../services/audio_format.dart';
 import '../services/recording_location_service.dart';
 
 class MicrophonePanel extends StatefulWidget {
@@ -104,10 +105,11 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
         );
         return;
       }
+      final format = RecordingFormat.detect(bytes) ?? RecordingFormat.wav;
       final imported = await widget.state.importAudioBytes(
         bytes: bytes,
-        fileName: 'recording.wav',
-        mimeType: 'audio/wav',
+        fileName: format.fileName,
+        mimeType: format.contentType,
         title: title.isEmpty ? 'Recorded conversation' : title,
         participantNames: draftPeople(draft).join(', '),
         participantIds: (draft['participantIds'] as List? ?? const [])

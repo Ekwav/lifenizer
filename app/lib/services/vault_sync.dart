@@ -1465,9 +1465,9 @@ extension VaultSync on LifenizerAppState {
     _notifyChanged();
   }
 
-  /// The pending recording's WAV bytes, read and decrypted on demand (the core
-  /// record holds only its metadata). Null when there is no draft or its stored
-  /// payload does not match the core.
+  /// The pending recording's audio (Ogg Opus or WAV), decrypted on demand
+  /// (the core record holds only its metadata). Null when there is no draft or
+  /// its stored payload does not match the core.
   Future<List<int>?> loadAudioDraftPayload() async {
     final draft = audioDraft;
     if (draft == null) return null;

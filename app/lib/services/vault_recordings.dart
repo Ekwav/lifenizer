@@ -28,6 +28,9 @@ extension VaultRecordings on LifenizerAppState {
     }
   }
 
+  String _recordingFileName(List<int> bytes) =>
+      (RecordingFormat.detect(bytes) ?? RecordingFormat.wav).fileName;
+
   bool _knownRecording(String id) =>
       conversations.any((c) => c.id == id && c.source == 'audio');
 
@@ -164,7 +167,7 @@ extension VaultRecordings on LifenizerAppState {
               location: location,
               participantIds: [],
               segments: [],
-              artifactNames: ['recording.wav'],
+              artifactNames: [_recordingFileName(bytes)],
               startedAt: recordedAt,
               endedAt: recordedAt,
             )
@@ -251,7 +254,7 @@ extension VaultRecordings on LifenizerAppState {
                     )
                   : null,
               segments: [],
-              artifactNames: ['recording.wav'],
+              artifactNames: [_recordingFileName(bytes)],
               startedAt: recordedAt,
               endedAt: recordedAt,
             )

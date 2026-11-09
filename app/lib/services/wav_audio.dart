@@ -3,12 +3,32 @@ import 'dart:typed_data';
 
 /// Wrap mono 16-bit little-endian PCM captured at 16 kHz in a WAV container.
 Uint8List encodeWav(Uint8List pcm) {
-  final data = ByteData(44 + pcm.length);
-  final bytes = data.buffer.asUint8List();
+  final bytes = Uint8List(44 + pcm.length);
+  _writeWavHeader(bytes, pcm.length);
+  return bytes..setRange(44, bytes.length, pcm);
+}
+
+/// A zeroed 16 kHz mono PCM16 WAV of [samples] samples, header filled in, so
+/// decoders can write samples in place at byte 44 + 2 * index.
+Uint8List wavBuffer(int samples) {
+  final bytes = Uint8List(44 + samples * 2);
+  _writeWavHeader(bytes, samples * 2);
+  return bytes;
+}
+
+/// [wav] (from [wavBuffer]) shortened to its first [samples] samples.
+Uint8List truncateWav(Uint8List wav, int samples) {
+  final shorter = Uint8List.sublistView(wav, 0, 44 + samples * 2);
+  _writeWavHeader(shorter, samples * 2);
+  return shorter;
+}
+
+void _writeWavHeader(Uint8List bytes, int dataLength) {
+  final data = ByteData.sublistView(bytes);
   void label(int offset, String text) =>
       bytes.setRange(offset, offset + 4, ascii.encode(text));
   label(0, 'RIFF');
-  data.setUint32(4, 36 + pcm.length, Endian.little);
+  data.setUint32(4, 36 + dataLength, Endian.little);
   label(8, 'WAVE');
   label(12, 'fmt ');
   data.setUint32(16, 16, Endian.little);
@@ -19,9 +39,7 @@ Uint8List encodeWav(Uint8List pcm) {
   data.setUint16(32, 2, Endian.little);
   data.setUint16(34, 16, Endian.little);
   label(36, 'data');
-  data.setUint32(40, pcm.length, Endian.little);
-  bytes.setRange(44, bytes.length, pcm);
-  return bytes;
+  data.setUint32(40, dataLength, Endian.little);
 }
 
 /// Extract only the selected sentence from our 16 kHz mono PCM WAV recordings.

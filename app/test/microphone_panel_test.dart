@@ -3,7 +3,10 @@ import 'dart:convert';
 
 import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
+import 'package:app/services/audio_format.dart';
 import 'package:app/services/local_vault_store.dart';
+import 'package:app/services/recording_codec.dart';
+import 'package:app/services/wav_audio.dart';
 import 'package:app/widgets/microphone_panel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -133,6 +136,8 @@ class _Vault {
       localStore: store,
       apiFactory: (url) => LifenizerApiClient(baseUrl: url, client: client),
     );
+    // These tests check exact samples; Opus storage has its own test.
+    state.recording.encodeAudio = (pcm) async => encodeWav(pcm);
     final vault = _Vault(store, client, state);
     await vault.unlock();
     return vault;
@@ -521,6 +526,33 @@ void main() {
       expect(vault.state.conversations, isEmpty);
       expect(cancel, findsNothing);
       await verifyDraft(tester, vault);
+      await remove(tester, vault);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
+
+  testWidgets(
+    'stop stores the draft as Ogg Opus where libopus is available',
+    (tester) async {
+      final vault = await mount(tester);
+      vault.state.recording.encodeAudio = encodeRecording;
+      await start(tester);
+      recorder.pcm.add(Uint8List(16000 * 2));
+      await tester.pump();
+      await tester.tap(find.text('Stop and save recording'));
+      await finish(tester, vault.state.recording.stop());
+      final draft = (await tester.runAsync(vault.state.loadAudioDraftPayload))!;
+      final expected = await tester.runAsync(
+        () => encodeRecording(Uint8List(4)),
+      );
+      expect(
+        RecordingFormat.detect(draft),
+        RecordingFormat.detect(expected!),
+        reason: 'Opus when this host can encode it, WAV otherwise',
+      );
+      if (RecordingFormat.detect(draft) == RecordingFormat.oggOpus) {
+        expect(draft.length, lessThan(16000 * 2 ~/ 6));
+      }
       await remove(tester, vault);
     },
     variant: TargetPlatformVariant.only(TargetPlatform.linux),

@@ -8,7 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:record/record.dart';
 
 import '../app_state.dart';
-import 'wav_audio.dart';
+import 'recording_codec.dart';
 import 'recording_location_service.dart';
 import '../models.dart';
 
@@ -78,28 +78,9 @@ class RecordingController extends ChangeNotifier with WidgetsBindingObserver {
       for (final value in captures) {
         if (!_canImport || scope != _scope) break;
         try {
-          final capture = value as Map<Object?, Object?>;
-          final arguments = {'scope': scope, 'id': capture['id']};
-          final pcm = await _background.invokeMethod<Uint8List>(
-            'read',
-            arguments,
-          );
-          if (!_canImport || scope != _scope) break;
-          if (pcm == null || pcm.isEmpty) {
-            error = 'No audio was captured. Check your microphone.';
-            continue;
+          if (!await _recoverCapture(value as Map<Object?, Object?>, scope)) {
+            break;
           }
-          await state.importPendingRecording(
-            encodeWav(pcm),
-            DateTime.fromMillisecondsSinceEpoch(capture['startedAt'] as int),
-            capture['id'] as String,
-            location: capture['location'] is Map
-                ? RecordingLocation.fromJson(
-                    Map<String, dynamic>.from(capture['location'] as Map),
-                  )
-                : null,
-          );
-          await _background.invokeMethod<void>('ack', arguments);
         } catch (failure) {
           error = 'Could not recover a recording: $failure';
         }
@@ -111,6 +92,36 @@ class RecordingController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Imports one native capture; false when importing must stop for now.
+  Future<bool> _recoverCapture(
+    Map<Object?, Object?> capture,
+    String scope,
+  ) async {
+    final arguments = {'scope': scope, 'id': capture['id']};
+    final pcm = await _background.invokeMethod<Uint8List>('read', arguments);
+    if (!_canImport || scope != _scope) return false;
+    if (pcm == null || pcm.isEmpty) {
+      error = 'No audio was captured. Check your microphone.';
+      return true;
+    }
+    // The native .pending PCM stays until 'ack', so a crash or lock while
+    // encoding only repeats this capture on the next resume.
+    final audio = await encodeAudio(pcm);
+    if (!_canImport || scope != _scope) return false;
+    await state.importPendingRecording(
+      audio,
+      DateTime.fromMillisecondsSinceEpoch(capture['startedAt'] as int),
+      capture['id'] as String,
+      location: capture['location'] is Map
+          ? RecordingLocation.fromJson(
+              Map<String, dynamic>.from(capture['location'] as Map),
+            )
+          : null,
+    );
+    await _background.invokeMethod<void>('ack', arguments);
+    return true;
+  }
+
   bool get _canImport =>
       !_disposed && _resumed && state.isAuthenticated && !state.busy;
 
@@ -120,6 +131,9 @@ class RecordingController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   final LifenizerAppState state;
+
+  /// Turns finished PCM into the stored file: Ogg Opus, or WAV as fallback.
+  Future<Uint8List> Function(Uint8List pcm) encodeAudio = encodeRecording;
   AudioRecorder? _recorder;
   final _pcm = BytesBuilder(copy: false);
   static const _background = MethodChannel('com.lifenizer/recording');
@@ -267,7 +281,7 @@ class RecordingController extends ChangeNotifier with WidgetsBindingObserver {
       if (_pcm.length == 0) {
         throw StateError('No audio was captured. Check your microphone.');
       }
-      await state.saveAudioDraft(encodeWav(_pcm.toBytes()), startedAt!);
+      await state.saveAudioDraft(await encodeAudio(_pcm.toBytes()), startedAt!);
       _pcm.clear();
     } catch (failure) {
       error = failure.toString();

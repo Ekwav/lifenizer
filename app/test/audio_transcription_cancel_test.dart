@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
 import 'package:app/models.dart';
 import 'package:app/services/audio_payload_codec.dart';
+import 'package:app/services/ogg_opus.dart';
 import 'package:app/services/request_cancellation.dart';
+import 'package:app/services/wav_audio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -179,6 +182,37 @@ void main() {
       await import;
       return client.uploads.single;
     }
+
+    test('sends Ogg Opus recordings as audio/ogg', () async {
+      final ogg =
+          (OggOpusWriter(preSkip: 312, serial: 1)
+                ..addPacket(Uint8List.fromList([0xF8, 0xFF, 0xFE])))
+              .finish(endGranule: 960);
+
+      final upload = await uploadOf(ogg, 'recording.ogg');
+
+      expect(upload.parts.keys, ['metadata', 'audio']);
+      expect(upload.audioType, 'audio/ogg');
+      expect(upload.audio, ogg);
+      expect(
+        upload.parts['audio']!.headers['content-disposition'],
+        contains('filename="recording.ogg"'),
+      );
+      expect(
+        upload.parts['metadata']!.contentType,
+        startsWith('application/json'),
+      );
+      expect(upload.metadata['mimeType'], 'audio/ogg');
+      expect(upload.metadata['title'], 'Memo');
+      expect(upload.metadata.containsKey('payloadBase64'), isFalse);
+    });
+
+    test('sends WAV recordings as audio/wav', () async {
+      final wav = encodeWav(Uint8List(640));
+      final upload = await uploadOf(wav, 'recording.wav');
+      expect(upload.audioType, 'audio/wav');
+      expect(upload.audio, wav);
+    });
 
     test('keeps the claimed type for other files', () async {
       final upload = await uploadOf([1, 2, 3], 'song.mp3');

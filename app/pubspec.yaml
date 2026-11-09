@@ -39,6 +39,7 @@ dependencies:
   cryptography: ^2.9.0
   sodium: 4.0.4
   ffi: ^2.2.0
+  web: ^1.1.1
   flutter_secure_storage: ^10.3.4
   uuid: ^4.5.3
   shared_preferences: ^2.5.5

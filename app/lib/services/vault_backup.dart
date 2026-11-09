@@ -125,6 +125,7 @@ extension VaultBackup on LifenizerAppState {
         if (matches.length == 1) people.add(matches.single.id);
       }
       final at = DateTime.parse(draft['recordedAt'] as String);
+      final format = RecordingFormat.detect(bytes) ?? RecordingFormat.wav;
       yield {
         'type': 'conversation',
         'value': Conversation(
@@ -138,7 +139,7 @@ extension VaultBackup on LifenizerAppState {
               : null,
           participantIds: people.toList(),
           segments: [],
-          artifactNames: ['recording.wav'],
+          artifactNames: [format.fileName],
           startedAt: at,
           endedAt: at,
         ).toJson(),
@@ -146,8 +147,8 @@ extension VaultBackup on LifenizerAppState {
       yield* _backupMediaRecords({
         'kind': 'audio',
         'id': id,
-        'fileName': 'recording.wav',
-        'contentType': 'audio/wav',
+        'fileName': format.fileName,
+        'contentType': format.contentType,
       }, bytes);
     }
     // The gallery may currently show only one conversation; fetch the complete

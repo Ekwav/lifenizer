@@ -427,8 +427,11 @@ extension VaultImports on LifenizerAppState {
     }
   }
 
+  /// Our own recordings are identified by content, never by name.
   String _audioContentType(List<int> bytes, String fileName, String? claimed) =>
-      claimed ?? _guessAudioMimeType(fileName);
+      RecordingFormat.detect(bytes)?.contentType ??
+      claimed ??
+      _guessAudioMimeType(fileName);
 
   Map<String, String> _audioMetadata(String? language, DateTime? recordedAt) {
     final trimmed = language?.trim() ?? '';

@@ -1,20 +1,22 @@
 part of '../app_state.dart';
 
 extension VaultTraining on LifenizerAppState {
+  /// Without an explicit type, our own recordings are labelled by content.
   Future<void> _cacheCorrectionAudio(
     String conversationId,
     List<int> bytes, {
-    String contentType = 'audio/wav',
-    String fileName = 'recording.wav',
+    String? contentType,
+    String? fileName,
   }) async {
     final vault = _localVaultKey;
     if (vault == null) return;
+    final format = RecordingFormat.detect(bytes) ?? RecordingFormat.wav;
     final encoded = await base64EncodeInWorker(bytes);
     final payload = await _crypto.encryptJson({
       'vaultKey': vault,
       'vaultId': session?.vaultId,
-      'contentType': contentType,
-      'fileName': fileName,
+      'contentType': contentType ?? format.contentType,
+      'fileName': fileName ?? format.fileName,
       'conversationId': conversationId,
       'bytes': encoded,
     }, background: true);
@@ -69,14 +71,14 @@ extension VaultTraining on LifenizerAppState {
         'This sentence has no usable audio end timestamp. Re-transcribe the original recording or record a replacement sentence.',
       );
     }
-    final bytes =
+    final source =
         audioOverride ?? (await loadRecordingAudio(conversation.id)).bytes;
     return RecordingAudio(
-      bytes: await compute(_trainingClip, (
-        bytes,
-        segment.offsetMs,
-        segment.endMs ?? nextStart,
-      )),
+      bytes: await recordingClip(
+        source,
+        startMs: segment.offsetMs,
+        endMs: segment.endMs ?? nextStart,
+      ),
       fileName: 'sentence.wav',
     );
   }

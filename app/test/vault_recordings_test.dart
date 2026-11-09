@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:app/api_client.dart';
 import 'package:app/app_state.dart';
 import 'package:app/crypto_service.dart';
 import 'package:app/models.dart';
 import 'package:app/services/local_vault_store.dart';
+import 'package:app/services/ogg_opus.dart';
 import 'package:app/services/audio_cache_io.dart' as cache;
 import 'package:app/services/recording_relay_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -620,6 +622,31 @@ void main() {
       await expectLater(state.transcribeRecording(id), throwsStateError);
     },
   );
+
+  test('an Ogg Opus capture is stored, loaded and uploaded as Opus', () async {
+    final state = await device();
+    final ogg =
+        (OggOpusWriter(preSkip: 312, serial: 3)
+              ..addPacket(Uint8List.fromList([0xF8, 0xFF, 0xFE])))
+            .finish(endGranule: 960);
+    await state.importPendingRecording(
+      ogg,
+      DateTime.utc(2026, 10, 21),
+      'native-opus',
+    );
+    final id = state.conversations.single.id;
+    expect(state.conversations.single.artifactNames, ['recording.ogg']);
+
+    final audio = await state.loadRecordingAudio(id);
+    expect(audio.bytes, ogg);
+    expect(audio.contentType, 'audio/ogg');
+    expect(audio.fileName, 'recording.ogg');
+
+    await state.transcribeRecording(id);
+    expect(uploads.single.audioType, 'audio/ogg');
+    expect(uploads.single.audio, ogg);
+    expect(uploads.single.metadata['originalFileName'], 'recording.ogg');
+  });
 
   test('empty draft retention keeps the draft and reports failure', () async {
     final state = await device();

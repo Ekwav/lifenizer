@@ -99,6 +99,14 @@ jobs:
         working-directory: app
         run: flutter analyze
 
+      # The Opus codec tests load the system libopus and fail on CI without it.
+      - name: Install libopus if needed
+        run: |
+          if ! ldconfig -p | grep -q 'libopus\.so\.0'; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends libopus0
+          fi
+
       - name: Test
         working-directory: app
         run: flutter test --reporter expanded

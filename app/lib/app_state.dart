@@ -37,6 +37,8 @@ import 'services/recording_controller.dart';
 import 'services/recording_relay_service.dart';
 import 'services/request_cancellation.dart';
 import 'services/audio_payload_codec.dart';
+import 'services/audio_format.dart';
+import 'services/recording_codec.dart';
 import 'services/audio_cache_io.dart'
     if (dart.library.js_interop) 'services/audio_cache_web.dart'
     as audio_cache;
