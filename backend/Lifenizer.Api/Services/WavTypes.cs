@@ -71,7 +71,11 @@ public sealed record WavLayout(WavFormat Format, int DataOffset, int DataLength)
 public sealed record WavChunk(int ByteOffset, int ByteLength, TimeSpan Start);
 
 /// <summary>Chunks to transcribe; an empty list means the audio holds nothing audible.</summary>
-public sealed record WavChunkPlan(WavFormat Format, IReadOnlyList<WavChunk> Chunks);
+public sealed record WavChunkPlan(WavFormat Format, IReadOnlyList<WavChunk> Chunks)
+{
+    /// <summary>How the planner judged the source's frames; null for hand-built plans (no tail recovery then).</summary>
+    public WavSpeechMap? Speech { get; init; }
+}
 
 /// <summary>
 /// Audio bytes that the plan's chunk offsets refer to (original WAV, or decoded PCM). Holds the audio
@@ -92,4 +96,38 @@ public sealed record AudioLimits(int MaxAudioSeconds, AudioMemoryBudget Budget, 
     public const int MaxConfigurableSeconds = 36_000;
 
     public static int ClampSeconds(int seconds) => Math.Clamp(seconds, MinConfigurableSeconds, MaxConfigurableSeconds);
+}
+
+/// <summary>
+/// Frame levels of a PCM source as the planner judged them (adaptive threshold over the whole source), so a
+/// part of it can later be tested for speech with the same rule the planner uses to keep a chunk.
+/// </summary>
+public sealed class WavSpeechMap
+{
+    internal WavSpeechMap(WavSilenceChunker.SpeechTest test, int frameBytes, double frameSeconds, int dataOffset)
+    {
+        Test = test;
+        FrameBytes = frameBytes;
+        FrameSeconds = frameSeconds;
+        DataOffset = dataOffset;
+    }
+
+    internal WavSilenceChunker.SpeechTest Test { get; }
+    internal int FrameBytes { get; }
+    internal double FrameSeconds { get; }
+    private int DataOffset { get; }
+
+    /// <summary>
+    /// Whether the absolute byte range holds speech: audible and at least MinSpeech (or <paramref name="minSpeechSeconds"/>, if larger) of non-silent frames.
+    /// Only frames that start inside the range count, so a word ending just before it is not mistaken for speech in it.
+    /// </summary>
+    public bool HasSpeech(int byteOffset, int byteLength, double minSpeechSeconds = 0)
+    {
+        var from = Math.Max(0, CeilFrames(byteOffset - DataOffset));
+        var to = Math.Min(Test.Energy.Length, CeilFrames(byteOffset + byteLength - DataOffset));
+        var minFrames = Math.Max(Test.MinSpeechFrames, (int)Math.Ceiling(minSpeechSeconds / FrameSeconds));
+        return to > from && Test.IsWorthSending(new WavSilenceChunker.FrameRange(from, to), minFrames);
+    }
+
+    private int CeilFrames(int bytes) => bytes <= 0 ? 0 : (bytes + FrameBytes - 1) / FrameBytes;
 }

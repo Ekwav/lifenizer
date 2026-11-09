@@ -244,18 +244,20 @@ public sealed class ProviderHttpImportClient(
     {
         var limits = new AudioLimits(AudioLimits.ClampSeconds(configuration.GetValue("Imports:MaxAudioSeconds", AudioChunking.DefaultMaxAudioSeconds)), audioMemoryBudget, WhisperSettings.ChunkerOptions(configuration));
         using var source = await AudioChunking.TryCreateSourceAsync(audioBytes, limits, cancellationToken);
+        var requestLanguage = WhisperTranscriptionClient.NormalizeLanguage(language);
+        ChunkedWhisperTranscriber.TranscribeChunk sendSlice = (audio, token) => whisperTranscriptionClient.TranscribeAsync(audio, fileName, requestLanguage ?? audio.Language, token);
         if (source is null)
         {
-            return await chunkedTranscriber.RunGatedAsync(
+            var whole = await chunkedTranscriber.RunGatedAsync(
                 token => ChunkedWhisperTranscriber.WithTimeoutAsync(WhisperSettings.WholeFileTimeout(configuration),
                     timed => whisperTranscriptionClient.TranscribeAsync(audioBytes, fileName, mimeType, language, timed), token),
                 cancellationToken);
+            return await chunkedTranscriber.RecoverWholeFileTailAsync(whole, () => AudioChunking.WholeDurationSeconds(audioBytes), token => AudioChunking.TryLoadWholeAsync(audioBytes, limits, token), sendSlice, cancellationToken);
         }
         if (source.Plan.Chunks.Count == 0) throw new InvalidOperationException(NoUsableTextMessage);
 
         var maxParallel = Math.Clamp(configuration.GetValue("Whisper:MaxParallelChunks", 4), 1, 16);
-        return await chunkedTranscriber.TranscribeAsync(source.Bytes, source.Plan, maxParallel,
-            (audio, token) => whisperTranscriptionClient.TranscribeAsync(audio, fileName, language, token), cancellationToken);
+        return await chunkedTranscriber.TranscribeAsync(source.Bytes, source.Plan, maxParallel, sendSlice, cancellationToken);
     }
 
     /// <summary>
