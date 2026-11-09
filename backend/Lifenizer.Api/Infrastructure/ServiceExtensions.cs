@@ -111,6 +111,8 @@ public static class ServiceExtensions
         services.AddScoped<UserAccountService>();
         services.AddScoped<PlainImapImportClient>();
         services.AddScoped<WhisperTranscriptionClient>();
+        services.AddSingleton(provider => new ChunkedWhisperTranscriber(
+            provider.GetRequiredService<ILogger<ChunkedWhisperTranscriber>>(), provider.GetRequiredService<IConfiguration>()));
         services.AddScoped<TabTrainingClient>();
         services.AddSingleton<YouTubeCaptionFetcher>(provider => new YouTubeCaptionFetcher(provider.GetRequiredService<IHttpClientFactory>()));
         services.AddScoped<ProviderHttpImportClient>();

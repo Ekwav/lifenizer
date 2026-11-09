@@ -523,6 +523,20 @@ Optional request metadata:
   values more than 1 day in the future, are rejected with a 400 naming `metadata.recordedAt`.
   Applies to both the base64 audio payload path and the direct-`text` transcript path.
 
+#### Chunked transcription
+
+WAV (PCM16) recordings longer than 30 s are split on silence into ~7-17 s chunks,
+transcribed in parallel and merged (segment times shifted by the chunk offset; language is the most
+frequent chunk language). Entirely silent recordings fail with "no usable text" without calling whisper.
+Other formats (mp3, m4a, webm, float WAV) are sent whole as before. WAV sample rates outside 8000-192000 Hz
+are a 400. Config:
+
+- `Whisper:MaxParallelChunks` (default 4) — parallel chunks per import
+- `Whisper:MaxConcurrentRequests` (default 4) — global cap on whisper requests across all imports
+  (chunk requests and whole-file requests alike)
+- `Whisper:ChunkTimeoutSeconds` (default 180) — per chunk request, excluding queue time; timeouts are not retried
+  (connection errors and 5xx are retried once)
+
 ### audio playback and saved originals
 
 **Capture** offers play/pause and seeking for a stopped draft. **Save recording to

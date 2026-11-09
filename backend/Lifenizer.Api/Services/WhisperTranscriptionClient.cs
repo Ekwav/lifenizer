@@ -86,11 +86,11 @@ public sealed class WhisperTranscriptionClient(IHttpClientFactory httpClientFact
         }
         catch (HttpRequestException exception)
         {
-            throw new InvalidOperationException($"Whisper transcription service at {baseUrl} is unreachable: {exception.Message}");
+            throw new WhisperTransientException($"Whisper transcription service at {baseUrl} is unreachable: {exception.Message}");
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new InvalidOperationException($"Whisper transcription service at {baseUrl} timed out.");
+            throw new WhisperTimeoutException($"Whisper transcription service at {baseUrl} timed out.");
         }
 
         using (response)
@@ -99,7 +99,8 @@ public sealed class WhisperTranscriptionClient(IHttpClientFactory httpClientFact
             if (!response.IsSuccessStatusCode)
             {
                 var excerpt = body.Length > 300 ? body[..300] + "…" : body;
-                throw new InvalidOperationException($"Whisper transcription service at {baseUrl} failed with {(int)response.StatusCode}: {excerpt}");
+                var failure = $"Whisper transcription service at {baseUrl} failed with {(int)response.StatusCode}: {excerpt}";
+                throw (int)response.StatusCode >= 500 ? new WhisperTransientException(failure) : new InvalidOperationException(failure);
             }
 
             return ParseResponse(body);
@@ -182,6 +183,12 @@ public sealed class WhisperTranscriptionClient(IHttpClientFactory httpClientFact
         return string.Equals(trimmed, "auto", StringComparison.OrdinalIgnoreCase) ? null : trimmed;
     }
 }
+
+/// <summary>The whisper request timed out. Not retried: whisper may still be working on it.</summary>
+public sealed class WhisperTimeoutException(string message) : InvalidOperationException(message);
+
+/// <summary>A whisper failure worth retrying (unreachable, timeout, 5xx). Still an InvalidOperationException for callers.</summary>
+public sealed class WhisperTransientException(string message) : InvalidOperationException(message);
 
 public sealed record WhisperTranscriptionResult(string Text, string? Language, IReadOnlyList<WhisperSegment> Segments);
 

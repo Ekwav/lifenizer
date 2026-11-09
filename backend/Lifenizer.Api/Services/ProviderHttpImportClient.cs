@@ -11,10 +11,13 @@ public sealed class ProviderHttpImportClient(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
     WhisperTranscriptionClient whisperTranscriptionClient,
+    ChunkedWhisperTranscriber chunkedTranscriber,
     ParserRegistry parserRegistry,
     YouTubeCaptionFetcher youTubeCaptionFetcher,
     IHttpContextAccessor httpContextAccessor)
 {
+    private const string NoUsableTextMessage = "Whisper transcription returned no usable text.";
+
     public async Task<NormalizedImportResponse> ImportPaperlessAsync(ImportRequest request, CancellationToken cancellationToken)
     {
         var baseUrl = ProviderBaseUrl(request, "Imports:Paperless:BaseUrl", "Paperless");
@@ -174,31 +177,27 @@ public sealed class ProviderHttpImportClient(
             throw new InvalidOperationException("Audio import payloadBase64 is not valid base64.");
         }
 
+        return await TranscribeAndNormalizeAsync(request, audioBytes, request.MimeType, recordedAt, cancellationToken);
+    }
+
+    private async Task<NormalizedImportResponse> TranscribeAndNormalizeAsync(
+        ImportRequest request, byte[] audioBytes, string? requestMimeType, DateTimeOffset? recordedAt, CancellationToken cancellationToken)
+    {
         var fileName = request.OriginalFileName ?? ImportTextParsers.Metadata(request, "fileName") ?? "audio-upload";
-        var mimeType = request.MimeType ?? "application/octet-stream";
+        var mimeType = requestMimeType ?? "application/octet-stream";
         // NOTE: language is the only per-request override honored here. The whisper-trained base
         // URL is intentionally configuration-only (Whisper:BaseUrl) -- it must never come from
         // request metadata, or any authenticated user could redirect server-side requests to
         // arbitrary in-cluster addresses (SSRF).
         var language = ImportTextParsers.Metadata(request, "language");
 
-        var transcription = await whisperTranscriptionClient.TranscribeAsync(audioBytes, fileName, mimeType, language, cancellationToken);
+        var transcription = await TranscribeAudioAsync(audioBytes, fileName, mimeType, language, cancellationToken);
 
-        var segments = new List<NormalizedSegment>();
-        foreach (var segment in transcription.Segments)
-        {
-            var text = segment.Text.Trim();
-            if (text.Length == 0) continue;
-            var offsetMs = (int)Math.Round(segment.Start * 1000);
-            var endMs = segment.End is { } end && double.IsFinite(end) && end >= segment.Start && end * 1000 <= int.MaxValue
-                ? (int?)Math.Round(end * 1000) : null;
-            var createdAt = recordedAt is null ? (DateTimeOffset?)null : recordedAt.Value + TimeSpan.FromMilliseconds(offsetMs);
-            segments.Add(new NormalizedSegment(text, null, offsetMs, createdAt, EndMs: endMs));
-        }
+        var segments = MapSegments(transcription, recordedAt);
 
         if (segments.Count == 0)
         {
-            throw new InvalidOperationException("Whisper transcription returned no usable text.");
+            throw new InvalidOperationException(NoUsableTextMessage);
         }
 
         var metadata = !string.IsNullOrWhiteSpace(transcription.Language)
@@ -215,6 +214,37 @@ public sealed class ProviderHttpImportClient(
             metadata);
 
         return ImportTextParsers.Response("audio", $"Transcribed and normalized {segments.Count} audio segment(s).", [conversation]);
+    }
+
+    private static List<NormalizedSegment> MapSegments(WhisperTranscriptionResult transcription, DateTimeOffset? recordedAt)
+    {
+        var segments = new List<NormalizedSegment>();
+        foreach (var segment in transcription.Segments)
+        {
+            var text = segment.Text.Trim();
+            if (text.Length == 0) continue;
+            var offsetMs = (int)Math.Round(segment.Start * 1000);
+            var endMs = segment.End is { } end && double.IsFinite(end) && end >= segment.Start && end * 1000 <= int.MaxValue
+                ? (int?)Math.Round(end * 1000) : null;
+            var createdAt = recordedAt is null ? (DateTimeOffset?)null : recordedAt.Value + TimeSpan.FromMilliseconds(offsetMs);
+            segments.Add(new NormalizedSegment(text, null, offsetMs, createdAt, EndMs: endMs));
+        }
+        return segments;
+    }
+
+    private async Task<WhisperTranscriptionResult> TranscribeAudioAsync(byte[] audioBytes, string fileName, string mimeType, string? language, CancellationToken cancellationToken)
+    {
+        var plan = await Task.Run(() => WavSilenceChunker.TryPlan(audioBytes), cancellationToken);
+        if (plan is null)
+        {
+            return await chunkedTranscriber.RunGatedAsync(
+                token => whisperTranscriptionClient.TranscribeAsync(audioBytes, fileName, mimeType, language, token), cancellationToken);
+        }
+        if (plan.Chunks.Count == 0) throw new InvalidOperationException(NoUsableTextMessage);
+
+        var maxParallel = Math.Clamp(configuration.GetValue("Whisper:MaxParallelChunks", 4), 1, 16);
+        return await chunkedTranscriber.TranscribeAsync(audioBytes, plan, maxParallel,
+            (wav, token) => whisperTranscriptionClient.TranscribeAsync(wav, fileName, "audio/wav", language, token), cancellationToken);
     }
 
     /// <summary>
