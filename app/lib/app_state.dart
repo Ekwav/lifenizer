@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show TextEditingValue;
 import 'package:uuid/uuid.dart';
 import 'package:cryptography/cryptography.dart';
 
@@ -152,7 +153,11 @@ class LifenizerAppState extends ChangeNotifier {
   // next save rewrites them there, then removes the old records.
   int? _chunkMigrationFrom;
   String rememberedEmail = '';
-  String pendingSearchQuery = '';
+
+  /// Search typed on the lock screen. The unlocked search field takes it over
+  /// with its cursor and IME composing range intact.
+  TextEditingValue pendingSearch = TextEditingValue.empty;
+  String get pendingSearchQuery => pendingSearch.text;
   String? _localVaultKey;
   final List<SyncEnvelope> _pendingSync = [];
   final Map<String, bool> _pendingRecordingSync = {};

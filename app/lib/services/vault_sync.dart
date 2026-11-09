@@ -284,6 +284,7 @@ extension VaultSync on LifenizerAppState {
       _api = null;
       session = null;
       _clearVault();
+      pendingSearch = TextEditingValue.empty;
       pairing.onLocked();
       status = 'Vault locked';
     } catch (exception) {

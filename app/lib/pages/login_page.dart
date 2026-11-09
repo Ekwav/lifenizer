@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../services/quick_action_service.dart';
@@ -18,9 +19,13 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
-  late final _search = TextEditingController(
-    text: widget.state.pendingSearchQuery,
+  late final _search = TextEditingController.fromValue(
+    widget.state.pendingSearch,
   );
+  final _searchFocus = FocusNode(debugLabel: 'Locked search');
+  // Keeps the same field (and its keyboard connection) when the startup page
+  // switches to the unlock page.
+  final _searchKey = GlobalKey(debugLabel: 'Locked search');
   late final _api = TextEditingController(text: widget.state.apiBaseUrl);
   late final _email = TextEditingController(text: widget.state.rememberedEmail);
   final _password = TextEditingController();
@@ -31,6 +36,8 @@ class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
   bool _manual = false;
   bool _register = false;
   bool _linkElsewhere = false;
+  bool _searchFocusRequested = false;
+  bool _osPromptOpened = false;
 
   @override
   void initState() {
@@ -39,27 +46,68 @@ class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
     widget.state.addListener(_stateChanged);
     QuickActionService.instance.addListener(_receiveAction);
     widget.state.pairing.addListener(_maybeAutoUnlock);
+    widget.state.pairing.addListener(_maybeFocusSearch);
+    _search.addListener(_storeSearch);
     _stateChanged();
     _receiveAction();
   }
 
   void _stateChanged() {
+    _maybeFocusSearch();
     _maybeAutoUnlock();
     _maybeStartRecording();
   }
 
+  void _storeSearch() => widget.state.pendingSearch = _search.value;
+
+  /// The IME composing range is only valid for the unlock frame, where the
+  /// search page takes it over. A search opened later keeps just the text.
+  void _dropPendingComposing() {
+    final state = widget.state;
+    state.pendingSearch = state.pendingSearch.copyWith(
+      composing: TextRange.empty,
+    );
+  }
+
+  /// Android focuses the search while unlocking so typing can start before
+  /// the vault opens.
+  bool get _focusSearchEarly =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  /// Focuses the search once a paired device shows it, so typing can start
+  /// while it unlocks. Only once per page, and not over the record shortcut.
+  void _maybeFocusSearch() {
+    if (!_focusSearchEarly ||
+        _searchFocusRequested ||
+        _linkElsewhere ||
+        !widget.state.pairing.isPaired ||
+        QuickActionService.instance.pending?.action == 'record') {
+      return;
+    }
+    _searchFocusRequested = true;
+    _searchFocus.requestFocus();
+  }
+
+  /// The OS unlock prompt hides the keyboard; bring it back for the focused
+  /// search once the app is in front again. Other resumes leave it alone.
+  void _reshowSearchKeyboard() {
+    if (!_osPromptOpened) return;
+    _osPromptOpened = false;
+    if (!_searchFocus.hasPrimaryFocus) return;
+    unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.show'));
+  }
+
   void _receiveAction() {
     final action = QuickActionService.instance.pending;
-    if (action?.action == 'search') {
-      _search.text = action!.query;
-      widget.state.pendingSearchQuery = action.query;
-    }
+    if (action?.action == 'search') _search.text = action!.query;
     _maybeStartRecording();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
-    if (lifecycle == AppLifecycleState.resumed) _maybeStartRecording();
+    if (lifecycle != AppLifecycleState.resumed) return;
+    _maybeStartRecording();
+    _reshowSearchKeyboard();
   }
 
   void _maybeStartRecording() {
@@ -82,9 +130,10 @@ class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
   }
 
   Widget _searchField() => TextField(
+    key: _searchKey,
     controller: _search,
-    onChanged: (query) {
-      widget.state.pendingSearchQuery = query;
+    focusNode: _searchFocus,
+    onChanged: (_) {
       if (QuickActionService.instance.pending?.action == 'search') {
         QuickActionService.instance.consume();
       }
@@ -164,6 +213,10 @@ class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
     widget.state.removeListener(_stateChanged);
     QuickActionService.instance.removeListener(_receiveAction);
     widget.state.pairing.removeListener(_maybeAutoUnlock);
+    widget.state.pairing.removeListener(_maybeFocusSearch);
+    _search.removeListener(_storeSearch);
+    _dropPendingComposing();
+    _searchFocus.dispose();
     for (final controller in [
       _search,
       _api,
@@ -214,6 +267,7 @@ class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
       password = await requestDevicePassword(context);
       if (!mounted || password == null) return;
     }
+    _osPromptOpened = _focusSearchEarly && password == null;
     await widget.state.pairing.unlockSaved(
       password: password,
       authenticate: true,

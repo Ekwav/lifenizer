@@ -49,7 +49,18 @@ class _SearchPageState extends State<SearchPage> {
       tagFilter: '',
     );
     _applyAction();
-    widget.state.pendingSearchQuery = '';
+    _adoptLockScreenSearch();
+  }
+
+  /// Continues the search typed on the lock screen with the same text, cursor
+  /// and IME composing range. Focusing before the first frame lets the
+  /// keyboard move to this field without closing in between.
+  void _adoptLockScreenSearch() {
+    final pending = widget.state.pendingSearch;
+    widget.state.pendingSearch = TextEditingValue.empty;
+    if (widget.action?.conversationId != null) return;
+    if (widget.action == null) _viewModel.queryController.value = pending;
+    _searchFocus.requestFocus();
   }
 
   @override
@@ -61,9 +72,7 @@ class _SearchPageState extends State<SearchPage> {
   void _applyAction() {
     _resultLimit = 50;
     _viewModel.clearFilters();
-    _viewModel.setQuery(
-      widget.action?.query ?? widget.state.pendingSearchQuery,
-    );
+    _viewModel.setQuery(widget.action?.query ?? '');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final id = widget.action?.conversationId;
