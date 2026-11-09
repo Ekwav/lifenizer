@@ -551,7 +551,31 @@ one at a time), so the plan is logged at Information once per file (`Planned N a
 whisper and, separately, the time queued for a global request slot, summed over attempts. Chunks are
 transcribed in parallel and merged (segment times shifted by the chunk offset; language is the most
 frequent chunk language). Entirely silent recordings fail with "no usable text" without calling whisper.
-Other formats (mp3, m4a, webm, float WAV) are sent whole as before, with no duration check (pre-existing behaviour). Config:
+Other formats (mp3, m4a, webm, float WAV) are sent whole as before, with no duration check (pre-existing behaviour).
+
+**Tail recovery.** Even within 28 s the trained whisper sometimes stops early: its last segment ends 3.5-10 s before
+the end of the request although speech follows (5 of 39 chunks of a 15-min recording, about 4% of the words). After
+each chunk's response, when the last segment ends more than `Whisper:TailRecoverySeconds` (default 2.5 s) before the
+chunk end and the audio after that end holds speech (the planner's test: audible and at least 0.5 s of non-silent frames,
+judged with the recording-wide threshold), the tail is sent once more, from 0.5 s before the last segment's end to the
+chunk end. Its segments are shifted to their absolute time and appended after the chunk's; a tail segment that starts
+before the last kept segment ends loses the words repeating the end of the kept text (case and punctuation ignored;
+compared across segments against the last 8 words, and at most 3 words are stripped, about what a 0.5 s overlap holds;
+the longest matching prefix wins, so head "I said no no" + tail "no no no stop" gives "I said no no no stop") and is
+dropped when nothing else is left. Kept tail segments never start before the previous segment ends and never have a
+start after their end; whitespace-only segments are ignored. When the caller gave no language the tail is sent with the
+language whisper reported for the chunk. There is at most one recovery request per chunk and none for the recovery
+itself; no recovery happens when whisper returned no segments or no end time (the tail would be the whole chunk again,
+which whisper answers the same way). The recovery request shares the chunk path: global request gate, per-user import
+limit (it runs inside the same import), timeout scaled by the tail's length, one retry on connection errors and 5xx,
+cancellation. Recovery is best effort: when the recovery request times out or fails (after its retry) a Warning names the chunk,
+tail start and error, and the chunk keeps its transcript; only cancellation fails the import. A recovery that added words is
+logged at Information (`Tail of audio chunk 3/39 re-sent (tail start 112.1 s, length 8.2 s): added 14 word(s), whisper ... ms`;
+one that added none at Debug) and the summary line reports recovered and attempted tails (`..., recovered 4/5 cut-off tail(s)`).
+Files sent whole get the same recovery when they can be sliced: the duration is read from the header (WAV) or the Ogg pages
+(no decoding), and only when the transcript ends more than the threshold before it does is a PCM16 WAV used as is or an Ogg
+Opus decoded (under the audio memory budget); the tail goes out as a WAV slice; other formats are skipped.
+Config:
 
 - `Whisper:MaxParallelChunks` (default 4) — parallel chunks per import
 - `Whisper:MaxConcurrentRequests` (default 4) — global cap on whisper requests across all imports
@@ -572,6 +596,8 @@ Other formats (mp3, m4a, webm, float WAV) are sent whole as before, with no dura
   queued requests wait inside whisper. For a 28 s chunk with 4 concurrent requests that is 224 s, above the ~152 s that
   4 queued requests need even at real-time speed with ~10 s overhead each. Timeouts are not retried (connection errors and 5xx are retried once).
 - `Whisper:WholeFileTimeoutSeconds` (default 600) — bound for whole-file (unchunked) requests
+- `Whisper:TailRecoverySeconds` (default 2.5) — gap between the last segment's end and the request's end that triggers
+  tail recovery (see above); 0 or negative disables it, enabled values are clamped to 1..30
 - Non-numeric, NaN or infinite values of these keys fall back to their defaults.
 
 #### Multipart upload: `POST /api/imports/audio/upload`

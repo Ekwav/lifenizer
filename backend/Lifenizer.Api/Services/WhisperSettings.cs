@@ -12,6 +12,11 @@ public static class WhisperSettings
     /// <summary>Accepted range of Whisper:MaxChunkSeconds (the trained whisper needs at most 30).</summary>
     public const double MinMaxChunkSeconds = 10;
     public const double MaxMaxChunkSeconds = 3600;
+    /// <summary>A chunk whose transcript ends this much before the chunk end (with speech left) gets its tail sent once more.</summary>
+    public const double DefaultTailRecoverySeconds = 2.5;
+    /// <summary>Accepted range of an enabled Whisper:TailRecoverySeconds; 0 or less turns recovery off.</summary>
+    public const double MinTailRecoverySeconds = 1;
+    public const double MaxTailRecoverySeconds = 30;
     /// <summary>The trained whisper decodes in windows of this length and drops the text past it.</summary>
     public static readonly TimeSpan WhisperWindow = TimeSpan.FromSeconds(30);
 
@@ -23,6 +28,17 @@ public static class WhisperSettings
 
     public static double TimeoutPerAudioSecond(IConfiguration configuration) =>
         Number(configuration, "Whisper:ChunkTimeoutPerAudioSecond", DefaultTimeoutPerAudioSecond, 0, 20);
+
+    /// <summary>Whisper:TailRecoverySeconds: 0 (or negative) disables tail recovery; malformed falls back to the default.</summary>
+    public static double TailRecoverySeconds(IConfiguration configuration) =>
+        ClampTailRecovery(Number(configuration, "Whisper:TailRecoverySeconds", DefaultTailRecoverySeconds, double.MinValue, double.MaxValue));
+
+    /// <summary>0 or less (and non-finite) is off; an enabled value is clamped to [MinTailRecoverySeconds, MaxTailRecoverySeconds].</summary>
+    public static double ClampTailRecovery(double seconds)
+    {
+        if (!double.IsFinite(seconds) || seconds <= 0) return 0;
+        return Math.Clamp(seconds, MinTailRecoverySeconds, MaxTailRecoverySeconds);
+    }
 
     /// <summary>Chunker options with the configured pause and cap; the cap search window is derived from the cap so the result always validates.</summary>
     public static WavChunkerOptions ChunkerOptions(IConfiguration configuration)

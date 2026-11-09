@@ -246,6 +246,7 @@ public sealed class OpusUploadTests
         await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
         {
             ["Whisper:BaseUrl"] = whisper.Url,
+            ["Whisper:TailRecoverySeconds"] = "0", // the fake cannot identify tail requests
             ["Imports:MaxConcurrentAudioImportsPerUser"] = "5",
             ["Imports:MaxConcurrentAudioImports"] = "1"
         });
@@ -277,6 +278,7 @@ public sealed class OpusUploadTests
         await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
         {
             ["Whisper:BaseUrl"] = whisper.Url,
+            ["Whisper:TailRecoverySeconds"] = "0", // the fake cannot identify tail requests
             ["Imports:MaxConcurrentAudioImportsPerUser"] = "1"
         });
         using var client = await ChunkedAudioImportTests.AuthenticatedClientAsync(factory, "slash@example.test");
@@ -513,6 +515,7 @@ public sealed class OpusUploadTests
         await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
         {
             ["Whisper:BaseUrl"] = whisper.Url,
+            ["Whisper:TailRecoverySeconds"] = "0", // the fake cannot identify tail requests
             ["Imports:MaxConcurrentAudioImportsPerUser"] = "1"
         });
         using var client = await ChunkedAudioImportTests.AuthenticatedClientAsync(factory, "per-user@example.test");
@@ -601,7 +604,7 @@ public sealed class OpusUploadTests
         }
     }
 
-    private static MultipartFormDataContent Multipart(byte[] audio, string contentType, ImportRequest metadata)
+    internal static MultipartFormDataContent Multipart(byte[] audio, string contentType, ImportRequest metadata)
     {
         var form = new MultipartFormDataContent();
         form.Add(new StringContent(JsonSerializer.Serialize(metadata, JsonOptions), Encoding.UTF8, "application/json"), "metadata");
@@ -611,7 +614,7 @@ public sealed class OpusUploadTests
         return form;
     }
 
-    private static byte[] EncodeOpus(double seconds, Func<double, bool> isSpeech)
+    internal static byte[] EncodeOpus(double seconds, Func<double, bool> isSpeech)
     {
         var encoder = OpusCodecFactory.CreateEncoder(SyntheticWav.Rate, 1, OpusApplication.OPUS_APPLICATION_VOIP);
         encoder.Bitrate = 32000;

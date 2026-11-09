@@ -12,6 +12,9 @@ public sealed class WavChunkContent : HttpContent
     private readonly byte[] header;
     private readonly ReadOnlyMemory<byte> pcm;
 
+    /// <summary>Language to ask whisper for when the caller did not choose one (a re-sent tail uses the language its chunk was detected as).</summary>
+    public string? Language { get; init; }
+
     public WavChunkContent(byte[] source, WavFormat format, WavChunk chunk)
     {
         header = WavSilenceChunker.CreateHeader(format, chunk.ByteLength);

@@ -348,6 +348,7 @@ public sealed class ChunkedAudioImportTests
         {
             ["Whisper:BaseUrl"] = whisper.Url,
             ["Whisper:MaxConcurrentRequests"] = "1",
+            ["Whisper:TailRecoverySeconds"] = "0",
             ["Imports:MaxConcurrentAudioImportsPerUser"] = "10"
         });
         using var client = await AuthenticatedClientAsync(factory, "whole-gate@example.test");
@@ -380,11 +381,13 @@ public sealed class ChunkedAudioImportTests
     private static ImportRequest Request(byte[] wav) =>
         new(OriginalFileName: "long.wav", MimeType: "audio/wav", PayloadBase64: Convert.ToBase64String(wav));
 
+    /// <summary>Tail recovery is off: the fake answers every chunk with a 0.5-1.0 s segment and cannot identify tail requests.</summary>
     internal static LifenizerApiFactory FactoryFor(ConcurrentWhisper whisper, int maxParallel, int? maxConcurrent = null) => new(new Dictionary<string, string?>
     {
         ["Whisper:BaseUrl"] = whisper.Url,
         ["Whisper:MaxParallelChunks"] = maxParallel.ToString(),
-        ["Whisper:MaxConcurrentRequests"] = (maxConcurrent ?? 4).ToString()
+        ["Whisper:MaxConcurrentRequests"] = (maxConcurrent ?? 4).ToString(),
+        ["Whisper:TailRecoverySeconds"] = "0"
     });
 
     internal static async Task<NormalizedImportResponse> ImportAsync(HttpClient client, byte[] wav)

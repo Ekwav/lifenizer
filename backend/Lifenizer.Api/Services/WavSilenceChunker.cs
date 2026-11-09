@@ -33,15 +33,33 @@ public static class WavSilenceChunker
         var duration = TimeSpan.FromSeconds((double)layout.DataLength / format.BlockAlign / format.SampleRate);
         if (duration <= options.NoChunkUpTo) return null;
 
+        var speech = AnalyzeSpeech(source, layout, options);
+        var test = speech.Test;
+        var ranges = PlanRanges(test, speech.FrameSeconds, options);
+        var chunks = BuildChunks(ranges, test.Energy, options, new FrameGeometry(speech.FrameBytes, speech.FrameSeconds, layout));
+        return new WavChunkPlan(format, chunks) { Speech = speech };
+    }
+
+    /// <summary>The whole PCM as one chunk (a short file sent whole), with its speech map so a part of it can be judged.</summary>
+    public static WavChunkPlan WholePlan(byte[] source, WavLayout layout, WavChunkerOptions? options = null)
+    {
+        options ??= DefaultOptions;
+        options.Validate();
+        var chunk = new WavChunk(layout.DataOffset, layout.DataLength, TimeSpan.Zero);
+        return new WavChunkPlan(layout.Format, [chunk]) { Speech = AnalyzeSpeech(source, layout, options) };
+    }
+
+    /// <summary>Frame levels and silence flags of the PCM, judged the way the planner judges them.</summary>
+    private static WavSpeechMap AnalyzeSpeech(byte[] source, WavLayout layout, WavChunkerOptions options)
+    {
+        var format = layout.Format;
         var frameSamples = Math.Max(1, (int)(options.Frame.TotalSeconds * format.SampleRate));
         var frameBytes = frameSamples * format.BlockAlign;
         var frameSeconds = (double)frameSamples / format.SampleRate;
         var energy = FrameEnergies(source, layout, frameBytes);
         var silent = SilentFlags(energy, frameSeconds, options);
-        var ranges = PlanRanges(silent, energy, frameSeconds, options);
-
-        var chunks = BuildChunks(ranges, energy, options, new FrameGeometry(frameBytes, frameSeconds, layout));
-        return new WavChunkPlan(format, chunks);
+        var test = new SpeechTest(energy, silent, options.MinSilenceRms, Math.Max(1, Frames(options.MinSpeech, frameSeconds)));
+        return new WavSpeechMap(test, frameBytes, frameSeconds, layout.DataOffset);
     }
 
     /// <summary>Builds a standalone WAV for one chunk.</summary>
@@ -191,7 +209,7 @@ public static class WavSilenceChunker
     }
 
     /// <summary>Frame range [Start, End) of audio to transcribe.</summary>
-    private readonly record struct FrameRange(int Start, int End);
+    internal readonly record struct FrameRange(int Start, int End);
 
     private static int Frames(TimeSpan span, double frameSeconds) => (int)(span.TotalSeconds / frameSeconds);
 
@@ -199,8 +217,9 @@ public static class WavSilenceChunker
     /// Speech ranges between pauses that hold enough speech, each split further (without a gap between the pieces)
     /// when it exceeds the maximum chunk length. MinSpeech is judged on the whole range, so a cap piece of quiet speech is kept.
     /// </summary>
-    private static List<FrameRange> PlanRanges(bool[] silent, double[] energy, double frameSeconds, WavChunkerOptions options)
+    private static List<FrameRange> PlanRanges(SpeechTest speech, double frameSeconds, WavChunkerOptions options)
     {
+        var (energy, silent) = (speech.Energy, speech.Silent);
         var rules = new PauseRules(
             Math.Max(1, Frames(options.MinPause, frameSeconds)),
             Frames(options.MaxBlipInPause, frameSeconds),
@@ -211,7 +230,6 @@ public static class WavSilenceChunker
             Math.Max(2, Frames(options.MaxChunk, frameSeconds)),
             Math.Max(1, Frames(options.CapSearchWindow, frameSeconds)),
             Frames(options.MinTrailingChunk, frameSeconds));
-        var speech = new SpeechTest(energy, silent, options.MinSilenceRms, Math.Max(1, Frames(options.MinSpeech, frameSeconds)));
         var ranges = new List<FrameRange>();
         foreach (var range in SpeechRanges(pauses, padding, silent.Length))
         {
@@ -221,10 +239,13 @@ public static class WavSilenceChunker
     }
 
     /// <summary>A range is sent when it is audible and holds at least MinSpeech of non-silent frames (drops stray noise between two pauses).</summary>
-    private sealed record SpeechTest(double[] Energy, bool[] Silent, double MinSilenceRms, int MinSpeechFrames)
+    internal sealed record SpeechTest(double[] Energy, bool[] Silent, double MinSilenceRms, int MinSpeechFrames)
     {
-        public bool IsWorthSending(FrameRange range) =>
-            !IsInaudible(Energy, range.Start, range.End, MinSilenceRms) && SpeechFrames(Silent, range, MinSpeechFrames) >= MinSpeechFrames;
+        public bool IsWorthSending(FrameRange range) => IsWorthSending(range, MinSpeechFrames);
+
+        /// <summary>Same test with a caller-chosen minimum of non-silent frames.</summary>
+        public bool IsWorthSending(FrameRange range, int minSpeechFrames) =>
+            !IsInaudible(Energy, range.Start, range.End, MinSilenceRms) && SpeechFrames(Silent, range, minSpeechFrames) >= minSpeechFrames;
     }
 
     private readonly record struct PauseRules(int MinFrames, int BlipFrames, int MinSilenceBeforeBlip);

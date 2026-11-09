@@ -187,7 +187,7 @@ public sealed class WhisperTranscriptionClient(IHttpClientFactory httpClientFact
         return null;
     }
 
-    private static string? NormalizeLanguage(string? language)
+    internal static string? NormalizeLanguage(string? language)
     {
         var trimmed = language?.Trim();
         if (string.IsNullOrEmpty(trimmed)) return null;
