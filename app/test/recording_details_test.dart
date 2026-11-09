@@ -15,6 +15,8 @@ import 'package:http/testing.dart';
 import 'package:record/record.dart';
 import 'package:sembast/sembast.dart' hide Finder;
 
+import 'support/multipart_upload.dart';
+
 class _Recorder extends RecordPlatform {
   final pcm = StreamController<Uint8List>.broadcast(sync: true);
   final disposed = Completer<void>();
@@ -354,7 +356,7 @@ void main() {
     final vault = await mount(
       tester,
       handler: (request) async {
-        if (request.url.path == '/api/imports/audio') {
+        if (request.url.path == '/api/imports/audio/upload') {
           captured = request;
           return http.Response(
             jsonEncode({
@@ -392,7 +394,7 @@ void main() {
     await tapVisible(tester, find.text('Transcribe now'));
     await tester.pump();
     await until(tester, () => captured != null);
-    final body = jsonDecode(captured!.body) as Map<String, dynamic>;
+    final body = AudioUpload.parse(captured!).metadata;
     expect(body['title'], 'Standup');
     expect(body['participantNames'], ['Bob', 'Carol']);
     await until(tester, () => vault.state.audioDraft == null);

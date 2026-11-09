@@ -19,6 +19,15 @@ class ImportSummary {
   final Map<String, String> diagnostics;
 }
 
+/// Where a transcribed recording is filed, and how its audio is labelled.
+typedef _AudioImportTarget = ({
+  String? recordingId,
+  List<String> participantIds,
+  RecordingLocation? location,
+  String fileName,
+  String contentType,
+});
+
 extension VaultImports on LifenizerAppState {
   Future<Map<String, dynamic>> paperlessSettings() =>
       _requireApi().paperlessSettings();
@@ -281,17 +290,23 @@ extension VaultImports on LifenizerAppState {
     return saved;
   }
 
+  /// Upper bound for one audio upload plus transcription. Long enough for a
+  /// 30-minute recording on a slow CPU server; users can cancel earlier.
+  static const _audioTranscriptionTimeout = Duration(minutes: 45);
+
   /// Imports an audio recording for server-side transcription.
   ///
   /// Takes raw [bytes] and a [fileName] directly (rather than a
   /// `PlatformFile`) so this can be driven by the file picker in the UI or
-  /// called directly from tests with a stubbed HTTP client. The backend
-  /// transcribes on CPU and can take minutes, so the request uses a long
-  /// timeout (see [LifenizerApiClient.importSource]); the resulting
+  /// called directly from tests with a stubbed HTTP client. The resulting
   /// conversation is ingested through the same normalized-import path as
   /// every other import source, so it is tagged, encrypted, and synced
   /// identically.
-  Future<void> importAudioBytes({
+  ///
+  /// Returns true once the transcript and its audio are saved, even if search
+  /// indexing fails afterwards; false when the caller must keep its audio, for
+  /// example after [cancelAudioTranscription].
+  Future<bool> importAudioBytes({
     required List<int> bytes,
     required String fileName,
     String? mimeType,
@@ -303,61 +318,134 @@ extension VaultImports on LifenizerAppState {
     List<String> participantIds = const [],
     RecordingLocation? location,
   }) async {
-    if (bytes.isEmpty) return;
-    status = 'Transcribing audio… this can take a few minutes.';
-    error = null;
-    _notifyChanged();
-    await _run(() async {
-      final api = _requireApi();
-      final identity = recordingIdentity;
-      final metadata = <String, String>{
-        if (language != null && language.trim().isNotEmpty)
-          'language': language.trim(),
-        if (recordedAt != null)
-          'recordedAt': recordedAt.toUtc().toIso8601String(),
-      };
-      final normalized = await api.importSource(
-        'audio',
-        ImportSourceRequest(
-          title: title?.trim().isEmpty == true ? null : title?.trim(),
-          originalFileName: fileName,
-          mimeType: mimeType ?? _guessAudioMimeType(fileName),
-          metadata: metadata,
-          participantNames: participantNames == null
-              ? const []
-              : participantNames
-                    .split(',')
-                    .map((name) => name.trim())
-                    .where((name) => name.isNotEmpty)
-                    .toList(),
-          payloadBase64: base64Encode(bytes),
-        ),
-        timeout: const Duration(minutes: 10),
-      );
-      if (recordingId != null) _checkRecordingSession(api, identity);
-      final previousIds = conversations
-          .map((conversation) => conversation.id)
-          .toSet();
-      await _ingestNormalizedImport(
-        normalized,
-        recordingId: recordingId,
-        selectedParticipantIds: participantIds,
-        location: location,
-      );
-      for (final conversation in conversations) {
-        if (conversation.source == 'audio' &&
-            !previousIds.contains(conversation.id)) {
-          await _cacheCorrectionAudio(
-            conversation.id,
-            bytes,
-            fileName: fileName,
-            contentType: mimeType ?? _guessAudioMimeType(fileName),
-          );
-        }
-      }
-      status = '${normalized.message} Saved encrypted; queued for sync.';
-    });
+    if (bytes.isEmpty) return false;
+    if (busy) {
+      status = 'Wait for the current vault operation to finish.';
+      _notifyChanged();
+      return false;
+    }
+    final contentType = _audioContentType(bytes, fileName, mimeType);
+    final request = ImportSourceRequest(
+      title: title?.trim().isEmpty == true ? null : title?.trim(),
+      originalFileName: fileName,
+      mimeType: contentType,
+      metadata: _audioMetadata(language, recordedAt),
+      participantNames: _splitParticipantNames(participantNames),
+    );
+    final target = (
+      recordingId: recordingId,
+      participantIds: participantIds,
+      location: location,
+      fileName: fileName,
+      contentType: contentType,
+    );
+    var saved = false;
+    final run = _run(
+      () async => saved = await _transcribeAudio(request, bytes, target),
+    );
+    _audioImport = run;
+    try {
+      await run;
+    } finally {
+      if (identical(_audioImport, run)) _audioImport = null;
+    }
+    return saved;
   }
+
+  Future<bool> _transcribeAudio(
+    ImportSourceRequest request,
+    List<int> bytes,
+    _AudioImportTarget target,
+  ) async {
+    final api = _requireApi();
+    final identity = recordingIdentity;
+    final normalized = await _uploadAudio(api, request, bytes);
+    if (normalized == null) return false;
+    if (target.recordingId != null) _checkRecordingSession(api, identity);
+    final added = await _ingestTranscribedAudio(normalized, target);
+    // Only once the audio is cached may the caller drop its copy.
+    await _cacheTranscribedAudio(added, bytes, target);
+    status = '${normalized.message} Saved encrypted; queued for sync.';
+    return true;
+  }
+
+  /// Uploads while [cancelAudioTranscription] can abort it. Null if cancelled.
+  Future<NormalizedImportResult?> _uploadAudio(
+    LifenizerApiClient api,
+    ImportSourceRequest request,
+    List<int> bytes,
+  ) async {
+    final cancellation = RequestCancellation();
+    _audioTranscription = cancellation;
+    status = 'Transcribing audio… you can cancel at any time.';
+    _notifyChanged();
+    try {
+      return await api.importAudio(
+        request,
+        audio: bytes,
+        timeout: _audioTranscriptionTimeout,
+        cancellation: cancellation,
+      );
+    } on RequestCancelledException {
+      status = 'Transcription cancelled.';
+      return null;
+    } finally {
+      _audioTranscription = null;
+      _notifyChanged();
+    }
+  }
+
+  /// Ingests the transcript and returns the audio conversations it added.
+  Future<List<Conversation>> _ingestTranscribedAudio(
+    NormalizedImportResult normalized,
+    _AudioImportTarget target,
+  ) async {
+    final previousIds = conversations.map((c) => c.id).toSet();
+    await _ingestNormalizedImport(
+      normalized,
+      recordingId: target.recordingId,
+      selectedParticipantIds: target.participantIds,
+      location: target.location,
+    );
+    return conversations
+        .where((c) => c.source == 'audio' && !previousIds.contains(c.id))
+        .toList();
+  }
+
+  Future<void> _cacheTranscribedAudio(
+    List<Conversation> added,
+    List<int> bytes,
+    _AudioImportTarget target,
+  ) async {
+    for (final conversation in added) {
+      await _cacheCorrectionAudio(
+        conversation.id,
+        bytes,
+        fileName: target.fileName,
+        contentType: target.contentType,
+      );
+    }
+  }
+
+  String _audioContentType(List<int> bytes, String fileName, String? claimed) =>
+      claimed ?? _guessAudioMimeType(fileName);
+
+  Map<String, String> _audioMetadata(String? language, DateTime? recordedAt) {
+    final trimmed = language?.trim() ?? '';
+    return {
+      if (trimmed.isNotEmpty) 'language': trimmed,
+      if (recordedAt != null)
+        'recordedAt': recordedAt.toUtc().toIso8601String(),
+    };
+  }
+
+  List<String> _splitParticipantNames(String? names) => names == null
+      ? const []
+      : names
+            .split(',')
+            .map((name) => name.trim())
+            .where((name) => name.isNotEmpty)
+            .toList();
 
   static const Map<String, String> _audioMimeTypesByExtension = {
     'mp3': 'audio/mpeg',

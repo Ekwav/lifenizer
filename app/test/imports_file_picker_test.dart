@@ -12,6 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import 'support/multipart_upload.dart';
+
 AuthSession _session(String id) =>
     AuthSession(authToken: 'test', userId: id, vaultId: id, vaultSalt: 'salt');
 
@@ -59,10 +61,10 @@ class _Fixture {
           baseUrl: 'https://vault.example.test',
           client: MockClient((request) async {
             if (request.url.path.startsWith('/api/imports/')) {
-              imports.add(jsonDecode(request.body) as Map<String, dynamic>);
+              imports.add(importBodyOf(request));
               return http.Response(
                 jsonEncode({
-                  'source': request.url.pathSegments.last,
+                  'source': importSourceOf(request.url),
                   'plaintextCompute': false,
                   'message': 'Imported',
                   'participants': <dynamic>[],

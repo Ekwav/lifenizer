@@ -75,7 +75,7 @@ void main() {
           if (path == '/api/imports/capabilities') {
             return http.Response('[]', 200);
           }
-          if (path == '/api/imports/audio') {
+          if (path == '/api/imports/audio/upload') {
             return http.Response(
               jsonEncode({
                 'source': 'audio',

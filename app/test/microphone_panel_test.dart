@@ -76,32 +76,59 @@ class _MemoryStore extends LocalVaultStore {
   }
 }
 
+const _uploadPath = '/api/imports/audio/upload';
+
+/// Holds audio uploads open until their abort trigger fires, like a server
+/// still transcribing a long recording.
+class _HangingAudioClient extends http.BaseClient {
+  _HangingAudioClient(this._inner);
+  final http.Client _inner;
+  final uploading = Completer<void>();
+  final aborted = Completer<void>();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (request.url.path != _uploadPath) return _inner.send(request);
+    final trigger = request is http.Abortable ? request.abortTrigger : null;
+    if (trigger == null) throw StateError('Audio upload is not abortable.');
+    uploading.complete();
+    await trigger;
+    aborted.complete();
+    throw http.RequestAbortedException(request.url);
+  }
+
+  @override
+  void close() => _inner.close();
+}
+
 class _Vault {
   _Vault(this.store, this.client, this.state);
   final _MemoryStore store;
-  final MockClient client;
+  final _HangingAudioClient client;
   final LifenizerAppState state;
   static const key =
       'vault:["https://vault.example.test","alice@example.test"]';
   static Future<_Vault> open() async {
     final store = _MemoryStore();
-    final client = MockClient((request) async {
-      if (request.url.path.startsWith('/api/auth/')) {
-        return http.Response(
-          jsonEncode({
-            'authToken': 'token',
-            'userId': 'user',
-            'vaultId': 'vault',
-            'vaultSalt': 'salt',
-          }),
-          200,
-        );
-      }
-      if (request.url.path == '/api/imports/capabilities') {
-        return http.Response('[]', 200);
-      }
-      return http.Response('{"cursor":0,"envelopes":[]}', 200);
-    });
+    final client = _HangingAudioClient(
+      MockClient((request) async {
+        if (request.url.path.startsWith('/api/auth/')) {
+          return http.Response(
+            jsonEncode({
+              'authToken': 'token',
+              'userId': 'user',
+              'vaultId': 'vault',
+              'vaultSalt': 'salt',
+            }),
+            200,
+          );
+        }
+        if (request.url.path == '/api/imports/capabilities') {
+          return http.Response('[]', 200);
+        }
+        return http.Response('{"cursor":0,"envelopes":[]}', 200);
+      }),
+    );
     final state = LifenizerAppState(
       localStore: store,
       apiFactory: (url) => LifenizerApiClient(baseUrl: url, client: client),
@@ -186,6 +213,17 @@ void main() {
       isTrue,
       reason: 'Recording lifecycle operation did not complete',
     );
+  }
+
+  Future<void> waitFor(WidgetTester tester, bool Function() condition) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (!condition() && DateTime.now().isBefore(deadline)) {
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+    }
+    expect(condition(), isTrue, reason: 'Condition not reached in time');
   }
 
   Future<void> remove(WidgetTester tester, _Vault vault) async {
@@ -443,6 +481,79 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await remove(tester, vault);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
+
+  testWidgets(
+    'cancel aborts a running transcription and keeps the draft',
+    (tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final vault = await mount(tester);
+      vault.state.addListener(() {
+        vault.state.audioDraft?['detailsPrompted'] = true;
+      });
+      await start(tester);
+      recorder.pcm.add(samples);
+      await finish(tester, vault.state.recording.stop());
+      vault.state.audioDraft!['detailsPrompted'] = true;
+      await tester.pump();
+      expect(find.byKey(const Key('cancel-transcription')), findsNothing);
+      await tester.ensureVisible(find.text('Send to Whisper and transcribe'));
+      await tester.tap(find.text('Send to Whisper and transcribe'));
+      await waitFor(tester, () => vault.client.uploading.isCompleted);
+      await tester.pump();
+      expect(vault.state.busy, isTrue);
+      final cancel = find.byKey(const Key('cancel-transcription'));
+      expect(cancel, findsOneWidget);
+      expect(tester.widget<TextButton>(cancel).onPressed, isNotNull);
+      await tester.ensureVisible(cancel);
+      await tester.tap(cancel);
+      await waitFor(tester, () => !vault.state.busy);
+      await tester.pump();
+      expect(vault.client.aborted.isCompleted, isTrue);
+      expect(vault.state.error, isNull);
+      expect(vault.state.status, 'Transcription cancelled.');
+      expect(vault.state.audioDraft, isNotNull);
+      expect(vault.state.conversations, isEmpty);
+      expect(cancel, findsNothing);
+      await verifyDraft(tester, vault);
+      await remove(tester, vault);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
+
+  testWidgets(
+    'locking cancels a running transcription and keeps the draft',
+    (tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final vault = await mount(tester);
+      vault.state.addListener(() {
+        vault.state.audioDraft?['detailsPrompted'] = true;
+      });
+      await start(tester);
+      recorder.pcm.add(samples);
+      await finish(tester, vault.state.recording.stop());
+      vault.state.audioDraft!['detailsPrompted'] = true;
+      await tester.pump();
+      await tester.ensureVisible(find.text('Send to Whisper and transcribe'));
+      await tester.tap(find.text('Send to Whisper and transcribe'));
+      await waitFor(tester, () => vault.client.uploading.isCompleted);
+
+      await finish(tester, vault.state.lock());
+
+      expect(vault.client.aborted.isCompleted, isTrue);
+      expect(vault.state.isAuthenticated, isFalse);
+      await finish(tester, vault.unlock(offline: true));
+      await tester.pump();
+      expect(vault.state.audioDraft, isNotNull);
+      expect(vault.state.conversations, isEmpty);
+      await verifyDraft(tester, vault);
       await remove(tester, vault);
     },
     variant: TargetPlatformVariant.only(TargetPlatform.linux),

@@ -35,6 +35,8 @@ import 'services/browser_extension_receiver_service.dart';
 import 'services/camera_roll_watch_service.dart';
 import 'services/recording_controller.dart';
 import 'services/recording_relay_service.dart';
+import 'services/request_cancellation.dart';
+import 'services/audio_payload_codec.dart';
 import 'services/audio_cache_io.dart'
     if (dart.library.js_interop) 'services/audio_cache_web.dart'
     as audio_cache;
@@ -130,6 +132,7 @@ class LifenizerAppState extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _audioTranscription?.cancel();
     unawaited(_diskSearch?.close());
     recording.dispose();
     recordingRelay.dispose();
@@ -206,6 +209,10 @@ class LifenizerAppState extends ChangeNotifier {
   LifenizerApiClient? _api;
   int syncCursor = 0;
   bool busy = false;
+  // Set while an audio upload waits for the server; see importAudioBytes.
+  RequestCancellation? _audioTranscription;
+  // The whole audio import operation, so lock() can wait for it.
+  Future<void>? _audioImport;
   String? status;
   String? error;
   bool startupLoading = false;
@@ -1619,13 +1626,14 @@ class LifenizerAppState extends ChangeNotifier {
     }
 
     if (source == 'audio' && bytes != null && bytes.isNotEmpty) {
-      return importAudioBytes(
+      await importAudioBytes(
         bytes: bytes,
         fileName: normalizedName.isEmpty
             ? 'shared-recording.wav'
             : normalizedName,
         mimeType: normalizedMime.isEmpty ? null : normalizedMime,
       );
+      return;
     }
     if (source == 'manual-text' || source == 'browser-capture') {
       return addManualText(
@@ -1742,6 +1750,19 @@ class LifenizerAppState extends ChangeNotifier {
       _importPendingRecording(bytes, recordedAt, captureId, location: location);
 
   Future<void> transcribeRecording(String id) => _transcribeRecording(id);
+
+  /// Whether an audio upload is waiting for the server and can be cancelled.
+  bool get isTranscribingAudio => _audioTranscription != null;
+
+  /// Aborts the running audio upload. The server stops transcribing, the
+  /// draft or saved recording is kept, and no error is reported.
+  void cancelAudioTranscription() {
+    final cancellation = _audioTranscription;
+    if (cancellation == null || cancellation.isCancelled) return;
+    cancellation.cancel();
+    status = 'Cancelling transcription…';
+    _notifyChanged();
+  }
 
   Future<void> addRecordingConversation({
     required String title,
@@ -2394,7 +2415,7 @@ class LifenizerAppState extends ChangeNotifier {
         status =
             'Saved encrypted on this device · ${_pendingSync.length} change(s) waiting to sync';
       }
-      notifyListeners();
+      _notifyChanged();
     }
   }
 

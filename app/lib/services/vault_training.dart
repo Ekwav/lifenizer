@@ -9,13 +9,14 @@ extension VaultTraining on LifenizerAppState {
   }) async {
     final vault = _localVaultKey;
     if (vault == null) return;
+    final encoded = await base64EncodeInWorker(bytes);
     final payload = await _crypto.encryptJson({
       'vaultKey': vault,
       'vaultId': session?.vaultId,
       'contentType': contentType,
       'fileName': fileName,
       'conversationId': conversationId,
-      'bytes': base64Encode(bytes),
+      'bytes': encoded,
     }, background: true);
     await audio_cache.writeAudioCache('$vault:audio:$conversationId', {
       'cipherText': payload.cipherText,

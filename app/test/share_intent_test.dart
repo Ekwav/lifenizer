@@ -10,6 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import 'support/multipart_upload.dart';
+
 class _ShareVault extends LifenizerAppState {
   bool unlocked = false;
   final imported = Completer<void>();
@@ -283,9 +285,9 @@ void main() {
           baseUrl: 'https://vault.example.test',
           client: MockClient((request) async {
             if (request.url.path.startsWith('/api/imports/')) {
-              final source = request.url.path.split('/').last;
+              final source = importSourceOf(request.url);
               sources.add(source);
-              expect(jsonDecode(request.body)['payloadBase64'], isNotEmpty);
+              expect(importBodyOf(request)['payloadBase64'], isNotEmpty);
               return http.Response(
                 jsonEncode({
                   'source': source,

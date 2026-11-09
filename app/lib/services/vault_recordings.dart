@@ -31,11 +31,11 @@ extension VaultRecordings on LifenizerAppState {
   bool _knownRecording(String id) =>
       conversations.any((c) => c.id == id && c.source == 'audio');
 
-  RecordingAudio _decodeRecording(
+  Future<RecordingAudio> _decodeRecording(
     Map<String, dynamic> value,
     String id, {
     required bool local,
-  }) {
+  }) async {
     if (value['conversationId'] != id ||
         (local
             ? value['vaultKey'] != _localVaultKey
@@ -44,7 +44,7 @@ extension VaultRecordings on LifenizerAppState {
         'The recording does not belong to this vault and conversation.',
       );
     }
-    final bytes = base64Decode(value['bytes'] as String);
+    final bytes = await base64DecodeInWorker(value['bytes'] as String);
     if (bytes.isEmpty) throw StateError('The recording is empty.');
     return RecordingAudio(
       bytes: bytes,
@@ -91,7 +91,7 @@ extension VaultRecordings on LifenizerAppState {
       background: true,
     );
     _checkRecordingSession(api, identity);
-    final audio = _decodeRecording(value, id, local: false);
+    final audio = await _decodeRecording(value, id, local: false);
     await _cacheCorrectionAudio(
       id,
       audio.bytes,

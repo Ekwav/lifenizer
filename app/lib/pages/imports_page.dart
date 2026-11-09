@@ -17,6 +17,7 @@ import '../widgets/imap_import_panel.dart';
 import '../widgets/document_import_panel.dart';
 import '../widgets/paperless_import_panel.dart';
 import '../widgets/participant_picker.dart';
+import '../widgets/transcription_progress.dart';
 import '../widgets/camera_photos_panel.dart';
 import '../widgets/viewing_history_panel.dart';
 import '../widgets/discord_bot_import_panel.dart';
@@ -914,7 +915,7 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
       final bytes = await readExportBytes(file, maxBytes: 128 * 1024 * 1024);
       if (!_canImport(identity)) return;
       final submittedDraft = _draft;
-      await widget.state.importAudioBytes(
+      final imported = await widget.state.importAudioBytes(
         bytes: bytes,
         fileName: file.name,
         title: _titleController.text,
@@ -923,9 +924,7 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
         language: _languageController.text,
         recordedAt: _recordedAt,
       );
-      if (mounted &&
-          widget.state.recordingIdentity == identity &&
-          widget.state.error == null) {
+      if (mounted && widget.state.recordingIdentity == identity && imported) {
         _savedDraft = submittedDraft;
       }
     } catch (exception) {
@@ -1071,6 +1070,7 @@ class _AudioImportPanelState extends State<_AudioImportPanel> {
               icon: const Icon(Icons.graphic_eq),
               label: const Text('Import audio recording'),
             ),
+            TranscriptionCancelButton(state: widget.state),
             if (_pickError != null) ...[
               const SizedBox(height: 8),
               Text(

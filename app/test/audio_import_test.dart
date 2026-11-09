@@ -6,15 +6,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import 'support/multipart_upload.dart';
+
 void main() {
   group('LifenizerAppState.importAudioBytes', () {
     test(
-      'sends bytes+filename to /api/imports/audio and the transcribed '
+      'uploads bytes+filename to /api/imports/audio/upload and the transcribed '
       'conversation ends up searchable by a word from the transcript',
       () async {
         http.Request? captured;
         final client = MockClient((request) async {
-          if (request.url.path == '/api/imports/audio') {
+          if (request.url.path == '/api/imports/audio/upload') {
             captured = request;
             return http.Response(
               jsonEncode({
@@ -64,10 +66,13 @@ void main() {
 
         expect(state.error, isNull);
         expect(captured, isNotNull);
-        expect(captured!.url.path, '/api/imports/audio');
+        expect(captured!.url.path, '/api/imports/audio/upload');
 
-        final body = jsonDecode(captured!.body) as Map<String, dynamic>;
-        expect(body['payloadBase64'], base64Encode(audioBytes));
+        final upload = AudioUpload.parse(captured!);
+        expect(upload.audio, audioBytes);
+        expect(upload.audioType, 'audio/mp4');
+        final body = upload.metadata;
+        expect(body.containsKey('payloadBase64'), isFalse);
         expect(body['originalFileName'], 'memo.m4a');
         expect(body['mimeType'], 'audio/mp4');
         expect(body['title'], 'Reminder memo');
@@ -92,7 +97,7 @@ void main() {
         // include it.
         final recordedAt = DateTime.utc(2025, 10, 14, 18, 5);
         final client = MockClient((request) async {
-          if (request.url.path == '/api/imports/audio') {
+          if (request.url.path == '/api/imports/audio/upload') {
             captured = request;
             // Mirrors what the backend now returns once metadata.recordedAt
             // is honored: each segment's createdAt is recordedAt + offsetMs.
@@ -151,7 +156,7 @@ void main() {
 
         expect(state.error, isNull);
         expect(captured, isNotNull);
-        final body = jsonDecode(captured!.body) as Map<String, dynamic>;
+        final body = AudioUpload.parse(captured!).metadata;
         expect(body['metadata'], {'recordedAt': '2025-10-14T18:05:00.000Z'});
 
         expect(state.conversations, hasLength(1));

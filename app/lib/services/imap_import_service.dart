@@ -237,7 +237,9 @@ class EmailImportService extends ChangeNotifier {
             if (account['remember'] == true) {
               await _store.write(identity, account);
             }
-            if (_disposed || _generation != generation || _identity != identity) {
+            if (_disposed ||
+                _generation != generation ||
+                _identity != identity) {
               return;
             }
             _account = account;

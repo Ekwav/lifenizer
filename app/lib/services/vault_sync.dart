@@ -262,6 +262,9 @@ extension VaultSync on LifenizerAppState {
   }
 
   Future<void> lock() async {
+    final transcription = _audioImport;
+    // Only await when needed: callers rely on busy being set synchronously.
+    if (transcription != null) await _stopAudioImport(transcription);
     if (busy) return;
     busy = true;
     _locking = true;
@@ -295,6 +298,13 @@ extension VaultSync on LifenizerAppState {
       busy = false;
       _notifyChanged();
     }
+  }
+
+  /// Locking must not wait up to the transcription timeout: cancel the upload
+  /// (the recording is kept) and wait until its operation has released busy.
+  Future<void> _stopAudioImport(Future<void> running) {
+    cancelAudioTranscription();
+    return running;
   }
 
   void _clearVault() {
@@ -1476,7 +1486,10 @@ extension VaultSync on LifenizerAppState {
       nonce: nonce,
       background: true,
     );
-    return _draftPayloadCache = base64Decode(plain['payload'] as String);
+    final bytes = await base64DecodeInWorker(plain['payload'] as String);
+    // The draft may have been replaced while decoding in the worker.
+    if (identical(audioDraft, draft)) _draftPayloadCache = bytes;
+    return bytes;
   }
 
   /// Stores the title/people chosen for the pending recording with the draft so

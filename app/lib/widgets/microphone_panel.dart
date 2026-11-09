@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import 'recording_details_sheet.dart';
 import 'recording_audio_player.dart';
+import 'transcription_progress.dart';
 import '../models.dart';
 import '../services/recording_location_service.dart';
 
@@ -103,7 +104,7 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
         );
         return;
       }
-      await widget.state.importAudioBytes(
+      final imported = await widget.state.importAudioBytes(
         bytes: bytes,
         fileName: 'recording.wav',
         mimeType: 'audio/wav',
@@ -118,7 +119,8 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
             : null,
         recordedAt: DateTime.parse(draft['recordedAt'] as String),
       );
-      if (widget.state.error == null) await widget.state.discardAudioDraft();
+      // A cancelled or failed transcription keeps the draft for a retry.
+      if (imported) await widget.state.discardAudioDraft();
     } finally {
       if (mounted && !_disposing) setState(() => _working = false);
     }
@@ -238,7 +240,10 @@ class _MicrophonePanelState extends State<MicrophonePanel> {
                 icon: const Icon(Icons.mic),
                 label: const Text('Start microphone recording'),
               ),
-            if (_working || recording.working) const LinearProgressIndicator(),
+            if (_working)
+              TranscriptionProgress(state: widget.state)
+            else if (recording.working)
+              const LinearProgressIndicator(),
             if (recording.error != null)
               Text(
                 recording.error!,

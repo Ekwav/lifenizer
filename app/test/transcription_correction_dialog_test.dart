@@ -111,7 +111,7 @@ class _Fixture {
           503,
         );
       }
-      if (path == '/api/imports/audio') {
+      if (path == '/api/imports/audio/upload') {
         return http.Response(
           jsonEncode({
             'source': 'audio',

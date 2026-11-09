@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../services/recording_playback.dart';
+import 'transcription_progress.dart';
 
 class RecordingAudioPlayer extends StatefulWidget {
   const RecordingAudioPlayer({
@@ -176,6 +177,7 @@ class _RecordingAudioPlayerState extends State<RecordingAudioPlayer> {
             const Text(
               'Sends this recording to your configured server for transcription.',
             ),
+            if (_transcribing) TranscriptionProgress(state: widget.state),
           ],
           if (conversation != null)
             SwitchListTile(

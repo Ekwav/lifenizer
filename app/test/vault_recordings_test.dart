@@ -15,6 +15,8 @@ import 'package:http/testing.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:sembast/sembast_memory.dart';
 
+import 'support/multipart_upload.dart';
+
 const _base = 'https://recordings.example.test';
 const _email = 'audio@example.test';
 const _phrase = 'private audio passphrase';
@@ -61,6 +63,7 @@ void main() {
   late VaultCrypto crypto;
   late Map<String, Map<String, dynamic>> online;
   late List<String> requests;
+  late List<AudioUpload> uploads;
   Future<void>? fetchGate;
   Completer<void>? fetching;
   Future<void>? recordingWriteGate;
@@ -76,6 +79,7 @@ void main() {
     await crypto.unlock(email: _email, passphrase: _phrase, vaultSalt: _salt);
     online = {};
     requests = [];
+    uploads = [];
     fetchGate = null;
     fetching = null;
     recordingWriteGate = null;
@@ -113,8 +117,10 @@ void main() {
           if (path == '/api/imports/capabilities') {
             return http.Response('[]', 200);
           }
-          if (path == '/api/imports/audio') {
-            final input = jsonDecode(request.body) as Map<String, dynamic>;
+          if (path == '/api/imports/audio/upload') {
+            final upload = AudioUpload.parse(request);
+            uploads.add(upload);
+            final input = upload.metadata;
             return http.Response(
               jsonEncode({
                 'source': 'audio',

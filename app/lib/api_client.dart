@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -5,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import 'models.dart';
+import 'services/request_cancellation.dart';
 import 'services/vault_worker_io.dart'
     if (dart.library.js_interop) 'services/vault_worker_web.dart';
 
@@ -127,10 +129,8 @@ class LifenizerApiClient {
 
   /// Runs an import for [source] with the given [request].
   ///
-  /// [timeout] overrides the default (unbounded) wait for this call. It is
-  /// used for slow server-side work such as audio transcription (see
-  /// [LifenizerAppState.importAudioBytes]) — other imports stay exempt from
-  /// any timeout, matching today's behavior.
+  /// [timeout] overrides the default 30-second wait for this call. Audio
+  /// transcription uses [importAudio] instead, which can be cancelled.
   Future<NormalizedImportResult> importSource(
     String source,
     ImportSourceRequest request, {
@@ -142,6 +142,56 @@ class LifenizerApiClient {
       timeout: timeout,
     );
     return NormalizedImportResult.fromJson(response);
+  }
+
+  /// Uploads [audio] as multipart form data for transcription: a JSON
+  /// `metadata` part and an `audio` part typed as [ImportSourceRequest.mimeType].
+  ///
+  /// Both [cancellation] and [timeout] abort the HTTP request, which closes
+  /// the connection so the server stops transcribing. Cancelling throws
+  /// [RequestCancelledException]; the timeout throws [TimeoutException].
+  Future<NormalizedImportResult> importAudio(
+    ImportSourceRequest request, {
+    required List<int> audio,
+    required Duration timeout,
+    RequestCancellation? cancellation,
+  }) async {
+    final response = await _sendAbortable(
+      (abortTrigger) => _audioUploadRequest(request, audio, abortTrigger),
+      timeout: timeout,
+      cancellation: cancellation,
+    );
+    _ensureSuccess(response);
+    return NormalizedImportResult.fromJson(_decodeObject(response));
+  }
+
+  http.MultipartRequest _audioUploadRequest(
+    ImportSourceRequest request,
+    List<int> audio,
+    Future<void> abortTrigger,
+  ) {
+    final metadata = request.toJson()..remove('payloadBase64');
+    return http.AbortableMultipartRequest(
+        'POST',
+        _uri('/api/imports/audio/upload'),
+        abortTrigger: abortTrigger,
+      )
+      ..headers.addAll(_authHeaders())
+      ..files.add(
+        http.MultipartFile.fromString(
+          'metadata',
+          jsonEncode(metadata),
+          contentType: MediaType('application', 'json'),
+        ),
+      )
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          audio,
+          filename: request.originalFileName ?? 'recording',
+          contentType: MediaType.parse(request.mimeType ?? 'audio/wav'),
+        ),
+      );
   }
 
   Future<Map<String, dynamic>> imapSettings() async {
@@ -431,9 +481,45 @@ class LifenizerApiClient {
       authenticated: authenticated,
     );
     _ensureSuccess(response);
-    return response.body.isEmpty
-        ? <String, dynamic>{}
-        : Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+    return _decodeObject(response);
+  }
+
+  Map<String, dynamic> _decodeObject(http.Response response) =>
+      response.body.isEmpty
+      ? <String, dynamic>{}
+      : Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+
+  /// Sends a fresh request from [build] per attempt (401 retries included).
+  /// Any failure after the abort fired is reported as the abort's reason.
+  Future<http.Response> _sendAbortable(
+    http.BaseRequest Function(Future<void> abortTrigger) build, {
+    required Duration timeout,
+    RequestCancellation? cancellation,
+  }) async {
+    final abort = _AbortSignal(timeout, cancellation);
+    try {
+      return await _retry(() => _sendOnce(build, abort));
+    } catch (_) {
+      if (!abort.fired) rethrow;
+      throw abort.reason();
+    } finally {
+      abort.dispose();
+    }
+  }
+
+  Future<http.Response> _sendOnce(
+    http.BaseRequest Function(Future<void> abortTrigger) build,
+    _AbortSignal abort,
+  ) {
+    // Do not open a connection for a request that is already aborted.
+    if (abort.fired) return Future.error(abort.reason());
+    final request = build(abort.trigger);
+    final response = _client.send(request).then(http.Response.fromStream);
+    // Also fail on abort if a platform client ignores `abortTrigger`.
+    final aborted = abort.trigger.then<http.Response>(
+      (_) => throw http.RequestAbortedException(request.url),
+    );
+    return Future.any([response, aborted]);
   }
 
   Future<http.Response> _get(String path, [Map<String, String>? query]) =>
@@ -465,13 +551,14 @@ class LifenizerApiClient {
     return Uri.parse('$normalized$path').replace(queryParameters: query);
   }
 
-  Map<String, String> _headers({bool authenticated = true}) {
-    final headers = <String, String>{'content-type': 'application/json'};
-    if (authenticated && authToken != null) {
-      headers['authorization'] = 'Bearer $authToken';
-    }
-    return headers;
-  }
+  Map<String, String> _headers({bool authenticated = true}) => {
+    'content-type': 'application/json',
+    if (authenticated) ..._authHeaders(),
+  };
+
+  Map<String, String> _authHeaders() => {
+    if (authToken != null) 'authorization': 'Bearer $authToken',
+  };
 
   void _ensureSuccess(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -484,6 +571,41 @@ class LifenizerApiClient {
             : Duration(seconds: retry),
       );
     }
+  }
+}
+
+/// Aborts a request on user cancellation or when [timeout] elapses.
+class _AbortSignal {
+  _AbortSignal(this.timeout, this._cancellation) {
+    _timer = Timer(timeout, _expire);
+    _cancellation?.whenCancelled.then((_) => _fire());
+  }
+
+  final Duration timeout;
+  final RequestCancellation? _cancellation;
+  final Completer<void> _fired = Completer<void>();
+  late final Timer _timer;
+  bool _timedOut = false;
+
+  Future<void> get trigger => _fired.future;
+
+  // Also true right after cancel(), before [trigger] has completed.
+  bool get fired => _fired.isCompleted || (_cancellation?.isCancelled ?? false);
+
+  Exception reason() => _timedOut
+      ? TimeoutException('The server did not answer in time.', timeout)
+      : const RequestCancelledException();
+
+  void dispose() => _timer.cancel();
+
+  void _expire() {
+    if (fired) return;
+    _timedOut = true;
+    _fire();
+  }
+
+  void _fire() {
+    if (!_fired.isCompleted) _fired.complete();
   }
 }
 
