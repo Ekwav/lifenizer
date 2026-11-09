@@ -525,17 +525,34 @@ Optional request metadata:
 
 #### Chunked transcription
 
-WAV (PCM16) recordings longer than 30 s are split on silence into ~7-17 s chunks,
+WAV (PCM16) and Ogg Opus recordings longer than 30 s are split on silence into ~7-17 s chunks,
 transcribed in parallel and merged (segment times shifted by the chunk offset; language is the most
 frequent chunk language). Entirely silent recordings fail with "no usable text" without calling whisper.
-Other formats (mp3, m4a, webm, float WAV) are sent whole as before. WAV sample rates outside 8000-192000 Hz
-are a 400. Config:
+Other formats (mp3, m4a, webm, float WAV) are sent whole as before, with no duration check (pre-existing behaviour). Config:
 
 - `Whisper:MaxParallelChunks` (default 4) — parallel chunks per import
 - `Whisper:MaxConcurrentRequests` (default 4) — global cap on whisper requests across all imports
   (chunk requests and whole-file requests alike)
+- `Imports:MaxAudioSeconds` (default 14400 = 4 h, clamped 1..36000) — applies to WAV (from its header) and Ogg Opus
+  (duration summed from every packet's TOC; the Ogg granule is untrusted and compared as a raw sample count). Longer
+  audio is a 400 and is never forwarded. WAV sample rates outside 8000-192000 Hz are a 400.
+- `Imports:AudioMemoryBudgetMb` (default 600) — process-wide budget for decoded PCM (or the raw WAV bytes) held while
+  an import is transcribed. Imports queue for budget; one needing more than the whole budget is a 400.
 - `Whisper:ChunkTimeoutSeconds` (default 180) — per chunk request, excluding queue time; timeouts are not retried
   (connection errors and 5xx are retried once)
+
+#### Multipart upload: `POST /api/imports/audio/upload`
+
+Same result and errors as `POST /api/imports/audio`, but takes `multipart/form-data` instead of base64 JSON:
+a `metadata` part (JSON of the import request, `payloadBase64` ignored) and an `audio` part (file bytes,
+`audio/ogg` Opus or `audio/wav`). Anything starting with `OggS` must be a clean single-stream Ogg Opus file (mono or stereo, mapping family 0,
+every page checksum valid, one stream serial, all packets decodable); otherwise the request is a 400
+("Unsupported or damaged Ogg audio - export as WAV or Opus mono/stereo") and nothing is forwarded to whisper. This
+covers Vorbis, chained or interleaved streams, bad checksums, more than two channels and corrupt packets. Clean Opus is
+decoded in-process (Concentus, managed) to 16 kHz mono with pre-skip, output gain and trailing padding honoured; clean
+Opus of 30 s or less is sent to whisper whole after the scan. Malformed multipart bodies, repeated `audio`/`metadata`
+parts and Opus packets over 128 KB return 400. The body is limited by
+`Imports:MaxRequestBytes` (413 when exceeded). The JSON endpoint keeps working for older clients.
 
 ### audio playback and saved originals
 

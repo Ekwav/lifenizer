@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3" Version="4.0.25.1" />
+    <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageReference Include="FirebaseAdmin" Version="3.5.0" />
     <PackageReference Include="MailKit" Version="4.17.0" />

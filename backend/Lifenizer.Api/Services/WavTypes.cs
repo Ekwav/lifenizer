@@ -43,3 +43,24 @@ public sealed record WavChunk(int ByteOffset, int ByteLength, TimeSpan Start);
 
 /// <summary>Chunks to transcribe; an empty list means the audio holds nothing audible.</summary>
 public sealed record WavChunkPlan(WavFormat Format, IReadOnlyList<WavChunk> Chunks);
+
+/// <summary>
+/// Audio bytes that the plan's chunk offsets refer to (original WAV, or decoded PCM). Holds the audio
+/// memory budget lease; dispose it once the transcription has finished with the bytes.
+/// </summary>
+public sealed class AudioChunkSource(byte[] bytes, WavChunkPlan plan, IDisposable? lease) : IDisposable
+{
+    public byte[] Bytes { get; } = bytes;
+    public WavChunkPlan Plan { get; } = plan;
+
+    public void Dispose() => lease?.Dispose();
+}
+
+/// <summary>Limits applied while preparing uploaded audio.</summary>
+public sealed record AudioLimits(int MaxAudioSeconds, AudioMemoryBudget Budget)
+{
+    public const int MinConfigurableSeconds = 1;
+    public const int MaxConfigurableSeconds = 36_000;
+
+    public static int ClampSeconds(int seconds) => Math.Clamp(seconds, MinConfigurableSeconds, MaxConfigurableSeconds);
+}

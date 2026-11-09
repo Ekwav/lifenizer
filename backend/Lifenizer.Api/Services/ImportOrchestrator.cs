@@ -8,6 +8,9 @@ public sealed class ImportOrchestrator(
     ProviderHttpImportClient providerHttpImportClient,
     ParserRegistry parserRegistry)
 {
+    public Task<NormalizedImportResponse> ImportAudioUploadAsync(ImportRequest request, byte[] audioBytes, string? mimeType, CancellationToken cancellationToken)
+        => providerHttpImportClient.ImportAudioBytesAsync(request, audioBytes, mimeType, cancellationToken);
+
     public Task<NormalizedImportResponse> ImportAsync(string source, ImportRequest request, CancellationToken cancellationToken)
     {
         return source.ToLowerInvariant() switch

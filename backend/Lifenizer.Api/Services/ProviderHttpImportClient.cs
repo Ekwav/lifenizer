@@ -12,6 +12,7 @@ public sealed class ProviderHttpImportClient(
     IConfiguration configuration,
     WhisperTranscriptionClient whisperTranscriptionClient,
     ChunkedWhisperTranscriber chunkedTranscriber,
+    AudioMemoryBudget audioMemoryBudget,
     ParserRegistry parserRegistry,
     YouTubeCaptionFetcher youTubeCaptionFetcher,
     IHttpContextAccessor httpContextAccessor)
@@ -180,6 +181,13 @@ public sealed class ProviderHttpImportClient(
         return await TranscribeAndNormalizeAsync(request, audioBytes, request.MimeType, recordedAt, cancellationToken);
     }
 
+    /// <summary>Transcribes already-decoded audio bytes (multipart upload path).</summary>
+    public Task<NormalizedImportResponse> ImportAudioBytesAsync(ImportRequest request, byte[] audioBytes, string? mimeType, CancellationToken cancellationToken)
+    {
+        if (audioBytes.Length == 0) throw new InvalidOperationException("Audio upload is empty.");
+        return TranscribeAndNormalizeAsync(request, audioBytes, mimeType, ParseRecordedAt(request), cancellationToken);
+    }
+
     private async Task<NormalizedImportResponse> TranscribeAndNormalizeAsync(
         ImportRequest request, byte[] audioBytes, string? requestMimeType, DateTimeOffset? recordedAt, CancellationToken cancellationToken)
     {
@@ -234,16 +242,17 @@ public sealed class ProviderHttpImportClient(
 
     private async Task<WhisperTranscriptionResult> TranscribeAudioAsync(byte[] audioBytes, string fileName, string mimeType, string? language, CancellationToken cancellationToken)
     {
-        var plan = await Task.Run(() => WavSilenceChunker.TryPlan(audioBytes), cancellationToken);
-        if (plan is null)
+        var limits = new AudioLimits(AudioLimits.ClampSeconds(configuration.GetValue("Imports:MaxAudioSeconds", AudioChunking.DefaultMaxAudioSeconds)), audioMemoryBudget);
+        using var source = await AudioChunking.TryCreateSourceAsync(audioBytes, limits, cancellationToken);
+        if (source is null)
         {
             return await chunkedTranscriber.RunGatedAsync(
                 token => whisperTranscriptionClient.TranscribeAsync(audioBytes, fileName, mimeType, language, token), cancellationToken);
         }
-        if (plan.Chunks.Count == 0) throw new InvalidOperationException(NoUsableTextMessage);
+        if (source.Plan.Chunks.Count == 0) throw new InvalidOperationException(NoUsableTextMessage);
 
         var maxParallel = Math.Clamp(configuration.GetValue("Whisper:MaxParallelChunks", 4), 1, 16);
-        return await chunkedTranscriber.TranscribeAsync(audioBytes, plan, maxParallel,
+        return await chunkedTranscriber.TranscribeAsync(source.Bytes, source.Plan, maxParallel,
             (wav, token) => whisperTranscriptionClient.TranscribeAsync(wav, fileName, "audio/wav", language, token), cancellationToken);
     }
 

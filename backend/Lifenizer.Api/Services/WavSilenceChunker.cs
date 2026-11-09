@@ -117,7 +117,7 @@ public static class WavSilenceChunker
         var bits = BinaryPrimitives.ReadUInt16LittleEndian(fmt[14..]);
         var isPcm = tag == 1 || (tag == 0xFFFE && fmt.Length >= 26 && BinaryPrimitives.ReadUInt16LittleEndian(fmt[24..]) == 1);
         if (!isPcm || bits != 16 || channels is not (1 or 2)) return null;
-        if (rate is < MinSampleRate or > MaxSampleRate) throw new InvalidOperationException($"WAV sample rate must be {MinSampleRate}-{MaxSampleRate} Hz.");
+        if (rate is < MinSampleRate or > MaxSampleRate) throw new UnsupportedAudioException($"WAV sample rate must be {MinSampleRate}-{MaxSampleRate} Hz.");
         return new WavFormat(rate, channels);
     }
 

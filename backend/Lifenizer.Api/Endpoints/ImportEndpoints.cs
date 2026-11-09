@@ -53,6 +53,8 @@ public static class ImportEndpoints
 
         group.MapGet("/email/settings", (PlainImapImportClient imap) => Results.Ok(imap.Settings())).RequireAuthorization();
 
+        group.MapPost("/audio/upload", ImportAudioUploadAsync).RequireAuthorization();
+
         group.MapPost("/{source}", async ([FromRoute] string source, [FromBody] ImportRequest request, ImportOrchestrator orchestrator, HttpContext httpContext, CancellationToken cancellationToken) =>
         {
             var capability = Capabilities.FirstOrDefault(c => string.Equals(c.Source, source, StringComparison.OrdinalIgnoreCase));
@@ -61,26 +63,42 @@ public static class ImportEndpoints
                 return Results.NotFound(new { error = "unknown_import_source", source });
             }
 
-            try
-            {
-                var result = await orchestrator.ImportAsync(capability.Source, request, cancellationToken);
-                return Results.Ok(result);
-            }
-            catch (YouTubeCaptionException exception)
-            {
-                if (exception.RetryAfter is { } retry) httpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retry.TotalSeconds)).ToString();
-                return Results.Json(new { error = exception.Code, message = exception.Message }, statusCode: exception.StatusCode);
-            }
-            catch (InvalidOperationException exception)
-            {
-                return Results.BadRequest(new { error = "invalid_import_request", message = exception.Message });
-            }
-            catch (JsonException exception)
-            {
-                return Results.BadRequest(new { error = "invalid_import_json", message = exception.Message });
-            }
+            return await RunImportAsync(httpContext, () => orchestrator.ImportAsync(capability.Source, request, cancellationToken));
         }).RequireAuthorization();
 
         return app;
+    }
+
+    private static Task<IResult> ImportAudioUploadAsync(HttpContext httpContext, ImportOrchestrator orchestrator, IConfiguration configuration, CancellationToken cancellationToken) =>
+        RunImportAsync(httpContext, async () =>
+        {
+            var upload = await AudioUploadReader.ReadAsync(httpContext.Request, configuration, cancellationToken);
+            return await orchestrator.ImportAudioUploadAsync(upload.Request, upload.Audio, upload.MimeType, cancellationToken);
+        });
+
+    /// <summary>Runs an import and maps failures to the HTTP errors shared by all import routes.</summary>
+    private static async Task<IResult> RunImportAsync(HttpContext httpContext, Func<Task<NormalizedImportResponse>> import)
+    {
+        try
+        {
+            return Results.Ok(await import());
+        }
+        catch (YouTubeCaptionException exception)
+        {
+            if (exception.RetryAfter is { } retry) httpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retry.TotalSeconds)).ToString();
+            return Results.Json(new { error = exception.Code, message = exception.Message }, statusCode: exception.StatusCode);
+        }
+        catch (BadHttpRequestException exception)
+        {
+            return Results.Json(new { error = "invalid_import_request", message = exception.Message }, statusCode: exception.StatusCode);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.BadRequest(new { error = "invalid_import_request", message = exception.Message });
+        }
+        catch (JsonException exception)
+        {
+            return Results.BadRequest(new { error = "invalid_import_json", message = exception.Message });
+        }
     }
 }

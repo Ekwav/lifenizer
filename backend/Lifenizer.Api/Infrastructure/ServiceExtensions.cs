@@ -111,6 +111,7 @@ public static class ServiceExtensions
         services.AddScoped<UserAccountService>();
         services.AddScoped<PlainImapImportClient>();
         services.AddScoped<WhisperTranscriptionClient>();
+        services.AddSingleton(provider => AudioMemoryBudget.FromConfiguration(provider.GetRequiredService<IConfiguration>()));
         services.AddSingleton(provider => new ChunkedWhisperTranscriber(
             provider.GetRequiredService<ILogger<ChunkedWhisperTranscriber>>(), provider.GetRequiredService<IConfiguration>()));
         services.AddScoped<TabTrainingClient>();
