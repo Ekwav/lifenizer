@@ -5,8 +5,18 @@ using System.Text.Json;
 
 namespace Lifenizer.Api.Endpoints;
 
+/// <summary>Marks the endpoints that run audio transcription (the limiters key off the matched route, not the path text).</summary>
+public sealed record AudioImportRoute(bool Always);
+
 public static class ImportEndpoints
 {
+    /// <summary>True for the upload route and for the generic import route when its source is "audio".</summary>
+    public static bool IsAudioImport(HttpContext context)
+    {
+        if (context.GetEndpoint()?.Metadata.GetMetadata<AudioImportRoute>() is not { } route) return false;
+        return route.Always || string.Equals(context.Request.RouteValues["source"] as string, "audio", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static readonly ImportCapability[] Capabilities =
     [
         new("manual-text", "Manual text or chat paste", true, false, "Normalizes plaintext/chat paste into encrypted client sync.", ["text/plain", "text/markdown"]),
@@ -53,7 +63,7 @@ public static class ImportEndpoints
 
         group.MapGet("/email/settings", (PlainImapImportClient imap) => Results.Ok(imap.Settings())).RequireAuthorization();
 
-        group.MapPost("/audio/upload", ImportAudioUploadAsync).RequireAuthorization();
+        group.MapPost("/audio/upload", ImportAudioUploadAsync).RequireAuthorization().WithMetadata(new AudioImportRoute(Always: true));
 
         group.MapPost("/{source}", async ([FromRoute] string source, [FromBody] ImportRequest request, ImportOrchestrator orchestrator, HttpContext httpContext, CancellationToken cancellationToken) =>
         {
@@ -64,7 +74,7 @@ public static class ImportEndpoints
             }
 
             return await RunImportAsync(httpContext, () => orchestrator.ImportAsync(capability.Source, request, cancellationToken));
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithMetadata(new AudioImportRoute(Always: false));
 
         return app;
     }

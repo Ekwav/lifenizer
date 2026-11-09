@@ -233,6 +233,66 @@ public sealed class OpusUploadTests
     }
 
     [Test]
+    public async Task Upload_GlobalAudioLimit_Gives429AcrossUsers()
+    {
+        var wav = SyntheticWav.Build(60, SyntheticWav.SentencePattern);
+        var plan = WavSilenceChunker.TryPlan(wav)!;
+        using var release = new ManualResetEventSlim();
+        await using var whisper = new ChunkedAudioImportTests.ConcurrentWhisper(wav, plan, (_, _) =>
+        {
+            release.Wait(TimeSpan.FromSeconds(20));
+            return ChunkedAudioImportTests.ConcurrentWhisper.Ok;
+        });
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Whisper:BaseUrl"] = whisper.Url,
+            ["Imports:MaxConcurrentAudioImportsPerUser"] = "5",
+            ["Imports:MaxConcurrentAudioImports"] = "1"
+        });
+        using var userA = await ChunkedAudioImportTests.AuthenticatedClientAsync(factory, "global-a@example.test");
+        using var userB = await ChunkedAudioImportTests.AuthenticatedClientAsync(factory, "global-b@example.test");
+
+        var first = userA.PostAsync("/api/imports/audio/upload", Multipart(wav, "audio/wav", new ImportRequest()));
+        while (whisper.Calls.Count == 0) await Task.Delay(20);
+        var other = await userB.PostAsync("/api/imports/audio/upload", Multipart(wav, "audio/wav", new ImportRequest()));
+        var json = await userB.PostAsJsonAsync("/api/imports/audio", new ImportRequest(PayloadBase64: Convert.ToBase64String(wav)), JsonOptions);
+        release.Set();
+
+        Assert.That(other.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
+        Assert.That(json.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
+        Assert.That((await first).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [Test]
+    public async Task Upload_TrailingSlashVariants_AreLimitedToo()
+    {
+        var wav = SyntheticWav.Build(60, SyntheticWav.SentencePattern);
+        var plan = WavSilenceChunker.TryPlan(wav)!;
+        using var release = new ManualResetEventSlim();
+        await using var whisper = new ChunkedAudioImportTests.ConcurrentWhisper(wav, plan, (_, _) =>
+        {
+            release.Wait(TimeSpan.FromSeconds(20));
+            return ChunkedAudioImportTests.ConcurrentWhisper.Ok;
+        });
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Whisper:BaseUrl"] = whisper.Url,
+            ["Imports:MaxConcurrentAudioImportsPerUser"] = "1"
+        });
+        using var client = await ChunkedAudioImportTests.AuthenticatedClientAsync(factory, "slash@example.test");
+
+        var first = client.PostAsync("/api/imports/audio/upload", Multipart(wav, "audio/wav", new ImportRequest()));
+        while (whisper.Calls.Count == 0) await Task.Delay(20);
+        var upload = await client.PostAsync("/api/imports/audio/upload/", Multipart(wav, "audio/wav", new ImportRequest()));
+        var json = await client.PostAsJsonAsync("/api/imports/audio/", new ImportRequest(PayloadBase64: Convert.ToBase64String(wav)), JsonOptions);
+        var upper = await client.PostAsJsonAsync("/api/imports/AUDIO", new ImportRequest(PayloadBase64: Convert.ToBase64String(wav)), JsonOptions);
+        release.Set();
+
+        Assert.That(new[] { upload.StatusCode, json.StatusCode, upper.StatusCode }, Is.All.EqualTo(HttpStatusCode.TooManyRequests));
+        await first;
+    }
+
+    [Test]
     public async Task Upload_BeyondMaxAudioSeconds_IsRejectedAndNeverForwarded()
     {
         var bomb = OggTestKit.DtxBomb(packets: 600, granule: 600L * 5760);
@@ -437,6 +497,40 @@ public sealed class OpusUploadTests
     public async Task Upload_GranuleLongMaxValue_IsRejectedAndNeverForwarded()
     {
         await AssertRejectedWithoutForwarding(OggTestKit.DtxBomb(packets: 10, granule: long.MaxValue), "granule-max@example.test");
+    }
+
+    [Test]
+    public async Task Upload_SecondConcurrentAudioImportOfOneUser_Gets429_ButOtherRoutesAreUnaffected()
+    {
+        var wav = SyntheticWav.Build(60, SyntheticWav.SentencePattern);
+        var plan = WavSilenceChunker.TryPlan(wav)!;
+        using var release = new ManualResetEventSlim();
+        await using var whisper = new ChunkedAudioImportTests.ConcurrentWhisper(wav, plan, (_, _) =>
+        {
+            release.Wait(TimeSpan.FromSeconds(20));
+            return ChunkedAudioImportTests.ConcurrentWhisper.Ok;
+        });
+        await using var factory = new LifenizerApiFactory(new Dictionary<string, string?>
+        {
+            ["Whisper:BaseUrl"] = whisper.Url,
+            ["Imports:MaxConcurrentAudioImportsPerUser"] = "1"
+        });
+        using var client = await ChunkedAudioImportTests.AuthenticatedClientAsync(factory, "per-user@example.test");
+
+        var first = client.PostAsync("/api/imports/audio/upload", Multipart(wav, "audio/wav", new ImportRequest()));
+        while (whisper.Calls.Count == 0) await Task.Delay(20);
+        var secondUpload = await client.PostAsync("/api/imports/audio/upload", Multipart(wav, "audio/wav", new ImportRequest()));
+        var secondJson = await client.PostAsJsonAsync("/api/imports/audio", new ImportRequest(PayloadBase64: Convert.ToBase64String(wav)), JsonOptions);
+        var otherRoute = await client.PostAsJsonAsync("/api/imports/manual-text", new ImportRequest(Text: "hello there"), JsonOptions);
+        release.Set();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(secondUpload.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
+            Assert.That(secondJson.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
+            Assert.That(otherRoute.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        });
+        Assert.That((await first).StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
     private static async Task AssertRejectedWithoutForwarding(byte[] ogg, string email)

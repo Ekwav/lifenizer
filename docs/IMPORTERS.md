@@ -538,6 +538,9 @@ Other formats (mp3, m4a, webm, float WAV) are sent whole as before, with no dura
   audio is a 400 and is never forwarded. WAV sample rates outside 8000-192000 Hz are a 400.
 - `Imports:AudioMemoryBudgetMb` (default 600) — process-wide budget for decoded PCM (or the raw WAV bytes) held while
   an import is transcribed. Imports queue for budget; one needing more than the whole budget is a 400.
+- `Imports:MaxConcurrentAudioImportsPerUser` (default 2) and `Imports:MaxConcurrentAudioImports` (default 3, all
+  users) — concurrent audio imports (`/api/imports/audio` and `/api/imports/audio/upload`, matched by route, so
+  trailing slashes and casing do not bypass them); extra ones get 429. Other import routes are not limited.
 - `Whisper:ChunkTimeoutSeconds` (default 180) — per chunk request, excluding queue time; timeouts are not retried
   (connection errors and 5xx are retried once)
 

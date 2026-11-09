@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 using System.Net;
 using Microsoft.AspNetCore.Identity;
@@ -87,6 +88,7 @@ public static class ServiceExtensions
             options.AddPolicy("account-auth", context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "local",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+            options.GlobalLimiter = PartitionedRateLimiter.CreateChained(PerUserAudioImportLimiter(), GlobalAudioImportLimiter());
             options.AddPolicy("pairing-request", context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "local",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
@@ -101,6 +103,31 @@ public static class ServiceExtensions
 
         return services;
     }
+
+    private const int DefaultMaxConcurrentAudioImportsPerUser = 2;
+    private const int DefaultMaxConcurrentAudioImports = 3;
+
+    /// <summary>Concurrent audio imports per authenticated user; a token without a subject gets no permits.</summary>
+    private static PartitionedRateLimiter<HttpContext> PerUserAudioImportLimiter() =>
+        PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        {
+            if (!ImportEndpoints.IsAudioImport(context)) return RateLimitPartition.GetNoLimiter("not-audio");
+            var user = context.User.FindFirstValue("sub") ?? context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var permits = user is null ? 0 : ConfiguredLimit(context, "Imports:MaxConcurrentAudioImportsPerUser", DefaultMaxConcurrentAudioImportsPerUser);
+            return RateLimitPartition.GetConcurrencyLimiter(user ?? "no-subject", _ => new ConcurrencyLimiterOptions { PermitLimit = permits, QueueLimit = 0 });
+        });
+
+    /// <summary>Concurrent audio imports across all users (bounds the upload buffers held in memory).</summary>
+    private static PartitionedRateLimiter<HttpContext> GlobalAudioImportLimiter() =>
+        PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        {
+            if (!ImportEndpoints.IsAudioImport(context)) return RateLimitPartition.GetNoLimiter("not-audio");
+            var permits = ConfiguredLimit(context, "Imports:MaxConcurrentAudioImports", DefaultMaxConcurrentAudioImports);
+            return RateLimitPartition.GetConcurrencyLimiter("all-users", _ => new ConcurrencyLimiterOptions { PermitLimit = permits, QueueLimit = 0 });
+        });
+
+    private static int ConfiguredLimit(HttpContext context, string key, int fallback) =>
+        Math.Max(1, context.RequestServices.GetRequiredService<IConfiguration>().GetValue(key, fallback));
 
     /// <summary>
     /// Registers import-related services: orchestrator, parsers, and HTTP clients.
