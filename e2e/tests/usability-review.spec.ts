@@ -1,4 +1,4 @@
-import { expect, Page, test } from '@playwright/test';
+import { expect, Locator, Page, test } from '@playwright/test';
 
 test.use({ actionTimeout: 20_000 });
 
@@ -13,6 +13,26 @@ async function fill(page: Page, name: RegExp, value: string) {
   await field.pressSequentially(value);
   await field.press('Tab');
   await expect(field).toHaveValue(value);
+}
+
+// Enters the whole value as one input event, like a paste or dictation. On the
+// 390px page this restarts the caret's scroll-into-view animation before it
+// ever ticks, so the page is still scrolling when the next action starts.
+async function paste(page: Page, name: RegExp, value: string) {
+  const field = page.getByRole('textbox', { name });
+  await field.click();
+  await field.press('ControlOrMeta+A');
+  await page.keyboard.insertText(value);
+  await field.press('Tab');
+  await expect(field).toHaveValue(value);
+}
+
+// While a Flutter Scrollable animates it ignores pointers, and the web engine
+// drops flt-tappable from every button inside it. Playwright still sees those
+// buttons as enabled and stable, so a click in that window is silently lost.
+async function tap(button: Locator) {
+  await expect(button).toHaveAttribute('flt-tappable', '');
+  await button.click();
 }
 
 for (const width of [390, 1280]) {
@@ -38,22 +58,22 @@ for (const width of [390, 1280]) {
     await capture.click();
     await page.getByRole('textbox', { name: /^Text$/ }).click();
     await expect(page.getByRole('textbox', { name: /^Text$/ })).toHaveValue('Keep this unsaved capture across navigation.');
-    await page.getByRole('button', { name: 'Encrypt import', exact: true }).click();
+    await tap(page.getByRole('button', { name: 'Encrypt import', exact: true }));
     await expect.poll(async () => (await snapshot(page)).conversations.length).toBe(1);
     expect((await snapshot(page)).conversations[0].segments[0].text).toBe('Keep this unsaved capture across navigation.');
     await page.getByRole('textbox', { name: /^Text$/ }).click();
     await expect(page.getByRole('textbox', { name: /^Text$/ })).toHaveValue('');
 
-    await page.getByRole('button', { name: 'Start session', exact: true }).click();
-    await fill(page, /^Typed segment$/, 'The final note needs no extra Add segment click.');
-    await page.getByRole('button', { name: 'Stop session', exact: true }).click();
+    await tap(page.getByRole('button', { name: 'Start session', exact: true }));
+    await paste(page, /^Typed segment$/, 'The final note needs no extra Add segment click.');
+    await tap(page.getByRole('button', { name: 'Stop session', exact: true }));
     await expect.poll(async () => {
       const data = await snapshot(page);
       return data.conversations.find((item: any) => item.source === 'live-recording')?.segments.map((item: any) => item.text);
     }).toEqual(['The final note needs no extra Add segment click.']);
 
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Choose file', exact: true }).click();
+    await tap(page.getByRole('button', { name: 'Choose file', exact: true }));
     await (await chooser).setFiles({
       name: 'watch-history.json',
       mimeType: 'application/json',
